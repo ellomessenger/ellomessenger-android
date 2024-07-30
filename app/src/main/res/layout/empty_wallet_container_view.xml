@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:background="@color/background"
+	android:paddingBottom="24dp">
+
+	<ImageView
+		android:id="@+id/empty_card_image"
+		android:layout_width="0dp"
+		android:layout_height="0dp"
+		android:layout_marginStart="20dp"
+		android:layout_marginTop="20dp"
+		android:layout_marginEnd="20dp"
+		android:contentDescription="@string/ello_card"
+		android:src="@drawable/main_wallet_card"
+		app:layout_constraintDimensionRatio="1.6"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		app:layout_goneMarginTop="20dp" />
+
+	<TextView
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="16dp"
+		android:layout_marginTop="16dp"
+		android:text="@string/main_wallet"
+		android:textColor="@color/white"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintStart_toStartOf="@id/empty_card_image"
+		app:layout_constraintTop_toTopOf="@id/empty_card_image" />
+
+	<ImageView
+		android:id="@+id/ello_coin_symbol"
+		android:layout_width="24dp"
+		android:layout_height="24dp"
+		android:layout_marginStart="16dp"
+		android:layout_marginTop="4dp"
+		android:contentDescription="@string/cont_desc_ello_coin"
+		android:src="@drawable/ello_dollar_wallet_logo"
+		android:tint="@color/white"
+		app:layout_constraintBottom_toBottomOf="@id/empty_card_balance_label"
+		app:layout_constraintDimensionRatio="1:1"
+		app:layout_constraintStart_toStartOf="@id/empty_card_image"
+		app:layout_constraintTop_toTopOf="@id/empty_card_balance_label" />
+
+	<TextView
+		android:id="@+id/empty_card_balance_label"
+		android:layout_width="wrap_content"
+		android:layout_height="41dp"
+		android:layout_gravity="left|bottom"
+		android:layout_marginStart="3dp"
+		android:layout_marginBottom="16dp"
+		android:text="0"
+		android:textColor="@color/white"
+		android:textSize="30sp"
+		android:textStyle="bold"
+		app:layout_constraintBottom_toBottomOf="@id/empty_card_image"
+		app:layout_constraintStart_toEndOf="@id/ello_coin_symbol" />
+
+	<TextView
+		android:id="@+id/empty_wallet_info_label"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="20dp"
+		android:layout_marginTop="16dp"
+		android:layout_marginEnd="20dp"
+		android:lineSpacingMultiplier="1.1"
+		android:textSize="16sp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/empty_card_image" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/top_up_wallet_button"
+		style="@style/Widget.App.BrandedButtonSmallRadius"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginStart="20dp"
+		android:layout_marginTop="16dp"
+		android:layout_marginEnd="20dp"
+		android:text="@string/buy_ello_coins"
+		app:layout_constraintBottom_toTopOf="@+id/skip_empty_wallet_button"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/empty_wallet_info_label"
+		app:layout_constraintVertical_bias="1" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/skip_empty_wallet_button"
+		style="@style/Widget.App.WhiteButtonSmallRadius"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginStart="20dp"
+		android:layout_marginEnd="20dp"
+		android:text="@string/skip"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/top_up_wallet_button"
+		app:layout_constraintVertical_bias="1" />
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

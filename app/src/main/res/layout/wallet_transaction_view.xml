@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="74dp"
+	android:background="?selectableItemBackground"
+	android:paddingStart="20dp">
+
+	<ImageView
+		android:id="@+id/transaction_type_image"
+		android:layout_width="42dp"
+		android:layout_height="42dp"
+		android:contentDescription="@string/transaction_type_image_desc"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		tools:src="@drawable/panda_logo" />
+
+	<FrameLayout
+		android:id="@+id/peer_avatar_container"
+		android:layout_width="20dp"
+		android:layout_height="20dp"
+		android:layout_marginStart="16dp"
+		android:layout_marginTop="2dp"
+		android:contentDescription="@string/cont_desc_channel_logo"
+		app:layout_constraintStart_toEndOf="@id/transaction_type_image"
+		app:layout_constraintTop_toTopOf="@id/transaction_type_image"
+		tools:background="@drawable/panda_logo" />
+
+	<TextView
+		android:id="@+id/amount_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginEnd="20dp"
+		android:textSize="20sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="@id/transaction_type_image"
+		tools:text="-$10.80"
+		tools:textColor="@color/dark" />
+
+	<ImageView
+		android:id="@+id/ello_coin_symbol"
+		android:layout_width="16dp"
+		android:layout_height="16dp"
+		android:layout_marginTop="1dp"
+		android:layout_marginEnd="2dp"
+		android:contentDescription="@string/cont_desc_ello_coin"
+		android:src="@drawable/ello_dollar_wallet_logo"
+		app:layout_constraintBottom_toBottomOf="@id/amount_label"
+		app:layout_constraintDimensionRatio="1:1"
+		app:layout_constraintEnd_toStartOf="@id/amount_label"
+		app:layout_constraintTop_toTopOf="@id/amount_label" />
+
+	<TextView
+		android:id="@+id/purchase_name_label"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="8dp"
+		android:layout_marginEnd="8dp"
+		android:ellipsize="end"
+		android:maxLines="1"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toStartOf="@id/ello_coin_symbol"
+		app:layout_constraintStart_toEndOf="@id/peer_avatar_container"
+		app:layout_constraintTop_toTopOf="@id/transaction_type_image"
+		app:layout_goneMarginStart="16dp"
+		tools:text="3D digital sculptings" />
+
+	<TextView
+		android:id="@+id/purchase_type_label"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="16dp"
+		android:textColor="@color/dark_gray"
+		android:textSize="14sp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toEndOf="@id/transaction_type_image"
+		app:layout_constraintTop_toBottomOf="@id/purchase_name_label"
+		tools:text="Subscription fee" />
+
+	<View
+		android:id="@+id/divider"
+		android:layout_width="0dp"
+		android:layout_height="0.36dp"
+		android:layout_marginStart="20dp"
+		android:background="@color/divider"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

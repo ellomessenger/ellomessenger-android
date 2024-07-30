@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<org.telegram.ui.Components.VerificationCodeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/code_layout"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:divider="@drawable/transparent_divider"
+	android:orientation="horizontal"
+	android:showDividers="middle">
+
+	<include
+		android:id="@+id/input_1"
+		layout="@layout/verification_code_input"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_weight="1" />
+
+	<include
+		android:id="@+id/input_2"
+		layout="@layout/verification_code_input"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_weight="1" />
+
+	<include
+		android:id="@+id/input_3"
+		layout="@layout/verification_code_input"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_weight="1" />
+
+	<include
+		android:id="@+id/input_4"
+		layout="@layout/verification_code_input"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_weight="1" />
+
+	<include
+		android:id="@+id/input_5"
+		layout="@layout/verification_code_input"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_weight="1" />
+
+	<include
+		android:id="@+id/input_6"
+		layout="@layout/verification_code_input"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_weight="1" />
+
+</org.telegram.ui.Components.VerificationCodeLayout>

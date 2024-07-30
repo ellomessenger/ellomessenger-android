@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:background="@color/light_background"
+	android:clipChildren="false"
+	android:clipToOutline="false"
+	android:clipToPadding="false"
+	android:paddingBottom="20dp">
+
+	<ImageView
+		android:id="@+id/card_background"
+		android:layout_width="0dp"
+		android:layout_height="0dp"
+		android:layout_margin="20dp"
+		android:clipToOutline="false"
+		android:contentDescription="@string/cont_desc_referral_card_background"
+		android:elevation="4dp"
+		android:src="@drawable/referral_commission_card"
+		app:layout_constraintDimensionRatio="1.6"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<ImageView
+		android:id="@+id/gift"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="24dp"
+		android:contentDescription="@string/cont_desc_group_of_people"
+		android:elevation="10dp"
+		android:src="@drawable/public_group"
+		app:layout_constraintEnd_toEndOf="@id/card_background"
+		app:layout_constraintStart_toStartOf="@id/card_background"
+		app:layout_constraintTop_toTopOf="@id/card_background" />
+
+	<TextView
+		android:id="@+id/total_revenue"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginHorizontal="16dp"
+		android:layout_marginTop="24dp"
+		android:elevation="10dp"
+		android:gravity="center_horizontal"
+		android:text="@string/commission_from_referrals"
+		android:textColor="@color/white"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="@id/card_background"
+		app:layout_constraintStart_toStartOf="@id/card_background"
+		app:layout_constraintTop_toBottomOf="@id/gift" />
+
+	<TextView
+		android:id="@+id/amount_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginHorizontal="16dp"
+		android:layout_marginTop="8dp"
+		android:elevation="10dp"
+		android:textColor="@color/white"
+		android:textSize="30sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="@id/card_background"
+		app:layout_constraintStart_toStartOf="@id/card_background"
+		app:layout_constraintTop_toBottomOf="@id/total_revenue"
+		tools:text="1950.32" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

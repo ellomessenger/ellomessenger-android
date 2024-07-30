@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:padding="@dimen/common_size_16dp">
+
+	<androidx.cardview.widget.CardView
+		android:id="@+id/avatar_container"
+		android:layout_width="@dimen/common_size_57dp"
+		android:layout_height="@dimen/common_size_57dp"
+		android:clickable="false"
+		app:cardBackgroundColor="@color/orange"
+		app:cardCornerRadius="28.5dp"
+		app:cardElevation="0dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<ImageView
+			android:id="@+id/avatar_view"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:contentDescription="@string/cont_desc_avatar" />
+	</androidx.cardview.widget.CardView>
+
+	<TextView
+		android:id="@+id/channel_name"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="16dp"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintBottom_toBottomOf="@id/avatar_container"
+		app:layout_constraintStart_toEndOf="@id/avatar_container"
+		app:layout_constraintTop_toTopOf="@id/avatar_container"
+		tools:text="Best recipes" />
+
+	<ImageView
+		android:id="@+id/edit"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:background="?selectableItemBackgroundBorderless"
+		android:contentDescription="@string/edit_channel"
+		android:src="@drawable/ic_edit"
+		android:tint="@color/dark_gray"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="@id/avatar_container"
+		app:tint="@color/dark_gray" />
+
+	<TextView
+		android:id="@+id/members"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="9.5dp"
+		android:text="@string/members"
+		android:textColor="@color/dark_gray"
+		android:textSize="13sp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/avatar_container" />
+
+	<TextView
+		android:id="@+id/members_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/members"
+		tools:text="120" />
+
+	<TextView
+		android:id="@+id/earned_amount"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="9.5dp"
+		android:text="@string/earned_amount"
+		android:textColor="@color/dark_gray"
+		android:textSize="13sp"
+		app:layout_constraintEnd_toStartOf="@id/price"
+		app:layout_constraintStart_toEndOf="@id/members"
+		app:layout_constraintTop_toBottomOf="@id/avatar_container" />
+
+	<TextView
+		android:id="@+id/earned_amount_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:drawablePadding="4dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:drawableStartCompat="@drawable/paid_channel_icon"
+		app:layout_constraintStart_toStartOf="@id/earned_amount"
+		app:layout_constraintTop_toBottomOf="@id/members"
+		tools:text="1200" />
+
+	<TextView
+		android:id="@+id/price"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="9.5dp"
+		android:text="@string/subscription_price"
+		android:textColor="@color/dark_gray"
+		android:textSize="13sp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/avatar_container" />
+
+	<TextView
+		android:id="@+id/price_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:drawablePadding="4dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:drawableStartCompat="@drawable/paid_channel_icon"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/members"
+		tools:text="1200" />
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

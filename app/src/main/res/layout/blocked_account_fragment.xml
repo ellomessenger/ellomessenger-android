@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<FrameLayout
+		android:id="@+id/panda_image"
+		android:layout_width="160dp"
+		android:layout_height="160dp"
+		app:layout_constraintBottom_toTopOf="@id/title"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		app:layout_constraintVertical_chainStyle="packed" />
+
+	<TextView
+		android:id="@+id/title"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginHorizontal="16dp"
+		android:layout_marginTop="32dp"
+		android:gravity="center_horizontal"
+		android:lineSpacingMultiplier="1"
+		android:textSize="30sp"
+		android:textStyle="bold"
+		app:layout_constraintBottom_toTopOf="@id/description"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/panda_image"
+		tools:text="Account @MarcB is suspended" />
+
+	<TextView
+		android:id="@+id/description"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginHorizontal="16dp"
+		android:layout_marginTop="16dp"
+		android:gravity="center_horizontal"
+		android:textSize="16sp"
+		app:layout_constraintBottom_toTopOf="@id/support_button"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/title"
+		tools:text="@string/account_blocked" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/support_button"
+		style="@style/Widget.App.BrandedButton"
+		android:layout_width="0dp"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginStart="16dp"
+		android:layout_marginEnd="16dp"
+		android:layout_marginBottom="8dp"
+		android:text="@string/Support"
+		app:layout_constraintBottom_toTopOf="@id/ok_button"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/ok_button"
+		style="@style/Widget.App.DestructiveButton"
+		android:layout_width="0dp"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginStart="16dp"
+		android:layout_marginEnd="16dp"
+		android:layout_marginBottom="16dp"
+		android:text="@string/ok"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

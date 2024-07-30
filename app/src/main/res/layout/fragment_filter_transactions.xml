@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:padding="16dp">
+
+	<TextView
+		android:id="@+id/select_channel_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@string/select_channel"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/channel_spinner_layout"
+		style="@style/Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="8dp"
+		app:boxBackgroundColor="@color/white"
+		app:boxStrokeWidth="1dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintHeight_min="@dimen/common_size_58dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/select_channel_label">
+
+		<com.google.android.material.textfield.MaterialAutoCompleteTextView
+			android:id="@+id/channel_spinner"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:hint="@string/channel"
+			android:imeOptions="actionNext"
+			android:inputType="text"
+			android:maxLines="1" />
+	</com.google.android.material.textfield.TextInputLayout>
+
+	<TextView
+		android:id="@+id/date_from_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="16dp"
+		android:text="@string/date_from"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/channel_spinner_layout" />
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/date_from_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="8dp"
+		app:endIconDrawable="@drawable/ic_calendar"
+		app:endIconMode="custom"
+		app:endIconTint="@color/brand"
+		app:layout_constraintHeight_min="@dimen/common_size_58dp"
+		app:layout_constraintTop_toBottomOf="@id/date_from_label">
+
+		<com.google.android.material.textfield.TextInputEditText
+			android:id="@+id/date_from_field"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:focusable="false"
+			android:hint="@string/date_from"
+			android:imeOptions="actionNext" />
+	</com.google.android.material.textfield.TextInputLayout>
+
+	<TextView
+		android:id="@+id/date_to_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="16dp"
+		android:text="@string/date_to"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/date_from_layout" />
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/date_to_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="8dp"
+		app:endIconDrawable="@drawable/ic_calendar"
+		app:endIconMode="custom"
+		app:endIconTint="@color/brand"
+		app:layout_constraintHeight_min="@dimen/common_size_58dp"
+		app:layout_constraintTop_toBottomOf="@id/date_to_label">
+
+		<com.google.android.material.textfield.TextInputEditText
+			android:id="@+id/date_to_field"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:focusable="false"
+			android:hint="@string/date_to"
+			android:imeOptions="actionNext" />
+	</com.google.android.material.textfield.TextInputLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

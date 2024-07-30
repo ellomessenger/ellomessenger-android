@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:background="@color/light_background"
+	android:clipChildren="false"
+	android:clipToOutline="false"
+	android:clipToPadding="false"
+	android:fillViewport="true">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_gravity="center_horizontal"
+		android:clipChildren="false"
+		android:clipToOutline="false"
+		android:clipToPadding="false"
+		android:orientation="vertical">
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:clipChildren="false"
+			android:clipToOutline="false"
+			android:clipToPadding="false"
+			android:paddingBottom="20dp">
+
+			<ImageView
+				android:id="@+id/card_background"
+				android:layout_width="0dp"
+				android:layout_height="0dp"
+				android:layout_margin="20dp"
+				android:clipToOutline="false"
+				android:contentDescription="@string/cont_desc_referral_card_background"
+				android:elevation="4dp"
+				android:src="@drawable/referral_card"
+				app:layout_constraintDimensionRatio="1.6"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<ImageView
+				android:id="@+id/gift"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="24dp"
+				android:contentDescription="@string/cont_desc_gift"
+				android:elevation="10dp"
+				android:src="@drawable/gift"
+				app:layout_constraintEnd_toEndOf="@id/card_background"
+				app:layout_constraintStart_toStartOf="@id/card_background"
+				app:layout_constraintTop_toTopOf="@id/card_background" />
+
+			<TextView
+				android:id="@+id/total_revenue"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginHorizontal="16dp"
+				android:layout_marginTop="24dp"
+				android:elevation="10dp"
+				android:gravity="center_horizontal"
+				android:text="@string/total_revenue"
+				android:textColor="@color/white"
+				android:textSize="16sp"
+				android:textStyle="bold"
+				app:layout_constraintEnd_toEndOf="@id/card_background"
+				app:layout_constraintStart_toStartOf="@id/card_background"
+				app:layout_constraintTop_toBottomOf="@id/gift" />
+
+			<TextView
+				android:id="@+id/amount_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginHorizontal="16dp"
+				android:layout_marginTop="8dp"
+				android:elevation="10dp"
+				android:textColor="@color/white"
+				android:textSize="30sp"
+				android:textStyle="bold"
+				app:layout_constraintEnd_toEndOf="@id/card_background"
+				app:layout_constraintStart_toStartOf="@id/card_background"
+				app:layout_constraintTop_toBottomOf="@id/total_revenue"
+				tools:text="1950.32" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginHorizontal="20dp"
+			android:background="@drawable/text_input_background_large_corner"
+			android:elevation="2dp"
+			android:padding="16dp">
+
+			<ImageView
+				android:id="@+id/referrals_counter_thumb"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:importantForAccessibility="no"
+				android:src="@drawable/referrals_counter_thumb"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<TextView
+				android:id="@+id/referrals_counter_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/referrals_counter_thumb"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:text="456 Referrals" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<ImageView
+			android:id="@+id/invite_background_header"
+			android:layout_width="match_parent"
+			android:layout_height="24dp"
+			android:layout_marginTop="16dp"
+			android:contentDescription="@null"
+			android:elevation="4dp"
+			android:src="@drawable/top_round_background_wallet" />
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:background="@color/background"
+			android:elevation="5dp"
+			android:gravity="center_horizontal"
+			android:orientation="vertical"
+			android:outlineProvider="none"
+			android:paddingHorizontal="20dp">
+
+			<TextView
+				android:id="@+id/referral_name_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:gravity="center_horizontal"
+				android:textSize="16sp"
+				android:textStyle="bold"
+				tools:text="@string/invite_friend_get_coin" />
+
+			<TextView
+				android:id="@+id/referral_description_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="12dp"
+				android:gravity="center_horizontal"
+				android:textColor="@color/dark_gray"
+				android:textSize="13sp"
+				tools:text="@string/invite_info" />
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:layout_width="match_parent"
+				android:layout_height="62dp"
+				android:layout_marginTop="16dp"
+				android:background="@drawable/text_input_background_large_corner">
+
+				<TextView
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="20dp"
+					android:layout_marginEnd="12dp"
+					android:text="@string/referral_code_link"
+					android:textSize="15sp"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toStartOf="@id/copy_link_button"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<ImageButton
+					android:id="@+id/copy_link_button"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:background="?selectableItemBackgroundBorderless"
+					android:contentDescription="@string/copy_referral_code_link"
+					android:padding="16dp"
+					android:src="@drawable/msg_copy"
+					android:tint="#3a85f3"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintTop_toTopOf="parent"
+					app:tint="#3a85f3" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:layout_width="match_parent"
+				android:layout_height="62dp"
+				android:layout_marginTop="8dp"
+				android:background="@drawable/text_input_background_large_corner">
+
+				<TextView
+					android:id="@+id/referral_code_label_header"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/referral_code"
+					android:textColor="@color/dark_gray"
+					android:textSize="12sp"
+					app:layout_constraintBottom_toTopOf="@id/referral_code_label"
+					app:layout_constraintStart_toStartOf="@id/referral_code_label"
+					app:layout_constraintTop_toTopOf="parent"
+					app:layout_constraintVertical_chainStyle="packed" />
+
+				<TextView
+					android:id="@+id/referral_code_label"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="20dp"
+					android:layout_marginTop="2dp"
+					android:layout_marginEnd="12dp"
+					android:textSize="15sp"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toStartOf="@id/copy_code_button"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/referral_code_label_header"
+					tools:text="1LPM0683hg" />
+
+				<ImageButton
+					android:id="@+id/copy_code_button"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:background="?selectableItemBackgroundBorderless"
+					android:contentDescription="@string/copy_referral_code"
+					android:padding="16dp"
+					android:src="@drawable/msg_copy"
+					android:tint="#3a85f3"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintTop_toTopOf="parent"
+					app:tint="#3a85f3" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/share_button"
+				style="@style/Widget.App.BrandedButton"
+				android:layout_width="match_parent"
+				android:layout_height="62dp"
+				android:layout_marginTop="16dp"
+				android:layout_marginBottom="16dp"
+				android:text="@string/share_with_friends" />
+
+		</LinearLayout>
+
+	</LinearLayout>
+
+</ScrollView>

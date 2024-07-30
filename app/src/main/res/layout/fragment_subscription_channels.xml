@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:animateLayoutChanges="true">
+
+	<androidx.core.widget.ContentLoadingProgressBar
+		android:id="@+id/progress_bar"
+		style="?android:progressBarStyleHorizontal"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:indeterminate="true"
+		android:indeterminateTint="@color/brand"
+		android:visibility="gone"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<LinearLayout
+		android:id="@+id/no_channels_view"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:gravity="center"
+		android:orientation="vertical"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<ImageView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:src="@drawable/monitor_recorder" />
+
+		<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="22dp"
+			android:text="@string/create_a_subscription_channel"
+			android:textColor="@color/dark_gray"
+			android:textSize="16sp" />
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/create_channel"
+			style="@style/Widget.App.WhiteButton"
+			android:layout_width="match_parent"
+			android:layout_height="@dimen/common_size_58dp"
+			android:layout_marginTop="24dp"
+			android:text="@string/create_channel"
+			app:icon="@drawable/ic_add"
+			app:iconTint="@color/brand"
+			app:strokeColor="@color/gray_border"
+			app:strokeWidth="1dp" />
+	</LinearLayout>
+
+	<LinearLayout
+		android:id="@+id/no_channels_view_info"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:gravity="center_horizontal"
+		android:orientation="vertical"
+		android:padding="16dp"
+		android:visibility="gone">
+
+		<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="0dp"
+			android:layout_weight="1"
+			android:text="@string/info_create_a_subscription_channel"
+			android:textColor="@color/dark"
+			android:textSize="16sp" />
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/create_channel_info"
+			style="@style/Widget.App.BrandedButton"
+			android:layout_width="match_parent"
+			android:layout_height="@dimen/common_size_58dp"
+			android:layout_marginHorizontal="67dp"
+			android:text="@string/create_channel" />
+	</LinearLayout>
+
+
+	<androidx.recyclerview.widget.RecyclerView
+		android:id="@+id/channels"
+		android:layout_width="match_parent"
+		android:layout_height="0dp"
+		app:layout_constraintBottom_toTopOf="@id/totals_layout"
+		app:layout_constraintTop_toTopOf="parent"
+		tools:listitem="@layout/item_subscription_channel"
+		tools:visibility="gone" />
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:id="@+id/totals_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:background="@drawable/shape_15_dp_top"
+		android:backgroundTint="@color/undead_dark"
+		android:padding="16dp"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		tools:visibility="gone">
+
+		<TextView
+			android:id="@+id/available"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="@string/available"
+			android:textColor="@color/gray_a7"
+			android:textSize="14sp"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent" />
+
+		<TextView
+			android:id="@+id/available_value"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:textColor="@color/white"
+			android:textSize="14sp"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/available"
+			tools:text="120" />
+
+		<TextView
+			android:id="@+id/earned_last_month"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="@string/earned_last_month"
+			android:textColor="@color/gray_a7"
+			android:textSize="14sp"
+			app:layout_constraintEnd_toStartOf="@id/total_earned"
+			app:layout_constraintStart_toEndOf="@id/available"
+			app:layout_constraintTop_toTopOf="parent" />
+
+		<TextView
+			android:id="@+id/earned_last_month_value"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:textColor="@color/white"
+			android:textSize="14sp"
+			app:layout_constraintEnd_toEndOf="@id/earned_last_month"
+			app:layout_constraintStart_toStartOf="@id/earned_last_month"
+			app:layout_constraintTop_toBottomOf="@id/available"
+			tools:text="1200" />
+
+		<TextView
+			android:id="@+id/total_earned"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="@string/total_earned"
+			android:textColor="@color/gray_a7"
+			android:textSize="14sp"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintTop_toTopOf="parent" />
+
+		<TextView
+			android:id="@+id/total_earned_value"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:textColor="@color/white"
+			android:textSize="14sp"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/total_earned"
+			tools:text="1200" />
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

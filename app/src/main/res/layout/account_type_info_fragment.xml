@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:background="@drawable/chat_background"
+	android:orientation="vertical">
+
+	<FrameLayout
+		android:id="@+id/action_bar_container"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content" />
+
+	<ScrollView
+		android:layout_width="match_parent"
+		android:layout_height="match_parent">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="vertical"
+			android:paddingTop="16dp"
+			android:paddingBottom="16dp">
+
+			<TextView
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/personal_account"
+				android:textSize="24sp"
+				android:textStyle="bold" />
+
+			<TextView
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginTop="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/personal_account_intro"
+				android:textSize="14sp" />
+
+			<FrameLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				android:layout_marginEnd="16dp"
+				android:orientation="vertical">
+
+				<ImageView
+					android:layout_width="match_parent"
+					android:layout_height="match_parent"
+					android:contentDescription="@null"
+					android:importantForAccessibility="no"
+					android:scaleType="fitXY"
+					android:src="@drawable/feed_view_background"
+					android:tint="@color/feed_item_background_tint"
+					android:tintMode="multiply"
+					app:tint="@color/feed_item_background_tint" />
+
+				<LinearLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="20dp"
+					android:layout_marginTop="6dp"
+					android:layout_marginEnd="10dp"
+					android:orientation="vertical">
+
+					<TextView
+						android:layout_width="match_parent"
+						android:layout_height="wrap_content"
+						android:layout_marginBottom="10dp"
+						android:lineSpacingMultiplier="1.15"
+						android:text="@string/personal_account_features"
+						android:textColor="@color/text"
+						android:textSize="14sp" />
+
+				</LinearLayout>
+
+			</FrameLayout>
+
+			<TextView
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginTop="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/business_account"
+				android:textSize="24sp"
+				android:textStyle="bold" />
+
+			<TextView
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginTop="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/business_account_intro"
+				android:textSize="14sp" />
+
+			<FrameLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				android:layout_marginEnd="16dp"
+				android:orientation="vertical">
+
+				<ImageView
+					android:layout_width="match_parent"
+					android:layout_height="match_parent"
+					android:contentDescription="@null"
+					android:importantForAccessibility="no"
+					android:scaleType="fitXY"
+					android:src="@drawable/feed_view_background"
+					android:tint="@color/feed_item_background_tint"
+					android:tintMode="multiply"
+					app:tint="@color/feed_item_background_tint" />
+
+				<LinearLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="20dp"
+					android:layout_marginTop="6dp"
+					android:layout_marginEnd="10dp"
+					android:orientation="vertical">
+
+					<TextView
+						android:layout_width="match_parent"
+						android:layout_height="wrap_content"
+						android:layout_marginBottom="10dp"
+						android:lineSpacingMultiplier="1.15"
+						android:text="@string/business_account_features"
+						android:textColor="@color/text"
+						android:textSize="14sp" />
+
+				</LinearLayout>
+
+			</FrameLayout>
+
+		</LinearLayout>
+
+	</ScrollView>
+
+</LinearLayout>

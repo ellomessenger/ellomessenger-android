@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:id="@+id/shortcut_widget_item"
+	android:layout_width="match_parent"
+	android:layout_height="72dp"
+	android:minHeight="72dp"
+	android:theme="@style/Theme.TMessages.AppWidget">
+
+	<ImageView
+		android:id="@+id/shortcut_widget_item_avatar"
+		android:layout_width="54dp"
+		android:layout_height="54dp"
+		android:layout_gravity="start|center_vertical"
+		android:layout_marginStart="10dp"
+		android:layout_marginLeft="10dp"
+		android:layout_marginRight="10dp"
+		android:gravity="start"
+		android:src="?attr/widgetPreviewImage" />
+
+	<RelativeLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_gravity="top|start"
+		android:layout_marginStart="76dp"
+		android:layout_marginTop="11dp"
+		android:layout_marginEnd="16dp">
+
+		<TextView
+			android:id="@+id/shortcut_widget_item_text"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_alignParentStart="true"
+			android:layout_marginEnd="4dp"
+			android:layout_toStartOf="@+id/shortcut_widget_item_time"
+			android:ellipsize="end"
+			android:fontFamily="sans-serif-medium"
+			android:gravity="start"
+			android:singleLine="true"
+			android:text="?attr/widgetPreviewTitle"
+			android:textColor="@color/widget_name"
+			android:textSize="17sp" />
+
+		<TextView
+			android:id="@+id/shortcut_widget_item_time"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_alignParentEnd="true"
+			android:layout_marginTop="3dp"
+			android:text="?attr/widgetPreviewTime"
+			android:textColor="@color/widget_time"
+			android:textSize="13sp" />
+
+	</RelativeLayout>
+
+	<RelativeLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_gravity="top|start"
+		android:layout_marginStart="76dp"
+		android:layout_marginTop="37dp"
+		android:layout_marginEnd="16dp"
+		android:orientation="horizontal">
+
+		<TextView
+			android:id="@+id/shortcut_widget_item_message"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_alignParentStart="true"
+			android:layout_toStartOf="@+id/shortcut_widget_item_badge"
+			android:autoLink="none"
+			android:ellipsize="end"
+			android:gravity="start"
+			android:singleLine="true"
+			android:text="?attr/widgetPreviewContent"
+			android:textColor="@color/widget_text"
+			android:textColorLink="@color/widget_text"
+			android:textSize="16sp" />
+
+		<TextView
+			android:id="@+id/shortcut_widget_item_badge"
+			style="@style/TMessages.AppWidget.Badge"
+			android:layout_alignParentEnd="true"
+			android:layout_marginStart="4dp"
+			android:visibility="?attr/widgetPreviewDot"
+			tools:text="2" />
+
+	</RelativeLayout>
+
+	<FrameLayout
+		android:id="@+id/shortcut_widget_item_divider"
+		android:layout_width="match_parent"
+		android:layout_height="1px"
+		android:layout_gravity="bottom|start"
+		android:layout_marginStart="76dp"
+		android:layout_marginEnd="8dp"
+		android:background="@color/widget_divider" />
+
+</FrameLayout>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<color name="widget_name">#ffffff</color>
+	<color name="widget_badge">#ffffff</color>
+	<color name="widget_time">#74808B</color>
+	<color name="widget_text">#7E8B98</color>
+	<color name="widget_divider">#000000</color>
+	<color name="widget_action_text">#75ADE5</color>
+	<color name="widget_edit_text">#8D949B</color>
+
+	<!-- Ello colors -->
+	<color name="divider">#9E9E9E</color>
+	<color name="background">@color/dark_background</color>
+	<color name="buttons_background">@color/light_background</color>
+	<color name="brand">#0F61DA</color>
+	<color name="dark">#ffffff</color>
+	<color name="dark_gray">#929298</color>
+	<color name="light_gray">#1F1F20</color>
+	<color name="purple">#EF4062</color>
+	<color name="green">#27AE60</color>
+	<color name="orange">#F2994A</color>
+	<color name="gray_border">@color/divider</color>
+	<color name="hint">#4D4D50</color>
+	<color name="disabled_text">#929298</color>
+	<color name="error_background">#fde7eb</color>
+	<color name="text">#ffffff</color>
+	<color name="brand_day_night">@color/hint</color>
+	<color name="avatar_tint">#85858C</color>
+	<color name="avatar_background">@color/light_background</color>
+	<color name="white_day_night">#101010</color>
+	<color name="light_background">#252525</color>
+	<color name="light_background_transparent">#99484848</color>
+	<color name="header">#101010</color>
+	<color name="light_chat_enter_background">#252525</color>
+	<color name="action_bar_item">@color/white</color>
+	<color name="splash_background">@color/light_chat_enter_background</color>
+	<color name="bulletin_background">@color/light_chat_enter_background</color>
+	<color name="button_text">@color/white</color>
+	<color name="dark_with_alpha">#0Dffffff</color>
+	<color name="feed_item_background_tint">@color/dark_background</color>
+	<color name="intro_background_color">@color/light_background</color>
+	<color name="intro_fill_background">@color/background</color>
+	<color name="feed_header">@color/light_background</color>
+	<color name="silver">#424242</color>
+	<color name="transparent_dark_gray">@color/white_transparent</color>
+</resources>

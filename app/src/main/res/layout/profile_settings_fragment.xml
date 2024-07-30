@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:background="@color/feed_audio_background">
+
+	<ScrollView
+		android:layout_width="match_parent"
+		android:layout_height="0dp"
+		android:layout_marginBottom="18dp"
+		app:layout_constraintBottom_toTopOf="@id/delete_account_button"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:background="@color/background"
+			android:clipToOutline="false"
+			android:elevation="1dp"
+			android:orientation="vertical">
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/privacy_container"
+				android:layout_width="match_parent"
+				android:layout_height="@dimen/common_size_64dp"
+				android:foreground="?selectableItemBackground">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="16dp"
+					android:contentDescription="@null"
+					android:src="@drawable/settings_privacy"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="52dp"
+					android:gravity="center_vertical"
+					android:text="@string/settings_privacy"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginEnd="16dp"
+					android:contentDescription="@string/disclosure_indicator"
+					android:src="@drawable/right_arrow_2"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<View
+				android:layout_width="match_parent"
+				android:layout_height="0.5dp"
+				android:layout_marginStart="16dp"
+				android:background="@color/divider" />
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/email_container"
+				android:layout_width="match_parent"
+				android:layout_height="@dimen/common_size_64dp"
+				android:foreground="?selectableItemBackground">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="16dp"
+					android:contentDescription="@null"
+					android:src="@drawable/settings_email_pass"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="52dp"
+					android:gravity="center_vertical"
+					android:text="@string/settings_password_email"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginEnd="16dp"
+					android:contentDescription="@string/disclosure_indicator"
+					android:src="@drawable/right_arrow_2"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<View
+				android:layout_width="match_parent"
+				android:layout_height="0.5dp"
+				android:layout_marginStart="16dp"
+				android:background="@color/divider" />
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/language_container"
+				android:layout_width="match_parent"
+				android:layout_height="@dimen/common_size_64dp"
+				android:foreground="?selectableItemBackground"
+				android:visibility="gone"
+				tools:visibility="visible">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="16dp"
+					android:contentDescription="@null"
+					android:src="@drawable/settings_language"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="52dp"
+					android:gravity="center_vertical"
+					android:text="@string/Language"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginEnd="16dp"
+					android:contentDescription="@string/disclosure_indicator"
+					android:src="@drawable/right_arrow_2"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<View
+				android:layout_width="match_parent"
+				android:layout_height="0.5dp"
+				android:layout_marginStart="16dp"
+				android:background="@color/divider"
+				android:visibility="gone"
+				tools:visibility="visible" />
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/devices_container"
+				android:layout_width="match_parent"
+				android:layout_height="@dimen/common_size_64dp"
+				android:foreground="?selectableItemBackground">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="16dp"
+					android:contentDescription="@null"
+					android:src="@drawable/settings_devices"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="52dp"
+					android:gravity="center_vertical"
+					android:text="@string/Devices"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginEnd="16dp"
+					android:contentDescription="@string/disclosure_indicator"
+					android:src="@drawable/right_arrow_2"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<View
+				android:layout_width="match_parent"
+				android:layout_height="0.5dp"
+				android:layout_marginStart="16dp"
+				android:background="@color/divider"
+				android:visibility="gone"
+				tools:visibility="visible" />
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/notifications_container"
+				android:layout_width="match_parent"
+				android:layout_height="@dimen/common_size_64dp"
+				android:foreground="?selectableItemBackground"
+				android:visibility="gone"
+				tools:visibility="visible">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="16dp"
+					android:contentDescription="@null"
+					android:src="@drawable/settings_notifications"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="52dp"
+					android:gravity="center_vertical"
+					android:text="@string/NotificationsAndSounds"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginEnd="16dp"
+					android:contentDescription="@string/disclosure_indicator"
+					android:src="@drawable/right_arrow_2"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+		</LinearLayout>
+
+	</ScrollView>
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/delete_account_button"
+		style="@style/Widget.App.DestructiveButton"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		app:cornerRadius="14dp"
+		android:padding="16dp"
+		android:layout_marginStart="20dp"
+		android:layout_marginEnd="20dp"
+		android:layout_marginBottom="16dp"
+		android:text="@string/delete_account"
+		android:textStyle="bold"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent" />
+
+	<androidx.core.widget.ContentLoadingProgressBar
+		android:id="@+id/progress_bar"
+		style="?android:progressBarStyleHorizontal"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:indeterminate="true"
+		android:indeterminateTint="@color/brand"
+		android:visibility="gone"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

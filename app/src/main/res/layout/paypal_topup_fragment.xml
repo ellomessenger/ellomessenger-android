@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:id="@+id/paypal_container"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:padding="20dp">
+
+		<ImageView
+			android:id="@+id/paypal_logo"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:contentDescription="@string/cont_desc_paypal_logo"
+			android:src="@drawable/paypal_full_logo"
+			app:layout_constraintBottom_toTopOf="@id/connect_button"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent" />
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/connect_button"
+			style="@style/Widget.App.BrandedButtonSmallRadius"
+			android:layout_width="match_parent"
+			android:layout_height="@dimen/common_size_58dp"
+			android:layout_marginBottom="12dp"
+			android:text="@string/connect_to_paypal"
+			app:layout_constraintBottom_toTopOf="@id/app_leave_paypal_info"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent" />
+
+		<TextView
+			android:id="@+id/app_leave_paypal_info"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:text="@string/you_will_leave_app"
+			android:textColor="@color/hint"
+			android:textSize="14sp"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:id="@+id/loading_container"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:padding="20dp"
+		android:visibility="gone">
+
+		<ProgressBar
+			android:id="@+id/progress_bar"
+			style="?android:attr/progressBarStyleLarge"
+			android:layout_width="160dp"
+			android:layout_height="0dp"
+			android:indeterminate="true"
+			android:indeterminateDrawable="@drawable/progressbar_circular"
+			android:indeterminateTint="@color/brand"
+			app:layout_constraintBottom_toTopOf="@id/connecting_label"
+			app:layout_constraintDimensionRatio="1:1"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			app:layout_constraintVertical_bias="0.4"
+			app:layout_constraintVertical_chainStyle="packed" />
+
+		<TextView
+			android:id="@+id/connecting_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:text="@string/connecting_to_paypal"
+			android:textSize="20sp"
+			android:textStyle="bold"
+			app:layout_constraintBottom_toTopOf="@id/connecting_info"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/progress_bar" />
+
+		<TextView
+			android:id="@+id/connecting_info"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="4dp"
+			android:gravity="center"
+			android:text="@string/you_will_leave_app"
+			android:textColor="@color/hint"
+			android:textSize="14sp"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/connecting_label" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+</FrameLayout>

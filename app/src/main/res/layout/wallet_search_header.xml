@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="@dimen/common_size_30dp"
+	android:background="@color/light_background"
+	android:clipChildren="false"
+	android:paddingTop="4dp">
+
+	<ImageView
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:contentDescription="@null"
+		android:elevation="4dp"
+		android:outlineProvider="background"
+		android:src="@drawable/top_round_background_wallet" />
+
+	<ImageView
+		android:id="@+id/knob"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="10dp"
+		android:contentDescription="@string/knob"
+		android:elevation="5dp"
+		android:outlineProvider="none"
+		android:src="@drawable/knob"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<ImageButton
+		android:id="@+id/sort_button"
+		android:layout_width="24dp"
+		android:layout_height="24dp"
+		android:layout_marginStart="20dp"
+		android:layout_marginBottom="15dp"
+		android:background="@null"
+		android:contentDescription="@string/sort"
+		android:elevation="5dp"
+		android:foreground="?selectableItemBackgroundBorderless"
+		android:outlineProvider="none"
+		android:src="@drawable/sort"
+		android:tint="@color/disabled_text"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:tint="@color/disabled_text" />
+
+	<ImageButton
+		android:id="@+id/calendar_button"
+		android:layout_width="24dp"
+		android:layout_height="24dp"
+		android:layout_marginStart="20dp"
+		android:layout_marginBottom="15dp"
+		android:background="@null"
+		android:contentDescription="@string/filter_by_date"
+		android:elevation="5dp"
+		android:foreground="?selectableItemBackgroundBorderless"
+		android:outlineProvider="none"
+		android:src="@drawable/ic_calendar"
+		android:tint="@color/disabled_text"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintStart_toEndOf="@id/sort_button"
+		app:tint="@color/disabled_text" />
+
+	<ImageButton
+		android:id="@+id/cancel_button"
+		android:layout_width="24dp"
+		android:layout_height="24dp"
+		android:layout_marginEnd="20dp"
+		android:layout_marginBottom="15dp"
+		android:background="@null"
+		android:contentDescription="@string/clear_filters"
+		android:elevation="5dp"
+		android:foreground="?selectableItemBackgroundBorderless"
+		android:outlineProvider="none"
+		android:src="@drawable/cancel"
+		android:tint="@color/disabled_text"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:tint="@color/disabled_text" />
+
+	<EditText
+		android:layout_width="0dp"
+		android:layout_height="34dp"
+		android:layout_marginStart="19dp"
+		android:layout_marginEnd="20dp"
+		android:background="@drawable/wallet_search_input_background"
+		android:drawableStart="@drawable/ic_search_menu"
+		android:drawablePadding="11dp"
+		android:drawableTint="@color/disabled_text"
+		android:elevation="5dp"
+		android:hint="@string/search"
+		android:importantForAutofill="no"
+		android:inputType="textAutoCorrect"
+		android:outlineProvider="none"
+		android:paddingStart="15dp"
+		android:paddingTop="0dp"
+		android:paddingEnd="15dp"
+		android:paddingBottom="0dp"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="@id/calendar_button"
+		app:layout_constraintEnd_toStartOf="@id/cancel_button"
+		app:layout_constraintStart_toEndOf="@id/calendar_button"
+		app:layout_constraintTop_toTopOf="@id/calendar_button" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

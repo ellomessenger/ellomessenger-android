@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:padding="@dimen/common_size_16dp">
+
+	<androidx.cardview.widget.CardView
+		android:id="@+id/avatar_container"
+		android:layout_width="@dimen/common_size_57dp"
+		android:layout_height="@dimen/common_size_57dp"
+		android:clickable="false"
+		app:cardBackgroundColor="@color/orange"
+		app:cardCornerRadius="28.5dp"
+		app:cardElevation="0dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<ImageView
+			android:id="@+id/avatar_view"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:contentDescription="@string/cont_desc_avatar" />
+	</androidx.cardview.widget.CardView>
+
+	<TextView
+		android:id="@+id/full_name"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="16dp"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintBottom_toBottomOf="@id/avatar_container"
+		app:layout_constraintStart_toEndOf="@id/avatar_container"
+		app:layout_constraintTop_toTopOf="@id/avatar_container"
+		tools:text="Anika Herwitz" />
+
+	<ImageView
+		android:id="@+id/status_icon"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginEnd="8dp"
+		android:src="@drawable/ic_approved"
+		app:layout_constraintBottom_toBottomOf="@id/transaction_status"
+		app:layout_constraintEnd_toStartOf="@id/transaction_status"
+		app:layout_constraintTop_toTopOf="@id/transaction_status" />
+
+	<TextView
+		android:id="@+id/transaction_status"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@string/approved"
+		android:textColor="@color/green"
+		android:textSize="13sp"
+		android:textStyle="bold"
+		app:layout_constraintBottom_toBottomOf="@id/avatar_container"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="@id/avatar_container" />
+
+	<TextView
+		android:id="@+id/total_amount"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="9.5dp"
+		android:text="@string/total_amount"
+		android:textSize="13sp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/avatar_container" />
+
+	<TextView
+		android:id="@+id/total_amount_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:drawablePadding="4dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:drawableStartCompat="@drawable/paid_channel_icon"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/total_amount"
+		tools:text="120" />
+
+	<TextView
+		android:id="@+id/received_amount"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@string/received_amount"
+		android:textSize="13sp"
+		app:layout_constraintEnd_toStartOf="@id/payment_methods"
+		app:layout_constraintStart_toEndOf="@id/total_amount"
+		app:layout_constraintTop_toTopOf="@id/total_amount" />
+
+	<TextView
+		android:id="@+id/received_amount_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:layout_constraintStart_toStartOf="@id/received_amount"
+		app:layout_constraintTop_toBottomOf="@id/received_amount"
+		tools:text="Feb 25, 2022" />
+
+	<TextView
+		android:id="@+id/payment_methods"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@string/payment_methods"
+		android:textSize="13sp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="@id/total_amount" />
+
+	<TextView
+		android:id="@+id/payment_methods_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/payment_methods"
+		tools:text="Feb 25, 2022" />
+
+	<TextView
+		android:id="@+id/commissions"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="16dp"
+		android:text="@string/commissions"
+		android:textSize="13sp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/total_amount_value" />
+
+	<TextView
+		android:id="@+id/commissions_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:drawablePadding="4dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:drawableStartCompat="@drawable/paid_channel_icon"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/commissions"
+		tools:text="120" />
+
+	<TextView
+		android:id="@+id/withdrawal_request"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@string/withdrawal_request"
+		android:textSize="13sp"
+		app:layout_constraintEnd_toStartOf="@id/payment_methods"
+		app:layout_constraintStart_toEndOf="@id/commissions"
+		app:layout_constraintTop_toTopOf="@id/commissions" />
+
+	<TextView
+		android:id="@+id/withdrawal_request_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:layout_constraintStart_toStartOf="@id/withdrawal_request"
+		app:layout_constraintTop_toBottomOf="@id/withdrawal_request"
+		tools:text="Feb 25, 2022" />
+
+	<TextView
+		android:id="@+id/transfer"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@string/transfer"
+		android:textSize="13sp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="@id/commissions" />
+
+	<TextView
+		android:id="@+id/transfer_value"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="6dp"
+		android:textSize="14sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/transfer"
+		tools:text="Feb 25, 2022" />
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

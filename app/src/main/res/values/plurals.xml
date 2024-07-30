@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<plurals name="days">
+		<item quantity="zero">%d days</item>
+		<item quantity="one">%d day</item>
+		<item quantity="two">%d days</item>
+		<item quantity="few">%d days</item>
+		<item quantity="many">%d days</item>
+		<item quantity="other">%d days</item>
+	</plurals>
+
+	<plurals name="weeks">
+		<item quantity="zero">%d weeks</item>
+		<item quantity="one">%d week</item>
+		<item quantity="two">%d weeks</item>
+		<item quantity="few">%d weeks</item>
+		<item quantity="many">%d weeks</item>
+		<item quantity="other">%d weeks</item>
+	</plurals>
+
+	<plurals name="months">
+		<item quantity="zero">%d months</item>
+		<item quantity="one">%d month</item>
+		<item quantity="two">%d months</item>
+		<item quantity="few">%d months</item>
+		<item quantity="many">%d months</item>
+		<item quantity="other">%d months</item>
+	</plurals>
+
+	<plurals name="years">
+		<item quantity="zero">%d years</item>
+		<item quantity="one">%d year</item>
+		<item quantity="two">%d years</item>
+		<item quantity="few">%d years</item>
+		<item quantity="many">%d years</item>
+		<item quantity="other">%d years</item>
+	</plurals>
+
+	<plurals name="hours">
+		<item quantity="zero">%d hours</item>
+		<item quantity="one">%d hour</item>
+		<item quantity="two">%d hours</item>
+		<item quantity="few">%d hours</item>
+		<item quantity="many">%d hours</item>
+		<item quantity="other">%d hours</item>
+	</plurals>
+
+	<plurals name="minutes">
+		<item quantity="zero">%d minutes</item>
+		<item quantity="one">%d minute</item>
+		<item quantity="two">%d minutes</item>
+		<item quantity="few">%d minutes</item>
+		<item quantity="many">%d minutes</item>
+		<item quantity="other">%d minutes</item>
+	</plurals>
+
+	<plurals name="seconds">
+		<item quantity="zero">%d seconds</item>
+		<item quantity="one">%d second</item>
+		<item quantity="two">%d seconds</item>
+		<item quantity="few">%d seconds</item>
+		<item quantity="many">%d seconds</item>
+		<item quantity="other">%d seconds</item>
+	</plurals>
+
+	<plurals name="hours_no_format">
+		<item quantity="zero">hours</item>
+		<item quantity="one">hour</item>
+		<item quantity="two">hours</item>
+		<item quantity="few">hours</item>
+		<item quantity="many">hours</item>
+		<item quantity="other">hours</item>
+	</plurals>
+
+	<plurals name="minutes_no_format">
+		<item quantity="zero">minutes</item>
+		<item quantity="one">minute</item>
+		<item quantity="two">minutes</item>
+		<item quantity="few">minutes</item>
+		<item quantity="many">minutes</item>
+		<item quantity="other">minutes</item>
+	</plurals>
+
+	<plurals name="seconds_no_format">
+		<item quantity="zero">seconds</item>
+		<item quantity="one">second</item>
+		<item quantity="two">seconds</item>
+		<item quantity="few">seconds</item>
+		<item quantity="many">seconds</item>
+		<item quantity="other">seconds</item>
+	</plurals>
+
+	<plurals name="days_no_format">
+		<item quantity="zero">days</item>
+		<item quantity="one">day</item>
+		<item quantity="two">days</item>
+		<item quantity="few">days</item>
+		<item quantity="many">days</item>
+		<item quantity="other">days</item>
+	</plurals>
+
+	<plurals name="weeks_no_format">
+		<item quantity="zero">weeks</item>
+		<item quantity="one">week</item>
+		<item quantity="two">weeks</item>
+		<item quantity="few">weeks</item>
+		<item quantity="many">weeks</item>
+		<item quantity="other">weeks</item>
+	</plurals>
+
+	<plurals name="months_no_format">
+		<item quantity="zero">months</item>
+		<item quantity="one">month</item>
+		<item quantity="two">months</item>
+		<item quantity="few">months</item>
+		<item quantity="many">months</item>
+		<item quantity="other">months</item>
+	</plurals>
+
+	<plurals name="years_no_format">
+		<item quantity="zero">years</item>
+		<item quantity="one">year</item>
+		<item quantity="two">years</item>
+		<item quantity="few">years</item>
+		<item quantity="many">years</item>
+		<item quantity="other">years</item>
+	</plurals>
+
+	<plurals name="subscribers">
+		<item quantity="zero">%d subscribers</item>
+		<item quantity="one">%d subscriber</item>
+		<item quantity="two">%d subscribers</item>
+		<item quantity="few">%d subscribers</item>
+		<item quantity="many">%d subscribers</item>
+		<item quantity="other">%d subscribers</item>
+	</plurals>
+
+	<plurals name="ello_coins">
+		<item quantity="zero">%d ElloCoins</item>
+		<item quantity="one">%d ElloCoin</item>
+		<item quantity="two">%d ElloCoins</item>
+		<item quantity="few">%d ElloCoins</item>
+		<item quantity="many">%d ElloCoins</item>
+		<item quantity="other">%d ElloCoins</item>
+	</plurals>
+
+	<plurals name="comments">
+		<item quantity="zero">%d comments</item>
+		<item quantity="one">%d comment</item>
+		<item quantity="two">%d comments</item>
+		<item quantity="few">%d comments</item>
+		<item quantity="many">%d comments</item>
+		<item quantity="other">%d comments</item>
+	</plurals>
+
+	<plurals name="prompts">
+		<item quantity="zero">prompts</item>
+		<item quantity="one">prompt</item>
+		<item quantity="two">prompts</item>
+		<item quantity="few">prompts</item>
+		<item quantity="many">prompts</item>
+		<item quantity="other">prompts</item>
+	</plurals>
+
+</resources>

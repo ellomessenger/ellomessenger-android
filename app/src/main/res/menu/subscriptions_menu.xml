@@ -1,0 +1,10 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/current_subscriptions"
+        android:icon="@drawable/ic_current_subscriptions"
+        android:title="@string/my_current_subscriptions" />
+    <item
+        android:id="@+id/previous_subscriptions"
+        android:icon="@drawable/previous_subscriptions"
+        android:title="@string/my_previous_subscriptions" />
+</menu>

@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:id="@+id/subscribe_dialog_parent_view"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:paddingHorizontal="16dp">
+
+		<include
+			android:id="@+id/channel_profile"
+			layout="@layout/channel_brief_profile"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="16dp"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent" />
+
+		<ImageButton
+			android:id="@+id/close_button"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="16dp"
+			android:background="?selectableItemBackgroundBorderless"
+			android:contentDescription="@string/Close"
+			android:src="@drawable/msg_close"
+			android:tint="@color/dark_gray"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			app:tint="@color/dark_gray" />
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/price_container"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			app:layout_constraintEnd_toEndOf="@id/channel_profile"
+			app:layout_constraintStart_toStartOf="@id/channel_profile"
+			app:layout_constraintTop_toBottomOf="@id/channel_profile">
+
+			<View
+				android:id="@+id/price_background"
+				android:layout_width="0dp"
+				android:layout_height="0dp"
+				android:layout_marginBottom="-12dp"
+				android:background="@drawable/subscribe_popup_text_background"
+				app:layout_constraintBottom_toBottomOf="@id/end_date_container"
+				app:layout_constraintEnd_toEndOf="@id/subs_channel"
+				app:layout_constraintStart_toStartOf="@id/subs_channel"
+				app:layout_constraintTop_toTopOf="@id/subs_channel" />
+
+			<TextView
+				android:id="@+id/subs_channel"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				android:gravity="center"
+				android:paddingTop="4dp"
+				android:text="@string/subscription_channel"
+				android:textColor="@color/brand"
+				android:textSize="15sp"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<ImageView
+				android:id="@+id/ello_coin_symbol"
+				android:layout_width="20dp"
+				android:layout_height="20dp"
+				android:layout_marginTop="4dp"
+				android:layout_marginEnd="3dp"
+				android:contentDescription="@string/cont_desc_ello_coin"
+				android:tint="@color/brand"
+				android:src="@drawable/ello_dollar_wallet_logo"
+				app:layout_constraintBottom_toBottomOf="@id/price"
+				app:layout_constraintDimensionRatio="1:1"
+				app:layout_constraintEnd_toStartOf="@id/price"
+				app:layout_constraintHorizontal_chainStyle="packed"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="@id/price" />
+
+			<TextView
+				android:id="@+id/price"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:gravity="center"
+				android:paddingTop="4dp"
+				android:text="@string/PricePerMonthMe"
+				android:textColor="@color/brand"
+				android:textSize="20sp"
+				android:textStyle="bold"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/ello_coin_symbol"
+				app:layout_constraintTop_toBottomOf="@+id/subs_channel"
+				tools:text="10/month" />
+
+			<FrameLayout
+				android:id="@+id/start_date_container"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="12dp"
+				android:layout_marginTop="12dp"
+				android:layout_marginEnd="12dp"
+				app:layout_constraintEnd_toEndOf="@id/price_background"
+				app:layout_constraintStart_toStartOf="@id/price_background"
+				app:layout_constraintTop_toBottomOf="@id/price">
+
+				<TextView
+					android:id="@+id/start_date_header"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="start"
+					android:text="@string/start_date_colon"
+					android:textColor="@color/text_fixed"
+					android:textSize="15sp"
+					android:textStyle="bold" />
+
+				<TextView
+					android:id="@+id/start_date_label"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="end"
+					android:textColor="@color/brand"
+					android:textSize="15sp"
+					android:textStyle="bold"
+					tools:text="Apr 1, 2023" />
+
+			</FrameLayout>
+
+			<FrameLayout
+				android:id="@+id/end_date_container"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="12dp"
+				android:layout_marginTop="8dp"
+				android:layout_marginEnd="12dp"
+				app:layout_constraintEnd_toEndOf="@id/price_background"
+				app:layout_constraintStart_toStartOf="@id/price_background"
+				app:layout_constraintTop_toBottomOf="@id/start_date_container">
+
+				<TextView
+					android:id="@+id/end_date_header"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="start"
+					android:text="@string/end_date_colon"
+					android:textColor="@color/text_fixed"
+					android:textSize="15sp"
+					android:textStyle="bold" />
+
+				<TextView
+					android:id="@+id/end_date_label"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="end"
+					android:textColor="@color/brand"
+					android:textSize="15sp"
+					android:textStyle="bold"
+					tools:text="Apr 1, 2024" />
+
+			</FrameLayout>
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<TextView
+			android:id="@+id/description"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="11dp"
+			android:background="@drawable/border_corner_background"
+			android:lineSpacingMultiplier="1.4"
+			android:paddingHorizontal="16dp"
+			android:paddingVertical="8dp"
+			android:text="@string/subscription_description"
+			android:textColor="@color/text"
+			android:textSize="14sp"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/price_container" />
+
+		<LinearLayout
+			android:id="@+id/adult_layout"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="11dp"
+			android:background="@drawable/adult_border"
+			android:orientation="vertical"
+			android:padding="8dp"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/description">
+
+			<ImageView
+				android:layout_width="match_parent"
+				android:layout_height="41dp"
+				android:background="@drawable/adult_background"
+				android:contentDescription="@string/adult_description"
+				android:padding="8dp"
+				android:src="@drawable/adult_channel_icon"
+				android:tint="@color/white"
+				app:tint="@color/white"
+				tools:ignore="UseAppTint" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="8dp"
+				android:lineSpacingMultiplier="1.2"
+				android:text="@string/adult_description"
+				android:textColor="@color/text"
+				android:textSize="14sp" />
+
+		</LinearLayout>
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/subscribe_button"
+			style="@style/Widget.App.BrandedButton"
+			android:layout_width="match_parent"
+			android:layout_height="@dimen/common_size_58dp"
+			android:layout_marginTop="24dp"
+			android:text="@string/subscribe"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/adult_layout" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="320dp"
+	android:layout_height="wrap_content"
+	android:background="@drawable/rounded_rect_button_background"
+	android:clickable="false"
+	android:paddingStart="15dp"
+	android:paddingEnd="15dp"
+	android:paddingBottom="12dp">
+
+	<ImageButton
+		android:id="@+id/close_button"
+		android:layout_width="24dp"
+		android:layout_height="24dp"
+		android:background="?selectableItemBackgroundBorderless"
+		android:contentDescription="@string/Close"
+		android:src="@drawable/ic_layer_close"
+		android:tint="@color/disabled_text"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		app:tint="@color/disabled_text" />
+
+	<TextView
+		android:id="@+id/title"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="9dp"
+		android:gravity="center"
+		android:textColor="@color/text"
+		android:text="@string/LimitReached"
+		android:textSize="20sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<TextView
+		android:id="@+id/description"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="8dp"
+		android:gravity="center"
+		android:text="@string/too_large_document"
+		android:textSize="14sp"
+		android:textColor="@color/text"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/title" />
+
+	<TextView
+		android:id="@+id/limit_label"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="24dp"
+		android:background="@drawable/limit_back"
+		android:drawableStart="@drawable/limit_folder"
+		android:drawablePadding="8dp"
+		android:gravity="center"
+		android:padding="10dp"
+		android:textColor="@color/white"
+		android:textSize="15sp"
+		android:textStyle="bold"
+		app:drawableStartCompat="@drawable/limit_folder"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/description"
+		app:layout_constraintWidth="wrap_content"
+		tools:text="Limit: 1 GB" />
+
+	<TextView
+		android:id="@+id/size_label"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="14dp"
+		android:background="@drawable/feed_audio_background"
+		android:gravity="center"
+		android:padding="18dp"
+		android:text="@string/large_file_error_format"
+		android:textColor="@color/text"
+		android:textSize="15sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/limit_label" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/ok_button"
+		style="@style/Widget.App.BrandedButton"
+		android:layout_width="match_parent"
+		android:layout_height="54dp"
+		android:text="@string/ok"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/size_label" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+

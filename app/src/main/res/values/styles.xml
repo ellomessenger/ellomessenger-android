@@ -1,0 +1,693 @@
+<resources xmlns:android="http://schemas.android.com/apk/res/android">
+
+	<!--THEMES-->
+
+	<style name="Theme.TMessages.Start" parent="Theme.SplashScreen">
+		<item name="windowSplashScreenBackground">@color/splash_background</item>
+		<item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+		<item name="windowSplashScreenAnimationDuration">1000</item>
+		<item name="postSplashScreenTheme">@style/Theme.TMessages</item>
+	</style>
+
+	<style name="Theme.TMessages" parent="Theme.Material3.DayNight.NoActionBar">
+		<item name="android:fontFamily">@font/font</item>
+		<item name="fontFamily">@font/font</item>
+		<item name="android:windowActionBar">false</item>
+		<item name="android:windowNoTitle">true</item>
+		<item name="android:windowActionBarOverlay">false</item>
+		<!--		<item name="android:itemTextAppearance">@style/ActionBar.Transparent.TMessages.Item</item>-->
+		<item name="android:listViewStyle">@style/Theme.TMessages.ListView</item>
+		<item name="android:listChoiceBackgroundIndicator">@drawable/list_selector_ex</item>
+		<item name="android:actionBarItemBackground">@drawable/bar_selector_style</item>
+		<!--				<item name="android:actionBarStyle">@style/ActionBar.Transparent.TMessages.Start</item>-->
+		<item name="android:windowBackground">@color/background</item>
+		<item name="android:windowContentOverlay">@null</item>
+		<!--		<item name="android:textViewStyle">@style/MyTextViewStyle</item>-->
+		<item name="android:colorBackground">@color/background</item>
+		<item name="colorOnBackground">@color/text</item>
+		<item name="android:textColor">@color/text</item>
+		<item name="colorPrimary">@color/white</item>
+		<item name="colorPrimaryVariant">@color/brand</item>
+		<item name="colorSecondary">@color/brand</item>
+		<item name="colorSecondaryVariant">@color/brand</item>
+		<item name="colorOnPrimary">@color/white</item>
+		<item name="colorSurface">@color/white_day_night</item>
+		<item name="colorOnSurface">@color/brand</item>
+		<item name="colorAccent">@color/brand</item>
+		<item name="colorOnContainer">@color/text</item>
+		<item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+		<item name="textInputStyle">@style/Widget.App.TextInputLayout.OutlinedBox</item>
+		<item name="bottomNavigationStyle">@style/Theme.App.BottomNavigationView</item>
+		<item name="actionBarStyle">@style/Theme.App.ActionBar</item>
+		<item name="iconTint">@color/text</item>
+		<item name="alertDialogTheme">@style/Theme.App.AlertDialog</item>
+		<item name="materialAlertDialogTheme">@style/Theme.App.MaterialAlertDialog</item>
+		<item name="toolbarStyle">@style/Theme.App.ToolbarLayout</item>
+		<item name="appBarLayoutStyle">@style/Theme.App.AppBarLayout</item>
+		<item name="buttonBarButtonStyle">@style/Theme.App.ButtonBarStyle</item>
+		<item name="android:lineSpacingMultiplier">1.3</item>
+		<item name="android:textSize">16sp</item>
+		<item name="android:textColorLink">@color/brand</item>
+		<item name="materialButtonStyle">@style/Theme.App.ButtonBarStyle</item>
+		<item name="hintTextColor">@color/hint</item>
+		<item name="bottomSheetDialogTheme">@style/BottomSheetDialogStyle</item>
+		<item name="android:colorControlActivated">@color/text</item>
+		<item name="switchStyle">@style/Widget.App.Switch</item>
+		<item name="materialButtonOutlinedStyle">@style/Widget.App.ButtonOutlinedStyle</item>
+		<item name="brandedButtonStyle">@style/Widget.App.BrandedButton</item>
+		<item name="brandedWhiteButtonStyle">@style/Widget.App.WhiteButton</item>
+		<item name="checkboxStyle">@style/Widget.App.CheckBoxCustom</item>
+		<item name="brandedWhiteButtonSmallRadiusStyle">@style/Widget.App.WhiteButtonSmallRadius</item>
+		<item name="tabStyle">@style/AppTheme.TabLayout</item>
+		<item name="popupMenuBackground">@color/background</item>
+	</style>
+
+	<style name="Widget.App.ButtonOutlinedStyle" parent="Widget.Material3.Button.OutlinedButton">
+		<item name="backgroundTint">@color/toggle_group_color_selector</item>
+		<item name="android:textColor">@color/toggle_group_text_color_selector</item>
+		<item name="strokeColor">@color/color_toggle_active</item>
+		<item name="android:textSize">14sp</item>
+	</style>
+
+	<style name="Widget.App.WalletPeriodButtonOutlinedStyle" parent="Widget.Material3.Button.OutlinedButton">
+		<item name="backgroundTint">@color/wallet_toggle_group_color_selector</item>
+		<item name="android:textColor">@color/text</item>
+		<item name="strokeColor">@color/gray_border</item>
+		<item name="android:textSize">14sp</item>
+	</style>
+
+	<style name="Theme.TMessages.PopupNotification" parent="Theme.TMessages">
+		<item name="android:windowBackground">@android:color/transparent</item>
+		<item name="android:windowIsTranslucent">true</item>
+		<item name="android:windowAnimationStyle">@null</item>
+		<item name="android:windowActionBar">false</item>
+		<item name="android:windowNoTitle">true</item>
+	</style>
+
+	<style name="Theme.TMessages.Transparent" parent="Theme.TMessages">
+		<item name="android:windowIsTranslucent">true</item>
+		<item name="android:windowBackground">@android:color/transparent</item>
+		<item name="android:windowContentOverlay">@null</item>
+		<item name="android:windowCloseOnTouchOutside">false</item>
+		<item name="android:colorBackgroundCacheHint">@null</item>
+		<item name="android:windowNoTitle">true</item>
+		<item name="android:windowIsFloating">true</item>
+		<item name="android:backgroundDimEnabled">false</item>
+		<item name="android:windowAnimationStyle">@null</item>
+		<item name="android:windowActionBar">false</item>
+	</style>
+
+	<style name="Theme.TMessages.TransparentWithAlerts" parent="Theme.TMessages">
+		<item name="android:windowIsTranslucent">true</item>
+		<item name="android:windowBackground">@android:color/transparent</item>
+		<item name="android:windowContentOverlay">@null</item>
+		<item name="android:colorBackgroundCacheHint">@null</item>
+		<item name="android:windowNoTitle">true</item>
+		<item name="android:windowActionBar">false</item>
+	</style>
+
+	<style name="scrollbarShapeStyle">
+		<item name="android:scrollbarAlwaysDrawVerticalTrack">true</item>
+		<item name="android:scrollbarStyle">insideInset</item>
+		<item name="android:scrollbars">vertical</item>
+		<item name="android:fadeScrollbars">true</item>
+		<item name="android:scrollbarThumbVertical">@drawable/scrollbar_vertical_thumb_inset</item>
+		<item name="android:scrollbarTrackVertical">@null</item>
+		<item name="android:scrollbarSize">8dp</item>
+		<item name="android:scrollbarFadeDuration">250</item>
+		<item name="android:scrollbarDefaultDelayBeforeFade">400</item>
+	</style>
+
+	<!-- TextView -->
+
+	<!--	<style name="MyTextViewStyle" parent="android:Widget.Holo.Light.TextView">-->
+	<!--		<item name="android:hyphenationFrequency">none</item>-->
+	<!--	</style>-->
+
+	<!-- POPUP -->
+
+	<style name="PopupAnimation" mce_bogus="1" parent="android:Animation">
+		<item name="android:windowEnterAnimation">@anim/popup_in</item>
+		<item name="android:windowExitAnimation">@anim/popup_out</item>
+	</style>
+
+	<style name="PopupContextAnimation" mce_bogus="1" parent="android:Animation">
+		<item name="android:windowEnterAnimation">@anim/popup_context_in</item>
+	</style>
+
+	<style name="PopupContextAnimation2" mce_bogus="1" parent="android:Animation">
+		<item name="android:windowEnterAnimation">@anim/popup_context_in</item>
+		<item name="android:windowExitAnimation">@anim/popup_out</item>
+	</style>
+
+	<!--ACTION BAR-->
+
+	<!--	<style name="ActionBar.Transparent.TMessages.Start" parent="android:style/Widget.Holo.Light.ActionBar">-->
+	<!--		<item name="android:background">#ff527da3</item>-->
+	<!--		<item name="android:logo">@drawable/transparent</item>-->
+	<!--		<item name="android:title">""</item>-->
+	<!--	</style>-->
+
+	<!--ACTION BAR ITEMS-->
+
+	<style name="ActionBar.Transparent.TMessages.Item" parent="android:TextAppearance.Widget.IconMenu.Item">
+		<item name="android:textColor">#000000</item>
+		<item name="android:textSize">18sp</item>
+	</style>
+
+	<!--LIST VIEW-->
+
+	<style name="Theme.TMessages.ListView" parent="@android:style/Widget.ListView">
+		<item name="android:listSelector">@drawable/list_selector_ex</item>
+		<item name="android:fadingEdge">none</item>
+		<item name="android:dividerHeight">1dp</item>
+		<item name="android:divider">@color/divider</item>
+	</style>
+
+	<!--ALERT DIALOG-->
+
+	<style name="DialogNoAnimation">
+		<item name="android:windowEnterAnimation">@anim/no_animation</item>
+		<item name="android:windowExitAnimation">@anim/no_animation</item>
+	</style>
+
+	<style name="TransparentDialog" parent="@android:style/Theme.Dialog">
+		<item name="android:windowBackground">@android:color/transparent</item>
+		<item name="android:background">@null</item>
+		<item name="android:windowContentOverlay">@null</item>
+		<item name="android:windowNoTitle">true</item>
+		<item name="android:windowIsFloating">true</item>
+		<item name="android:windowIsTranslucent">true</item>
+		<item name="android:windowFullscreen">false</item>
+	</style>
+
+	<style name="TransparentDialog2" parent="TransparentDialog">
+		<item name="android:statusBarColor">@android:color/transparent</item>
+		<item name="android:windowTranslucentStatus">true</item>
+	</style>
+
+	<style name="TransparentDialogNoAnimation" parent="@android:style/Theme.Dialog">
+		<item name="android:windowBackground">@android:color/transparent</item>
+		<item name="android:colorBackgroundCacheHint">@null</item>
+		<item name="android:windowFrame">@null</item>
+		<item name="android:windowContentOverlay">@null</item>
+		<item name="android:windowAnimationStyle">@null</item>
+		<item name="android:windowIsFloating">false</item>
+		<item name="android:backgroundDimEnabled">false</item>
+		<item name="android:windowIsTranslucent">true</item>
+		<item name="android:windowNoTitle">true</item>
+	</style>
+
+	<!--APP WIDGET-->
+
+	<style name="Base.Theme.TMessages.AppWidget" parent="Theme.TMessages" />
+
+	<style name="Theme.TMessages.AppWidget" parent="Base.Theme.TMessages.AppWidget">
+		<item name="widgetBackgroundCornerRadius">@dimen/app_widget_background_corner_radius</item>
+		<item name="widgetPreviewTitle" />
+		<item name="widgetPreviewContent" />
+		<item name="widgetPreviewTime" />
+		<item name="widgetPreviewDot">0</item>
+		<item name="widgetPreviewImage">@null</item>
+	</style>
+
+	<style name="Theme.TMessages.AppWidget.Preview">
+		<item name="widgetPreviewTitle">Local Weather</item>
+		<item name="widgetPreviewContent">&#9728; 30°C Sunny,</item>
+		<item name="widgetPreviewTime">13:00</item>
+		<item name="widgetPreviewDot">0</item>
+		<item name="widgetPreviewImage">@drawable/widget_avatar_5</item>
+	</style>
+
+	<style name="Theme.TMessages.AppWidget.Preview2">
+		<item name="widgetPreviewTitle">Rex</item>
+		<item name="widgetPreviewContent">It\'s morning in Tokyo &#128526;</item>
+		<item name="widgetPreviewTime">12:00</item>
+		<item name="widgetPreviewDot">2</item>
+		<item name="widgetPreviewImage">@drawable/widget_avatar_7</item>
+	</style>
+
+	<style name="Theme.TMessages.AppWidget.Preview3">
+		<item name="widgetPreviewTitle">Dolph Ingman</item>
+		<item name="widgetPreviewContent">&#128517; Sticker</item>
+		<item name="widgetPreviewTime">11:00</item>
+		<item name="widgetPreviewDot">2</item>
+		<item name="widgetPreviewImage">@drawable/widget_avatar_6</item>
+	</style>
+
+	<style name="Theme.TMessages.AppWidget.Preview4">
+		<item name="widgetPreviewTitle">Doge</item>
+		<item name="widgetPreviewDot">0</item>
+		<item name="widgetPreviewImage">@drawable/widget_avatar_1</item>
+	</style>
+
+	<style name="Theme.TMessages.AppWidget.Preview5">
+		<item name="widgetPreviewTitle">Donald</item>
+		<item name="widgetPreviewDot">2</item>
+		<item name="widgetPreviewImage">@drawable/widget_avatar_4</item>
+	</style>
+
+	<style name="Theme.TMessages.AppWidget.Preview6">
+		<item name="widgetPreviewTitle">Kate</item>
+		<item name="widgetPreviewDot">2</item>
+		<item name="widgetPreviewImage">@drawable/widget_avatar_2</item>
+	</style>
+
+	<style name="Theme.TMessages.AppWidget.Preview7">
+		<item name="widgetPreviewTitle">Nick</item>
+		<item name="widgetPreviewDot">2</item>
+		<item name="widgetPreviewImage">@drawable/widget_avatar_3</item>
+	</style>
+
+	<!-- APP WIDGET STYLES-->
+
+	<style name="Base.TMessages.AppWidget.Background" parent="android:Widget">
+		<item name="android:id">@android:id/background</item>
+		<item name="android:padding">2dp</item>
+	</style>
+
+	<style name="TMessages.AppWidget.Background" parent="Base.TMessages.AppWidget.Background">
+		<item name="android:background">@drawable/widget_bg</item>
+	</style>
+
+	<style name="Base.TMessages.AppWidget.Badge" parent="android:Widget">
+		<item name="android:layout_width">wrap_content</item>
+		<item name="android:layout_height">23dp</item>
+		<item name="android:paddingLeft">7dp</item>
+		<item name="android:paddingRight">7dp</item>
+		<item name="android:paddingBottom">1dp</item>
+		<item name="android:fontFamily">@font/inter_medium</item>
+		<item name="android:gravity">center</item>
+		<item name="android:minWidth">23dp</item>
+		<item name="android:textSize">13sp</item>
+		<item name="android:background">@drawable/widget_badge_background</item>
+	</style>
+
+	<style name="TMessages.AppWidget.Badge" parent="Base.TMessages.AppWidget.Badge">
+		<item name="android:textColor">@color/widget_badge</item>
+	</style>
+
+	<!-- imported styles from old project -->
+
+	<!--	<style name="Theme.Ello" parent="Theme.Material3.DayNight.NoActionBar">-->
+	<!--		<item name="android:colorBackground">@color/background</item>-->
+	<!--		<item name="colorOnBackground">@color/text</item>-->
+	<!--		<item name="android:textColor">@color/text</item>-->
+	<!--		<item name="colorPrimary">@color/white</item>-->
+	<!--		<item name="colorPrimaryVariant">@color/brand</item>-->
+	<!--		<item name="colorSecondary">@color/brand</item>-->
+	<!--		<item name="colorSecondaryVariant">@color/brand</item>-->
+	<!--		<item name="colorOnPrimary">@color/white</item>-->
+	<!--		<item name="colorSurface">@color/white_day_night</item>-->
+	<!--		<item name="colorOnSurface">@color/brand</item>-->
+	<!--		<item name="colorAccent">@color/brand</item>-->
+	<!--		<item name="colorOnContainer">@color/text</item>-->
+	<!--		<item name="android:statusBarColor">?attr/colorPrimaryVariant</item>-->
+	<!--		<item name="textInputStyle">@style/Widget.App.TextInputLayout.OutlinedBox</item>-->
+	<!--		<item name="bottomNavigationStyle">@style/Theme.App.BottomNavigationView</item>-->
+	<!--		<item name="actionBarStyle">@style/Theme.App.ActionBar</item>-->
+	<!--		<item name="iconTint">@color/text</item>-->
+	<!--		<item name="alertDialogTheme">@style/Theme.App.AlertDialog</item>-->
+	<!--		<item name="materialAlertDialogTheme">@style/Theme.App.MaterialAlertDialog</item>-->
+	<!--		<item name="toolbarStyle">@style/Theme.App.ToolbarLayout</item>-->
+	<!--		<item name="appBarLayoutStyle">@style/Theme.App.AppBarLayout</item>-->
+	<!--		<item name="buttonBarButtonStyle">@style/Theme.App.ButtonBarStyle</item>-->
+	<!--		<item name="android:lineSpacingMultiplier">1.3</item>-->
+	<!--		<item name="android:textSize">16sp</item>-->
+	<!--		<item name="android:textColorLink">@color/brand</item>-->
+	<!--		<item name="materialButtonStyle">@style/Theme.App.ButtonBarStyle</item>-->
+	<!--		<item name="hintTextColor">@color/hint</item>-->
+	<!--		<item name="bottomSheetDialogTheme">@style/BottomSheetDialogStyle</item>-->
+	<!--		<item name="android:colorControlActivated">@color/text</item>-->
+	<!--		<item name="switchStyle">@style/Widget.App.Switch</item>-->
+	<!--	</style>-->
+
+	<style name="Widget.App.Switch" parent="Widget.MaterialComponents.CompoundButton.Switch">
+		<item name="useMaterialThemeColors">false</item>
+		<item name="android:thumb">@drawable/switch_thumb</item>
+		<item name="materialThemeOverlay">@style/ThemeOverlay.App.Switch</item>
+	</style>
+
+	<style name="ThemeOverlay.App.Switch" parent="">
+		<item name="colorSurface">@color/switch_tint_disabled</item>
+		<item name="colorOnSurface">@color/brand</item>
+		<item name="colorSecondary">@color/dark_gray</item>
+	</style>
+
+	<style name="BottomSheetDialogStyle" parent="Theme.Material3.DayNight.BottomSheetDialog">
+		<item name="android:windowIsFloating">false</item>
+		<item name="android:windowSoftInputMode">adjustResize</item>
+		<item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+		<item name="colorPrimary">@color/white</item>
+		<item name="colorAccent">@color/brand</item>
+	</style>
+
+	<style name="Theme.App.ButtonBarStyle" parent="Widget.Material3.Button">
+		<item name="android:textColor">@color/text</item>
+		<item name="backgroundTint">@color/background</item>
+	</style>
+
+	<style name="Theme.App.AppBarLayout" parent="Widget.MaterialComponents.AppBarLayout.PrimarySurface">
+		<item name="android:background">@color/white_day_night</item>
+	</style>
+
+	<style name="Theme.App.ToolbarLayout" parent="Widget.Material3.Toolbar">
+		<item name="titleTextAppearance">@style/Theme.App.ActionBar.TitleTextStyle</item>
+		<item name="navigationIconTint">@color/text</item>
+	</style>
+
+	<style name="Theme.App.AlertDialog" parent="ThemeOverlay.Material3.Dialog">
+		<item name="buttonBarPositiveButtonStyle">@style/Theme.App.DialogButton</item>
+		<item name="buttonBarNegativeButtonStyle">@style/Theme.App.DialogButton</item>
+		<item name="buttonBarNeutralButtonStyle">@style/Theme.App.DialogButton</item>
+	</style>
+
+	<style name="Theme.App.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+		<item name="buttonBarPositiveButtonStyle">@style/Theme.App.DialogButton</item>
+		<item name="buttonBarNegativeButtonStyle">@style/Theme.App.DialogButton</item>
+		<item name="buttonBarNeutralButtonStyle">@style/Theme.App.DialogButton</item>
+		<item name="android:background">@color/background</item>
+	</style>
+
+	<style name="Theme.App.DialogButton" parent="Widget.Material3.Button.TextButton.Dialog">
+		<item name="android:textColor">@color/text</item>
+	</style>
+
+	<style name="Theme.App.ActionBar" parent="Widget.Material3.Light.ActionBar.Solid">
+		<item name="titleTextStyle">@style/Theme.App.ActionBar.TitleTextStyle</item>
+		<item name="background">@color/background</item>
+		<item name="backgroundStacked">@color/background</item>
+		<item name="backgroundSplit">@color/background</item>
+	</style>
+
+	<style name="Theme.App.ActionBar.TitleTextStyle" parent="TextAppearance.Material3.ActionBar.Title">
+		<item name="android:textColor">@color/text</item>
+		<item name="android:textSize">20sp</item>
+	</style>
+
+	<style name="Theme.App.BottomNavigationView" parent="Widget.Material3.BottomNavigationView">
+		<item name="android:backgroundTintMode">multiply</item>
+		<item name="android:background">@drawable/bottom_nav_background</item>
+		<item name="itemActiveIndicatorStyle">@null</item>
+		<item name="labelVisibilityMode">labeled</item>
+		<item name="materialThemeOverlay">@style/AppTheme.BottomNavigationView.ElevationOverlay
+		</item>
+		<item name="itemTextColor">@color/bottom_navigation_color</item>
+		<item name="itemIconTint">@color/bottom_navigation_color</item>
+	</style>
+
+	<style name="AppTheme.BottomNavigationView.ElevationOverlay" parent="">
+		<item name="elevationOverlayEnabled">false</item>
+	</style>
+
+	<!--	<style name="Theme.App.Starting" parent="Theme.SplashScreen">-->
+	<!--		<item name="windowSplashScreenBackground">@color/background</item>-->
+	<!--		<item name="windowSplashScreenAnimatedIcon">@drawable/ic_ello_logo</item>-->
+	<!--		<item name="windowSplashScreenAnimationDuration">1000</item>-->
+	<!--		<item name="postSplashScreenTheme">@style/Theme.Ello</item>-->
+	<!--	</style>-->
+
+	<style name="Widget.App.WhiteButton" parent="Widget.App.BrandedButton">
+		<item name="backgroundTint">@color/white_button_background</item>
+		<item name="android:textColor">@color/white_button_foreground</item>
+	</style>
+
+	<style name="Widget.App.RectangularButton" parent="Widget.App.WhiteButton">
+		<item name="iconTint">@color/brand</item>
+		<item name="android:inset">0dp</item>
+		<item name="android:insetTop">0dp</item>
+		<item name="android:insetBottom">0dp</item>
+		<item name="android:insetLeft">0dp</item>
+		<item name="android:insetRight">0dp</item>
+		<item name="shapeAppearanceOverlay">@style/Widget.App.BrandedButton.RectOverlay</item>
+		<item name="android:textColor">@color/brand</item>
+		<item name="drawableTint">@color/brand</item>
+		<item name="backgroundTint">@color/buttons_background</item>
+		<item name="android:padding">0dp</item>
+		<item name="android:foreground">?selectableItemBackground</item>
+	</style>
+
+	<style name="Widget.App.BrandedButton" parent="Widget.Material3.Button">
+		<item name="shapeAppearanceOverlay">@style/Widget.App.BrandedButton.ShapeOverlay</item>
+		<item name="android:textColor">@color/brand_button_foreground</item>
+		<item name="android:textSize">@dimen/common_size_16dp</item>
+		<item name="android:textStyle">normal</item>
+		<item name="backgroundTint">@color/brand_button_background</item>
+	</style>
+
+	<style name="Widget.App.BrandedButton.Green">
+		<item name="backgroundTint">#44BE2E</item><!-- todo -->
+	</style>
+
+	<style name="Widget.App.BrandedButtonSmallRadius" parent="Widget.App.BrandedButton">
+		<item name="shapeAppearanceOverlay">
+			@style/Widget.App.BrandedButton.ShapeOverlaySmallRadius
+		</item>
+	</style>
+
+	<style name="Widget.App.BrandedButtonTinyRadius" parent="Widget.App.BrandedButton">
+		<item name="shapeAppearanceOverlay">
+			@style/Widget.App.BrandedButton.ShapeOverlayTinyRadius
+		</item>
+	</style>
+
+	<style name="Widget.App.WhiteButtonLargeRadius" parent="Widget.App.WhiteButtonSmallRadius">
+		<item name="shapeAppearanceOverlay">
+			@style/Widget.App.BrandedButton.ShapeOverlay
+		</item>
+	</style>
+
+	<style name="Widget.App.WhiteButtonSmallRadius" parent="Widget.Material3.Button.OutlinedButton">
+		<item name="shapeAppearanceOverlay">
+			@style/Widget.App.BrandedButton.ShapeOverlaySmallRadius
+		</item>
+		<item name="backgroundTint">@color/white_button_background</item>
+		<item name="android:textColor">@color/button_text</item>
+		<item name="android:textSize">@dimen/common_size_16dp</item>
+		<item name="android:textStyle">bold</item>
+		<item name="strokeColor">@color/hint</item>
+		<item name="strokeWidth">0.32dp</item>
+		<item name="rippleColor">@color/light_gray</item>
+	</style>
+
+	<style name="Widget.App.DestructiveButtonSmallRadius" parent="Widget.App.DestructiveButton">
+		<item name="shapeAppearanceOverlay">
+			@style/Widget.App.BrandedButton.ShapeOverlaySmallRadius
+		</item>
+	</style>
+
+	<style name="Widget.App.DestructiveButton" parent="Widget.App.BrandedButton">
+		<item name="android:textColor">@color/purple</item>
+		<item name="backgroundTint">@color/destructive_button_background</item>
+	</style>
+
+	<style name="Widget.App.BrandedButton.RectOverlay" parent="ShapeAppearanceOverlay.Material3.Button">
+		<item name="cornerSize">0dp</item>
+	</style>
+
+	<style name="Widget.App.BrandedButton.ShapeOverlay" parent="ShapeAppearanceOverlay.Material3.Button">
+		<item name="cornerSize">@dimen/common_size_18dp</item>
+	</style>
+
+	<style name="Widget.App.BrandedButton.ShapeOverlaySmallRadius" parent="ShapeAppearanceOverlay.Material3.Button">
+		<item name="cornerSize">@dimen/common_size_10dp</item>
+	</style>
+
+	<style name="Widget.App.BrandedButton.ShapeOverlayTinyRadius" parent="ShapeAppearanceOverlay.Material3.Button">
+		<item name="cornerSize">@dimen/common_size_10dp</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayout.OutlinedBox.Success" parent="Widget.App.TextInputLayout.OutlinedBox">
+		<item name="boxStrokeColor">@color/brand</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayout.NoBox" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+		<item name="hintTextColor">@color/outlined_box_hint_color</item>
+		<item name="boxStrokeWidth">0dp</item>
+		<item name="boxStrokeWidthFocused">0dp</item>
+		<item name="boxStrokeColor">@null</item>
+		<item name="endIconTint">@color/brand</item>
+		<item name="endIconMode">clear_text</item>
+		<item name="android:textSize">@dimen/common_size_16dp</item>
+		<item name="errorTextColor">@color/purple</item>
+		<item name="boxBackgroundColor">@null</item>
+		<item name="boxStrokeErrorColor">@null</item>
+		<item name="boxCornerRadiusBottomEnd">0dp</item>
+		<item name="boxCornerRadiusBottomStart">0dp</item>
+		<item name="boxCornerRadiusTopEnd">0dp</item>
+		<item name="boxCornerRadiusTopStart">0dp</item>
+		<item name="android:textColorHint">@color/hint</item>
+		<item name="materialThemeOverlay">@null</item>
+		<item name="editTextStyle">@null</item>
+		<item name="shapeAppearance">@null</item>
+		<item name="checkboxStyle">@null</item>
+		<item name="prefixTextAppearance">@style/Widget.App.TextInputLayoutNoBoxTextAppearance
+		</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayoutNoBoxTextAppearance" parent="">
+		<item name="android:gravity">center_vertical</item>
+		<item name="android:textSize">16sp</item>
+		<item name="android:textColor">@color/text</item>
+		<item name="android:paddingStart">20dp</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayout.OutlinedBox" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+		<item name="android:textColorHighlight">@color/avatar_tint</item>
+		<item name="android:colorControlActivated">@color/avatar_tint</item>
+		<item name="hintTextColor">@color/outlined_box_hint_color</item>
+		<item name="boxStrokeWidth">0dp</item>
+		<item name="boxStrokeWidthFocused">1dp</item>
+		<item name="boxStrokeColor">@color/brand</item>
+		<item name="endIconTint">@color/brand</item>
+		<item name="endIconMode">clear_text</item>
+		<item name="android:textSize">@dimen/common_size_16dp</item>
+		<item name="errorTextColor">@color/purple</item>
+		<item name="boxBackgroundColor">@color/light_gray</item>
+		<item name="boxStrokeErrorColor">@color/purple</item>
+		<item name="boxCornerRadiusBottomEnd">@dimen/common_size_18dp</item>
+		<item name="boxCornerRadiusBottomStart">@dimen/common_size_18dp</item>
+		<item name="boxCornerRadiusTopEnd">@dimen/common_size_18dp</item>
+		<item name="boxCornerRadiusTopStart">@dimen/common_size_18dp</item>
+		<item name="android:textColorHint">@color/hint</item>
+		<item name="materialThemeOverlay">@style/Widget.App.TextInputLayout.OutlinedBox
+		</item>
+		<item name="editTextStyle">@style/CustomTextInputEditPaddingStyle</item>
+		<item name="shapeAppearance">@style/Widget.App.TextInputLayout.ShapeAppearanceOverlay</item>
+		<item name="checkboxStyle">@style/Widget.App.CheckBox</item>
+	</style>
+
+	<style name="Widget.App.CheckBox" parent="Widget.Material3.CompoundButton.CheckBox">
+		<item name="buttonTint">@color/checkbox_color</item>
+		<item name="android:button">@drawable/checkbox</item>
+		<item name="android:paddingStart">10dp</item>
+		<item name="android:textAppearance">@style/Widget.App.CheckboxTextAppearance</item>
+	</style>
+
+	<style name="Widget.App.CheckBoxCustom" parent="Widget.Material3.CompoundButton.CheckBox">
+		<item name="buttonTint">@color/checkbox_color</item>
+		<item name="android:button">@drawable/radiobutton</item>
+		<item name="android:paddingStart">10dp</item>
+		<item name="android:textAppearance">@style/Widget.App.CheckboxTextAppearance</item>
+	</style>
+
+	<style name="Widget.App.CheckboxTextAppearance" parent="">
+		<item name="android:textSize">14sp</item>
+		<item name="android:textColor">@color/text</item>
+		<item name="android:paddingStart">20dp</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenu" parent="Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+		<item name="materialThemeOverlay">@style/ThemeOverlay.App.AutoCompleteTextView.OutlinedBox
+		</item>
+		<item name="endIconDrawable">@drawable/ic_dropdown</item>
+		<item name="endIconTint">@color/text</item>
+		<item name="hintTextColor">@color/outlined_box_hint_color</item>
+		<item name="boxStrokeWidth">0dp</item>
+		<item name="boxStrokeWidthFocused">1dp</item>
+		<item name="boxStrokeColor">@color/brand</item>
+		<item name="android:textColor">@color/text</item>
+		<item name="boxBackgroundColor">@color/light_gray</item>
+		<item name="boxStrokeErrorColor">@color/purple</item>
+		<item name="boxCornerRadiusBottomEnd">@dimen/common_size_18dp</item>
+		<item name="boxCornerRadiusBottomStart">@dimen/common_size_18dp</item>
+		<item name="boxCornerRadiusTopEnd">@dimen/common_size_18dp</item>
+		<item name="boxCornerRadiusTopStart">@dimen/common_size_18dp</item>
+		<item name="android:textColorHint">@color/hint</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenu.White">
+		<item name="boxStrokeColor">@color/dropdown_stroke</item>
+		<item name="boxBackgroundColor">@color/background</item>
+		<item name="boxStrokeWidth">1dp</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenuSmallDropdown" parent="Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+		<item name="endIconDrawable">@drawable/small_dropdown</item>
+	</style>
+
+	<style name="ThemeOverlay.App.AutoCompleteTextView.OutlinedBox" parent="ThemeOverlay.Material3.AutoCompleteTextView.OutlinedBox">
+		<item name="autoCompleteTextViewStyle">@style/Widget.App.AutoCompleteTextView.OutlinedBox
+		</item>
+		<item name="colorSurface">@color/white_day_night</item>
+	</style>
+
+	<style name="Widget.App.AutoCompleteTextView.OutlinedBox" parent="Widget.Material3.AutoCompleteTextView.OutlinedBox">
+		<item name="android:paddingTop">0dp</item>
+		<item name="android:paddingBottom">0dp</item>
+		<item name="android:popupBackground">@color/background</item>
+		<item name="android:textColor">@color/text</item>
+	</style>
+
+	<style name="Widget.App.TextInputLayout.ShapeAppearanceOverlay" parent="">
+		<item name="cornerSize">@dimen/common_size_12dp</item>
+		<item name="cornerSizeBottomLeft">@dimen/common_size_12dp</item>
+		<item name="cornerSizeBottomRight">@dimen/common_size_12dp</item>
+	</style>
+
+	<style name="CustomTextInputEditPaddingStyle" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+		<item name="android:textColor">@color/text</item>
+		<item name="android:paddingTop">0dp</item>
+		<item name="android:paddingBottom">0dp</item>
+	</style>
+
+	<style name="Widget.App.BorderlessButton" parent="Widget.Material3.Button.TextButton">
+		<item name="android:textColor">@color/text_button_selector</item>
+		<item name="android:textSize">@dimen/common_size_16dp</item>
+		<item name="android:textStyle">normal</item>
+		<item name="shapeAppearanceOverlay">@style/Widget.App.BrandedButton.ShapeOverlay</item>
+	</style>
+
+	<style name="RoundedImageView" parent="">
+		<item name="cornerFamily">rounded</item>
+		<item name="cornerSize">14dp</item>
+	</style>
+
+	<style name="PasswordTextInput">
+		<item name="endIconMode">password_toggle</item>
+		<item name="endIconDrawable">@drawable/password_icon_selector</item>
+		<item name="endIconCheckable">true</item>
+		<item name="endIconTint">@color/hint</item>
+	</style>
+
+	<style name="LinkText">
+		<item name="android:textColor">@color/brand</item>
+		<item name="android:textSize">14sp</item>
+		<item name="android:fontFamily">@font/inter_regular</item>
+	</style>
+
+	<style name="TextLabel">
+		<item name="android:textColor">@color/dark_gray</item>
+		<item name="android:textSize">12sp</item>
+		<item name="android:fontFamily">@font/inter_regular</item>
+	</style>
+
+	<style name="AiRoundedImageView" parent="">
+		<item name="cornerFamily">rounded</item>
+		<item name="cornerSize">50%</item>
+	</style>
+
+	<style name="AiBuySwitch" parent="">
+		<item name="thumbTint">@color/white</item>
+		<item name="trackTint">@color/dark_transparent</item>
+	</style>
+
+	<style name="AppTheme.TabLayout" parent="Widget.MaterialComponents.TabLayout">
+		<item name="tabIndicatorFullWidth">false</item>
+		<item name="tabMode">fixed</item>
+		<item name="tabIndicatorHeight">4dp</item>
+		<item name="tabGravity">fill</item>
+		<item name="tabIndicatorColor">@color/brand</item>
+		<item name="tabSelectedTextColor">@color/brand</item>
+		<item name="tabTextColor">@color/dark_gray</item>
+		<item name="tabTextAppearance">@style/AppTheme.TabCaption.TextAppearance</item>
+		<item name="tabIndicator">@drawable/tab_indicator</item>
+	</style>
+
+	<style name="AppTheme.TabCaption.TextAppearance" parent="TextAppearance.MaterialComponents.Button">
+		<item name="android:textAllCaps">false</item>
+		<item name="android:textStyle">normal</item>
+		<item name="android:letterSpacing">0</item>
+		<item name="android:textSize">16sp</item>
+	</style>
+</resources>

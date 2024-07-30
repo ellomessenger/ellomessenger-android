@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/menu"
+		style="@style/Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenuSmallDropdown"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:hint=""
+		app:boxBackgroundColor="@color/background"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<com.google.android.material.textfield.MaterialAutoCompleteTextView
+			android:id="@+id/menu_field"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:focusable="false"
+			android:inputType="none"
+			android:text="@string/my_current_subscriptions"
+			android:textStyle="bold" />
+
+	</com.google.android.material.textfield.TextInputLayout>
+
+	<androidx.recyclerview.widget.RecyclerView
+		android:id="@+id/channel_list"
+		android:layout_width="match_parent"
+		android:layout_height="0dp"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/menu"
+		tools:listitem="@layout/item_subscription"
+		tools:visibility="gone" />
+
+	<FrameLayout
+		android:id="@+id/empty_list_image"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:contentDescription="@string/no_current_subscriptions"
+		android:visibility="gone"
+		app:layout_constraintBottom_toTopOf="@id/empty_list_label"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/menu"
+		app:layout_constraintVertical_bias="0.4"
+		app:layout_constraintVertical_chainStyle="packed"
+		tools:visibility="visible" />
+
+	<TextView
+		android:id="@+id/empty_list_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="16dp"
+		android:layout_marginTop="16dp"
+		android:layout_marginEnd="16dp"
+		android:gravity="center"
+		android:text="@string/no_current_subscriptions"
+		android:textColor="@color/disabled_text"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/empty_list_image"
+		tools:visibility="visible" />
+
+	<androidx.core.widget.ContentLoadingProgressBar
+		android:id="@+id/progress_bar"
+		style="?android:progressBarStyleHorizontal"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:indeterminate="true"
+		android:indeterminateTint="@color/brand"
+		android:visibility="gone"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

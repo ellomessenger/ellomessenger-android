@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:background="@color/background">
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/birthday_field_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		app:endIconDrawable="@drawable/ic_calendar"
+		app:endIconMode="custom"
+		app:endIconTint="@color/brand"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintHeight_min="@dimen/common_size_58dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<com.google.android.material.textfield.TextInputEditText
+			android:id="@+id/birthday_field"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:focusable="false"
+			android:hint="@string/date_of_birth"
+			android:imeOptions="actionNext"
+			android:inputType="none" />
+
+	</com.google.android.material.textfield.TextInputLayout>
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/country_spinner_layout"
+		style="@style/Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenu.White"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="24dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintHeight_min="@dimen/common_size_58dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/birthday_field_layout">
+
+		<com.google.android.material.textfield.MaterialAutoCompleteTextView
+			android:id="@+id/country_spinner"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:hint="@string/country"
+			android:imeOptions="actionNext"
+			android:inputType="none" />
+
+	</com.google.android.material.textfield.TextInputLayout>
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/gender_spinner_layout"
+		style="@style/Widget.App.TextInputLayout.OutlinedBox.ExposedDropdownMenu.White"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="24dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintHeight_min="@dimen/common_size_58dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/country_spinner_layout">
+
+		<com.google.android.material.textfield.MaterialAutoCompleteTextView
+			android:id="@+id/gender_spinner"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:hint="@string/gender"
+			android:imeOptions="actionNext"
+			android:inputType="text"
+			android:maxLines="1" />
+
+	</com.google.android.material.textfield.TextInputLayout>
+
+	<LinearLayout
+		android:id="@+id/container_terms_checkbox"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:orientation="horizontal"
+		android:layout_marginTop="24dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/gender_spinner_layout"
+		app:layout_constraintEnd_toEndOf="parent">
+
+		<com.google.android.material.checkbox.MaterialCheckBox
+			android:id="@+id/terms_checkbox"
+			style="@style/Widget.App.CheckBox"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_gravity="center"
+			android:minWidth="0dp"
+			android:minHeight="0dp" />
+
+		<TextView
+			android:id="@+id/terms_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginStart="16dp"
+			android:clickable="true"
+			android:text="@string/welcome_privacy_description"
+			android:textColorLink="@color/text" />
+
+	</LinearLayout>
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/reg_next_button"
+		style="@style/Widget.App.BrandedButton"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginTop="24dp"
+		android:layout_marginBottom="32dp"
+		android:text="@string/registration"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/container_terms_checkbox"
+		app:layout_constraintVertical_bias="1" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

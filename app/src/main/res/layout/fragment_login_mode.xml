@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:fitsSystemWindows="true"
+	android:paddingStart="12dp"
+	android:paddingEnd="12dp"
+	android:paddingBottom="12dp">
+
+	<com.google.android.material.button.MaterialButtonToggleGroup
+		android:id="@+id/mode_segment_control"
+		android:layout_width="286dp"
+		android:layout_height="wrap_content"
+		app:checkedButton="@+id/segment_button_login"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		app:layout_constraintBottom_toTopOf="@+id/logo"
+		app:selectionRequired="true"
+		app:singleSelection="true">
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/segment_button_login"
+			style="?attr/materialButtonOutlinedStyle"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:text="@string/login" />
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/segment_button_registration"
+			style="?attr/materialButtonOutlinedStyle"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:text="@string/registration" />
+
+	</com.google.android.material.button.MaterialButtonToggleGroup>
+
+	<ImageView
+		android:id="@+id/logo"
+		android:layout_width="149dp"
+		android:layout_height="0dp"
+		android:layout_marginTop="28dp"
+		android:contentDescription="@string/cont_desc_logo"
+		android:src="@drawable/ello_no_app"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/mode_segment_control" />
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:id="@+id/login_container"
+		android:layout_width="match_parent"
+		android:layout_height="0dp"
+		android:layout_marginTop="28dp"
+		android:visibility="visible"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/logo">
+
+		<com.google.android.material.textfield.TextInputLayout
+			android:id="@+id/email_field_layout"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintHeight_min="@dimen/common_size_58dp"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent">
+
+			<com.google.android.material.textfield.TextInputEditText
+				android:id="@+id/email_field"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
+				android:hint="@string/username"
+				android:imeOptions="actionNext"
+				android:inputType="textEmailAddress|textPersonName" />
+
+		</com.google.android.material.textfield.TextInputLayout>
+
+		<com.google.android.material.textfield.TextInputLayout
+			android:id="@+id/password_field_layout"
+			style="@style/PasswordTextInput"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="16dp"
+			app:boxStrokeErrorColor="@color/purple"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintHeight_min="@dimen/common_size_58dp"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/email_field_layout">
+
+			<com.google.android.material.textfield.TextInputEditText
+				android:id="@+id/password_field"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
+				android:hint="@string/password"
+				android:imeOptions="actionDone"
+				android:inputType="textWebPassword" />
+
+		</com.google.android.material.textfield.TextInputLayout>
+		<TextView
+			android:id="@+id/login_error"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:textColor="@color/purple"
+			android:textSize="14sp"
+			android:visibility="gone"
+			android:text="@string/wrong_login_or_password"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@+id/password_field_layout" />
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/forgot_password_button"
+			style="@style/Widget.App.BorderlessButton"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="24dp"
+			android:text="@string/forgot_password"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/login_error" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+	<LinearLayout
+		android:id="@+id/registration_container"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="28dp"
+		android:orientation="vertical"
+		android:visibility="gone"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/logo">
+
+		<androidx.cardview.widget.CardView
+			android:id="@+id/personal_container_card"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			app:cardBackgroundColor="@android:color/transparent"
+			app:cardCornerRadius="@dimen/common_size_12dp"
+			app:cardElevation="0dp">
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/personal_container"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:foreground="?selectableItemBackgroundBorderless">
+
+				<androidx.cardview.widget.CardView
+					android:id="@+id/personal_card"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:padding="0dp"
+					app:cardCornerRadius="@dimen/common_size_12dp"
+					app:cardElevation="0dp"
+					app:layout_constraintTop_toTopOf="parent">
+
+					<ImageView
+						android:id="@+id/personal_image"
+						android:layout_width="match_parent"
+						android:layout_height="wrap_content"
+						android:contentDescription="@string/personal_profile"
+						android:scaleType="centerCrop"
+						android:src="@drawable/ic_personal_reg"
+						app:layout_constraintTop_toTopOf="parent" />
+
+				</androidx.cardview.widget.CardView>
+
+				<TextView
+					android:id="@+id/personal_label"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="4dp"
+					android:layout_marginTop="12dp"
+					android:layout_marginBottom="4dp"
+					android:drawablePadding="5dp"
+					android:text="@string/create_personal_account"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/personal_card" />
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="5dp"
+					android:contentDescription="@null"
+					android:src="@drawable/arrow_right"
+					android:tint="@color/text"
+					app:layout_constraintBottom_toBottomOf="@id/personal_label"
+					app:layout_constraintStart_toEndOf="@id/personal_label"
+					app:layout_constraintTop_toTopOf="@id/personal_label"
+					app:layout_constraintVertical_bias="0.65"
+					app:tint="@color/text" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+		</androidx.cardview.widget.CardView>
+
+
+		<androidx.cardview.widget.CardView
+			android:id="@+id/business_container_card"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="15dp"
+			app:cardBackgroundColor="@android:color/transparent"
+			app:cardCornerRadius="@dimen/common_size_12dp"
+			app:cardElevation="0dp">
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/business_container"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:foreground="?selectableItemBackgroundBorderless">
+
+				<androidx.cardview.widget.CardView
+					android:id="@+id/business_card"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:padding="0dp"
+					app:cardCornerRadius="@dimen/common_size_12dp"
+					app:cardElevation="0dp"
+					app:layout_constraintTop_toTopOf="parent">
+
+					<ImageView
+						android:id="@+id/business_image"
+						android:layout_width="match_parent"
+						android:layout_height="wrap_content"
+						android:contentDescription="@string/business_profile"
+						android:scaleType="centerCrop"
+						android:src="@drawable/ic_business_reg"
+						app:layout_constraintTop_toTopOf="parent" />
+
+				</androidx.cardview.widget.CardView>
+
+				<TextView
+					android:id="@+id/business_label"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="4dp"
+					android:layout_marginTop="12dp"
+					android:layout_marginBottom="4dp"
+					android:drawablePadding="5dp"
+					android:text="@string/create_business_account"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/business_card" />
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="5dp"
+					android:contentDescription="@null"
+					android:src="@drawable/arrow_right"
+					android:tint="@color/text"
+					app:layout_constraintBottom_toBottomOf="@id/business_label"
+					app:layout_constraintStart_toEndOf="@id/business_label"
+					app:layout_constraintTop_toTopOf="@id/business_label"
+					app:layout_constraintVertical_bias="0.65"
+					app:tint="@color/text" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+		</androidx.cardview.widget.CardView>
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="16dp"
+			android:background="@drawable/gray_bubble_background"
+			android:gravity="center"
+			android:orientation="vertical"
+			android:padding="16dp">
+
+			<TextView
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:gravity="center"
+				android:text="@string/which_account_to_choose"
+				android:textColor="@color/text"
+				android:textSize="16sp" />
+
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/account_type_button"
+				style="@style/Widget.App.WhiteButtonLargeRadius"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="12dp"
+				android:layout_marginBottom="16dp"
+				android:minHeight="@dimen/common_size_58dp"
+				android:paddingTop="0dp"
+				android:paddingBottom="0dp"
+				android:text="@string/personal_vs_business"
+				android:textColor="@color/brand" />
+
+		</LinearLayout>
+
+	</LinearLayout>
+
+	<androidx.core.widget.ContentLoadingProgressBar
+		android:id="@+id/progress_bar"
+		style="?android:progressBarStyleHorizontal"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:indeterminate="true"
+		android:indeterminateTint="@color/brand"
+		android:visibility="gone"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/login_button"
+		style="@style/Widget.App.BrandedButton"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginBottom="16dp"
+		android:text="@string/log_in"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@+id/login_container"
+		app:layout_constraintVertical_bias="1.0" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

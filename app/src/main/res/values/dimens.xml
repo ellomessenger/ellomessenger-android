@@ -1,0 +1,31 @@
+<resources>
+	<dimen name="common_size_16dp">16dp</dimen>
+	<dimen name="common_size_4dp">4dp</dimen>
+	<dimen name="common_size_10dp">10dp</dimen>
+	<dimen name="common_size_12dp">12dp</dimen>
+	<dimen name="common_size_15dp">15dp</dimen>
+	<dimen name="common_size_18dp">18dp</dimen>
+	<dimen name="common_size_58dp">58dp</dimen>
+	<dimen name="common_size_11dp">11dp</dimen>
+	<dimen name="common_size_32dp">32dp</dimen>
+	<dimen name="common_size_291dp">291dp</dimen>
+	<dimen name="common_size_64dp">64dp</dimen>
+	<dimen name="common_size_336dp">336dp</dimen>
+	<dimen name="common_size_72dp">72dp</dimen>
+	<dimen name="common_size_44dp">44dp</dimen>
+	<dimen name="common_size_54dp">54dp</dimen>
+	<dimen name="common_size_270dp">270dp</dimen>
+	<dimen name="common_size_140dp">140dp</dimen>
+	<dimen name="common_size_460dp">460dp</dimen>
+	<dimen name="common_size_80dp">80dp</dimen>
+	<dimen name="common_size_42dp">42dp</dimen>
+	<dimen name="common_size_120dp">120dp</dimen>
+	<dimen name="common_size_225dp">225dp</dimen>
+	<dimen name="common_size_57dp">57dp</dimen>
+	<dimen name="common_size_450dp">450dp</dimen>
+	<dimen name="common_size_30dp">30dp</dimen> <!-- was 78dp -->
+	<dimen name="common_size_28dp">28dp</dimen>
+	<dimen name="common_size_20dp">20dp</dimen>
+	<dimen name="common_size_14dp">14dp</dimen>
+	<dimen name="common_size_24dp">24dp</dimen>
+</resources>

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content">
+
+	<FrameLayout
+		android:id="@+id/avatar_container"
+		android:layout_width="60dp"
+		android:layout_height="60dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		tools:background="@drawable/panda_logo" />
+
+	<ImageView
+		android:id="@+id/adult"
+		android:layout_width="18dp"
+		android:layout_height="18dp"
+		android:layout_marginStart="6dp"
+		android:contentDescription="@string/adult_description"
+		android:src="@drawable/adult_channel_icon"
+		app:layout_constraintBottom_toBottomOf="@id/title"
+		app:layout_constraintEnd_toStartOf="@id/paid"
+		app:layout_constraintHorizontal_bias="0.5"
+		app:layout_constraintHorizontal_chainStyle="packed"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="@id/title" />
+
+	<ImageView
+		android:id="@+id/paid"
+		android:layout_width="18dp"
+		android:layout_height="18dp"
+		android:layout_marginStart="6dp"
+		android:contentDescription="@string/subscription_channel"
+		android:scaleType="fitXY"
+		android:src="@drawable/ic_paid_channel"
+		app:layout_constraintBottom_toBottomOf="@id/title"
+		app:layout_constraintEnd_toStartOf="@id/title"
+		app:layout_constraintStart_toEndOf="@id/adult"
+		app:layout_constraintTop_toTopOf="@id/title"
+		app:layout_goneMarginStart="0dp" />
+
+	<TextView
+		android:id="@+id/title"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="6dp"
+		android:layout_marginTop="12dp"
+		android:ellipsize="end"
+		android:maxLines="1"
+		android:textColor="@color/dark"
+		android:textSize="18sp"
+		android:textStyle="bold"
+		app:layout_constrainedWidth="true"
+		app:layout_constraintEnd_toStartOf="@id/verified"
+		app:layout_constraintStart_toEndOf="@id/paid"
+		app:layout_constraintTop_toBottomOf="@id/avatar_container"
+		app:layout_goneMarginStart="0dp"
+		tools:text="@string/lorem" />
+
+	<ImageView
+		android:id="@+id/verified"
+		android:layout_width="18dp"
+		android:layout_height="18dp"
+		android:layout_marginStart="6dp"
+		android:layout_marginEnd="6dp"
+		android:contentDescription="@string/verified_channel"
+		android:src="@drawable/verified_icon"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="@id/title"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toEndOf="@id/title"
+		app:layout_constraintTop_toTopOf="@id/title"
+		tools:visibility="visible" />
+
+	<TextView
+		android:id="@+id/sub_title"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="5dp"
+		android:maxLines="1"
+		android:textColor="@color/dark_gray"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/title"
+		tools:text="64 281 subscribers" />
+
+	<TextView
+		android:id="@+id/about"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="5dp"
+		android:ellipsize="end"
+		android:gravity="center"
+		android:maxLines="3"
+		android:textColor="@color/dark"
+		android:textSize="16sp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/sub_title"
+		tools:text="@string/lorem" />
+
+	<TextView
+		android:id="@+id/more"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="2dp"
+		android:text="@string/more"
+		android:textStyle="bold"
+		android:textColor="@color/brand"
+		android:visibility="gone"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@+id/about" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

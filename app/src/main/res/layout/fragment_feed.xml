@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<com.google.android.material.tabs.TabLayout
+		android:id="@+id/tab_layout"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:elevation="4dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<androidx.recyclerview.widget.RecyclerView
+		android:id="@+id/search_params_recycler_view"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:visibility="gone"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/tab_layout" />
+
+	<ImageView
+		android:id="@+id/chat_background"
+		android:layout_width="0dp"
+		android:layout_height="0dp"
+		android:contentDescription="@null"
+		android:importantForAccessibility="no"
+		android:scaleType="centerCrop"
+		android:src="@drawable/chat_background"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/search_params_recycler_view" />
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:id="@+id/empty_feed_container"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:background="@drawable/empty_feed_background_frame"
+		android:padding="18dp"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/search_params_recycler_view"
+		app:layout_constraintWidth_percent="0.75"
+		tools:visibility="visible">
+
+		<ImageView
+			android:id="@+id/empty_feed_panda"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:contentDescription="@string/panda_with_tv_instead_of_head"
+			android:src="@drawable/empty_feed_tv_panda"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			app:layout_constraintVertical_chainStyle="packed" />
+
+		<TextView
+			android:id="@+id/info_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="22dp"
+			android:gravity="center"
+			android:text="@string/empty_feed_message"
+			android:textColor="@color/white"
+			android:textSize="14sp"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/empty_feed_panda" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+	<androidx.recyclerview.widget.RecyclerView
+		android:id="@+id/recycler_view"
+		android:layout_width="0dp"
+		android:layout_height="0dp"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/search_params_recycler_view" />
+
+	<androidx.cardview.widget.CardView
+		android:id="@+id/scroll_to_top_button"
+		android:layout_width="wrap_content"
+		android:layout_height="40dp"
+		android:foreground="?selectableItemBackground"
+		android:translationY="-20dp"
+		app:cardCornerRadius="20dp"
+		app:cardElevation="0dp"
+		app:layout_constraintBottom_toTopOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent">
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:layout_width="wrap_content"
+			android:layout_height="match_parent"
+			android:background="@color/totals_blue"
+			android:paddingStart="12dp"
+			android:paddingEnd="12dp">
+
+			<ImageView
+				android:id="@+id/arrow_up"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:contentDescription="@null"
+				android:src="@drawable/arrow_up_feed"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<LinearLayout
+				android:id="@+id/avatars_container"
+				android:layout_width="wrap_content"
+				android:layout_height="match_parent"
+				android:layout_marginStart="7dp"
+				android:gravity="center_vertical"
+				android:orientation="horizontal"
+				app:layout_constraintStart_toEndOf="@id/arrow_up" />
+
+			<TextView
+				android:id="@+id/scroll_to_top_text"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="5dp"
+				android:contentDescription="@null"
+				android:text="@string/new_posts"
+				android:textColor="@color/white"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toEndOf="@id/avatars_container"
+				app:layout_constraintTop_toTopOf="parent" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+	</androidx.cardview.widget.CardView>
+
+	<ProgressBar
+		android:id="@+id/explore_progress_bar"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_gravity="center"
+		android:indeterminate="true"
+		android:indeterminateTint="@color/brand"
+		android:visibility="gone"
+		tools:visibility="visible"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

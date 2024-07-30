@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="wrap_content"
+	android:layout_height="wrap_content"
+	android:gravity="center">
+
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/code_digit_input"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:clipChildren="false"
+		android:clipToPadding="false"
+		android:padding="0dp"
+		app:boxCornerRadiusBottomEnd="10dp"
+		app:boxCornerRadiusBottomStart="10dp"
+		app:boxCornerRadiusTopEnd="10dp"
+		app:boxCornerRadiusTopStart="10dp"
+		app:boxStrokeErrorColor="@color/purple"
+		app:endIconMode="none"
+		app:hintEnabled="false">
+
+		<com.google.android.material.textfield.TextInputEditText
+			android:id="@+id/code_digit"
+			android:layout_width="match_parent"
+			android:layout_height="64dp"
+			android:background="@drawable/code_input_background"
+			android:cursorVisible="false"
+			android:digits="0123456789"
+			android:fontFamily="@font/inter_bold"
+			android:gravity="center"
+			android:imeOptions="actionNone"
+			android:inputType="numberPassword"
+			android:maxLength="1"
+			android:padding="0dp"
+			android:textColor="@color/dark_fixed"
+			android:textSize="20sp"
+			tools:text="4" />
+
+	</com.google.android.material.textfield.TextInputLayout>
+
+</FrameLayout>

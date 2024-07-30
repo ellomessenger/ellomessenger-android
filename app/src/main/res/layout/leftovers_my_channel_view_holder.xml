@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="80dp"
+	android:clipChildren="false"
+	android:clipToPadding="false"
+	android:padding="@dimen/common_size_16dp">
+
+	<FrameLayout
+		android:id="@+id/avatar_container"
+		android:layout_width="@dimen/common_size_57dp"
+		android:layout_height="@dimen/common_size_57dp"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		tools:background="@drawable/panda_logo" />
+
+	<ImageView
+		android:id="@+id/adult_channel_icon"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="12dp"
+		android:contentDescription="@string/cont_desc_is_adult_channel"
+		android:src="@drawable/adult_channel_icon"
+		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="@id/channel_name"
+		app:layout_constraintStart_toEndOf="@id/avatar_container"
+		app:layout_constraintTop_toTopOf="@id/avatar_container"
+		tools:visibility="visible" />
+
+	<TextView
+		android:id="@+id/channel_name"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="8dp"
+		android:layout_marginBottom="1dp"
+		android:ellipsize="end"
+		android:maxLines="1"
+		android:textSize="16sp"
+		android:textStyle="bold"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintHorizontal_bias="0"
+		app:layout_constraintStart_toEndOf="@id/adult_channel_icon"
+		app:layout_constraintTop_toTopOf="@id/avatar_container"
+		tools:text="Best recipes" />
+
+	<TextView
+		android:id="@+id/subscribers_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="12dp"
+		android:layout_marginTop="3dp"
+		android:text="@string/subscribers_with_colon"
+		android:textColor="@color/dark_gray"
+		android:textSize="14sp"
+		app:layout_constraintStart_toEndOf="@id/avatar_container"
+		app:layout_constraintTop_toBottomOf="@id/channel_name" />
+
+	<TextView
+		android:id="@+id/subscribers_count_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="4dp"
+		android:textSize="14sp"
+		app:layout_constraintBottom_toBottomOf="@id/subscribers_label"
+		app:layout_constraintStart_toEndOf="@id/subscribers_label"
+		app:layout_constraintTop_toTopOf="@id/subscribers_label"
+		tools:text="100" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

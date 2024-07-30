@@ -1,0 +1,577 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:layout_marginTop="4dp"
+	android:layout_marginBottom="6dp"
+	android:clipChildren="false"
+	android:clipToPadding="false"
+	android:foreground="?selectableItemBackground">
+
+	<ImageView
+		android:id="@+id/background_image"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:layout_marginStart="6dp"
+		android:layout_marginEnd="64dp"
+		android:contentDescription="@null"
+		android:importantForAccessibility="no"
+		android:scaleType="fitXY"
+		android:src="@drawable/feed_view_background"
+		android:tint="@color/feed_item_background_tint"
+		android:tintMode="multiply"
+		app:tint="@color/feed_item_background_tint" />
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="26dp"
+		android:layout_marginTop="10dp"
+		android:layout_marginEnd="76dp"
+		android:clipChildren="false"
+		android:clipToPadding="false"
+		android:orientation="vertical">
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/header_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:background="@drawable/feed_header_background"
+			android:padding="8dp">
+
+			<FrameLayout
+				android:id="@+id/avatar_container"
+				android:layout_width="@dimen/common_size_42dp"
+				android:layout_height="@dimen/common_size_42dp"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:background="@drawable/panda_logo" />
+
+			<View
+				android:id="@+id/avatar_guideline"
+				android:layout_width="0dp"
+				android:layout_height="0dp"
+				android:layout_marginStart="12dp"
+				android:visibility="invisible"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toEndOf="@id/avatar_container"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<ImageView
+				android:id="@+id/paid_feed_icon"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:contentDescription="@string/paid_channel"
+				android:paddingEnd="4dp"
+				android:src="@drawable/ic_paid_channel"
+				android:visibility="gone"
+				app:layout_constraintBottom_toBottomOf="@id/name_label"
+				app:layout_constraintEnd_toStartOf="@id/course_icon"
+				app:layout_constraintHorizontal_bias="0"
+				app:layout_constraintHorizontal_chainStyle="packed"
+				app:layout_constraintStart_toEndOf="@id/avatar_guideline"
+				app:layout_constraintTop_toTopOf="@id/name_label"
+				tools:visibility="visible" />
+
+			<ImageView
+				android:id="@+id/course_icon"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:contentDescription="@string/online_course"
+				android:paddingEnd="4dp"
+				android:src="@drawable/online_course"
+				android:visibility="gone"
+				app:layout_constraintBottom_toBottomOf="@id/name_label"
+				app:layout_constraintEnd_toStartOf="@id/adult_channel_icon"
+				app:layout_constraintHorizontal_bias="0"
+				app:layout_constraintHorizontal_chainStyle="packed"
+				app:layout_constraintStart_toEndOf="@id/paid_feed_icon"
+				app:layout_constraintTop_toTopOf="@id/name_label"
+				tools:visibility="visible" />
+
+			<ImageView
+				android:id="@+id/adult_channel_icon"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:contentDescription="@string/paid_channel"
+				android:paddingEnd="4dp"
+				android:src="@drawable/adult_channel_icon"
+				android:visibility="gone"
+				app:layout_constraintBottom_toBottomOf="@id/name_label"
+				app:layout_constraintEnd_toStartOf="@id/name_label"
+				app:layout_constraintHorizontal_bias="0"
+				app:layout_constraintStart_toEndOf="@id/course_icon"
+				app:layout_constraintTop_toTopOf="@id/name_label"
+				tools:visibility="visible" />
+
+			<TextView
+				android:id="@+id/name_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:ellipsize="end"
+				android:maxLines="1"
+				android:textSize="15sp"
+				android:textStyle="bold"
+				app:layout_constrainedWidth="true"
+				app:layout_constraintEnd_toStartOf="@id/verified_icon"
+				app:layout_constraintHorizontal_bias="0"
+				app:layout_constraintStart_toEndOf="@id/adult_channel_icon"
+				app:layout_constraintTop_toTopOf="@id/avatar_container"
+				tools:text="AspenAspenAspenAspenAspen AspenAspen Aspen Aspen Aspen Aspen Aspen Aspen" />
+
+			<ImageView
+				android:id="@+id/verified_icon"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="4dp"
+				android:layout_marginTop="1dp"
+				android:layout_marginEnd="12dp"
+				android:contentDescription="@string/verified_account"
+				android:src="@drawable/verified_icon"
+				app:layout_constraintBottom_toBottomOf="@id/name_label"
+				app:layout_constraintEnd_toStartOf="@id/pin_icon"
+				app:layout_constraintHorizontal_bias="0"
+				app:layout_constraintStart_toEndOf="@id/name_label"
+				app:layout_constraintTop_toTopOf="@id/name_label" />
+
+			<TextView
+				android:id="@+id/username_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:ellipsize="end"
+				android:maxLines="1"
+				android:textColor="@color/brand"
+				android:textSize="13sp"
+				app:layout_constrainedWidth="true"
+				app:layout_constraintBottom_toBottomOf="@id/avatar_container"
+				app:layout_constraintEnd_toStartOf="@id/more_button"
+				app:layout_constraintHorizontal_bias="0"
+				app:layout_constraintHorizontal_chainStyle="packed"
+				app:layout_constraintStart_toEndOf="@id/avatar_guideline"
+				tools:text="\@AspenAspenAspenAspenAspenAspenAspenAspenAspen" />
+
+			<ImageView
+				android:id="@+id/pin_icon"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="10dp"
+				android:layout_marginTop="4dp"
+				android:contentDescription="@string/cont_desc_pinned"
+				android:src="@drawable/ic_pin"
+				android:tint="@color/brand"
+				app:layout_constraintBottom_toBottomOf="@id/name_label"
+				app:layout_constraintEnd_toStartOf="@id/more_button"
+				app:layout_constraintTop_toTopOf="@id/name_label"
+				app:tint="@color/brand" />
+
+			<ImageButton
+				android:id="@+id/more_button"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:background="?selectableItemBackgroundBorderless"
+				android:contentDescription="@string/more_actions"
+				android:padding="8dp"
+				android:src="@drawable/more_feed"
+				app:layout_constraintDimensionRatio="1:1"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintTop_toTopOf="@id/avatar_container" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<TextView
+			android:id="@+id/message_label"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:ellipsize="end"
+			android:lineSpacingMultiplier="1.1"
+			android:textSize="15sp"
+			android:visibility="gone"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@id/guideline"
+			app:layout_constraintTop_toBottomOf="@id/web_preview_container"
+			tools:text="Apple allegedly accidentally showed the iPhone 14 Pro on a Thailand YouTube channel. The video demonstrates how Apple Pay works and briefly. Apple allegedly accidentally showed the iPhone 14 Pro on a Thailand YouTube channel. The video demonstrates how Apple Pay works and briefly"
+			tools:visibility="visible" />
+
+		<TextView
+			android:id="@+id/translate_button"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="4dp"
+			android:ellipsize="end"
+			android:maxLines="1"
+			android:text="@string/translate"
+			android:textColor="@color/brand"
+			android:textSize="13sp"
+			android:visibility="gone"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@id/guideline"
+			app:layout_constraintTop_toBottomOf="@id/message_label"
+			tools:visibility="visible" />
+
+		<androidx.cardview.widget.CardView
+			android:id="@+id/photo_video_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginStart="-5dp"
+			android:layout_marginTop="8dp"
+			android:layout_marginEnd="-6dp"
+			android:visibility="gone"
+			app:cardCornerRadius="12dp"
+			app:cardElevation="0dp"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@id/guideline"
+			app:layout_constraintTop_toBottomOf="@id/translate_button"
+			tools:layout_height="200dp"
+			tools:visibility="visible">
+
+			<androidx.viewpager2.widget.ViewPager2
+				android:id="@+id/view_pager"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent" />
+
+			<TextView
+				android:id="@+id/counter_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="4dp"
+				android:layout_marginTop="4dp"
+				android:background="@drawable/image_counter_background"
+				android:paddingStart="7dp"
+				android:paddingTop="2dp"
+				android:paddingEnd="7dp"
+				android:paddingBottom="2dp"
+				android:textColor="@color/white"
+				android:textSize="9sp"
+				android:visibility="gone"
+				app:layout_constraintStart_toStartOf="@id/photo_video_container"
+				app:layout_constraintTop_toTopOf="@id/photo_video_container"
+				tools:text="1 / 5"
+				tools:visibility="visible" />
+
+		</androidx.cardview.widget.CardView>
+
+		<LinearLayout
+			android:id="@+id/page_indicator_container"
+			android:layout_width="wrap_content"
+			android:layout_height="5dp"
+			android:layout_gravity="center_horizontal"
+			android:layout_marginTop="16dp"
+			android:divider="@drawable/pager_indicator_divider"
+			android:orientation="horizontal"
+			android:showDividers="middle"
+			android:visibility="gone"
+			tools:visibility="visible" />
+
+		<LinearLayout
+			android:id="@+id/audio_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="14dp"
+			android:clipChildren="false"
+			android:clipToPadding="false"
+			android:divider="@drawable/feed_audio_items_divider"
+			android:orientation="vertical"
+			android:showDividers="middle"
+			android:visibility="gone"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@id/guideline"
+			app:layout_constraintTop_toBottomOf="@id/page_indicator_container"
+			tools:visibility="visible" />
+
+		<LinearLayout
+			android:id="@+id/contact_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:orientation="vertical"
+			android:visibility="gone">
+
+			<FrameLayout
+				android:id="@+id/user_avatar_container"
+				android:layout_width="80dp"
+				android:layout_height="80dp"
+				android:layout_marginTop="14dp"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:background="@drawable/panda_logo" />
+
+			<TextView
+				android:id="@+id/user_full_name"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				android:textColor="@color/dark_fixed"
+				android:textSize="20sp"
+				android:textStyle="bold"
+				tools:text="Aspen Aspen" />
+
+			<TextView
+				android:id="@+id/username"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:textColor="@color/brand"
+				android:textSize="14sp"
+				tools:text="\@AspenAspen" />
+
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/bt_add_contact"
+				android:layout_width="wrap_content"
+				android:layout_height="@dimen/common_size_54dp"
+				android:layout_marginTop="24dp"
+				android:drawableLeft="@drawable/msg_addcontact"
+				android:drawableTint="@color/white"
+				android:text="@string/AddContactTitle"
+				android:textColor="@color/white"
+				app:backgroundTint="@color/brand"
+				app:cornerRadius="14dp" />
+
+		</LinearLayout>
+
+		<TextView
+			android:id="@+id/info_label"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginEnd="18dp"
+			android:textSize="14sp"
+			android:visibility="gone"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@id/guideline"
+			app:layout_constraintTop_toBottomOf="@id/audio_container"
+			tools:text="Updated just recently" />
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/web_preview_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:foreground="?selectableItemBackground"
+			android:visibility="gone"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@id/guideline"
+			app:layout_constraintTop_toBottomOf="@id/date_label"
+			tools:visibility="visible">
+
+			<View
+				android:id="@+id/web_preview_indicator"
+				android:layout_width="2dp"
+				android:layout_height="0dp"
+				android:background="@color/brand"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<TextView
+				android:id="@+id/web_preview_url"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="7dp"
+				android:textColor="@color/brand"
+				android:textSize="13sp"
+				app:layout_constraintStart_toEndOf="@id/web_preview_indicator"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:text="https://ello.team" />
+
+			<TextView
+				android:id="@+id/web_preview_title"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="7dp"
+				android:layout_marginTop="5dp"
+				android:textSize="13sp"
+				android:textStyle="bold"
+				android:visibility="gone"
+				app:layout_constraintStart_toEndOf="@id/web_preview_indicator"
+				app:layout_constraintTop_toBottomOf="@id/web_preview_url"
+				tools:text="Article title"
+				tools:visibility="visible" />
+
+			<TextView
+				android:id="@+id/web_preview_description"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="7dp"
+				android:layout_marginTop="5dp"
+				android:ellipsize="end"
+				android:textSize="12sp"
+				android:visibility="gone"
+				app:layout_constraintStart_toEndOf="@id/web_preview_indicator"
+				app:layout_constraintTop_toBottomOf="@id/web_preview_title"
+				tools:text="This is article text"
+				tools:visibility="visible" />
+
+			<ImageView
+				android:id="@+id/web_preview_image"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="7dp"
+				android:layout_marginTop="5dp"
+				android:contentDescription="@null"
+				android:scaleType="centerCrop"
+				android:visibility="gone"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/web_preview_indicator"
+				app:layout_constraintTop_toBottomOf="@id/web_preview_description"
+				tools:src="@drawable/ello_card"
+				tools:visibility="visible" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/controls_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="15dp">
+
+			<LinearLayout
+				android:id="@+id/likes_button"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:background="@drawable/likes_button_background"
+				android:clickable="true"
+				android:focusable="true"
+				android:foreground="?selectableItemBackground"
+				android:gravity="center"
+				android:orientation="horizontal"
+				android:paddingStart="8dp"
+				android:paddingTop="3dp"
+				android:paddingEnd="8dp"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent">
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginBottom="1dp"
+					android:text="❤️️"
+					android:textSize="16sp" />
+
+				<TextView
+					android:id="@+id/likes_counter_label"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="4dp"
+					android:layout_marginBottom="1dp"
+					android:text="0"
+					android:textSize="12sp"
+					android:textStyle="bold"
+					tools:text="78" />
+
+			</LinearLayout>
+
+			<TextView
+				android:id="@+id/date_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:textColor="@color/dark_gray"
+				android:textSize="12sp"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:text="6:07 AM" />
+
+			<TextView
+				android:id="@+id/views_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginEnd="6dp"
+				android:text="0"
+				android:textColor="@color/dark_gray"
+				android:textSize="12sp"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toStartOf="@id/date_label"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:text="3.7K" />
+
+			<ImageView
+				android:id="@+id/views_image"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginEnd="3dp"
+				android:importantForAccessibility="no"
+				android:src="@drawable/views"
+				android:tint="@color/dark_gray"
+				app:layout_constraintBottom_toBottomOf="@id/views_label"
+				app:layout_constraintEnd_toStartOf="@id/views_label"
+				app:layout_constraintTop_toTopOf="@id/views_label"
+				app:tint="@color/dark_gray" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/comments_container"
+			android:layout_width="match_parent"
+			android:layout_height="52dp"
+			android:layout_marginTop="8dp"
+			android:background="?selectableItemBackground"
+			android:clipChildren="false"
+			android:clipToPadding="false">
+
+			<View
+				android:layout_width="0dp"
+				android:layout_height="0.5dp"
+				android:layout_marginEnd="-17dp"
+				android:background="@color/divider"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<LinearLayout
+				android:id="@+id/avatars_container"
+				android:layout_width="wrap_content"
+				android:layout_height="32dp"
+				android:gravity="center_vertical"
+				android:orientation="horizontal"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<TextView
+				android:id="@+id/comments_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="8dp"
+				android:contentDescription="@null"
+				android:textColor="@color/brand"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toEndOf="@id/avatars_container"
+				app:layout_constraintTop_toTopOf="parent"
+				app:layout_goneMarginStart="0dp"
+				tools:text="750 comments" />
+
+			<ImageView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:src="@drawable/arrow_right"
+				android:tint="@color/brand"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				app:tint="@color/brand" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<View
+			android:id="@+id/comments_container_placeholder"
+			android:layout_width="match_parent"
+			android:layout_height="8dp"
+			android:visibility="gone" />
+
+	</LinearLayout>
+
+	<ImageButton
+		android:id="@+id/button_forward"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_gravity="bottom|end"
+		android:layout_marginEnd="24dp"
+		android:layout_marginBottom="12dp"
+		android:background="?selectableItemBackgroundBorderless"
+		android:contentDescription="@string/Forward"
+		android:src="@drawable/button_forward" />
+
+</FrameLayout>

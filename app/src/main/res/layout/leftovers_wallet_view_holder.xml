@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:paddingStart="20dp">
+
+	<View
+		android:layout_width="0dp"
+		android:layout_height="0.5dp"
+		android:background="@color/divider"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<LinearLayout
+		android:id="@+id/wallet_name_container"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="4dp"
+		android:orientation="vertical"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toStartOf="@+id/wallet_amount_container"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<TextView
+			android:id="@+id/wallet_name_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:gravity="start"
+			android:textSize="15sp"
+			tools:text="Main Wallet" />
+
+		<TextView
+			android:id="@+id/frozen_balance_info_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:gravity="start"
+			android:text="@string/on_hold"
+			android:textSize="15sp"
+			tools:visibility="gone" />
+
+		<TextView
+			android:id="@+id/transfer_balance_info_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:layout_marginBottom="6dp"
+			android:gravity="start"
+			android:text="@string/available"
+			android:textSize="15sp"
+			tools:visibility="gone" />
+
+	</LinearLayout>
+
+	<LinearLayout
+		android:id="@+id/wallet_amount_container"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:orientation="vertical"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="@+id/wallet_name_container">
+
+		<TextView
+			android:id="@+id/wallet_amount_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginEnd="20dp"
+			android:gravity="end"
+			android:textSize="15sp"
+			tools:text="950.32" />
+
+		<TextView
+			android:id="@+id/frozen_balance_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:layout_marginEnd="20dp"
+			android:gravity="end"
+			android:textSize="15sp"
+			tools:text="950.32"
+			tools:visibility="gone" />
+
+		<TextView
+			android:id="@+id/transfer_balance_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="6dp"
+			android:layout_marginEnd="20dp"
+			android:layout_marginBottom="6dp"
+			android:gravity="end"
+			android:textSize="15sp"
+			tools:text="950.32"
+			tools:visibility="gone" />
+	</LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

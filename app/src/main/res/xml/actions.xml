@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<actions>
+	<action intentName="actions.intent.GET_THING">
+		<fulfillment urlTemplate="elloapp://search{?query}">
+			<parameter-mapping
+				intentParameter="thing.name"
+				required="true"
+				urlParameter="query" />
+		</fulfillment>
+		<fulfillment urlTemplate="elloapp://search" />
+	</action>
+	<action intentName="actions.intent.CREATE_CALL">
+		<fulfillment urlTemplate="elloapp://call{?format,name}">
+			<parameter-mapping
+				intentParameter="call.callFormat"
+				urlParameter="format" />
+			<parameter-mapping
+				intentParameter="call.participant.name"
+				urlParameter="name" />
+		</fulfillment>
+	</action>
+	<action intentName="actions.intent.GET_ACCOUNT">
+		<fulfillment urlTemplate="elloapp://settings" />
+	</action>
+	<action intentName="actions.intent.GET_BARCODE">
+		<fulfillment urlTemplate="elloapp://scanqr" />
+	</action>
+	<action intentName="actions.intent.CREATE_CONTACT_POINT">
+		<fulfillment urlTemplate="elloapp://addcontact{?name}">
+			<parameter-mapping
+				intentParameter="contactPoint.contact.name"
+				urlParameter="name" />
+		</fulfillment>
+	</action>
+	<action intentName="actions.intent.GET_CALL">
+		<fulfillment urlTemplate="elloapp://calllog" />
+	</action>
+</actions>

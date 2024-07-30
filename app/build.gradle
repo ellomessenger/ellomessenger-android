@@ -1,0 +1,190 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
+
+repositories {
+	mavenCentral()
+	google()
+}
+
+configurations {
+	compile.exclude module: 'support-v4'
+}
+
+configurations.configureEach {
+	exclude group: 'com.google.firebase', module: 'firebase-core'
+	exclude group: 'androidx.recyclerview', module: 'recyclerview'
+}
+
+dependencies {
+	implementation 'androidx.core:core-ktx:1.13.1'
+	implementation "androidx.core:core-splashscreen:1.0.1"
+	implementation 'androidx.palette:palette-ktx:1.0.0'
+	implementation 'androidx.exifinterface:exifinterface:1.3.7'
+	implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
+	implementation 'androidx.multidex:multidex:2.0.1'
+	implementation "androidx.sharetarget:sharetarget:1.2.0"
+	implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+	implementation 'androidx.interpolator:interpolator:1.0.0'
+	implementation 'androidx.appcompat:appcompat:1.7.0'
+	implementation 'androidx.viewpager2:viewpager2:1.1.0'
+	implementation 'com.google.android.material:material:1.12.0'
+
+	def kotlin_coroutines_version = '1.8.1'
+
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlin_coroutines_version"
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlin_coroutines_version"
+
+	implementation 'net.danlew:android.joda:2.12.7'
+	implementation 'com.google.code.gson:gson:2.11.0'
+
+	compileOnly 'org.checkerframework:checker-compat-qual:2.5.6'
+	implementation 'com.google.firebase:firebase-messaging:24.0.0'
+	implementation 'com.google.firebase:firebase-config:22.0.0'
+	implementation 'com.google.firebase:firebase-datatransport:19.0.0'
+	implementation 'com.google.firebase:firebase-appindexing:20.0.0'
+	implementation 'com.google.android.gms:play-services-maps:19.0.0'
+	implementation 'com.google.android.gms:play-services-auth:21.2.0'
+	implementation 'com.google.android.gms:play-services-vision:20.1.3'
+	implementation 'com.google.android.gms:play-services-wearable:18.2.0'
+	implementation 'com.google.android.gms:play-services-location:21.3.0'
+	implementation 'com.google.android.gms:play-services-wallet:19.4.0'
+	implementation 'com.google.android.gms:play-services-measurement:22.0.2'
+	implementation 'com.stripe:stripe-android:2.0.2'
+	implementation 'com.google.mlkit:language-id:17.0.5'
+	implementation 'com.android.billingclient:billing:7.0.0'
+	implementation 'com.android.billingclient:billing-ktx:7.0.0'
+
+	//noinspection GradleDependency
+	implementation 'com.googlecode.mp4parser:isoparser:1.0.6' // do not update as it breaks uploaded video playback
+
+	coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+
+	implementation files('libs/libgsaverification-client.aar')
+}
+
+java {
+	toolchain {
+		languageVersion.set(JavaLanguageVersion.of(17))
+	}
+}
+
+android {
+	compileSdk 34
+
+	def ndk_version = "21.4.7075529"
+
+	ndkVersion "$ndk_version"
+
+	sourceSets.main.jniLibs.srcDirs = ['./jni/']
+
+	externalNativeBuild {
+		cmake {
+			path 'jni/CMakeLists.txt'
+		}
+	}
+
+	compileOptions {
+		sourceCompatibility JavaVersion.VERSION_17
+		targetCompatibility JavaVersion.VERSION_17
+		coreLibraryDesugaringEnabled true
+	}
+
+	kotlinOptions {
+		jvmTarget = "17"
+	}
+
+	buildFeatures {
+		viewBinding true
+	}
+
+	defaultConfig {
+		applicationId "com.beint.elloapp"
+
+		minSdkVersion 23
+		targetSdkVersion 34
+		ndkVersion "$ndk_version"
+
+		versionName "2.6.54"
+		versionCode 20652
+
+		multiDexEnabled true
+
+		vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
+
+		externalNativeBuild {
+			cmake {
+				version '3.10.2'
+				arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23'
+			}
+		}
+
+		buildConfigField "String", "MESSENGER_ENDPOINT", "\"www.example.com\""
+		buildConfigField "int", "MESSENGER_PORT", "0"
+		buildConfigField "long", "AI_BOT_ID", "0L"
+		buildConfigField "long", "SUPPORT_BOT_ID", "0L"
+		buildConfigField "long", "NOTIFICATIONS_BOT_ID", "0L"
+		buildConfigField "long", "PHOENIX_BOT_ID", "0L"
+		buildConfigField "long", "BUSINESS_BOT_ID", "0L"
+		buildConfigField "long", "CANCER_BOT_ID", "0L"
+		buildConfigField "String", "USER_TIPS_USER", "\"ellotips\""
+
+		buildConfigField "String", "SUPPORT_URL", "\"https://ellomessenger.com/support\""
+		buildConfigField "String", "PRIVACY_POLICY_URL", "\"https://ellomessenger.com/privacy-policy\""
+		buildConfigField "String", "TERMS_URL", "\"https://ellomessenger.com/terms\""
+
+		buildConfigField "String", "DATACENTER_PUBLIC_KEY", "\"-----BEGIN RSA PUBLIC KEY-----\\n-----END RSA PUBLIC KEY-----\""
+		buildConfigField "String", "SERVER_PUBLIC_KEY", "\"-----BEGIN RSA PUBLIC KEY-----\\n-----END RSA PUBLIC KEY-----\""
+		buildConfigField "String", "SERVER_PUBLIC_KEY_FINGERPRINT", "\"0x0000000000000000\""
+
+		ndk {
+			// ignore lint warnings because for debug
+			// we do not need to support ChromeOS for now
+			//noinspection ChromeOsAbiSupport
+			abiFilters "armeabi-v7a", "arm64-v8a" //, "x86", "x86_64"
+		}
+	}
+
+	buildTypes {
+		debug {
+			jniDebuggable true
+			minifyEnabled false
+			shrinkResources false
+			multiDexEnabled true
+			proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+			ndk.debugSymbolLevel = 'FULL'
+			buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
+
+			ndk {
+				// ignore lint warnings because for debug
+				// we do not need additional architectures
+				//noinspection ChromeOsAbiSupport
+				abiFilters "arm64-v8a"
+			}
+		}
+		release {
+			jniDebuggable false
+			minifyEnabled true
+			shrinkResources false
+			multiDexEnabled true
+			proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+			ndk.debugSymbolLevel = 'FULL'
+			buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
+		}
+	}
+
+	flavorDimensions["default"]
+
+	buildFeatures {
+		buildConfig = true
+	}
+
+	lint {
+		disable 'MissingTranslation', 'ExtraTranslation', 'BlockedPrivateApi'
+	}
+
+	namespace 'org.telegram.messenger'
+}
+
+apply plugin: 'com.google.gms.google-services'
+apply plugin: 'org.jetbrains.kotlin.android'

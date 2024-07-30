@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:orientation="vertical"
+		android:padding="14dp">
+
+		<LinearLayout
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_gravity="center"
+			android:gravity="center"
+			android:orientation="vertical">
+
+			<ImageView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:src="@drawable/ic_ai_logo" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				android:gravity="center"
+				android:text="@string/take_prompting_to_the_next_level"
+				android:textColor="@color/dark"
+				android:textSize="20sp"
+				android:textStyle="bold" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="8dp"
+				android:gravity="center"
+				android:text="@string/ai_empowerment"
+				android:textColor="@color/dark"
+				android:textSize="14sp" />
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				android:background="@drawable/bg_ai_space_prompts"
+				android:orientation="horizontal"
+				android:padding="14dp">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:src="@drawable/ic_ai_chat" />
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginStart="12dp"
+					android:text="@string/ai_chat_prompts_remaining"
+					android:textColor="@color/dark"
+					android:textSize="16sp" />
+
+				<TextView
+					android:id="@+id/total_ai_chat"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginStart="16dp"
+					android:gravity="end"
+					android:layout_weight="1"
+					android:textColor="@color/dark"
+					android:textSize="16sp"
+					android:textStyle="bold"
+					android:text="0" />
+			</LinearLayout>
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="8dp"
+				android:background="@drawable/bg_ai_space_prompts"
+				android:orientation="horizontal"
+				android:padding="14dp">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:src="@drawable/ic_ai_photo" />
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginStart="12dp"
+					android:text="@string/ai_image_prompts_remaining"
+					android:textColor="@color/dark"
+					android:textSize="16sp" />
+
+				<TextView
+					android:id="@+id/total_ai_photo"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginStart="4dp"
+					android:gravity="end"
+					android:layout_weight="1"
+					android:textColor="@color/dark"
+					android:textSize="16sp"
+					android:textStyle="bold"
+					android:text="0" />
+			</LinearLayout>
+
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/buy_ai_pack"
+				style="@style/Widget.App.BrandedButton"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				app:cornerRadius="6dp"
+				android:padding="13dp"
+				android:text="@string/buy_ai_pack"
+				android:textSize="16sp" />
+		</LinearLayout>
+
+		<androidx.recyclerview.widget.RecyclerView
+			android:id="@+id/bot_list"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:layout_marginTop="10dp"
+			tools:listitem="@layout/item_bot_layout"
+			tools:itemCount="1"/>
+
+	</LinearLayout>
+
+</ScrollView>

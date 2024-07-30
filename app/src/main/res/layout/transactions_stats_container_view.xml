@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:background="@color/light_background"
+	android:orientation="vertical">
+
+	<TextView
+		android:id="@+id/period_label"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_margin="20dp"
+		android:textSize="30sp"
+		android:textStyle="bold"
+		tools:text="March 2023" />
+
+	<androidx.viewpager2.widget.ViewPager2
+		android:id="@+id/wallets_view_pager"
+		android:layout_width="match_parent"
+		android:layout_height="256dp"
+		android:clipChildren="false"
+		android:clipToPadding="false"
+		android:overScrollMode="never"
+		android:paddingStart="36dp"
+		android:paddingEnd="12dp"
+		tools:background="#00ff00" />
+
+	<com.google.android.material.button.MaterialButtonToggleGroup
+		android:id="@+id/mode_segment_control"
+		android:layout_width="300dp"
+		android:layout_height="wrap_content"
+		android:layout_gravity="center_horizontal"
+		android:layout_marginTop="12dp"
+		app:checkedButton="@+id/segment_button_week"
+		app:selectionRequired="true"
+		app:singleSelection="true">
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/segment_button_week"
+			style="@style/Widget.App.WalletPeriodButtonOutlinedStyle"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:text="@string/week"
+			android:textStyle="bold" />
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/segment_button_month"
+			style="@style/Widget.App.WalletPeriodButtonOutlinedStyle"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:text="@string/month"
+			android:textStyle="bold" />
+
+		<com.google.android.material.button.MaterialButton
+			android:id="@+id/segment_button_year"
+			style="@style/Widget.App.WalletPeriodButtonOutlinedStyle"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:text="@string/year"
+			android:textStyle="bold" />
+
+	</com.google.android.material.button.MaterialButtonToggleGroup>
+
+	<TextView
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:background="@color/light_background"
+		android:paddingStart="20dp"
+		android:paddingTop="14dp"
+		android:paddingEnd="20dp"
+		android:paddingBottom="14dp"
+		android:text="@string/transaction_history"
+		android:textSize="18sp"
+		android:textStyle="bold" />
+
+</LinearLayout>

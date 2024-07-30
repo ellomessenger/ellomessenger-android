@@ -1,0 +1,594 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:gravity="center_horizontal"
+		android:orientation="vertical"
+		android:padding="20dp">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:background="@drawable/all_round_light_background"
+			android:gravity="center_horizontal"
+			android:orientation="vertical"
+			android:padding="17dp">
+
+			<ImageView
+				android:id="@+id/transaction_type_image"
+				android:layout_width="57dp"
+				android:layout_height="57dp"
+				android:contentDescription="@string/transaction_type_image_desc"
+				tools:src="@drawable/subscription_fee_icon" />
+
+			<LinearLayout
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="12dp"
+				android:gravity="center_vertical"
+				android:orientation="horizontal">
+
+				<FrameLayout
+					android:id="@+id/payment_avatar_container"
+					android:layout_width="20dp"
+					android:layout_height="20dp"
+					tools:background="@drawable/panda_logo" />
+
+				<TextView
+					android:id="@+id/payment_source_label"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="4dp"
+					android:ellipsize="end"
+					android:maxLines="1"
+					android:textSize="18sp"
+					android:textStyle="bold"
+					tools:text="@string/ello_card" />
+
+			</LinearLayout>
+
+			<TextView
+				android:id="@+id/ai_bot_transaction_type_label"
+				android:layout_width="wrap_content"
+				android:layout_height="26dp"
+				android:layout_marginTop="16dp"
+				android:background="@drawable/topup_label_background"
+				android:backgroundTint="@color/brand"
+				android:gravity="center"
+				android:paddingStart="8dp"
+				android:paddingEnd="8dp"
+				android:text="@string/ai_chat_bot"
+				android:textColor="@color/white"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:visibility="gone" />
+
+			<TextView
+				android:id="@+id/transaction_type_label"
+				android:layout_width="wrap_content"
+				android:layout_height="26dp"
+				android:layout_marginTop="16dp"
+				android:background="@drawable/topup_label_background"
+				android:gravity="center"
+				android:paddingStart="8dp"
+				android:paddingEnd="8dp"
+				android:textColor="@color/white"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				tools:text="@string/top_up" />
+
+		</LinearLayout>
+
+		<TextView
+			android:id="@+id/status_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="24dp"
+			android:drawablePadding="9.5dp"
+			android:textSize="16sp"
+			android:textStyle="bold"
+			tools:drawableStart="@drawable/approved_icon"
+			tools:text="Approved"
+			tools:textColor="@color/online" />
+
+		<FrameLayout
+			android:id="@+id/error_layout"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:background="@drawable/error_background"
+			android:padding="11dp"
+			android:visibility="gone"
+			tools:visibility="visible">
+
+			<TextView
+				android:id="@+id/error_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_gravity="center"
+				android:drawableStart="@drawable/ic_error"
+				android:text="@string/insufficient_funds_on_your_account"
+				android:drawablePadding="18dp"
+				android:gravity="center"
+				android:textColor="@color/purple"
+				android:textSize="14sp"
+				app:drawableStartCompat="@drawable/ic_error"
+				android:textStyle="bold" />
+
+		</FrameLayout>
+
+		<TextView
+			android:id="@+id/date_label"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="24dp"
+			android:textSize="14sp"
+			tools:text="March 1, 2023, 15:28" />
+
+		<LinearLayout
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:gravity="center_vertical"
+			android:orientation="horizontal">
+
+			<ImageView
+				android:id="@+id/frozen_ello_coin_symbol"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:layout_marginTop="1dp"
+				android:layout_marginEnd="8dp"
+				android:contentDescription="@string/cont_desc_ello_coin"
+				android:src="@drawable/ello_dollar_wallet_logo"
+				app:layout_constraintBottom_toBottomOf="@id/frozen_balance_label"
+				app:layout_constraintDimensionRatio="1:1"
+				app:layout_constraintEnd_toStartOf="@id/frozen_balance_label"
+				app:layout_constraintTop_toTopOf="@id/frozen_balance_label" />
+
+			<TextView
+				android:id="@+id/amount_label"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:letterSpacing="-0.03"
+				android:textSize="50sp"
+				tools:text="-1000" />
+		</LinearLayout>
+
+		<View
+			android:id="@+id/spacer"
+			android:layout_width="match_parent"
+			android:layout_height="24dp" />
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/purchases_wrapper_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="0dp"
+			android:background="@drawable/all_round_light_background"
+			android:clipChildren="false"
+			android:clipToPadding="false"
+			android:orientation="horizontal"
+			android:padding="18dp"
+			android:visibility="gone"
+			tools:visibility="visible">
+
+			<ImageView
+				android:id="@+id/cart_icon"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:contentDescription="@string/cont_desc_shopping_cart"
+				android:src="@drawable/shopping_cart"
+				android:tint="@color/text_fixed"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				app:tint="@color/text_fixed" />
+
+			<TextView
+				android:id="@+id/purchases_header_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/purchase"
+				android:textColor="@color/disabled_text"
+				android:textSize="13sp"
+				app:layout_constraintEnd_toStartOf="@id/expand_purchases_button"
+				app:layout_constraintStart_toEndOf="@id/cart_icon"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<ImageButton
+				android:id="@+id/expand_purchases_button"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:background="@null"
+				android:contentDescription="@string/cont_desc_expand_purchases"
+				android:foreground="?selectableItemBackgroundBorderless"
+				android:src="@drawable/ic_dropdown"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<LinearLayout
+				android:id="@+id/purchases_container"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="12dp"
+				android:orientation="vertical"
+				app:layout_constraintEnd_toEndOf="@id/purchases_header_label"
+				app:layout_constraintStart_toStartOf="@id/purchases_header_label"
+				app:layout_constraintTop_toBottomOf="@id/purchases_header_label" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/channel_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:background="@drawable/all_round_light_background"
+			android:orientation="horizontal"
+			android:paddingStart="18dp"
+			android:paddingTop="8dp"
+			android:paddingEnd="18dp"
+			android:paddingBottom="8dp"
+			android:visibility="gone"
+			tools:visibility="visible">
+
+			<ImageView
+				android:id="@+id/radio_icon"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:contentDescription="@string/cont_desc_radio"
+				android:src="@drawable/ic_radio"
+				android:tint="@color/text_fixed"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				app:tint="@color/text_fixed" />
+
+			<TextView
+				android:id="@+id/channel_header_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/channel"
+				android:textColor="@color/disabled_text"
+				android:textSize="13sp"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/radio_icon"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<FrameLayout
+				android:id="@+id/channel_avatar_container"
+				android:layout_width="20dp"
+				android:layout_height="20dp"
+				android:layout_marginTop="4dp"
+				app:layout_constraintStart_toStartOf="@id/channel_header_label"
+				app:layout_constraintTop_toBottomOf="@id/channel_header_label"
+				tools:background="@drawable/panda_logo" />
+
+			<TextView
+				android:id="@+id/channel_name_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="8dp"
+				android:ellipsize="end"
+				android:maxLines="1"
+				android:textStyle="bold"
+				app:layout_constraintBottom_toBottomOf="@id/channel_avatar_container"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/channel_avatar_container"
+				app:layout_constraintTop_toTopOf="@id/channel_avatar_container"
+				tools:text="Modern art" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/fee_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:background="@drawable/all_round_light_background"
+			android:orientation="horizontal"
+			android:paddingStart="18dp"
+			android:paddingTop="8dp"
+			android:paddingEnd="18dp"
+			android:paddingBottom="8dp"
+			android:visibility="gone"
+			tools:visibility="visible">
+
+			<ImageView
+				android:id="@+id/fee_icon"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:contentDescription="@string/ello_commission"
+				android:src="@drawable/discount_shape"
+				android:tint="@color/text_fixed"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				app:tint="@color/text_fixed" />
+
+			<TextView
+				android:id="@+id/fee_header_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/ello_commission"
+				android:textColor="@color/disabled_text"
+				android:textSize="13sp"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/fee_icon"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<ImageView
+				android:id="@+id/commission_ello_coin_symbol"
+				android:layout_width="16dp"
+				android:layout_height="16dp"
+				android:layout_marginTop="1dp"
+				android:contentDescription="@string/cont_desc_ello_coin"
+				android:src="@drawable/ello_dollar_wallet_logo"
+				app:layout_constraintBottom_toBottomOf="@id/fee_amount_label"
+				app:layout_constraintDimensionRatio="1:1"
+				app:layout_constraintStart_toStartOf="@id/fee_header_label"
+				app:layout_constraintTop_toTopOf="@id/fee_amount_label" />
+
+			<TextView
+				android:id="@+id/fee_amount_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="2dp"
+				android:textStyle="bold"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/commission_ello_coin_symbol"
+				app:layout_constraintTop_toBottomOf="@id/fee_header_label"
+				tools:text="0.80" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/service_fee_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:background="@drawable/all_round_light_background"
+			android:orientation="horizontal"
+			android:paddingStart="18dp"
+			android:paddingTop="8dp"
+			android:paddingEnd="18dp"
+			android:paddingBottom="8dp"
+			android:visibility="gone"
+			tools:visibility="visible">
+
+			<ImageView
+				android:id="@+id/service_fee_icon"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:contentDescription="@string/service_fee"
+				android:src="@drawable/discount_shape"
+				android:tint="@color/text_fixed"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				app:tint="@color/text_fixed" />
+
+			<TextView
+				android:id="@+id/service_fee_header_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/service_fee"
+				android:textColor="@color/disabled_text"
+				android:textSize="13sp"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/service_fee_icon"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<ImageView
+				android:id="@+id/service_commission_ello_coin_symbol"
+				android:layout_width="16dp"
+				android:layout_height="16dp"
+				android:layout_marginTop="1dp"
+				android:contentDescription="@string/cont_desc_ello_coin"
+				android:src="@drawable/ello_dollar_wallet_logo"
+				app:layout_constraintBottom_toBottomOf="@id/service_fee_amount_label"
+				app:layout_constraintDimensionRatio="1:1"
+				app:layout_constraintStart_toStartOf="@id/service_fee_header_label"
+				app:layout_constraintTop_toTopOf="@id/service_fee_amount_label" />
+
+			<TextView
+				android:id="@+id/service_fee_amount_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="2dp"
+				android:textStyle="bold"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@+id/service_commission_ello_coin_symbol"
+				app:layout_constraintTop_toBottomOf="@id/service_fee_header_label"
+				app:layout_goneMarginStart="0dp"
+				tools:text="0.80" />
+
+			<ImageView
+				android:id="@+id/service_fee_ello_coin_symbol"
+				android:layout_width="12dp"
+				android:layout_height="12dp"
+				android:layout_marginTop="1dp"
+				android:contentDescription="@string/cont_desc_ello_coin"
+				android:src="@drawable/ello_dollar_wallet_logo"
+				android:visibility="gone"
+				app:layout_constraintBottom_toBottomOf="@id/service_fee_amount_label"
+				app:layout_constraintDimensionRatio="1:1"
+				app:layout_constraintStart_toStartOf="@id/service_fee_header_label"
+				app:layout_constraintTop_toTopOf="@id/service_fee_amount_label" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/payment_method_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:background="@drawable/all_round_light_background"
+			android:orientation="horizontal"
+			android:paddingStart="18dp"
+			android:paddingTop="8dp"
+			android:paddingEnd="18dp"
+			android:paddingBottom="8dp"
+			android:visibility="gone"
+			tools:visibility="visible">
+
+			<ImageView
+				android:id="@+id/payment_method_icon"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:contentDescription="@string/payment_method"
+				android:src="@drawable/card"
+				android:tint="@color/text_fixed"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				app:tint="@color/text_fixed" />
+
+			<TextView
+				android:id="@+id/payment_method_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:textStyle="bold"
+				android:layout_marginTop="4dp"
+				android:layout_marginBottom="4dp"
+				android:layout_marginStart="16dp"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@+id/payment_method_icon"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:text="Ello Card" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/referral_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:background="@drawable/all_round_light_background"
+			android:orientation="horizontal"
+			android:paddingStart="18dp"
+			android:paddingTop="8dp"
+			android:paddingEnd="18dp"
+			android:paddingBottom="8dp"
+			android:visibility="gone"
+			tools:visibility="visible">
+
+			<FrameLayout
+				android:id="@+id/referral_avatar_container"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:contentDescription="@string/cont_desc_radio"
+				tools:background="@drawable/panda_logo"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<TextView
+				android:id="@+id/referral_header_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/referral_user"
+				android:textColor="@color/disabled_text"
+				android:textSize="13sp"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/referral_avatar_container"
+				app:layout_constraintBottom_toTopOf="@id/referral_name_label"
+				app:layout_constraintTop_toTopOf="@id/referral_avatar_container" />
+
+			<TextView
+				android:id="@+id/referral_name_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:ellipsize="end"
+				android:maxLines="1"
+				android:textStyle="bold"
+				app:layout_constraintBottom_toBottomOf="@id/referral_avatar_container"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/referral_avatar_container"
+				app:layout_constraintTop_toBottomOf="@id/referral_header_label"
+				tools:text="Annette Black" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:id="@+id/balance_container"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:background="@drawable/all_round_light_background"
+			android:orientation="horizontal"
+			android:paddingStart="18dp"
+			android:paddingTop="8dp"
+			android:paddingEnd="18dp"
+			android:paddingBottom="8dp">
+
+			<ImageView
+				android:id="@+id/balance_icon"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
+				android:contentDescription="@string/balance"
+				android:src="@drawable/wallet_balance"
+				android:tint="@color/text_fixed"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				app:tint="@color/text_fixed" />
+
+			<TextView
+				android:id="@+id/balance_header_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="16dp"
+				android:layout_marginEnd="16dp"
+				android:text="@string/balance"
+				android:textColor="@color/disabled_text"
+				android:textSize="13sp"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/balance_icon"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<TextView
+				android:id="@+id/balance_label"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="2dp"
+				android:textStyle="bold"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@id/balance_ello_coin_symbol"
+				app:layout_constraintTop_toBottomOf="@id/balance_header_label"
+				tools:text="950.32" />
+
+			<ImageView
+				android:id="@+id/balance_ello_coin_symbol"
+				android:layout_width="16dp"
+				android:layout_height="16dp"
+				android:layout_marginTop="1dp"
+				android:contentDescription="@string/cont_desc_ello_coin"
+				android:src="@drawable/ello_dollar_wallet_logo"
+				app:layout_constraintBottom_toBottomOf="@id/balance_label"
+				app:layout_constraintDimensionRatio="1:1"
+				app:layout_constraintStart_toStartOf="@id/balance_header_label"
+				app:layout_constraintTop_toTopOf="@id/balance_label" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+	</LinearLayout>
+
+</ScrollView>

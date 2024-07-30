@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+	<item
+		android:id="@+id/hide"
+		android:icon="@drawable/sticker"
+		android:title="@string/hide_channel" />
+
+	<item
+		android:id="@+id/report"
+		android:icon="@drawable/ic_error"
+		android:title="@string/ReportChat" />
+
+</menu>

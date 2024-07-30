@@ -1,0 +1,637 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:installLocation="auto">
+
+	<supports-screens
+		android:anyDensity="true"
+		android:largeScreens="true"
+		android:normalScreens="true"
+		android:resizeable="true"
+		android:smallScreens="true"
+		android:xlargeScreens="true" />
+
+	<uses-feature
+		android:glEsVersion="0x00020000"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.telephony"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.wifi"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.screen.PORTRAIT"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.microphone"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.camera"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.camera2"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.location.gps"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.location.network"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.location"
+		android:required="false" />
+	<uses-feature
+		android:name="android.hardware.LOCATION"
+		android:required="false" />
+
+	<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+	<uses-permission android:name="android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS" />
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.RECORD_AUDIO" />
+	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+	<uses-permission android:name="android.permission.WAKE_LOCK" />
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+	<uses-permission android:name="android.permission.VIBRATE" />
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+	<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+	<uses-permission android:name="android.permission.USE_FINGERPRINT" />
+	<uses-permission android:name="android.permission.USE_BIOMETRIC" />
+	<uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+	<uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+	<uses-permission android:name="com.android.launcher.permission.UNINSTALL_SHORTCUT" />
+	<uses-permission android:name="android.permission.CAMERA" />
+	<uses-permission android:name="android.permission.BLUETOOTH" />
+	<uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+	<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+	<uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+
+	<uses-permission android:name="com.sec.android.provider.badge.permission.READ" />
+	<uses-permission android:name="com.sec.android.provider.badge.permission.WRITE" />
+	<uses-permission android:name="com.htc.launcher.permission.READ_SETTINGS" />
+	<uses-permission android:name="com.htc.launcher.permission.UPDATE_SHORTCUT" />
+	<uses-permission android:name="com.sonyericsson.home.permission.BROADCAST_BADGE" />
+	<uses-permission android:name="com.sonymobile.home.permission.PROVIDER_INSERT_BADGE" />
+	<uses-permission android:name="com.anddoes.launcher.permission.UPDATE_COUNT" />
+	<uses-permission android:name="com.majeur.launcher.permission.UPDATE_BADGE" />
+	<uses-permission android:name="android.permission.READ_APP_BADGE" />
+	<uses-permission android:name="com.oppo.launcher.permission.READ_SETTINGS" />
+	<uses-permission android:name="com.oppo.launcher.permission.WRITE_SETTINGS" />
+	<uses-permission android:name="me.everything.badger.permission.BADGE_COUNT_READ" />
+	<uses-permission android:name="me.everything.badger.permission.BADGE_COUNT_WRITE" />
+	<uses-permission android:name="com.android.vending.BILLING" />
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+	<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+	<uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+	<uses-permission android:name="com.beint.elloapp.permission.MAPS_RECEIVE" />
+	<uses-permission android:name="com.google.android.providers.gsf.permission.READ_GSERVICES" />
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+	<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+	<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+	<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+
+	<permission
+		android:name="com.beint.elloapp.permission.MAPS_RECEIVE"
+		android:protectionLevel="signature" />
+
+	<queries>
+		<package android:name="com.google.android.apps.maps" />
+	</queries>
+
+	<application
+		android:name="org.telegram.messenger.ApplicationLoader"
+		android:allowAudioPlaybackCapture="true"
+		android:allowBackup="false"
+		android:icon="@mipmap/ic_launcher"
+		android:label="@string/AppName"
+		android:largeHeap="true"
+		android:manageSpaceActivity="org.telegram.ui.ExternalActionActivity"
+		android:preserveLegacyExternalStorage="true"
+		android:requestLegacyExternalStorage="true"
+		android:roundIcon="@mipmap/ic_launcher_round"
+		android:supportsRtl="false"
+		android:theme="@style/Theme.TMessages.Start">
+
+		<meta-data
+			android:name="com.google.android.maps.v2.API_KEY"
+			android:value="<YOUR_KEY_HERE>" />
+
+		<service
+			android:name="org.telegram.messenger.GcmPushListenerService"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="com.google.firebase.MESSAGING_EVENT" />
+			</intent-filter>
+		</service>
+
+		<uses-library
+			android:name="com.google.android.maps"
+			android:required="false" />
+
+		<meta-data
+			android:name="firebase_analytics_collection_deactivated"
+			android:value="true" />
+		<meta-data
+			android:name="google_analytics_adid_collection_enabled"
+			android:value="false" />
+
+		<receiver
+			android:name="com.google.android.gms.measurement.AppMeasurementReceiver"
+			android:enabled="false"
+			android:exported="false"
+			tools:replace="android:enabled">
+			<intent-filter>
+				<action android:name="com.google.android.gms.measurement.UPLOAD" />
+			</intent-filter>
+		</receiver>
+
+		<service
+			android:name="com.google.android.gms.measurement.AppMeasurementService"
+			android:enabled="false"
+			android:exported="false"
+			tools:replace="android:enabled" />
+
+		<activity
+			android:name="org.telegram.ui.LaunchActivity"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:exported="true"
+			android:launchMode="singleTask"
+			android:theme="@style/Theme.TMessages.Start"
+			android:windowSoftInputMode="adjustResize">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+
+				<category android:name="android.intent.category.LAUNCHER" />
+				<category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+			</intent-filter>
+			<intent-filter>
+				<action android:name="android.intent.action.SEND" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="image/*" />
+			</intent-filter>
+			<intent-filter>
+				<action android:name="android.intent.action.SEND" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="video/*" />
+			</intent-filter>
+			<intent-filter>
+				<action android:name="android.intent.action.SEND_MULTIPLE" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="image/*" />
+			</intent-filter>
+			<intent-filter>
+				<action android:name="android.intent.action.SEND" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="text/plain" />
+			</intent-filter>
+			<intent-filter>
+				<action android:name="android.intent.action.SEND" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="*/*" />
+			</intent-filter>
+			<intent-filter>
+				<action android:name="android.intent.action.SEND_MULTIPLE" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="*/*" />
+			</intent-filter>
+			<intent-filter android:autoVerify="true">
+				<action android:name="android.intent.action.VIEW" />
+
+				<category android:name="android.intent.category.DEFAULT" />
+				<category android:name="android.intent.category.BROWSABLE" />
+
+				<data android:scheme="http" />
+				<data android:scheme="https" />
+				<data android:host="ello.team" />
+				<data android:host="stage.ello.team" />
+			</intent-filter>
+			<intent-filter
+				android:icon="@mipmap/ic_launcher"
+				android:priority="1"
+				android:roundIcon="@mipmap/ic_launcher_round">
+				<action android:name="android.intent.action.VIEW" />
+
+				<category android:name="android.intent.category.BROWSABLE" />
+				<category android:name="android.intent.category.DEFAULT" />
+
+				<data android:scheme="@string/app_scheme" />
+			</intent-filter>
+			<intent-filter>
+				<action android:name="com.beint.elloapp.messenger.CREATE_STICKER_PACK" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="*/*" />
+			</intent-filter>
+
+			<meta-data
+				android:name="android.service.chooser.chooser_target_service"
+				android:exported="true"
+				android:value="androidx.sharetarget.ChooserTargetServiceCompat" />
+			<meta-data
+				android:name="android.app.shortcuts"
+				android:resource="@xml/shortcuts" />
+		</activity>
+		<activity-alias
+			android:name="org.telegram.ui.CallsActivity"
+			android:targetActivity="org.telegram.ui.LaunchActivity"
+			android:permission="android.permission.CALL_PHONE"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="android.intent.action.VIEW"/>
+				<category android:name="android.intent.category.DEFAULT"/>
+				<data android:mimeType="vnd.android.cursor.item/vnd.org.telegram.messenger.android.call"/>
+				<data android:mimeType="vnd.android.cursor.item/vnd.org.telegram.messenger.android.call.video"/>
+			</intent-filter>
+		</activity-alias>
+
+		<service android:name="com.beint.elloapp.GoogleVoiceClientService" />
+
+		<activity
+			android:name="com.beint.elloapp.GoogleVoiceClientActivity"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="com.google.android.voicesearch.SEND_MESSAGE_TO_CONTACTS" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<data android:mimeType="text/plain" />
+			</intent-filter>
+		</activity>
+
+		<activity
+			android:name="org.telegram.ui.BubbleActivity"
+			android:allowEmbedded="true"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:documentLaunchMode="always"
+			android:exported="false"
+			android:resizeableActivity="true"
+			android:windowSoftInputMode="adjustResize" />
+		<activity
+			android:name="org.telegram.ui.ShareActivity"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:excludeFromRecents="true"
+			android:exported="true"
+			android:stateNotNeeded="true"
+			android:theme="@style/Theme.TMessages.Transparent"
+			android:windowSoftInputMode="adjustPan">
+			<intent-filter
+				android:icon="@mipmap/ic_launcher"
+				android:priority="1"
+				android:roundIcon="@mipmap/ic_launcher_round">
+				<action android:name="android.intent.action.VIEW" />
+
+				<category android:name="android.intent.category.BROWSABLE" />
+				<category android:name="android.intent.category.DEFAULT" />
+
+				<data android:scheme="@string/app_scheme_b" />
+			</intent-filter>
+		</activity>
+		<activity
+			android:name="org.telegram.ui.ExternalActionActivity"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:exported="true"
+			android:windowSoftInputMode="adjustPan">
+			<intent-filter
+				android:icon="@mipmap/ic_launcher"
+				android:roundIcon="@mipmap/ic_launcher_round">
+				<action android:name="com.beint.elloapp.passport.AUTHORIZE" />
+				<category android:name="android.intent.category.DEFAULT" />
+			</intent-filter>
+		</activity>
+		<activity
+			android:name="org.telegram.ui.ChatsWidgetConfigActivity"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:exported="true"
+			android:windowSoftInputMode="adjustPan">
+			<intent-filter
+				android:icon="@mipmap/ic_launcher"
+				android:roundIcon="@mipmap/ic_launcher_round">
+				<action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+			</intent-filter>
+		</activity>
+		<activity
+			android:name="org.telegram.ui.ContactsWidgetConfigActivity"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:exported="true"
+			android:windowSoftInputMode="adjustPan">
+			<intent-filter
+				android:icon="@mipmap/ic_launcher"
+				android:roundIcon="@mipmap/ic_launcher_round">
+				<action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+			</intent-filter>
+		</activity>
+		<!--        <activity-->
+		<!--            android:name="org.telegram.ui.FeedWidgetConfigActivity"-->
+		<!--            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"-->
+		<!--            android:windowSoftInputMode="adjustPan">-->
+		<!--            <intent-filter android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher_round">-->
+		<!--                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>-->
+		<!--            </intent-filter>-->
+		<!--        </activity>-->
+		<activity
+			android:name="org.telegram.messenger.OpenChatReceiver"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:exported="true" />
+		<activity
+			android:name="org.telegram.ui.PopupNotificationActivity"
+			android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:launchMode="singleTask"
+			android:resizeableActivity="false"
+			android:taskAffinity=""
+			android:theme="@style/Theme.TMessages.PopupNotification"
+			android:windowSoftInputMode="adjustResize|stateHidden" />
+		<activity
+			android:name="org.telegram.ui.VoIPPermissionActivity"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:taskAffinity="com.beint.elloapp.voip"
+			android:theme="@style/Theme.TMessages.Transparent" />
+		<activity
+			android:name="org.telegram.ui.VoIPFeedbackActivity"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:taskAffinity="com.beint.elloapp.voip_feedback"
+			android:theme="@style/Theme.TMessages.TransparentWithAlerts" />
+
+		<receiver
+			android:name=".AutoMessageHeardReceiver"
+			android:exported="false">
+			<intent-filter>
+				<action android:name="com.beint.elloapp.messenger.ACTION_MESSAGE_HEARD" />
+			</intent-filter>
+		</receiver>
+
+		<receiver
+			android:name=".NotificationsDisabledReceiver"
+			android:exported="false">
+			<intent-filter>
+				<action android:name="android.app.action.NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED" />
+			</intent-filter>
+		</receiver>
+
+		<receiver
+			android:name=".AutoMessageReplyReceiver"
+			android:exported="false">
+			<intent-filter>
+				<action android:name="com.beint.elloapp.messenger.ACTION_MESSAGE_REPLY" />
+			</intent-filter>
+		</receiver>
+
+		<receiver
+			android:name=".CallReceiver"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="android.intent.action.PHONE_STATE" />
+			</intent-filter>
+		</receiver>
+
+		<service
+			android:name=".KeepAliveJob"
+			android:exported="false"
+			android:permission="android.permission.BIND_JOB_SERVICE" />
+		<service
+			android:name=".BringAppForegroundService"
+			android:enabled="true"
+			android:exported="false" />
+		<service
+			android:name=".NotificationsService"
+			android:enabled="true"
+			android:exported="true" />
+		<service
+			android:name=".NotificationRepeat"
+			android:exported="false" />
+		<service
+			android:name=".VideoEncodingService"
+			android:enabled="true"
+			android:foregroundServiceType="dataSync"
+			android:exported="false" />
+		<service
+			android:name=".ImportingService"
+			android:enabled="true"
+			android:exported="true" />
+		<service
+			android:name=".LocationSharingService"
+			android:enabled="true"
+			android:exported="true"
+			android:foregroundServiceType="location" />
+		<service
+			android:name=".voip.VoIPService"
+			android:enabled="true"
+			android:foregroundServiceType="microphone|mediaPlayback" />
+		<service
+			android:name=".MusicPlayerService"
+			android:enabled="true"
+			android:exported="true"
+			android:foregroundServiceType="mediaPlayback" />
+		<service
+			android:name=".MusicBrowserService"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="android.media.browse.MediaBrowserService" />
+			</intent-filter>
+		</service>
+		<service
+			android:name=".voip.ElloConnectionService"
+			android:exported="true"
+			android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+			<intent-filter>
+				<action android:name="android.telecom.ConnectionService" />
+			</intent-filter>
+		</service>
+
+		<receiver
+			android:name=".MusicPlayerReceiver"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="com.beint.elloapp.android.musicplayer.close" />
+				<action android:name="com.beint.elloapp.android.musicplayer.pause" />
+				<action android:name="com.beint.elloapp.android.musicplayer.next" />
+				<action android:name="com.beint.elloapp.android.musicplayer.play" />
+				<action android:name="com.beint.elloapp.android.musicplayer.previous" />
+				<action android:name="android.intent.action.MEDIA_BUTTON" />
+				<action android:name="android.media.AUDIO_BECOMING_NOISY" />
+			</intent-filter>
+		</receiver>
+		<receiver
+			android:name=".voip.VoIPMediaButtonReceiver"
+			android:exported="false">
+			<intent-filter>
+				<action android:name="android.intent.action.MEDIA_BUTTON" />
+			</intent-filter>
+		</receiver>
+
+		<receiver
+			android:name=".AppStartReceiver"
+			android:enabled="true"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="com.beint.elloapp.start" />
+				<action android:name="android.intent.action.BOOT_COMPLETED" />
+			</intent-filter>
+		</receiver>
+
+		<receiver
+			android:name=".RefererReceiver"
+			android:exported="true"
+			android:permission="android.permission.INSTALL_PACKAGES">
+			<intent-filter>
+				<action android:name="com.android.vending.INSTALL_REFERRER" />
+			</intent-filter>
+		</receiver>
+
+		<receiver
+			android:name=".WearReplyReceiver"
+			android:enabled="true"
+			android:exported="true" />
+
+		<receiver
+			android:name=".StopLiveLocationReceiver"
+			android:enabled="true"
+			android:exported="true" />
+
+		<receiver
+			android:name=".PopupReplyReceiver"
+			android:enabled="true"
+			android:exported="true" />
+
+		<receiver
+			android:name=".NotificationCallbackReceiver"
+			android:enabled="true"
+			android:exported="false" />
+
+		<receiver
+			android:name=".ShareBroadcastReceiver"
+			android:enabled="true"
+			android:exported="true" />
+
+		<receiver
+			android:name=".CustomTabsCopyReceiver"
+			android:enabled="true"
+			android:exported="true" />
+
+		<receiver
+			android:name=".NotificationDismissReceiver"
+			android:exported="false" />
+
+		<receiver
+			android:name=".voip.VoIPActionsReceiver"
+			android:exported="false" />
+
+		<provider
+			android:name="androidx.core.content.FileProvider"
+			android:authorities="com.beint.elloapp.provider"
+			android:exported="false"
+			android:grantUriPermissions="true">
+			<meta-data
+				android:name="android.support.FILE_PROVIDER_PATHS"
+				android:resource="@xml/provider_paths" />
+		</provider>
+
+		<provider
+			android:name=".NotificationImageProvider"
+			android:authorities="com.beint.elloapp.notification_image_provider"
+			android:exported="false"
+			android:grantUriPermissions="true" />
+
+		<provider
+			android:name=".voip.CallNotificationSoundProvider"
+			android:authorities="com.beint.elloapp.call_sound_provider"
+			android:exported="true" />
+
+		<receiver
+			android:name=".ChatsWidgetProvider"
+			android:exported="false">
+			<meta-data
+				android:name="android.appwidget.provider"
+				android:resource="@xml/chats_widget_info" />
+			<intent-filter>
+				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+			</intent-filter>
+		</receiver>
+
+		<service
+			android:name=".ChatsWidgetService"
+			android:exported="false"
+			android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+		<receiver
+			android:name=".ContactsWidgetProvider"
+			android:exported="false">
+			<meta-data
+				android:name="android.appwidget.provider"
+				android:resource="@xml/contacts_widget_info" />
+			<intent-filter>
+				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+			</intent-filter>
+		</receiver>
+
+		<service
+			android:name=".ContactsWidgetService"
+			android:exported="false"
+			android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+		<!--        <receiver android:name=".FeedWidgetProvider">-->
+		<!--            <meta-data android:name="android.appwidget.provider"-->
+		<!--                android:resource="@xml/feed_widget_info" />-->
+		<!--            <intent-filter>-->
+		<!--                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />-->
+		<!--            </intent-filter>-->
+		<!--        </receiver>-->
+
+		<!--        <service android:name=".FeedWidgetService"-->
+		<!--            android:permission="android.permission.BIND_REMOTEVIEWS"-->
+		<!--            android:exported="false" />-->
+		<service
+			android:name=".FilesMigrationService"
+			android:exported="false" />
+
+		<uses-library
+			android:name="com.sec.android.app.multiwindow"
+			android:required="false" />
+
+		<meta-data
+			android:name="com.sec.android.support.multiwindow"
+			android:value="true" />
+		<meta-data
+			android:name="com.sec.android.multiwindow.DEFAULT_SIZE_W"
+			android:value="632dp" />
+		<meta-data
+			android:name="com.sec.android.multiwindow.DEFAULT_SIZE_H"
+			android:value="598dp" />
+		<meta-data
+			android:name="com.sec.android.multiwindow.MINIMUM_SIZE_W"
+			android:value="632dp" />
+		<meta-data
+			android:name="com.sec.android.multiwindow.MINIMUM_SIZE_H"
+			android:value="598dp" />
+
+		<meta-data
+			android:name="com.google.android.gms.wallet.api.enabled"
+			android:value="true" />
+
+		<meta-data
+			android:name="com.google.android.gms.vision.DEPENDENCIES"
+			android:value="face,barcode" />
+
+		<meta-data
+			android:name="android.max_aspect"
+			android:value="2.5" />
+
+		<meta-data
+			android:name="com.google.android.actions"
+			android:resource="@xml/actions" />
+
+	</application>
+
+</manifest>

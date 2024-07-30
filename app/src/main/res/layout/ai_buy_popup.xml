@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:orientation="vertical"
+	android:paddingHorizontal="20dp"
+	android:paddingTop="20dp">
+
+	<FrameLayout
+		android:id="@+id/title_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="32dp">
+
+		<ImageView
+			android:id="@+id/close"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_gravity="end"
+			android:clickable="true"
+			android:contentDescription="@string/Close"
+			android:focusable="true"
+			android:src="@drawable/ic_layer_close"
+			android:tint="@color/icon_color_selector"
+			app:tint="@color/icon_color_selector"
+			tools:ignore="UseAppTint" />
+
+		<TextView
+			android:id="@+id/title"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:text="@string/ai_buy_popup_title"
+			android:textColor="@color/dark"
+			android:textSize="@dimen/common_size_20dp"
+			android:textStyle="bold" />
+	</FrameLayout>
+
+
+	<FrameLayout
+		android:id="@+id/image_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="32dp"
+		android:gravity="center">
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image2"
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_popup"
+			android:translationX="32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image1_bg"
+			android:layout_width="88dp"
+			android:layout_height="88dp"
+			android:layout_gravity="center"
+			android:scaleType="fitCenter"
+			android:src="@drawable/ai_switch_thumb"
+			android:translationX="-32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image1"
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_text"
+			android:translationX="-32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image1_fg"
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerInside"
+			android:src="@drawable/ai_buy_type_text"
+			android:translationX="-32dp"
+			app:contentPadding="20dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+	</FrameLayout>
+
+	<FrameLayout
+		android:id="@+id/image_text_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="32dp"
+		android:visibility="gone"
+		android:gravity="center">
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_popup"
+			android:translationX="66dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="88dp"
+			android:layout_height="88dp"
+			android:layout_gravity="center"
+			android:scaleType="fitCenter"
+			android:src="@drawable/ai_switch_thumb"
+			android:translationX="-2dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_picture"
+			android:translationX="-2dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerInside"
+			android:src="@drawable/ai_buy_type_picture"
+			android:translationX="-2dp"
+			app:contentPadding="20dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="88dp"
+			android:layout_height="88dp"
+			android:layout_gravity="center"
+			android:scaleType="fitCenter"
+			android:src="@drawable/ai_switch_thumb"
+			android:translationX="-62dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_text"
+			android:translationX="-62dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerInside"
+			android:src="@drawable/ai_buy_type_text"
+			android:translationX="-62dp"
+			app:contentPadding="20dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+	</FrameLayout>
+
+	<TextView
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="8dp"
+		android:text="@string/ai_buy_popup_sub_title"
+		android:textColor="@color/dark"
+		android:textSize="@dimen/common_size_14dp" />
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:id="@+id/item_to_buy"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content">
+
+		<View
+			android:id="@+id/pack_background"
+			android:layout_width="0dp"
+			android:layout_height="0dp"
+			android:layout_marginEnd="12dp"
+			android:background="@drawable/rounded_ai_pack"
+			app:layout_constraintBottom_toBottomOf="@id/price_tag"
+			app:layout_constraintEnd_toStartOf="@+id/price_tag"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="@id/price_tag" />
+
+		<TextView
+			android:id="@+id/pack_unit"
+			android:layout_width="0dp"
+			android:layout_height="match_parent"
+			android:layout_marginLeft="12dp"
+			android:textColor="@color/text"
+			android:textSize="@dimen/common_size_16dp"
+			android:layout_marginEnd="8dp"
+			app:layout_constraintBottom_toBottomOf="@id/pack_amount"
+			app:layout_constraintEnd_toEndOf="@+id/pack_background"
+			app:layout_constraintStart_toEndOf="@id/pack_amount"
+			app:layout_constraintTop_toTopOf="@id/pack_amount"
+			tools:text="Prompts" />
+
+		<TextView
+			android:id="@+id/pack_amount"
+			android:layout_width="wrap_content"
+			android:layout_height="match_parent"
+			android:layout_marginVertical="12dp"
+			android:layout_marginStart="12dp"
+			android:background="@drawable/rounded_ai_price"
+			android:backgroundTint="@color/brand"
+			android:drawableStart="@drawable/ic_bolt"
+			android:drawableTint="@color/white_day_night"
+			android:paddingHorizontal="8dp"
+			android:paddingVertical="4dp"
+			android:textColor="@color/white_day_night"
+			android:textSize="@dimen/common_size_20dp"
+			app:drawableTint="@color/white_day_night"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			tools:text="200" />
+
+		<TextView
+			android:id="@+id/price_tag"
+			android:layout_width="wrap_content"
+			android:layout_height="match_parent"
+			android:background="@drawable/rounded_ai_price"
+			android:padding="12dp"
+			android:textColor="@color/white_day_night"
+			android:textSize="@dimen/common_size_24dp"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			tools:text="$4.99" />
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+	<LinearLayout
+		android:id="@+id/item_to_text_images_buy"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:visibility="gone"
+		android:orientation="vertical">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:background="@drawable/rounded_ai_pack"
+			android:orientation="horizontal">
+
+			<TextView
+				android:id="@+id/text_pack_amount"
+				android:layout_width="wrap_content"
+				android:layout_height="match_parent"
+				android:layout_marginVertical="12dp"
+				android:layout_marginStart="12dp"
+				android:background="@drawable/rounded_ai_price"
+				android:backgroundTint="@color/brand"
+				android:drawableStart="@drawable/ic_bolt"
+				android:drawableTint="@color/white_day_night"
+				android:paddingHorizontal="8dp"
+				android:paddingVertical="4dp"
+				android:textColor="@color/white_day_night"
+				android:textSize="@dimen/common_size_20dp"
+				app:drawableTint="@color/white_day_night"
+				tools:text="200" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="match_parent"
+				android:layout_marginLeft="12dp"
+				android:textColor="@color/text"
+				android:gravity="center"
+				android:textSize="@dimen/common_size_16dp"
+				android:layout_marginEnd="8dp"
+				android:text="@string/text_prompts" />
+		</LinearLayout>
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:layout_marginTop="4dp"
+			android:layout_marginBottom="4dp"
+			android:background="@drawable/rounded_ai_pack"
+			android:orientation="horizontal">
+
+			<TextView
+				android:id="@+id/image_pack_amount"
+				android:layout_width="wrap_content"
+				android:layout_height="match_parent"
+				android:layout_marginVertical="12dp"
+				android:layout_marginStart="12dp"
+				android:background="@drawable/rounded_ai_price"
+				android:backgroundTint="@color/brand"
+				android:drawableStart="@drawable/ic_bolt"
+				android:drawableTint="@color/white_day_night"
+				android:paddingHorizontal="8dp"
+				android:paddingVertical="4dp"
+				android:textColor="@color/white_day_night"
+				android:textSize="@dimen/common_size_20dp"
+				app:drawableTint="@color/white_day_night"
+				tools:text="200" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="match_parent"
+				android:layout_marginLeft="12dp"
+				android:textColor="@color/text"
+				android:gravity="center"
+				android:textSize="@dimen/common_size_16dp"
+				android:layout_marginEnd="8dp"
+				android:text="@string/image_prompts" />
+		</LinearLayout>
+
+		<TextView
+			android:id="@+id/image_text_price_tag"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:background="@drawable/rounded_ai_price"
+			android:padding="12dp"
+			android:gravity="center"
+			android:textColor="@color/white_day_night"
+			android:textSize="@dimen/common_size_24dp"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			tools:text="$4.99" />
+
+	</LinearLayout>
+
+	<View
+		android:id="@+id/divider"
+		android:layout_width="match_parent"
+		android:layout_height="1px"
+		android:layout_marginTop="16dp"
+		android:background="@color/disabled_text"
+		app:layout_constraintBottom_toTopOf="@id/buy_button"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent" />
+
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/buy_button"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginTop="16dp"
+		android:layout_marginBottom="16dp"
+		android:textColor="@color/white"
+		android:text="@string/ai_buy_pay"
+		app:cornerRadius="10dp"
+		app:backgroundTint="@color/brand"/>
+
+</LinearLayout>

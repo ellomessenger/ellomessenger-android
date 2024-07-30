@@ -1,0 +1,48 @@
+<!-- res/layout/item_custom.xml -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:background="@color/light_background"
+	android:orientation="vertical">
+
+	<TextView
+		android:id="@+id/tv_title"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:padding="6dp"
+		android:textStyle="bold"
+		android:textColor="@color/disabled_text"
+		android:textSize="14sp"
+		android:layout_marginStart="14dp"
+		android:paddingStart="16dp"
+		android:text="@string/invite_link" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/bt_invite_others"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:text="@string/invite_others_to_chat"
+		android:gravity="start|center"
+		app:rippleColor="@color/light_background"
+		android:padding="20dp"
+		android:textColor="@drawable/bg_txt_invite_others_selector"
+		android:drawableLeft="@drawable/ic_invite_link"
+		android:textSize="16sp"
+		app:cornerRadius="0dp"
+		app:iconGravity="textStart"
+		app:iconPadding="12dp" />
+
+	<TextView
+		android:id="@+id/tv_contacts"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:padding="6dp"
+		android:textStyle="bold"
+		android:textColor="@color/disabled_text"
+		android:textSize="14sp"
+		android:layout_marginStart="14dp"
+		android:paddingStart="16dp"
+		android:text="@string/contacts" />
+
+</LinearLayout>
