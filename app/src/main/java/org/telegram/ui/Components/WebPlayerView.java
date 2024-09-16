@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
-
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
@@ -79,14 +79,16 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 public class WebPlayerView extends ViewGroup implements VideoPlayer.VideoPlayerDelegate, AudioManager.OnAudioFocusChangeListener {
-
 	public interface WebPlayerViewDelegate {
 		void onInitFailed();
 
+		@Nullable
 		TextureView onSwitchToFullscreen(View controlsView, boolean fullscreen, float aspectRatio, int rotation, boolean byButton);
 
+		@Nullable
 		TextureView onSwitchInlineMode(View controlsView, boolean inline, int width, int height, int rotation, boolean animated);
 
 		void onInlineSurfaceTextureReady();
@@ -126,7 +128,7 @@ public class WebPlayerView extends ViewGroup implements VideoPlayer.VideoPlayerD
 
 	private boolean isStream;
 
-	private final boolean allowInlineAnimation = Build.VERSION.SDK_INT >= 21;
+	private final boolean allowInlineAnimation = true;
 
 	private static final int AUDIO_NO_FOCUS_NO_DUCK = 0;
 	private static final int AUDIO_NO_FOCUS_CAN_DUCK = 1;

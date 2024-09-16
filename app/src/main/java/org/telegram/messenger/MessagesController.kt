@@ -41,7 +41,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.telegram.SQLite.SQLiteException
-import org.telegram.messenger.FileLoader.Companion.getAttachFileName
 import org.telegram.messenger.ImageLoader.MessageThumb
 import org.telegram.messenger.MessagesStorage.BooleanCallback
 import org.telegram.messenger.MessagesStorage.LongCallback
@@ -112,6 +111,7 @@ import org.telegram.ui.LaunchActivity
 import org.telegram.ui.LaunchActivity.Companion.clearFragments
 import org.telegram.ui.PremiumPreviewFragment
 import org.telegram.ui.ProfileActivity
+import org.telegram.ui.feed.FeedFragment
 import java.io.File
 import java.util.Arrays
 import java.util.Collections
@@ -1260,7 +1260,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				encChatsDict = null
 			}
 
-			val newMessages = ArrayList<MessageObject>()
+			val newMessages = mutableListOf<MessageObject>()
 
 			for (message in pinnedDialogs.messages) {
 				val peerId = message.peer_id
@@ -1286,7 +1286,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				newMessages.add(messageObject)
 
-				newDialogMessage.put(messageObject.dialogId, messageObject)
+				// MARK: remove check for service messages
+				if (message !is TL_messageService) {
+					// MARK: but keep this line
+					newDialogMessage.put(messageObject.dialogId, messageObject)
+				}
 			}
 
 			fileLoader.checkMediaExistence(newMessages)
@@ -3531,6 +3535,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		editor = mainPreferences.edit()
 		editor.remove("archivehint").remove("proximityhint").remove("archivehint_l").remove("gifhint").remove("reminderhint").remove("soundHint").remove("dcDomainName2").remove("webFileDatacenterId").remove("themehint").remove("showFiltersTooltip").commit()
+		editor.remove(FeedFragment.LAST_READ_ID).remove(FeedFragment.FEED_POSITION).remove(FeedFragment.FEED_OFFSET).remove(FeedFragment.CURRENT_PAGE).commit()
 
 		val preferences = ApplicationLoader.applicationContext.getSharedPreferences("shortcut_widget", Activity.MODE_PRIVATE)
 		var widgetEditor: SharedPreferences.Editor? = null
@@ -5675,7 +5680,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun deleteUserPhoto(photo: InputPhoto?) {
+	@JvmOverloads
+	fun deleteUserPhoto(photo: InputPhoto?, isLastPhoto: Boolean = false) {
 		if (photo == null) {
 			userConfig.getCurrentUser()?.photo = TL_userProfilePhotoEmpty()
 
@@ -5689,6 +5695,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return
 			}
 
+			if (user.photo != null) {
+				messagesStorage.clearUserPhoto(user.id, user.photo?.photo_id ?: 0)
+			}
+
 			user.photo = userConfig.getCurrentUser()?.photo
 
 			notificationCenter.postNotificationName(NotificationCenter.mainUserInfoChanged)
@@ -5699,25 +5709,50 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				if (response is TL_photos_photo) {
-					messagesStorage.clearUserPhotos(user.id)
-
-					if (response.photo is TL_photo) {
-						user.photo = TL_userProfilePhoto()
-						user.photo?.has_video = !response.photo?.video_sizes.isNullOrEmpty()
-						user.photo?.photo_id = response.photo?.id ?: 0L
-						user.photo?.photo_small = FileLoader.getClosestPhotoSizeWithSize(response.photo?.sizes, 150)?.location
-						user.photo?.photo_big = FileLoader.getClosestPhotoSizeWithSize(response.photo?.sizes, 800)?.location
-						user.photo?.dc_id = response.photo?.dc_id ?: 0
-					}
-					else {
-						user.photo = TL_userProfilePhotoEmpty()
-					}
-
-					userConfig.getCurrentUser()?.photo = user.photo
-
-					messagesStorage.putUsersAndChats(listOf(user), null, false, false)
-
 					AndroidUtilities.runOnUIThread {
+						messagesStorage.clearUserPhotos(user.id)
+
+						var user1 = getUser(userConfig.getClientUserId())
+
+						if (user1 == null) {
+							user1 = userConfig.getCurrentUser()
+							putUser(user1, false)
+						}
+						else {
+							userConfig.setCurrentUser(user1)
+						}
+
+						if (user1 == null) {
+							return@runOnUIThread
+						}
+
+						if (response.photo is TL_photo && !isLastPhoto) {
+							user1.photo = TL_userProfilePhoto()
+							user1.photo?.has_video = !response.photo?.video_sizes.isNullOrEmpty()
+							user1.photo?.photo_id = response.photo?.id ?: 0L
+							user1.photo?.photo_small = FileLoader.getClosestPhotoSizeWithSize(response.photo?.sizes, 150)?.location
+							user1.photo?.photo_big = FileLoader.getClosestPhotoSizeWithSize(response.photo?.sizes, 800)?.location
+							user1.photo?.dc_id = response.photo?.dc_id ?: 0
+						}
+						else {
+							user1.photo = TL_userProfilePhotoEmpty()
+						}
+
+						messagesStorage.putUsersAndChats(listOf(user1), null, false, false)
+
+						val userFull = getUserFull(user1.id)
+
+						if (isLastPhoto) {
+							userFull?.profile_photo = null
+						}
+						else {
+							userFull?.profile_photo = response.photo
+						}
+
+						messagesStorage.updateUserInfo(userFull, false)
+
+						userConfig.getCurrentUser()?.photo = user1.photo
+
 						userConfig.saveConfig(true)
 
 						notificationCenter.postNotificationName(NotificationCenter.mainUserInfoChanged)
@@ -5730,7 +5765,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val req = TL_photos_deletePhotos()
 			req.id.add(photo)
 
-			connectionsManager.sendRequest(req)
+			connectionsManager.sendRequest(req) { _, error ->
+				if (error == null && isLastPhoto) {
+					AndroidUtilities.runOnUIThread {
+						deleteUserPhoto(null, true)
+					}
+				}
+			}
 		}
 	}
 
@@ -6572,8 +6613,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val peerFinal = peer
 
 			messagesStorage.getDialogMaxMessageId(did) {
-				deleteDialog(did, 2, onlyHistory, max(0, it), revoke, peerFinal, taskId)
-				checkIfFolderEmpty(1)
+				AndroidUtilities.runOnUIThread {
+					deleteDialog(did, 2, onlyHistory, max(0, it), revoke, peerFinal, taskId)
+					checkIfFolderEmpty(1)
+				}
 			}
 
 			return
@@ -9525,6 +9568,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 
+					// MARK: remove check for service messages
+					if (message is TL_messageService) {
+						continue
+					}
+
 					val messageObject = MessageObject(currentAccount, message, usersDict, chatsDict, generateLayout = false, checkMediaExists = true)
 
 					newDialogMessage.put(messageObject.dialogId, messageObject)
@@ -10044,7 +10092,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				newMessages.add(messageObject)
 
-				newDialogMessage.put(messageObject.dialogId, messageObject)
+				// MARK: remove check for service messages
+				if (message !is TL_messageService) {
+					// MARK: but keep this line
+					newDialogMessage.put(messageObject.dialogId, messageObject)
+				}
 			}
 
 			fileLoader.checkMediaExistence(newMessages)
@@ -10874,7 +10926,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				newMessages.add(messageObject)
 
-				newDialogMessage.put(messageObject.dialogId, messageObject)
+				// MARK: remove check for service messages
+				if (message !is TL_messageService) {
+					// MARK: but keep this line
+					newDialogMessage.put(messageObject.dialogId, messageObject)
+				}
 			}
 
 			fileLoader.checkMediaExistence(newMessages)
@@ -12278,28 +12334,28 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return@sendRequest
 			}
 
-//			var hasJoinMessage = false
+			var hasJoinMessage = false
 			val updates = response as? Updates
 
-//			if (updates != null) {
-//				for (a in updates.updates.indices) {
-//					val update = updates.updates[a]
-//
-//					if (update is TL_updateNewChannelMessage) {
-//						if (update.message.action is TL_messageActionChatAddUser) {
-//							hasJoinMessage = true
-//							break
-//						}
-//					}
-//				}
-//			}
+			if (updates != null) {
+				for (a in updates.updates.indices) {
+					val update = updates.updates[a]
+
+					if (update is TL_updateNewChannelMessage) {
+						if (update.message.action is TL_messageActionChatAddUser) {
+							hasJoinMessage = true
+							break
+						}
+					}
+				}
+			}
 
 			processUpdates(updates, false)
 
 			if (isChannel) {
-//				if (!hasJoinMessage && inputUser is TLRPC.TL_inputUserSelf) {
-//					generateJoinMessage(chatId, true)
-//				}
+				if (!hasJoinMessage && inputUser is TL_inputUserSelf) {
+					generateJoinMessage(chatId, true)
+				}
 
 				AndroidUtilities.runOnUIThread({
 					loadFullChat(chatId, 0, true)
@@ -14130,7 +14186,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					newMessages.add(messageObject)
 
-					newDialogMessage.put(messageObject.dialogId, messageObject)
+					// MARK: remove check for service messages
+					if (message !is TL_messageService) {
+						// MARK: but keep this line
+						newDialogMessage.put(messageObject.dialogId, messageObject)
+					}
 				}
 
 				fileLoader.checkMediaExistence(newMessages)
@@ -14363,6 +14423,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		messagesStorage.storageQueue.postRunnable {
 			AndroidUtilities.runOnUIThread {
 				notificationsController.processNewMessages(pushMessages, isLast = true, isFcm = false, countDownLatch = null)
+				messagesController.markMessageContentAsRead(obj)
 			}
 		}
 

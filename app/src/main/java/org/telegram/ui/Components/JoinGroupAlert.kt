@@ -35,11 +35,11 @@ import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.ChatInvite
 import org.telegram.tgnet.TLRPC.TL_messages_importChatInvite
 import org.telegram.tgnet.TLRPC.Updates
+import org.telegram.tgnet.tlrpc.ChatInvite
+import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.ActionBar.Theme
@@ -49,9 +49,9 @@ import org.telegram.ui.Components.Bulletin.TwoLineLottieLayout
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import kotlin.math.max
 
-class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String, private val fragment: BaseFragment?, resourcesProvider: Theme.ResourcesProvider?) : BottomSheet(context, false) {
-	private var chatInvite: ChatInvite? = null
-	private var currentChat: Chat? = null
+class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String, private val fragment: BaseFragment?) : BottomSheet(context, false) {
+	private val chatInvite: ChatInvite?
+	private val currentChat: Chat?
 	private var requestTextView: TextView? = null
 	private var requestProgressView: RadialProgressView? = null
 
@@ -61,11 +61,21 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 
 		fixNavigationBar(ResourcesCompat.getColor(context.resources, R.color.background, null))
 
-		if (obj is ChatInvite) {
-			chatInvite = obj
-		}
-		else if (obj is Chat) {
-			currentChat = obj
+		when (obj) {
+			is ChatInvite -> {
+				chatInvite = obj
+				currentChat = null
+			}
+
+			is Chat -> {
+				chatInvite = null
+				currentChat = obj
+			}
+
+			else -> {
+				chatInvite = null
+				currentChat = null
+			}
 		}
 
 		val linearLayout = LinearLayout(context)
@@ -105,36 +115,36 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 		linearLayout.addView(avatarImageView, LayoutHelper.createLinear(70, 70, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 29, 0, 0))
 
 		if (chatInvite != null) {
-			if (chatInvite?.chat != null) {
-				avatarDrawable = AvatarDrawable(chatInvite?.chat)
-				title = chatInvite?.chat?.title
-				participantsCount = chatInvite?.chat?.participants_count ?: 0
-				avatarImageView.setForUserOrChat(chatInvite?.chat, avatarDrawable, chatInvite)
+			if (chatInvite.chat != null) {
+				avatarDrawable = AvatarDrawable(chatInvite.chat)
+				title = chatInvite.chat?.title
+				participantsCount = chatInvite.chat?.participants_count ?: 0
+				avatarImageView.setForUserOrChat(chatInvite.chat, avatarDrawable, chatInvite)
 			}
 			else {
 				avatarDrawable = AvatarDrawable()
-				avatarDrawable.setInfo(chatInvite?.title, null)
+				avatarDrawable.setInfo(chatInvite.title, null)
 
-				title = chatInvite?.title
-				participantsCount = chatInvite?.participants_count ?: 0
+				title = chatInvite.title
+				participantsCount = chatInvite.participantsCount
 
-				val size = FileLoader.getClosestPhotoSizeWithSize(chatInvite?.photo?.sizes, 50)
+				val size = FileLoader.getClosestPhotoSizeWithSize(chatInvite.photo?.sizes, 50)
 
-				avatarImageView.setImage(ImageLocation.getForPhoto(size, chatInvite?.photo), "50_50", avatarDrawable, chatInvite)
+				avatarImageView.setImage(ImageLocation.getForPhoto(size, chatInvite.photo), "50_50", avatarDrawable, chatInvite)
 			}
 
-			about = chatInvite?.about
+			about = chatInvite.about
 		}
 		else if (currentChat != null) {
 			avatarDrawable = AvatarDrawable(currentChat)
 
-			title = currentChat?.title
+			title = currentChat.title
 
-			val chatFull = MessagesController.getInstance(currentAccount).getChatFull(currentChat?.id ?: 0L)
+			val chatFull = MessagesController.getInstance(currentAccount).getChatFull(currentChat.id)
 
 			about = chatFull?.about
 
-			participantsCount = max(currentChat?.participants_count ?: 0, chatFull?.participants_count ?: 0)
+			participantsCount = max(currentChat.participants_count, chatFull?.participants_count ?: 0)
 
 			avatarImageView.setForUserOrChat(currentChat, avatarDrawable, currentChat)
 		}
@@ -149,7 +159,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 
 		linearLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 10, 9, 10, if (participantsCount > 0) 0 else 20))
 
-		val isChannel = chatInvite != null && (chatInvite?.channel == true && chatInvite?.megagroup != true || isChannelAndNotMegaGroup(chatInvite?.chat)) || isChannel(currentChat) && currentChat?.megagroup != true
+		val isChannel = chatInvite != null && (chatInvite.channel && !chatInvite.megagroup || isChannelAndNotMegaGroup(chatInvite.chat)) || isChannel(currentChat) && !currentChat.megagroup
 		val hasAbout = !about.isNullOrEmpty()
 
 		if (participantsCount > 0) {
@@ -178,7 +188,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 			linearLayout.addView(aboutTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP, 24, 10, 24, 20))
 		}
 
-		if (chatInvite == null || chatInvite?.request_needed == true) {
+		if (chatInvite == null || chatInvite.requestNeeded) {
 			val requestFrameLayout = FrameLayout(context)
 			linearLayout.addView(requestFrameLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 
@@ -208,7 +218,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 				}, 400)
 
 				if (chatInvite == null && currentChat != null) {
-					MessagesController.getInstance(currentAccount).addUserToChat(currentChat?.id ?: 0L, getInstance(currentAccount).getCurrentUser(), 0, null, null, true, { dismiss() }) { err ->
+					MessagesController.getInstance(currentAccount).addUserToChat(currentChat.id, getInstance(currentAccount).getCurrentUser(), 0, null, null, true, { dismiss() }) { err ->
 						if (err != null && "INVITE_REQUEST_SENT" == err.text) {
 							setOnDismissListener {
 								showBulletin(context, fragment, isChannel)
@@ -256,8 +266,8 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 			descriptionTextView.setTextColor(ResourcesCompat.getColor(context.resources, R.color.dark_gray, null))
 			linearLayout.addView(descriptionTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP, 24, 17, 24, 15))
 		}
-		else if (chatInvite != null) {
-			if (!chatInvite?.participants.isNullOrEmpty()) {
+		else {
+			if (chatInvite.participants.isNotEmpty()) {
 				val listView = RecyclerListView(context)
 				listView.setPadding(0, 0, 0, AndroidUtilities.dp(8f))
 				listView.isNestedScrollingEnabled = false
@@ -276,7 +286,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 
 			linearLayout.addView(shadow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, AndroidUtilities.getShadowHeight()))
 
-			val pickerBottomLayout = PickerBottomLayout(context, false, resourcesProvider)
+			val pickerBottomLayout = PickerBottomLayout(context)
 			linearLayout.addView(pickerBottomLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.LEFT or Gravity.BOTTOM))
 
 			pickerBottomLayout.cancelButton.setPadding(AndroidUtilities.dp(18f), 0, AndroidUtilities.dp(18f), 0)
@@ -288,7 +298,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 			pickerBottomLayout.doneButtonBadgeTextView.visibility = View.GONE
 			pickerBottomLayout.doneButtonTextView.setTextColor(ResourcesCompat.getColor(context.resources, R.color.brand, null))
 
-			if (chatInvite?.channel == true && chatInvite?.megagroup != true || isChannel(chatInvite?.chat) && chatInvite?.chat?.megagroup != true) {
+			if (chatInvite.channel && !chatInvite.megagroup || isChannel(chatInvite.chat) && chatInvite.chat?.megagroup != true) {
 				pickerBottomLayout.doneButtonTextView.text = context.getString(R.string.ProfileJoinChannel).uppercase()
 			}
 			else {
@@ -343,7 +353,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 	private inner class UsersAdapter(private val context: Context) : SelectionAdapter() {
 		override fun getItemCount(): Int {
 			var count = chatInvite?.participants?.size ?: 0
-			val participantsCount = chatInvite?.chat?.participants_count ?: chatInvite?.participants_count ?: 0
+			val participantsCount = chatInvite?.chat?.participants_count ?: chatInvite?.participantsCount ?: 0
 
 			if (count != participantsCount) {
 				count++
@@ -374,7 +384,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 				cell.setUser(chatInvite.participants[position])
 			}
 			else {
-				val participantsCount = chatInvite.chat?.participants_count ?: chatInvite.participants_count
+				val participantsCount = chatInvite.chat?.participants_count ?: chatInvite.participantsCount
 				cell.setCount(participantsCount - chatInvite.participants.size)
 			}
 		}
@@ -385,7 +395,6 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 	}
 
 	companion object {
-		@JvmStatic
 		fun showBulletin(context: Context, fragment: BaseFragment?, isChannel: Boolean) {
 			if (fragment == null) {
 				return

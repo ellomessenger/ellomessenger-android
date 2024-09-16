@@ -31,7 +31,7 @@ class LatinLettersFilter : InputFilter {
 	}
 
 	private fun isLatinLetter(c: Char): Boolean {
-		return (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '@' || c == '.' || c == '_' || c == '-')
+		return (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '@' || c == '.' || c == '_' || c == '-' || c == '+')
 	}
 
 }

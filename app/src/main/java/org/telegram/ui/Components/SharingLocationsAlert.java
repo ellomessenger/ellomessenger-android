@@ -172,7 +172,7 @@ public class SharingLocationsAlert extends BottomSheet implements NotificationCe
 		shadow.setBackgroundResource(R.drawable.header_shadow_reverse);
 		containerView.addView(shadow, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 3, Gravity.BOTTOM | Gravity.LEFT, 0, 0, 0, 48));
 
-		PickerBottomLayout pickerBottomLayout = new PickerBottomLayout(context, false);
+		PickerBottomLayout pickerBottomLayout = new PickerBottomLayout(context);
 		pickerBottomLayout.setBackgroundColor(getContext().getColor(R.color.background));
 
 		containerView.addView(pickerBottomLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.LEFT | Gravity.BOTTOM));

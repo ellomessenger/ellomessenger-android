@@ -5,6 +5,7 @@
  *
  * Copyright Nikolai Kudashov, 2013-2018.
  * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Shamil Afandiyev, Ello 2024.
  */
 package org.telegram.ui.Components
 
@@ -4285,6 +4286,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 
 				if (user != null && user.bot) {
 					galleryButton = buttonsCount++
+					documentButton = buttonsCount++
 					return
 				}
 			}

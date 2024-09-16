@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
-
 package org.telegram.ui;
 
 import android.animation.Animator;
@@ -4668,7 +4668,7 @@ public class ThemePreviewActivity extends BaseFragment implements DownloadContro
 				}
 				else if (view instanceof ChatActionCell) {
 					ChatActionCell actionCell = (ChatActionCell)view;
-					actionCell.setMessageObject(message);
+					actionCell.setMessageObject(message, false, false);
 					actionCell.setAlpha(1.0f);
 				}
 			}

@@ -597,3 +597,11 @@ fun <T> MutableList<T>.removeDuplicates(lock: Any) {
 		addAll(setItems)
 	}
 }
+
+fun String.isYouTubeShortsLink(): Boolean {
+	return contains("youtube.com") && contains("/shorts/")
+}
+
+fun List<MessageObject>.hasServiceMessagesOnly(): Boolean {
+	return none { it.messageOwner?.action == null }
+}

@@ -147,7 +147,8 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 	}
 
 	private val adapter by lazy {
-		LocationActivityAdapter(context, locationType, dialogId, true)
+		// MARK: pass showVenues=true in order to allow venues search
+		LocationActivityAdapter(context, locationType, dialogId, needEmptyView = true, showVenues = false)
 	}
 
 	private val listView = object : RecyclerListView(context) {
@@ -162,7 +163,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 	private val searchAdapter: LocationActivitySearchAdapter by lazy {
 		object : LocationActivitySearchAdapter(context) {
 			override fun notifyDataSetChanged() {
-				searchItem?.setShowSearchProgress(searchAdapter.isSearching)
+				searchItem?.setShowSearchProgress(searchAdapter.isSearching())
 				emptySubtitleTextView.text = AndroidUtilities.replaceTags(LocaleController.formatString("NoPlacesFoundInfo", R.string.NoPlacesFoundInfo, searchAdapter.lastSearchString))
 				super.notifyDataSetChanged()
 			}
@@ -336,7 +337,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 
 		searchAreaButton.setOnClickListener {
 			showSearchPlacesButton(false)
-			adapter.searchPlacesWithQuery(null, userLocation, true, true)
+			adapter.searchPlacesWithQuery(null, userLocation, true)
 			searchedForCustomLocations = true
 			showResults()
 		}
@@ -442,7 +443,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 				map?.animateCamera(ApplicationLoader.mapsProvider.newCameraUpdateLatLng(IMapsProvider.LatLng(myLocation.latitude, myLocation.longitude)))
 
 				if (searchedForCustomLocations) {
-					adapter.searchPlacesWithQuery(null, myLocation, true, true)
+					adapter.searchPlacesWithQuery(null, myLocation, true)
 					searchedForCustomLocations = false
 					showResults()
 				}
@@ -1038,7 +1039,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		return null
 	}
 
-	private fun updatePlacesMarkers(places: ArrayList<TL_messageMediaVenue>?) {
+	private fun updatePlacesMarkers(places: List<TL_messageMediaVenue>?) {
 		if (places == null) {
 			return
 		}

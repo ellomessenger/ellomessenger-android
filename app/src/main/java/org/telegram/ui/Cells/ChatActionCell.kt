@@ -12,6 +12,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -91,7 +92,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 				val messageObject = messageObject
 
 				if (messageObject != null) {
-					setMessageObject(messageObject, true)
+					setMessageObject(messageObject, force = true, collapseForDate = collapseForDate)
 				}
 			}
 
@@ -100,7 +101,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 					val messageObject = messageObject
 
 					if (messageObject != null) {
-						setMessageObject(messageObject, true)
+						setMessageObject(messageObject, force = true, collapseForDate = collapseForDate)
 					}
 				}
 			}
@@ -131,7 +132,6 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 	private val tag: Int
 	private var pressedLink: URLSpan? = null
 	private val currentAccount = UserConfig.selectedAccount
-	val photoImage: ImageReceiver = ImageReceiver(this)
 	private val avatarDrawable: AvatarDrawable
 	private var textLayout: StaticLayout? = null
 	private var textWidth = 0
@@ -143,10 +143,10 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 	private var imagePressed = false
 	private var giftButtonPressed = false
 	private val giftButtonRect = RectF()
-	var spoilers: MutableList<SpoilerEffect> = ArrayList()
+	private val spoilers = mutableListOf<SpoilerEffect>()
 	private val spoilersPool = Stack<SpoilerEffect>()
 	private var animatedEmojiStack: EmojiGroupedSpans? = null
-	var textPaint: TextPaint? = null
+	private var textPaint: TextPaint? = null
 	private var viewTop = 0f
 	private var backgroundHeight = 0
 	private var visiblePartSet = false
@@ -155,24 +155,12 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 	private var lastTouchY = 0f
 	private var wasLayout = false
 	private var hasReplyMessage = false
-
-	var messageObject: MessageObject? = null
-		private set
-
-	var customDate = 0
-		private set
-
-	@ColorInt
-	private var overrideBackground = 0
-
-	@ColorInt
-	private var overrideText = 0
-
+	private var collapseForDate = false
 	private var customText: CharSequence? = null
 	private var overrideBackgroundPaint: Paint? = null
 	private var overrideTextPaint: TextPaint? = null
-	private val lineWidths = ArrayList<Int>()
-	private val lineHeights = ArrayList<Int>()
+	private val lineWidths = mutableListOf<Int>()
+	private val lineHeights = mutableListOf<Int>()
 	private val backgroundPath = Path()
 	private val rect = RectF()
 	private var invalidatePath = true
@@ -189,6 +177,19 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 	private var giftSticker: TLRPC.Document? = null
 	private var giftEffectAnimation: TLRPC.VideoSize? = null
 	private var forceWasUnread = false
+	val photoImage = ImageReceiver(this)
+
+	var messageObject: MessageObject? = null
+		private set
+
+	var customDate = 0
+		private set
+
+	@ColorInt
+	private var overrideBackground = 0
+
+	@ColorInt
+	private var overrideText = 0
 
 	private val giftStickerDelegate = object : ImageReceiverDelegate {
 		override fun didSetImage(imageReceiver: ImageReceiver, set: Boolean, thumb: Boolean, memCache: Boolean) {
@@ -206,13 +207,10 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 					if (messageObject.wasUnread || forceWasUnread) {
 						messageObject.wasUnread = false
 
-						forceWasUnread = messageObject.wasUnread
+						forceWasUnread = false
 
-						try {
+						runCatching {
 							performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
-						}
-						catch (e: Exception) {
-							// ignored
 						}
 
 						(getContext() as? LaunchActivity)?.fireworksOverlay?.start()
@@ -302,11 +300,9 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 		overrideText = text
 	}
 
-	fun setMessageObject(messageObject: MessageObject) {
-		setMessageObject(messageObject, false)
-	}
+	fun setMessageObject(messageObject: MessageObject, force: Boolean = false, collapseForDate: Boolean) {
+		this.collapseForDate = collapseForDate
 
-	fun setMessageObject(messageObject: MessageObject, force: Boolean) {
 		if (this.messageObject === messageObject && (textLayout == null || TextUtils.equals(textLayout!!.text, messageObject.messageText)) && (hasReplyMessage || messageObject.replyMessageObject == null) && !force) {
 			return
 		}
@@ -779,6 +775,12 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 			return
 		}
 
+		if (messageObject?.messageOwner?.action != null || collapseForDate) {
+			// MARK: remove to show action messages in chat
+			setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), 0)
+			return
+		}
+
 		if (messageObject != null && messageObject.type == MessageObject.TYPE_GIFT_PREMIUM) {
 			giftRectSize = min((if (AndroidUtilities.isTablet()) AndroidUtilities.getMinTabletSide() * 0.6f else AndroidUtilities.displaySize.x * 0.6f).toInt(), AndroidUtilities.displaySize.y - ActionBar.getCurrentActionBarHeight() - AndroidUtilities.statusBarHeight - AndroidUtilities.dp(64f))
 			stickerSize = giftRectSize - AndroidUtilities.dp(106f)
@@ -1009,6 +1011,11 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 			}
 		}
 
+		// MARK: prevent background from drawing for hidden service messages
+		if (measuredHeight == 0) {
+			return
+		}
+
 		var backgroundPaint = getThemedPaint(Theme.key_paint_chatActionBackground)
 
 		textPaint = getThemedPaint(Theme.key_paint_chatActionText) as TextPaint
@@ -1033,7 +1040,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 			invalidatePath = false
 			lineWidths.clear()
 
-			val count = textLayout!!.lineCount
+			val count = textLayout?.lineCount ?: 0
 			val corner = AndroidUtilities.dp(11f)
 			val cornerIn = AndroidUtilities.dp(8f)
 			var prevLineWidth = 0
@@ -1263,7 +1270,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 		giftSubtitlePaint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 15f, resources.displayMetrics)
 
 		rippleView = View(context)
-		rippleView.background = Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ROUNDRECT_6DP, AndroidUtilities.dp(16f))
+		rippleView.background = Theme.createSelectorDrawable(context.getColor(R.color.light_background), Theme.RIPPLE_MASK_ROUNDRECT_6DP, AndroidUtilities.dp(16f))
 		rippleView.visibility = GONE
 
 		addView(rippleView)

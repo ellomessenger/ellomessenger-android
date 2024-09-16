@@ -69,7 +69,7 @@ import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.BotInlineResult
 import org.telegram.tgnet.TLRPC.ChannelParticipant
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.ChatInvite
+import org.telegram.tgnet.tlrpc.ChatInvite
 import org.telegram.tgnet.TLRPC.ChatReactions
 import org.telegram.tgnet.TLRPC.InputStickerSet
 import org.telegram.tgnet.tlrpc.MessageEntity
@@ -4927,7 +4927,11 @@ open class MessageObject {
 			return true
 		}
 
-		return !isSponsored && (isFromUser || isFromGroup || eventId != 0L || messageOwner?.fwd_from != null && messageOwner?.fwd_from?.saved_from_peer != null)
+		if (isFromChannel && messageOwner?.fwd_from?.saved_from_peer != null) {
+			return false
+		}
+
+		return !isSponsored && (isFromUser || isFromGroup || eventId != 0L || messageOwner?.fwd_from?.saved_from_peer != null)
 	}
 
 	fun needDrawAvatarInternal(): Boolean {
@@ -4972,8 +4976,15 @@ open class MessageObject {
 			return 0L
 		}
 
+	private val isFromChannel: Boolean
+		get() {
+			val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(null, null, messageOwner?.peer_id?.channel_id) else null
+			return ChatObject.isChannel(chat) && !chat.megagroup
+		}
+
 	val isFromUser: Boolean
-		get() = messageOwner?.from_id is TL_peerUser && messageOwner?.post != true
+		// get() = messageOwner?.from_id is TL_peerUser // MARK: this prevents avatars from drawing for grouped messages: && messageOwner?.post != true
+		get() = messageOwner?.from_id is TL_peerUser && !isFromChannel
 
 	val isFromGroup: Boolean
 		get() {

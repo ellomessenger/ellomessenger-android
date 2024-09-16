@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
  */
 package org.telegram.ui.Cells
@@ -64,6 +64,7 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.combineDrawables
+import org.telegram.messenger.utils.getUser
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
@@ -276,6 +277,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 	var isMoving = false
 	var lastSize = 0
 	var swipeCanceled = false
+	private var isSearch: Boolean? = false
 
 	@JvmField
 	var useSeparator = false
@@ -293,7 +295,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		private set
 
 	var message: MessageObject? = null
-		private set
+		private set(value) {
+			field = value
+		}
 
 	var messageId = 0
 		private set
@@ -404,7 +408,11 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 		this.dialogId = dialogId
 		lastDialogChangedTime = System.currentTimeMillis()
-		message = messageObject
+
+		message = messageObject ?: MessagesStorage.getInstance(currentAccount).getLastMessage(dialogId)?.let {
+			MessageObject(currentAccount, it, generateLayout = false, checkMediaExists = true)
+		}
+
 		useMeForMyMessages = useMe
 		isDialogCell = false
 		lastMessageDate = date
@@ -420,6 +428,37 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			lastSendState = message?.messageOwner?.send_state ?: 0
 		}
 
+		update(0)
+	}
+
+	fun setDialog(dialogId: Long, messageObject: MessageObject?, date: Int, useMe: Boolean, isSearch: Boolean?) {
+		if (this.dialogId != dialogId) {
+			lastStatusDrawableParams = -1
+		}
+
+		this.dialogId = dialogId
+		lastDialogChangedTime = System.currentTimeMillis()
+
+		message = messageObject ?: MessagesStorage.getInstance(currentAccount).getLastMessage(dialogId)?.let {
+			MessageObject(currentAccount, it, generateLayout = false, checkMediaExists = true)
+		}
+
+		useMeForMyMessages = useMe
+		isDialogCell = false
+		lastMessageDate = date
+		currentEditDate = messageObject?.messageOwner?.edit_date ?: 0
+		unreadCount = 0
+		markUnread = false
+		messageId = messageObject?.id ?: 0
+		mentionCount = 0
+		reactionMentionCount = 0
+		lastUnreadState = messageObject != null && messageObject.isUnread
+
+		if (message != null) {
+			lastSendState = message?.messageOwner?.send_state ?: 0
+		}
+
+		this.isSearch = isSearch
 		update(0)
 	}
 
@@ -1054,13 +1093,18 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 							messageString = formatArchivedDialogNames()
 						}
 						else if (message!!.messageOwner is TL_messageService) {
-							if (ChatObject.isChannelAndNotMegaGroup(chat) && message?.messageOwner?.action is TL_messageActionChannelMigrateFrom) {
-								messageString = ""
-								showChecks = false
-							}
-							else {
-								messageString = msgText
-							}
+							// MARK: uncomment to show service messages in dialogs list
+//							if (ChatObject.isChannelAndNotMegaGroup(chat) && message?.messageOwner?.action is TL_messageActionChannelMigrateFrom) {
+//								messageString = ""
+//								showChecks = false
+//							}
+//							else {
+//								messageString = msgText
+//							}
+
+							// MARK: remove following two lines to show service messages in dialogs list
+							messageString = ""
+							showChecks = false
 
 							// MARK: change service messages color here
 							currentMessagePaint = Theme.dialogs_messagePrintingPaint[paintIndex]
@@ -2049,6 +2093,46 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				currentMessagePaint = Theme.dialogs_messagePaint[paintIndex]
 			}
 			else if (!useForceThreeLines && !SharedConfig.useThreeLinesLayout || messageNameString != null) {
+				if (hasMessageThumb && isSearch == true) {
+					if (message!!.hasHighlightedWords() && !message?.messageOwner?.message.isNullOrEmpty()) {
+						messageString = message!!.messageTrimmedToHighlight
+
+						if (message!!.messageTrimmedToHighlight != null) {
+							messageString = message!!.messageTrimmedToHighlight
+						}
+
+						val w = measuredWidth - AndroidUtilities.dp((72 + 23 + thumbSize + 6).toFloat())
+
+						messageString = AndroidUtilities.ellipsizeCenterEnd(messageString, message!!.highlightedWords!![0], w, currentMessagePaint, 130).toString()
+					}
+					else {
+						if (messageString!!.length > 150) {
+							messageString = messageString.subSequence(0, 150)
+						}
+
+						messageString = AndroidUtilities.replaceNewLines(messageString)
+					}
+
+					if (messageString !is SpannableStringBuilder) {
+						messageString = SpannableStringBuilder(messageString)
+					}
+
+					val builder = messageString
+
+					builder.insert(0, " ")
+					builder.setSpan(FixedWidthSpan(AndroidUtilities.dp((thumbSize + 6).toFloat())), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+					Emoji.replaceEmoji(builder, Theme.dialogs_messagePaint[paintIndex].fontMetricsInt, false)
+
+					if (message!!.hasHighlightedWords()) {
+						val s = AndroidUtilities.highlightText(builder, message!!.highlightedWords)
+
+						if (s != null) {
+							messageString = s
+						}
+					}
+				}
+
 				messageStringFinal = TextUtils.ellipsize(messageString, currentMessagePaint, (messageWidth - AndroidUtilities.dp(12f)).toFloat(), TextUtils.TruncateAt.END)
 			}
 			else {
@@ -2229,7 +2313,11 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						offset += AndroidUtilities.dp(3f)
 					}
 
-					thumbImage.setImageX(messageLeft + offset)
+					if (isSearch == true) {
+						thumbImage.setImageX(messageLeft)
+					} else {
+						thumbImage.setImageX(messageLeft + offset)
+					}
 				}
 				catch (e: Exception) {
 					FileLog.e(e)
@@ -3445,7 +3533,12 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			}
 
 			val verifiedMuteIcons = combineDrawables(AndroidUtilities.dp(11f), drawables)
-			setDrawableBounds(verifiedMuteIcons, nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else Gravity.CENTER.toFloat() + 2f))
+
+			if (isLastCharUpperCaseOrDigit(user, chat)) {
+				setDrawableBounds(verifiedMuteIcons, nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else Gravity.CENTER.toFloat() + 2.1f))
+			} else {
+				setDrawableBounds(verifiedMuteIcons, nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else Gravity.CENTER.toFloat() + 2.3f))
+			}
 
 			verifiedMuteIcons.draw(canvas)
 		}
@@ -4032,6 +4125,37 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		if (needInvalidate) {
 			invalidate()
 		}
+	}
+
+	private fun isUpperCaseOrDigit(c: Char): Boolean {
+		return c.isUpperCase() || c.isDigit()
+	}
+
+	private fun isLastCharUpperCaseOrDigit(user: User?, chat: Chat?): Boolean {
+		val name = user?.last_name ?: user?.first_name
+		val channelName = chat?.title
+
+		if (!name.isNullOrEmpty()) {
+			val lastChar = name.last()
+
+			if (lastChar.isLowerCase()) {
+				return false
+			}
+
+			return isUpperCaseOrDigit(lastChar)
+		}
+
+		if (!channelName.isNullOrEmpty()) {
+			val lastChar = channelName.last()
+
+			if (lastChar.isLowerCase()) {
+				return false
+			}
+
+			return isUpperCaseOrDigit(lastChar)
+		}
+
+		return false
 	}
 
 	private fun createStatusDrawableAnimator(lastStatusDrawableParams: Int, currentStatus: Int) {

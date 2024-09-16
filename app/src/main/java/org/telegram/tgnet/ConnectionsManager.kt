@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Base64
 import androidx.annotation.Keep
+import com.beint.elloapp.DeviceInfo
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
@@ -79,8 +80,8 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	data class ResolvedDomain(private val addresses: ArrayList<String>, val ttl: Long) {
-		val address: String?
+	data class ResolvedDomain(private val addresses: List<String>, val ttl: Long) {
+		val address: String
 			get() = addresses[Utilities.random.nextInt(addresses.size)]
 	}
 
@@ -179,7 +180,7 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		try {
 			systemLangCode = LocaleController.getSystemLocaleStringIso639().lowercase(Locale.getDefault()).trim()
 			langCode = LocaleController.getLocaleStringIso639().lowercase(Locale.getDefault())
-			deviceModel = (Build.MANUFACTURER + Build.MODEL).trim()
+			deviceModel = DeviceInfo.getDeviceName()
 
 			val pInfo = ApplicationLoader.applicationContext.packageManager.getPackageInfo(ApplicationLoader.applicationContext.packageName, 0)
 

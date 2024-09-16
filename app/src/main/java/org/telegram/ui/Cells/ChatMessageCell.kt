@@ -113,6 +113,7 @@ import org.telegram.messenger.messageobject.GroupedMessages
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.messageobject.TextLayoutBlock
 import org.telegram.messenger.utils.dp
+import org.telegram.messenger.utils.isYouTubeShortsLink
 import org.telegram.messenger.video.VideoPlayerRewinder
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
@@ -1739,7 +1740,13 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							val url = webPage?.embed_url
 
 							if (!url.isNullOrEmpty()) {
-								delegate?.needOpenWebView(currentMessageObject, webPage.embed_url, webPage.site_name, webPage.title, webPage.url, webPage.embed_width, webPage.embed_height)
+								// MARK: remove this check to open YouTube Shorts inside the app
+								if (url.isYouTubeShortsLink()) {
+									Browser.openUrl(context, webPage.url)
+								}
+								else {
+									delegate?.needOpenWebView(currentMessageObject, webPage.embed_url, webPage.site_name, webPage.title, webPage.url, webPage.embed_width, webPage.embed_height)
+								}
 							}
 							else if (buttonState == -1 || buttonState == 3) {
 								delegate?.didPressImage(this, lastTouchX, lastTouchY)
@@ -10510,7 +10517,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				if (drawMediaCheckBox && (mediaCheckBox!!.isChecked || mediaCheckBox!!.getProgress() != 0f || checkBoxAnimationInProgress) && !textIsSelectionMode()) {
 					if (!currentMessagesGroup!!.isDocuments) {
-						Theme.chat_replyLinePaint.color = ResourcesCompat.getColor(resources, if (currentMessageObject?.isOutOwner == true) R.color.white else R.color.brand, null)
+						Theme.chat_replyLinePaint.color = ResourcesCompat.getColor(resources, if (currentMessageObject?.isOutOwner == true) R.color.white else R.color.brand_transparent, null)
 
 						rect.set(photoImage.imageX, photoImage.imageY, photoImage.imageX2, photoImage.imageY2)
 
@@ -13531,7 +13538,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		else {
 			val fromId = currentMessageObject!!.fromChatId
 
-			if (DialogObject.isUserDialog(fromId) && !currentMessageObject!!.messageOwner!!.post) {
+			if (DialogObject.isUserDialog(fromId) && (!currentMessageObject!!.messageOwner!!.post || ChatObject.isMegagroup(messagesController.getChat(currentMessageObject?.messageOwner?.peer_id?.channel_id)))) {
 				currentUser = messagesController.getUser(fromId)
 			}
 			else if (DialogObject.isChatDialog(fromId)) {
@@ -15156,10 +15163,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		applyServiceShaderMatrix()
 
 		if (alpha != 1f) {
-			val oldAlpha = getThemedPaint(Theme.key_paint_chatActionBackground).alpha
-			getThemedPaint(Theme.key_paint_chatActionBackground).alpha = (alpha * oldAlpha).toInt()
-			canvas.drawRoundRect(rect, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat(), getThemedPaint(Theme.key_paint_chatActionBackground))
-			getThemedPaint(Theme.key_paint_chatActionBackground).alpha = oldAlpha
+			val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
+
+			val oldAlpha = paint.alpha
+
+			paint.alpha = (alpha * oldAlpha).toInt()
+
+			canvas.drawRoundRect(rect, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat(), paint)
+
+			paint.alpha = oldAlpha
 		}
 		else {
 			canvas.drawRoundRect(rect, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat(), getThemedPaint(if (sideButtonPressed) Theme.key_paint_chatActionBackgroundSelected else Theme.key_paint_chatActionBackground))
@@ -15515,9 +15527,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			else {
 				val rect = if (isRoundVideo) {
 					RectF(sideStartX, (sideStartY - AndroidUtilities.dp(24f)), sideStartX + AndroidUtilities.dp(32f).toFloat(), (sideStartY + AndroidUtilities.dp(8f)))
-				} else {
+				}
+				else {
 					RectF(sideStartX, sideStartY, sideStartX + AndroidUtilities.dp(32f).toFloat(), sideStartY + AndroidUtilities.dp(32f).toFloat())
 				}
+
 				applyServiceShaderMatrix()
 
 				canvas.drawRoundRect(rect, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat(), getThemedPaint(if (sideButtonPressed) Theme.key_paint_chatActionBackgroundSelected else Theme.key_paint_chatActionBackground))
@@ -15748,13 +15762,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				rect.set((nameX.toInt() - AndroidUtilities.dp(12f)).toFloat(), (nameY.toInt() - AndroidUtilities.dp(5f)).toFloat(), (nameX.toInt() + AndroidUtilities.dp(12f) + nameWidth).toFloat(), (nameY.toInt() + AndroidUtilities.dp(22f)).toFloat())
 
-				oldAlpha = getThemedPaint(Theme.key_paint_chatActionBackground).alpha
+				val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
 
-				getThemedPaint(Theme.key_paint_chatActionBackground).alpha = (alphaProgress * oldAlpha * replyForwardAlpha).toInt()
+				oldAlpha = paint.alpha
+
+				paint.alpha = (alphaProgress * oldAlpha * replyForwardAlpha).toInt()
 
 				applyServiceShaderMatrix()
 
-				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), getThemedPaint(Theme.key_paint_chatActionBackground))
+				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
 
 				if (hasGradientService()) {
 					val oldAlpha2 = Theme.chat_actionBackgroundGradientDarkenPaint.alpha
@@ -15773,7 +15789,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				nameX -= nameOffsetX
 
-				getThemedPaint(Theme.key_paint_chatActionBackground).alpha = oldAlpha
+				paint.alpha = oldAlpha
 			}
 			else {
 				nameX = if (mediaBackground || currentMessageObject!!.isOutOwner) {
@@ -15970,12 +15986,14 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				var oldAlpha1 = -1
 				var oldAlpha2 = -1
 
+				val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
+
 				if (animatingAlpha != 1f || replyForwardAlpha != 1f) {
-					oldAlpha1 = getThemedPaint(Theme.key_paint_chatActionBackground).alpha
-					getThemedPaint(Theme.key_paint_chatActionBackground).alpha = (oldAlpha1 * animatingAlpha * replyForwardAlpha).toInt()
+					oldAlpha1 = paint.alpha
+					paint.alpha = (oldAlpha1 * animatingAlpha * replyForwardAlpha).toInt()
 				}
 
-				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), getThemedPaint(Theme.key_paint_chatActionBackground))
+				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
 
 				if (hasGradientService()) {
 					if (animatingAlpha != 1f || replyForwardAlpha != 1f) {
@@ -15987,7 +16005,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 
 				if (oldAlpha1 >= 0) {
-					getThemedPaint(Theme.key_paint_chatActionBackground).alpha = oldAlpha1
+					paint.alpha = oldAlpha1
 				}
 
 				if (oldAlpha2 >= 0) {
@@ -16164,13 +16182,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 					applyServiceShaderMatrix()
 
-					oldAlpha = getThemedPaint(Theme.key_paint_chatActionBackground).alpha
+					val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
 
-					getThemedPaint(Theme.key_paint_chatActionBackground).alpha = (oldAlpha * timeAlpha * replyForwardAlpha).toInt()
+					oldAlpha = paint.alpha
 
-					canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), getThemedPaint(Theme.key_paint_chatActionBackground))
+					paint.alpha = (oldAlpha * timeAlpha * replyForwardAlpha).toInt()
 
-					getThemedPaint(Theme.key_paint_chatActionBackground).alpha = oldAlpha
+					canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
+
+					paint.alpha = oldAlpha
 
 					if (hasGradientService()) {
 						oldAlpha = Theme.chat_actionBackgroundGradientDarkenPaint.alpha
@@ -17006,14 +17026,14 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			if (documentAttachType != DOCUMENT_ATTACH_TYPE_ROUND && documentAttachType != DOCUMENT_ATTACH_TYPE_STICKER && currentMessageObject!!.type != MessageObject.TYPE_EMOJIS) {
 				val rad = photoImage.getRoundRadius()
-				r = min(AndroidUtilities.dp(8f), max(rad[2], rad[3]))
+				r = min(AndroidUtilities.dp(12f), max(rad[2], rad[3]))
 				bigRadius = SharedConfig.bubbleRadius >= 10
 			}
 			else {
-				r = AndroidUtilities.dp(4f)
+				r = AndroidUtilities.dp(16f)
 			}
 
-			val x1 = timeX - AndroidUtilities.dp(if (bigRadius) 6f else 4f)
+			val x1 = timeX - AndroidUtilities.dp(if (bigRadius) 8f else 6f)
 			val timeY = photoImage.imageY2 + additionalTimeOffsetY
 			val y1 = timeY - AndroidUtilities.dp(23f)
 
@@ -17022,12 +17042,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			//MARK: the distance for the container in which the time is located on the sides is set here
 			val additionalSize = AndroidUtilities.dp(2f)
-			rect.set(
-					x1 + dec - additionalSize,
-					y1,
-					x1 - dec + timeWidth + AndroidUtilities.dp(if (bigRadius) 14f else 10f) + (if (currentMessageObject?.isOutOwner == true) 45f else 0f),
-					y1 + AndroidUtilities.dp(17f)
-			)
+
+			val widthIncrease = AndroidUtilities.dp(4f)
+
+			rect.set(x1 + dec - additionalSize, y1, x1 - dec + timeWidth + AndroidUtilities.dp(if (bigRadius) 14f else 10f) + (if (currentMessageObject?.isOutOwner == true) 45f else 0f) + widthIncrease, y1 + AndroidUtilities.dp(17f))
 			applyServiceShaderMatrix()
 
 			canvas.drawRoundRect(rect, r.toFloat(), r.toFloat(), paint)
@@ -19109,13 +19127,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				rect.set(x1, y1, x1 + timeWidthAudio + AndroidUtilities.dp((8 + 12 + 2).toFloat()), y1 + AndroidUtilities.dp(17f))
 
-				val oldAlpha = getThemedPaint(Theme.key_paint_chatActionBackground).alpha
+				val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
 
-				getThemedPaint(Theme.key_paint_chatActionBackground).alpha = (oldAlpha * timeAlpha).toInt()
+				val oldAlpha = paint.alpha
+
+				paint.alpha = (oldAlpha * timeAlpha).toInt()
 
 				applyServiceShaderMatrix()
 
-				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), getThemedPaint(Theme.key_paint_chatActionBackground))
+				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
 
 				if (hasGradientService()) {
 					val oldAlpha2 = Theme.chat_actionBackgroundGradientDarkenPaint.alpha
@@ -19124,7 +19144,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					Theme.chat_actionBackgroundGradientDarkenPaint.alpha = oldAlpha2
 				}
 
-				getThemedPaint(Theme.key_paint_chatActionBackground).alpha = oldAlpha
+				paint.alpha = oldAlpha
 
 				val showPlayingDrawable = playing || !currentMessageObject!!.isContentUnread
 

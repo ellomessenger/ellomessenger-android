@@ -4,10 +4,11 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2024.
  */
 package org.telegram.ui.Adapters
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.location.Location
@@ -20,9 +21,9 @@ import org.telegram.messenger.LocaleController
 import org.telegram.messenger.LocationController
 import org.telegram.messenger.LocationController.Companion.fetchLocationAddress
 import org.telegram.messenger.LocationController.LocationFetchCallback
-import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
+import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.TLRPC.TL_channelLocation
 import org.telegram.tgnet.TLRPC.TL_geoPoint
 import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
@@ -41,7 +42,8 @@ import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.LocationActivity
 import java.util.Locale
 
-open class LocationActivityAdapter(private val mContext: Context, private val locationType: Int, private val dialogId: Long, private val needEmptyView: Boolean) : BaseLocationAdapter(), LocationFetchCallback {
+@SuppressLint("NotifyDataSetChanged")
+open class LocationActivityAdapter(private val mContext: Context, private val locationType: Int, private val dialogId: Long, private val needEmptyView: Boolean, private val showVenues: Boolean = false) : BaseLocationAdapter(), LocationFetchCallback {
 	private val currentAccount = UserConfig.selectedAccount
 	private val globalGradientView = FlickerLoadingView(mContext)
 	private var overScrollHeight = 0
@@ -138,13 +140,13 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 		updateCell()
 	}
 
-	fun setLiveLocations(liveLocations: ArrayList<LocationActivity.LiveLocation>?) {
+	fun setLiveLocations(liveLocations: List<LocationActivity.LiveLocation>?) {
 		currentLiveLocations = ArrayList(liveLocations ?: emptyList())
 
 		val uid = UserConfig.getInstance(currentAccount).getClientUserId()
 
 		for (a in currentLiveLocations.indices) {
-			if (currentLiveLocations[a].id == uid || currentLiveLocations[a].`object`.out) {
+			if (currentLiveLocations[a].id == uid || currentLiveLocations[a].`object`?.out == true) {
 				currentLiveLocations.removeAt(a)
 				break
 			}
@@ -260,10 +262,50 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 			2 + currentLiveLocations.size
 		}
 		else {
+			var count = 0
+
 			if (searching || !searched || places.isEmpty()) {
-				(if (locationType != LocationActivity.LOCATION_TYPE_SEND) 6 else 5) + (if (!myLocationDenied && (searching || !searched)) 2 else 0) + (if (needEmptyView) 1 else 0) - if (myLocationDenied) 2 else 0
+				count += if (locationType != LocationActivity.LOCATION_TYPE_SEND) {
+					6
+				}
+				else {
+					5
+				}
+
+				if (!myLocationDenied && (searching || !searched)) {
+					count += 2
+				}
+
+				if (needEmptyView) {
+					count += 1
+				}
+
+				if (myLocationDenied) {
+					count -= 2
+				}
 			}
-			else (if (locationType == LocationActivity.LOCATION_TYPE_SEND_WITH_LIVE) 6 else 5) + places.size + if (needEmptyView) 1 else 0
+			else {
+				count += if (locationType == LocationActivity.LOCATION_TYPE_SEND_WITH_LIVE) {
+					6
+				}
+				else {
+					5
+				}
+
+				if (showVenues) {
+					count += places.size
+				}
+
+				if (needEmptyView) {
+					count += 1
+				}
+			}
+
+			if (!showVenues) {
+				count -= 5
+			}
+
+			count
 		}
 	}
 

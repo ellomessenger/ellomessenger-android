@@ -103,7 +103,6 @@ import org.telegram.tgnet.TLRPC.TL_messageActionSetChatTheme
 import org.telegram.tgnet.TLRPC.TL_messageActionSetMessagesTTL
 import org.telegram.tgnet.TLRPC.TL_messageActionUserJoined
 import org.telegram.tgnet.TLRPC.TL_messageActionUserUpdatedPhoto
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
 import org.telegram.tgnet.TLRPC.TL_messageMediaContact
 import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
 import org.telegram.tgnet.TLRPC.TL_messageMediaGame
@@ -119,6 +118,7 @@ import org.telegram.tgnet.TLRPC.TL_notificationSoundNone
 import org.telegram.tgnet.TLRPC.TL_notificationSoundRingtone
 import org.telegram.tgnet.TLRPC.TL_peerNotifySettings
 import org.telegram.tgnet.tlrpc.Message
+import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.BubbleActivity
 import org.telegram.ui.LaunchActivity
@@ -828,6 +828,12 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			for (a in messageObjects.indices) {
 				val messageObject = messageObjects[a]
 
+				if (messageObject.wasUnread && messageObject.messageOwner is TL_messageService) {
+					runBlocking(mainScope.coroutineContext) {
+						messagesController.markMessageContentAsRead(messageObject)
+					}
+				}
+
 				if (messageObject.messageOwner != null && (messageObject.isImportedForward || messageObject.messageOwner?.action is TL_messageActionSetMessagesTTL || messageObject.messageOwner?.silent == true && (messageObject.messageOwner?.action is TL_messageActionContactSignUp || messageObject.messageOwner?.action is TL_messageActionUserJoined))) {
 					continue
 				}
@@ -1415,6 +1421,10 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		}
 	}
 
+	fun getTotalUnreadCount(account: Int): Int {
+		return getInstance(account).totalUnreadCount
+	}
+
 	fun getUnreadCount(account: Int, force: Boolean): Int {
 		val controller = getInstance(account)
 		var count = 0
@@ -1423,26 +1433,18 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			if (controller.showBadgeMessages || force) {
 				if (controller.showBadgeMuted || force) {
 					try {
-						val dialogs = ArrayList(MessagesController.getInstance(account).allDialogs)
-						var i = 0
-						val N = dialogs.size
+						val dialogs = MessagesController.getInstance(account).allDialogs.toList()
 
-						while (i < N) {
-							val dialog = dialogs[i]
-
-							if (dialog != null && DialogObject.isChatDialog(dialog.id)) {
+						for (dialog in dialogs) {
+							if (DialogObject.isChatDialog(dialog.id)) {
 								val chat = messagesController.getChat(-dialog.id)
+
 								if (ChatObject.isNotInChat(chat)) {
-									i++
 									continue
 								}
 							}
 
-							if (dialog != null && dialog.unread_count != 0) {
-								count += dialog.unread_count
-							}
-
-							i++
+							count += dialog.unread_count
 						}
 					}
 					catch (e: Exception) {
@@ -1456,26 +1458,18 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			else {
 				if (controller.showBadgeMuted) {
 					try {
-						var i = 0
-						val N = MessagesController.getInstance(account).allDialogs.size
+						val dialogs = MessagesController.getInstance(account).allDialogs.toList()
 
-						while (i < N) {
-							val dialog = MessagesController.getInstance(account).allDialogs[i]
-
+						for (dialog in dialogs) {
 							if (DialogObject.isChatDialog(dialog.id)) {
 								val chat = messagesController.getChat(-dialog.id)
 
 								if (ChatObject.isNotInChat(chat)) {
-									i++
 									continue
 								}
 							}
 
-							if (dialog.unread_count != 0) {
-								count++
-							}
-
-							i++
+							count += dialog.unread_count
 						}
 					}
 					catch (e: Exception) {
@@ -3836,7 +3830,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		var key: String
 		val groupId: String
 		val overwriteKey: String?
-		val sound = Uri.parse("android.resource://" + ApplicationLoader.applicationContext.packageName + "/" + R.raw.notification_sound)
+		val sound = Uri.parse("android.resource://" + ApplicationLoader.applicationContext.packageName + "/" + R.raw.message_notification_sound)
 
 		if (isSilent) {
 			groupId = "other$currentAccount"

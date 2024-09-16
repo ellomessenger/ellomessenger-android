@@ -538,7 +538,7 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 
 		showAvatarProgress(show = false, animated = false)
 
-		nameTextView = EditTextEmoji(context, sizeNotifierFrameLayout, this, EditTextEmoji.STYLE_FRAGMENT, false, withLineColors = true)
+		nameTextView = EditTextEmoji(context, sizeNotifierFrameLayout, this, EditTextEmoji.STYLE_FRAGMENT, false, withLineColors = true, emojiButtonIsRight = true)
 
 		val channelNameText = context.getString(if (isCourse) R.string.online_course_name else R.string.channel_name)
 		nameTextView?.setHint(channelNameText)

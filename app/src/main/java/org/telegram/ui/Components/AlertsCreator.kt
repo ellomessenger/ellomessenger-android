@@ -64,6 +64,8 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.util.Consumer
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.BuildConfig
@@ -95,7 +97,10 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.vibrate
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ConnectionsManager.Companion.generateClassGuid
+import org.telegram.tgnet.ElloRpc
+import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.SerializedData
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.EncryptedChat
@@ -1856,11 +1861,36 @@ object AlertsCreator {
 							messageTextView.text = AndroidUtilities.replaceTags(LocaleController.formatString("MegaLeaveAlertWithName", R.string.MegaLeaveAlertWithName, chat.title))
 						}
 						else {
-							if (ChatObject.isOnlineCourse(chat)) {
-								messageTextView.text = context.getString(R.string.unsubscribe_course_description)
-							}
-							else if (ChatObject.isSubscriptionChannel(chat)) {
-								messageTextView.text = context.getString(R.string.unsubscribe_subchannel_description)
+//							if (ChatObject.isOnlineCourse(chat)) {
+//								messageTextView.text = context.getString(R.string.unsubscribe_course_description)
+//							}
+//							else if (ChatObject.isSubscriptionChannel(chat)) {
+//								messageTextView.text = context.getString(R.string.unsubscribe_paid_subchannel_description)
+//							}
+
+							if (ChatObject.isPaidChannel(chat)) {
+								val endDate = if (ChatObject.isSubscriptionChannel(chat)) {
+									val request = ElloRpc.getSubscriptionsRequest(ElloRpc.SubscriptionType.ACTIVE_CHANNELS)
+
+									val response = runBlocking(Dispatchers.IO) {
+										ConnectionsManager.getInstance(fragment.currentAccount).performRequest(request)
+									}
+
+									if (response is TLRPC.TL_biz_dataRaw) {
+										val subscriptions = response.readData<ElloRpc.Subscriptions>()
+										val currentSubscription = subscriptions?.items?.find { it.channelId == chat.id }
+
+										(currentSubscription?.expireAt ?: 0L) * 1000L
+									}
+									else {
+										0L
+									}
+								}
+								else {
+									chat.end_date
+								}
+
+								messageTextView.text = context.getString(R.string.confirm_unsubscribe_paid_channel_date, LocaleController.getInstance().chatFullDate.format(endDate))
 							}
 							else {
 								messageTextView.text = AndroidUtilities.replaceTags(LocaleController.formatString("ChannelLeaveAlertWithName", R.string.ChannelLeaveAlertWithName, chat.title))
@@ -1905,6 +1935,9 @@ object AlertsCreator {
 						if (chat.megagroup) {
 							context.getString(R.string.LeaveMegaMenu)
 						}
+						else if (ChatObject.isPaidChannel(chat)) {
+							context.getString(R.string.confirm)
+						}
 						else {
 							context.getString(R.string.LeaveChannelMenu)
 						}
@@ -1939,7 +1972,12 @@ object AlertsCreator {
 			onProcessRunnable?.run(second || deleteForAll[0])
 		}
 
-		builder.setNegativeButton(context.getString(R.string.Cancel), null)
+		if (ChatObject.isPaidChannel(chat)) {
+			builder.setNegativeButton(context.getString(R.string.not_now), null)
+		}
+		else {
+			builder.setNegativeButton(context.getString(R.string.Cancel), null)
+		}
 
 		val alertDialog = builder.create()
 

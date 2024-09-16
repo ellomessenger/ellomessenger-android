@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScrollerCustom
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout.OnRefreshListener
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayout.OnTabSelectedListener
@@ -44,6 +45,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.ChatObject
+import org.telegram.messenger.ChatObject.isSubscriptionChannel
 import org.telegram.messenger.FileLog
 import org.telegram.messenger.MessagesController
 import org.telegram.messenger.NotificationCenter
@@ -63,6 +66,7 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.CountriesDataSource
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
+import org.telegram.tgnet.ElloRpc.unsubscribeRequest
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.tlrpc.Message
 import org.telegram.tgnet.tlrpc.TL_contacts_found
@@ -93,7 +97,7 @@ import org.telegram.ui.PhotoViewer.EmptyPhotoViewerProvider
 import org.telegram.ui.profile.wallet.GridSpaceItemDecoration
 import kotlin.math.max
 
-class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate, NotificationCenter.NotificationCenterDelegate, FeedRecommendationsAdapter.FeedRecommendationsAdapterDelegate, ExploreAdapter.FeedExploreAdapterDelegate {
+class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate, NotificationCenter.NotificationCenterDelegate, FeedRecommendationsAdapter.FeedRecommendationsAdapterDelegate, ExploreAdapter.FeedExploreAdapterDelegate, OnRefreshListener {
 	private var binding: FragmentFeedBinding? = null
 	private val feedAdapter = FeedAdapter()
 	private val recommendationsAdapter = FeedRecommendationsAdapter()
@@ -245,6 +249,9 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		}
 
 		binding = FragmentFeedBinding.inflate(LayoutInflater.from(context), parentLayout, false)
+
+		binding?.swipeRefreshLayout?.setOnRefreshListener(this)
+		binding?.swipeRefreshLayout?.setColorSchemeResources(R.color.brand)
 
 		binding?.scrollToTopButton?.accessibilityDelegate = object : View.AccessibilityDelegate() {
 			override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
@@ -549,6 +556,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			it.addObserver(this, NotificationCenter.updateInterfaces)
 			it.addObserver(this, NotificationCenter.didReceiveNewMessages)
 			it.addObserver(this, NotificationCenter.dialogsNeedReload)
+			it.addObserver(this, NotificationCenter.needDeleteDialog)
 		}
 
 		DialogsActivity.loadDialogs(accountInstance)
@@ -618,6 +626,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			it.removeObserver(this, NotificationCenter.didReceiveNewMessages)
 			it.removeObserver(this, NotificationCenter.chatInfoDidLoad)
 			it.removeObserver(this, NotificationCenter.dialogsNeedReload)
+			it.removeObserver(this, NotificationCenter.needDeleteDialog)
 		}
 
 		super.onFragmentDestroy()
@@ -648,7 +657,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		if (feed.isNotEmpty()) {
 			withContext(mainScope.coroutineContext) {
 				feedAdapter.pinned = pinnedChannels.toLongArray()
-				feedAdapter.setFeed(feed, append = false)
+				feedAdapter.setFeed(feed, append = false, isLastPage = isLastFeedPage)
 
 				reloadState(restorePosition = false)
 
@@ -667,53 +676,61 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 	}
 
 	private suspend fun loadNewMessages() {
-		val newestMessage = feedAdapter.feed?.flatten()?.maxByOrNull { it.id }?.messageOwner
+		runCatching {
+			val newestMessage = feedAdapter.feed?.flatten()?.maxByOrNull { it.id }?.messageOwner
 
-		if (newestMessage == null) {
-			loadFeedData(true)
-			return
-		}
+			if (newestMessage == null) {
+				loadFeedData(true)
+				return
+			}
 
-		val newMessages = mutableListOf<Message>()
-		var page = 0
+			val newMessages = mutableListOf<Message>()
+			var page = 0
 
-		while (!newMessages.contains(newestMessage)) {
-			val req = TL_feeds_readHistory()
-			req.page = page
-			req.limit = limit
+			while (!newMessages.contains(newestMessage)) {
+				val req = TL_feeds_readHistory()
+				req.page = page
+				req.limit = limit
 
-			when (val res = connectionsManager.performRequest(req)) {
-				is TL_feeds_historyMessages -> {
-					page += 1
+				when (val res = connectionsManager.performRequest(req)) {
+					is TL_feeds_historyMessages -> {
+						page += 1
 
-					val messages = res.messages
+						val messages = res.messages
 
-					newMessages.addAll(messages)
+						newMessages.addAll(messages)
 
-					if (messages.size < limit) {
+						if (messages.size < limit) {
+							break
+						}
+					}
+
+					null -> {
+						FileLog.e("TL_feeds_readHistory unknown error")
+						break
+					}
+
+					else -> {
+						FileLog.e("TL_feeds_readHistory error: $res")
 						break
 					}
 				}
-
-				null -> {
-					FileLog.e("TL_feeds_readHistory unknown error")
-					break
-				}
-
-				else -> {
-					FileLog.e("TL_feeds_readHistory error: $res")
-					break
-				}
 			}
-		}
 
-		processLoadedMessages(newMessages, force = false)
+			processLoadedMessages(newMessages, force = false)
+		}.onFailure {
+			FileLog.e("Failed to load new messages", it)
+		}
 	}
 
 	private suspend fun loadFeedData(force: Boolean) {
 		if (!force && isLastFeedPage) {
 			feedAdapter.updateLoadingState(false)
 			return
+		}
+
+		withContext(mainScope.coroutineContext) {
+			binding?.swipeRefreshLayout?.isRefreshing = true
 		}
 
 		if (feedAdapter.pinned == null) {
@@ -786,7 +803,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				val offset = view?.top ?: 0
 
 				val newMessages = withContext(mainScope.coroutineContext) {
-					feedAdapter.setFeed(messages, append = !force)
+					feedAdapter.setFeed(messages, append = !force, isLastPage = isLastFeedPage)
 				}
 
 				val newVisiblePosition = feedAdapter.feed?.indexOf(previousVisibleMessage)
@@ -833,7 +850,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 	private fun showScrollToTopButton(newMessages: List<List<MessageObject>>) {
 		val binding = binding ?: return
-		val firstNewMessagePosition = newMessages.size
+		val firstNewMessagePosition = (newMessages.size - 1).coerceAtLeast(0)
 		val allNewMessages = newMessages.flatten().distinctBy { it.id }
 
 		if ((allNewMessages.maxOfOrNull { it.id } ?: 0) <= lastReadId) {
@@ -863,7 +880,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		}
 
 		binding.scrollToTopButton.setOnClickListener {
-			val linearSmoothScroller = LinearSmoothScrollerCustom(binding.recyclerView.context, LinearSmoothScrollerCustom.POSITION_MIDDLE)
+			val linearSmoothScroller = LinearSmoothScrollerCustom(binding.recyclerView.context, LinearSmoothScrollerCustom.POSITION_BOTTOM)
 			linearSmoothScroller.targetPosition = firstNewMessagePosition
 			binding.recyclerView.layoutManager?.startSmoothScroll(linearSmoothScroller)
 			hideScrollToTopButton()
@@ -895,6 +912,8 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 	@Synchronized
 	private fun reloadState(restorePosition: Boolean) {
+		binding?.swipeRefreshLayout?.isRefreshing = false
+
 		when (feedMode) {
 			FeedMode.FOLLOWING -> {
 				hideEmptyRecommendationsView()
@@ -912,12 +931,12 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				binding?.chatBackground?.visible()
 				binding?.exploreProgressBar?.gone()
 
-				if (feedAdapter.itemCount == 0) {
-					binding?.recyclerView?.gone()
+				if (feedAdapter.feed.isNullOrEmpty()) {
+					binding?.swipeRefreshLayout?.gone()
 					binding?.emptyFeedContainer?.visible()
 				}
 				else {
-					binding?.recyclerView?.visible()
+					binding?.swipeRefreshLayout?.visible()
 					binding?.emptyFeedContainer?.gone()
 				}
 			}
@@ -935,7 +954,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				binding?.chatBackground?.gone()
 				binding?.emptyFeedContainer?.gone()
 				binding?.searchParamsRecyclerView?.gone()
-				binding?.recyclerView?.visible()
+				binding?.swipeRefreshLayout?.visible()
 				searchItem?.gone()
 
 				if (exploreLoadingJob?.isActive == true && exploreAdapter.itemCount == 0) {
@@ -957,7 +976,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				binding?.chatBackground?.gone()
 				binding?.emptyFeedContainer?.gone()
 				binding?.searchParamsRecyclerView?.visible()
-				binding?.recyclerView?.visible()
+				binding?.swipeRefreshLayout?.visible()
 				binding?.exploreProgressBar?.gone()
 
 				searchItem?.visible()
@@ -1018,7 +1037,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 			val msg = ArrayList(messages.map {
 				MessageObject(currentAccount, it.messageOwner!!, generateLayout = true, checkMediaExists = true).apply {
-					messageText = message // MARK: check if this works properly
+					messageText = message
 				}
 			})
 
@@ -1413,6 +1432,54 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 					}
 				}
 			}
+
+			NotificationCenter.needDeleteDialog -> {
+				if (fragmentView == null || isPaused) {
+					return
+				}
+
+				val dialogId = args[0] as Long
+				val user = args[1] as? User
+				val chat = args[2] as? TLRPC.Chat
+				val revoke = (args[3] as? Boolean) ?: false
+
+				if (chat != null) {
+					if (ChatObject.isNotInChat(chat)) {
+						messagesController.deleteDialog(dialogId, 0, revoke)
+					}
+					else {
+						messagesController.deleteParticipantFromChat(-dialogId, messagesController.getUser(userConfig.getClientUserId()), null, revoke, revoke)
+					}
+
+					if (isSubscriptionChannel(chat)) {
+						val request = unsubscribeRequest(chat.id, ElloRpc.PEER_TYPE_CHANNEL)
+						connectionsManager.sendRequest(request)
+					}
+
+					if (recommendationsAdapter.contains(chat)) {
+						if (recommendationsLoadingJob?.isActive != true) {
+							recommendationsLoadingJob = ioScope.launch {
+								loadRecommendationsData(true)
+							}
+						}
+					}
+				}
+				else {
+					messagesController.deleteDialog(dialogId, 0, revoke)
+
+					if (user?.bot == true) {
+						messagesController.blockPeer(user.id)
+					}
+
+					if (recommendationsAdapter.contains(dialogId)) {
+						if (recommendationsLoadingJob?.isActive != true) {
+							recommendationsLoadingJob = ioScope.launch {
+								loadRecommendationsData(true)
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -1738,14 +1805,40 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		presentFragment(fragment)
 	}
 
+	override fun onRefresh() {
+		if (feedLoadingJob?.isActive == true) {
+			feedLoadingJob?.cancel()
+		}
+
+		feedLoadingJob = ioScope.launch {
+			loadFeedData(force = true)
+		}
+
+		if (recommendationsLoadingJob?.isActive == true) {
+			recommendationsLoadingJob?.cancel()
+		}
+
+		recommendationsLoadingJob = ioScope.launch {
+			loadRecommendationsData(force = true)
+		}
+
+		if (exploreLoadingJob?.isActive == true) {
+			exploreLoadingJob?.cancel()
+		}
+
+		exploreLoadingJob = ioScope.launch {
+			loadExploreData(force = true)
+		}
+	}
+
 	companion object {
 		private const val SETTINGS = 1
-		private const val FEED_POSITION = "feed_position"
-		private const val FEED_OFFSET = "feed_offset"
-		private const val CURRENT_PAGE = "current_page"
-		private const val LAST_READ_ID = "feed_last_read_id"
 		private const val DEFAULT_FETCH_LIMIT = 10
 		private const val SCROLL_TO_TOP_BUTTON_OFFSET = 54f
 		private const val FOR_YOU_TAB = 2
+		const val CURRENT_PAGE = "current_page"
+		const val FEED_OFFSET = "feed_offset"
+		const val FEED_POSITION = "feed_position"
+		const val LAST_READ_ID = "feed_last_read_id"
 	}
 }

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2024.
  */
 package org.telegram.ui.profile.subscriptions
 
@@ -39,15 +39,13 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 	private var subscriptions: List<ElloRpc.SubscriptionItem>? = null
 	private var emptyImage: RLottieImageView? = null
 
-	private var subscriptionType = SubscriptionType.ACTIVE_CHANNELS
+	private var subscriptionType = ElloRpc.SubscriptionType.ACTIVE_CHANNELS
 		set(value) {
 			field = value
 
 			binding?.menuField?.setText(when (value) {
-				SubscriptionType.ACTIVE_CHANNELS -> context?.getString(R.string.my_current_subscriptions)
-				SubscriptionType.CANCELLED_CHANNELS -> context?.getString(R.string.my_previous_subscriptions)
-				SubscriptionType.ALL_CHANNELS -> context?.getString(R.string.my_all_subscriptions)
-				SubscriptionType.ALL -> context?.getString(R.string.my_all_subscriptions)
+				ElloRpc.SubscriptionType.ACTIVE_CHANNELS -> context?.getString(R.string.my_current_subscriptions)
+				ElloRpc.SubscriptionType.PAST_CHANNELS -> context?.getString(R.string.my_previous_subscriptions)
 			})
 
 			loadData()
@@ -111,7 +109,7 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 	}
 
 	private fun loadData() {
-		val request = ElloRpc.getSubscriptionsRequest(type = subscriptionType.value)
+		val request = ElloRpc.getSubscriptionsRequest(subscriptionType)
 
 		connectionsManager.sendRequest(request) { response, _ ->
 			if (response is TLRPC.TL_biz_dataRaw) {
@@ -124,20 +122,12 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 
 					if (this.subscriptions.isNullOrEmpty()) {
 						when (subscriptionType) {
-							SubscriptionType.ACTIVE_CHANNELS -> {
+							ElloRpc.SubscriptionType.ACTIVE_CHANNELS -> {
 								binding?.emptyListLabel?.setText(R.string.no_current_subscriptions)
 							}
 
-							SubscriptionType.CANCELLED_CHANNELS -> {
+							ElloRpc.SubscriptionType.PAST_CHANNELS -> {
 								binding?.emptyListLabel?.setText(R.string.no_past_subscriptions)
-							}
-
-							SubscriptionType.ALL_CHANNELS -> {
-								binding?.emptyListLabel?.setText(R.string.no_current_subscriptions)
-							}
-
-							SubscriptionType.ALL -> {
-								binding?.emptyListLabel?.setText(R.string.no_current_subscriptions)
 							}
 						}
 
@@ -167,10 +157,10 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 
 		popUp?.setOnMenuItemClickListener {
 			subscriptionType = if (it.itemId == R.id.current_subscriptions) {
-				SubscriptionType.ACTIVE_CHANNELS
+				ElloRpc.SubscriptionType.ACTIVE_CHANNELS
 			}
 			else {
-				SubscriptionType.CANCELLED_CHANNELS
+				ElloRpc.SubscriptionType.PAST_CHANNELS
 			}
 
 			true

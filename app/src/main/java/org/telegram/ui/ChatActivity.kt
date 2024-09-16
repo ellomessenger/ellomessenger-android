@@ -68,6 +68,7 @@ import android.view.MotionEvent
 import android.view.TextureView
 import android.view.View
 import android.view.View.MeasureSpec
+import android.view.View.OnClickListener
 import android.view.View.OnTouchListener
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -118,6 +119,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -190,19 +192,16 @@ import org.telegram.messenger.Utilities
 import org.telegram.messenger.VideoEditedInfo
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.databinding.AiBotChatTopviewFreeBalanceBinding
-import org.telegram.messenger.databinding.SubscribeToChannelDialogBinding
 import org.telegram.messenger.messageobject.GroupedMessagePosition
 import org.telegram.messenger.messageobject.GroupedMessages
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.messageobject.SendAnimationData
 import org.telegram.messenger.support.LongSparseIntArray
 import org.telegram.messenger.utils.LinkClickListener
-import org.telegram.messenger.utils.LinkTouchMovementMethod
 import org.telegram.messenger.utils.createCombinedChatPropertiesDrawable
 import org.telegram.messenger.utils.gone
+import org.telegram.messenger.utils.hasServiceMessagesOnly
 import org.telegram.messenger.utils.invisible
-import org.telegram.messenger.utils.processForLinks
-import org.telegram.messenger.utils.toDateOnlyString
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
 import org.telegram.messenger.voip.VoIPService
@@ -218,13 +217,11 @@ import org.telegram.tgnet.TLRPC.BotInfo
 import org.telegram.tgnet.TLRPC.BotInlineResult
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.ChatInvite
 import org.telegram.tgnet.TLRPC.EncryptedChat
 import org.telegram.tgnet.TLRPC.FileLocation
 import org.telegram.tgnet.TLRPC.InputStickerSet
 import org.telegram.tgnet.TLRPC.KeyboardButton
 import org.telegram.tgnet.TLRPC.MessageAction
-import org.telegram.tgnet.tlrpc.MessageEntity
 import org.telegram.tgnet.TLRPC.MessageExtendedMedia
 import org.telegram.tgnet.TLRPC.MessageMedia
 import org.telegram.tgnet.TLRPC.MessageReplies
@@ -258,7 +255,6 @@ import org.telegram.tgnet.TLRPC.TL_game
 import org.telegram.tgnet.TLRPC.TL_groupCall
 import org.telegram.tgnet.TLRPC.TL_inlineBotSwitchPM
 import org.telegram.tgnet.TLRPC.TL_inputMediaPoll
-import org.telegram.tgnet.tlrpc.TL_inputMessageEntityMentionName
 import org.telegram.tgnet.TLRPC.TL_inputStickerSetID
 import org.telegram.tgnet.TLRPC.TL_inputStickerSetShortName
 import org.telegram.tgnet.TLRPC.TL_keyboardButtonBuy
@@ -290,16 +286,6 @@ import org.telegram.tgnet.TLRPC.TL_messageActionSetChatTheme
 import org.telegram.tgnet.TLRPC.TL_messageActionSetMessagesTTL
 import org.telegram.tgnet.TLRPC.TL_messageEmpty
 import org.telegram.tgnet.TLRPC.TL_messageEncryptedAction
-import org.telegram.tgnet.tlrpc.TL_messageEntityBold
-import org.telegram.tgnet.tlrpc.TL_messageEntityCode
-import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_messageEntityItalic
-import org.telegram.tgnet.tlrpc.TL_messageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_messageEntityPre
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.TL_messageEntityStrike
-import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
-import org.telegram.tgnet.tlrpc.TL_messageEntityUnderline
 import org.telegram.tgnet.TLRPC.TL_messageMediaContact
 import org.telegram.tgnet.TLRPC.TL_messageMediaGame
 import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
@@ -308,7 +294,6 @@ import org.telegram.tgnet.TLRPC.TL_messageMediaWebPage
 import org.telegram.tgnet.TLRPC.TL_messageReplies
 import org.telegram.tgnet.TLRPC.TL_messages_acceptUrlAuth
 import org.telegram.tgnet.TLRPC.TL_messages_discussionMessage
-import org.telegram.tgnet.tlrpc.TL_messages_editMessage
 import org.telegram.tgnet.TLRPC.TL_messages_getAttachMenuBot
 import org.telegram.tgnet.TLRPC.TL_messages_getDiscussionMessage
 import org.telegram.tgnet.TLRPC.TL_messages_getHistory
@@ -348,11 +333,25 @@ import org.telegram.tgnet.TLRPC.TL_webPageUrlPending
 import org.telegram.tgnet.TLRPC.Updates
 import org.telegram.tgnet.TLRPC.VideoSize
 import org.telegram.tgnet.TLRPC.WebPage
+import org.telegram.tgnet.tlrpc.ChatInvite
 import org.telegram.tgnet.tlrpc.Message
+import org.telegram.tgnet.tlrpc.MessageEntity
 import org.telegram.tgnet.tlrpc.ReactionCount
 import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.tlrpc.TL_inputMessageEntityMentionName
 import org.telegram.tgnet.tlrpc.TL_message
+import org.telegram.tgnet.tlrpc.TL_messageEntityBold
+import org.telegram.tgnet.tlrpc.TL_messageEntityCode
+import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji
+import org.telegram.tgnet.tlrpc.TL_messageEntityItalic
+import org.telegram.tgnet.tlrpc.TL_messageEntityMentionName
+import org.telegram.tgnet.tlrpc.TL_messageEntityPre
+import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
+import org.telegram.tgnet.tlrpc.TL_messageEntityStrike
+import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
+import org.telegram.tgnet.tlrpc.TL_messageEntityUnderline
 import org.telegram.tgnet.tlrpc.TL_messageReactions
+import org.telegram.tgnet.tlrpc.TL_messages_editMessage
 import org.telegram.tgnet.tlrpc.TL_reactionEmoji
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.tgnet.tlrpc.UserFull
@@ -392,13 +391,12 @@ import org.telegram.ui.Components.AnimatedFileDrawable
 import org.telegram.ui.Components.AnimationProperties
 import org.telegram.ui.Components.AttachBotIntroTopView
 import org.telegram.ui.Components.AutoDeletePopupWrapper
-import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.BackButtonMenu.addToPulledDialogs
 import org.telegram.ui.Components.BackButtonMenu.clearPulledDialogs
 import org.telegram.ui.Components.BackupImageView
 import org.telegram.ui.Components.BlurBehindDrawable
-import org.telegram.ui.Components.BlurredView
 import org.telegram.ui.Components.BlurredFrameLayout
+import org.telegram.ui.Components.BlurredView
 import org.telegram.ui.Components.Bulletin
 import org.telegram.ui.Components.BulletinFactory
 import org.telegram.ui.Components.BulletinFactory.FileType
@@ -477,6 +475,7 @@ import org.telegram.ui.Components.ShareAlert
 import org.telegram.ui.Components.SharedMediaLayout
 import org.telegram.ui.Components.SizeNotifierFrameLayout
 import org.telegram.ui.Components.StickersAlert
+import org.telegram.ui.Components.SubscribeToChannelAlert
 import org.telegram.ui.Components.SuggestEmojiView
 import org.telegram.ui.Components.TextSelectionHint
 import org.telegram.ui.Components.TextStyleSpan
@@ -508,7 +507,6 @@ import org.telegram.ui.aibot.AiSubscriptionPlansFragment
 import org.telegram.ui.channel.SubscriptionResultFragment
 import org.telegram.ui.group.GroupCallActivity
 import org.telegram.ui.group.GroupCreateActivity.ContactsAddActivityDelegate
-import org.telegram.ui.profile.subscriptions.SubscriptionType
 import org.telegram.ui.statistics.MessageStatisticActivity
 import java.io.BufferedWriter
 import java.io.File
@@ -519,7 +517,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Arrays
 import java.util.Calendar
 import java.util.Collections
-import java.util.Date
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
@@ -1669,7 +1666,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		notificationCenter.addObserver(this, NotificationCenter.dialogsUnreadReactionsCounterChanged)
 		notificationCenter.addObserver(this, NotificationCenter.groupStickersDidLoad)
 
-		if (dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) {
+		if (isAiBot()) {
 			notificationCenter.addObserver(this, NotificationCenter.aiBotStarted)
 			notificationCenter.addObserver(this, NotificationCenter.aiBotStopped)
 			notificationCenter.addObserver(this, NotificationCenter.aiBotRequestFailed)
@@ -1937,6 +1934,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		topUndoView?.hide(true, 0)
 	}
 
+	private fun isAiBot(): Boolean {
+		return currentUser?.bot == true && dialogId != BuildConfig.SUPPORT_BOT_ID
+	}
+
+	private fun isBot(): Boolean {
+		return currentUser?.bot == true
+	}
+
 	val otherSameChatsDiff: Int
 		get() {
 			val parentLayout = parentLayout
@@ -2100,7 +2105,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		chatBotController.cancelStartChatBot()
 
-		if (dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) {
+		if (isAiBot()) {
 			notificationCenter.removeObserver(this, NotificationCenter.aiBotStarted)
 			notificationCenter.removeObserver(this, NotificationCenter.aiBotStopped)
 			notificationCenter.removeObserver(this, NotificationCenter.aiBotRequestFailed)
@@ -3012,8 +3017,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					timeItem2 = headerItem.addSubItem(chat_enc_timer, R.drawable.msg_autodelete, context.getString(R.string.SetTimer))
 				}
 
-				if (currentUser?.id != BuildConfig.SUPPORT_BOT_ID && currentUser?.id != BuildConfig.AI_BOT_ID && currentUser?.id != 333000L && currentUser?.id != 777000L && currentUser?.id != 42777L && currentUser?.id != BuildConfig.PHOENIX_BOT_ID && currentUser?.id != BuildConfig.BUSINESS_BOT_ID && currentUser?.id != BuildConfig.CANCER_BOT_ID) {
-					clearHistoryItem = headerItem.addSubItem(clear_history, R.drawable.msg_clear, context.getString(R.string.ClearHistory))
+				if (!isBot() && currentUser?.id != 333000L && currentUser?.id != 777000L && currentUser?.id != 42777L) {
+					if (!isChannel(currentChat)) { // MARK: remove this check to enable clearing history for all channel types
+						clearHistoryItem = headerItem.addSubItem(clear_history, R.drawable.msg_clear, context.getString(R.string.ClearHistory))
+					}
 				}
 
 				if (isChannel(currentChat) && currentChat?.creator != true) {
@@ -3033,7 +3040,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						val leaveItem = headerItem.addSubItem(delete_chat, R.drawable.msg_leave, context.getString(R.string.DeleteAndExit))
 						leaveItem.setColors(ResourcesCompat.getColor(context.resources, R.color.purple, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
-					else if (currentUser?.self != true && currentUser?.id != BuildConfig.SUPPORT_BOT_ID && currentUser?.id != BuildConfig.AI_BOT_ID && currentUser?.id != 333000L && currentUser?.id != 777000L && currentUser?.id != 42777L && currentUser?.id != BuildConfig.PHOENIX_BOT_ID && currentUser?.id != BuildConfig.BUSINESS_BOT_ID && currentUser?.id != BuildConfig.CANCER_BOT_ID) {
+					else if (currentUser?.self != true && !isBot() && currentUser?.id != 333000L && currentUser?.id != 777000L && currentUser?.id != 42777L) {
 						val deleteItem = headerItem.addSubItem(delete_chat, R.drawable.msg_delete, context.getString(R.string.DeleteChatUser))
 						deleteItem.setColors(ResourcesCompat.getColor(context.resources, R.color.dark, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
@@ -4582,7 +4589,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		// contentView.setBackgroundImage(Theme.getCachedWallpaper(), Theme.isWallpaperMotion());
-		when(dialogId) {
+		when (dialogId) {
 			BuildConfig.PHOENIX_BOT_ID -> contentView?.background = ResourcesCompat.getDrawable(context.resources, R.drawable.chat_ai_phoenix_background, null)
 
 			BuildConfig.BUSINESS_BOT_ID -> contentView?.background = ResourcesCompat.getDrawable(context.resources, R.drawable.chat_ai_business_background, null)
@@ -4678,8 +4685,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 
 						else -> {
-							paint.color = ResourcesCompat.getColor(context.resources, R.color.service_message_background, null)
-							greetingsViewContainer?.background = Theme.createServiceDrawable(AndroidUtilities.dp(14f), greetingsViewContainer, contentView, paint)
+							if (isAiBot()) {
+								showBotHelpCell = true
+							}
+							else {
+								paint.color = ResourcesCompat.getColor(context.resources, R.color.service_message_background, null)
+								greetingsViewContainer?.background = Theme.createServiceDrawable(AndroidUtilities.dp(14f), greetingsViewContainer, contentView, paint)
+							}
 						}
 					}
 
@@ -7199,7 +7211,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		topChatPanelView?.addView(topViewSeparator2, createFrame(LayoutHelper.MATCH_PARENT, 1f / AndroidUtilities.density, Gravity.LEFT or Gravity.TOP, 10f, 50f, 10f, 1f))
 
-		if (BuildConfig.AI_BOT_ID == dialogId || BuildConfig.PHOENIX_BOT_ID == dialogId || BuildConfig.BUSINESS_BOT_ID == dialogId || BuildConfig.CANCER_BOT_ID == dialogId) {
+		if (isAiBot()) {
 			val botBalanceBinding = AiBotChatTopviewFreeBalanceBinding.inflate(LayoutInflater.from(getContext()))
 
 			botTopViewContainer = botBalanceBinding.root
@@ -7294,7 +7306,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 		}
 
-		if (BuildConfig.AI_BOT_ID != dialogId && BuildConfig.PHOENIX_BOT_ID != dialogId && BuildConfig.BUSINESS_BOT_ID != dialogId && BuildConfig.CANCER_BOT_ID != dialogId) {
+		if (!isBot()) {
 			val closeReportSpam = ImageView(context)
 			closeReportSpam.setImageResource(R.drawable.miniplayer_close)
 			closeReportSpam.contentDescription = context.getString(R.string.Close)
@@ -8057,7 +8069,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		bottomMessagesActionContainer?.setOnTouchListener { _, _ -> true }
 
-		chatActivityEnterView = object : ChatActivityEnterView(parentActivity!!, contentView, this@ChatActivity, true, dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) {
+		chatActivityEnterView = object : ChatActivityEnterView(parentActivity!!, contentView, this@ChatActivity, true, isAiBot()) {
 			var lastContentViewHeight = 0
 			var messageEditTextPredrawHeigth = 0
 			var messageEditTextPredrawScrollY = 0
@@ -9519,7 +9531,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			updateReactionsMentionButton(false)
 		}
 
-		if (dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) {
+		if (isAiBot()) {
 			startAiBot()
 		}
 
@@ -9535,7 +9547,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return
 		}
 
-		delay(100)
+		withContext(mainScope.coroutineContext) {
+			bottomOverlayChatText?.isEnabled = false
+		}
+
+		delay(500)
 
 		mainScope.launch {
 			showSubscribeBottomSheet(currentChat)
@@ -9551,9 +9567,21 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return
 		}
 
-		val currentSubscriptions = (connectionsManager.performRequest(ElloRpc.getSubscriptionsRequest(type = SubscriptionType.ALL.value)) as? TL_biz_dataRaw)?.readData<ElloRpc.Subscriptions>()
+		if (!currentChat.left) {
+			return
+		}
+
+		withContext(mainScope.coroutineContext) {
+			bottomOverlayChatText?.isEnabled = false
+		}
+
+		val currentSubscriptions = (connectionsManager.performRequest(ElloRpc.getSubscriptionsRequest(subscriptionType = ElloRpc.SubscriptionType.ACTIVE_CHANNELS)) as? TL_biz_dataRaw)?.readData<ElloRpc.Subscriptions>()
 
 		if (currentSubscriptions?.items?.find { it.channelId == currentChat.id && it.isActive } != null) {
+			withContext(mainScope.coroutineContext) {
+				bottomOverlayChatText?.isEnabled = true
+			}
+
 			return
 		}
 
@@ -9567,201 +9595,97 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	@MainThread
 	private fun showSubscribeBottomSheet(currentChat: Chat) {
 		val context = context ?: return
-		val binding: SubscribeToChannelDialogBinding
 		val subscriptionView: View?
 		val showingDialog = visibleDialog?.window?.findViewById<View>(R.id.subscribe_dialog_parent_view).also { subscriptionView = it } != null
 
-		binding = if (showingDialog && subscriptionView != null) {
-			SubscribeToChannelDialogBinding.bind(subscriptionView)
-		}
-		else {
-			SubscribeToChannelDialogBinding.inflate(LayoutInflater.from(context))
-		}
+		val alert = SubscribeToChannelAlert(context = context, currentChat = currentChat, currentChatInfo = currentChatInfo, subscriptionView = subscriptionView, linkClickListener = object : LinkClickListener {
+			override fun onClick(route: String) {
+				openUrl(route)
+			}
 
-		binding.channelProfile.about.setLinkTextColor(context.getColor(R.color.brand))
-		binding.channelProfile.about.movementMethod = LinkTouchMovementMethod()
+			override fun onLongClick(route: String) {
+				val builder = BottomSheet.Builder(parentActivity)
+				builder.setTitle(route)
 
-		val avatarDrawable = AvatarDrawable(currentChat)
-
-		val avatarImageView = BackupImageView(context)
-		avatarImageView.setForUserOrChat(currentChat, avatarDrawable)
-		avatarImageView.setRoundRadius(AndroidUtilities.dp(27f))
-
-		binding.channelProfile.avatarContainer.addView(avatarImageView, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
-		binding.channelProfile.title.text = avatarContainer?.titleTextView?.getText()
-		binding.channelProfile.title.isSelected = true
-		binding.channelProfile.subTitle.text = LocaleController.formatPluralString("Subscribers", currentChat.participants_count)
-
-		if (!currentChatInfo?.about.isNullOrEmpty()) {
-			binding.channelProfile.about.text = currentChatInfo?.about?.processForLinks(context, true, object : LinkClickListener {
-				override fun onClick(route: String) {
-					openUrl(route)
-				}
-
-				override fun onLongClick(route: String) {
-					runCatching {
-						binding.channelProfile.about.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
+				builder.setItems(arrayOf<CharSequence>(context.getString(R.string.Open), context.getString(R.string.Copy))) { _, which ->
+					if (which == 0) {
+						openUrl(route)
 					}
+					else if (which == 1) {
+						AndroidUtilities.addToClipboard(route)
 
-					val builder = BottomSheet.Builder(parentActivity)
-					builder.setTitle(route)
-
-					builder.setItems(arrayOf<CharSequence>(context.getString(R.string.Open), context.getString(R.string.Copy))) { _, which ->
-						if (which == 0) {
-							openUrl(route)
-						}
-						else if (which == 1) {
-							AndroidUtilities.addToClipboard(route)
-
-							if (AndroidUtilities.shouldShowClipboardToast()) {
-								if (route.startsWith("@")) {
-									BulletinFactory.of(this@ChatActivity).createSimpleBulletin(R.raw.copy, context.getString(R.string.UsernameCopied)).show()
-								}
-								else if (route.startsWith("#") || route.startsWith("$")) {
-									BulletinFactory.of(this@ChatActivity).createSimpleBulletin(R.raw.copy, context.getString(R.string.HashtagCopied)).show()
-								}
-								else {
-									BulletinFactory.of(this@ChatActivity).createSimpleBulletin(R.raw.copy, context.getString(R.string.LinkCopied)).show()
-								}
+						if (AndroidUtilities.shouldShowClipboardToast()) {
+							if (route.startsWith("@")) {
+								BulletinFactory.of(this@ChatActivity).createSimpleBulletin(R.raw.copy, context.getString(R.string.UsernameCopied)).show()
 							}
-						}
-					}
-					builder.show()
-				}
-			})
-
-			binding.channelProfile.about.visible()
-		}
-		else {
-			binding.channelProfile.about.gone()
-		}
-
-		if (!currentChatInfo?.about.isNullOrEmpty() && binding.channelProfile.about.text.length > MAX_VISIBLE_LENGTH) {
-			binding.channelProfile.more.visible()
-		}
-
-		binding.channelProfile.more.setOnClickListener {
-			binding.channelProfile.about.maxLines = Int.MAX_VALUE
-			binding.channelProfile.more.gone()
-		}
-
-		val isPaid = isPaidChannel(currentChat)
-		val isAdult = currentChat.adult
-
-		if (isPaid) {
-			binding.priceContainer.visible()
-			binding.description.visible()
-
-			if (isOnlineCourse(currentChat)) {
-				binding.subsChannel.text = context.getString(R.string.online_course)
-				binding.subscribeButton.text = context.getString(R.string.VoipChatJoin)
-				binding.channelProfile.paid.setImageResource(R.drawable.online_course)
-				binding.description.setText(R.string.course_description)
-			}
-			else {
-				binding.description.setText(R.string.subscription_description)
-			}
-
-			if (currentChat.verified) {
-				binding.channelProfile.verified.visible()
-			}
-			else {
-				binding.channelProfile.verified.gone()
-			}
-
-			binding.adultLayout.visibility = if (isAdult) View.VISIBLE else View.GONE
-			binding.channelProfile.adult.visibility = if (isAdult) View.VISIBLE else View.GONE
-			binding.price.text = LocaleController.formatString(if (isOnlineCourse(currentChat)) R.string.PricePerCourse else R.string.PricePerMonthMe, currentChat.cost)
-
-			if (currentChat.start_date != 0L) {
-				val startDate = Date(currentChat.start_date)
-				binding.startDateLabel.text = startDate.toDateOnlyString()
-			}
-			else {
-				binding.startDateContainer.gone()
-			}
-
-			if (currentChat.end_date != 0L) {
-				val endDate = Date(currentChat.end_date)
-				binding.endDateLabel.text = endDate.toDateOnlyString()
-			}
-			else {
-				binding.endDateContainer.gone()
-			}
-		}
-		else if (isAdult) {
-			binding.priceContainer.gone()
-			binding.description.gone()
-			binding.adultLayout.visible()
-			binding.channelProfile.adult.visible()
-
-			if (currentChat.verified) {
-				binding.channelProfile.verified.visible()
-			}
-			else {
-				binding.channelProfile.verified.gone()
-			}
-		}
-		else {
-			// impossible situation, but should be covered anyway
-			return
-		}
-
-		binding.subscribeButton.setOnClickListener { view ->
-			if (!isPaid) {
-				bottomOverlayChatText?.performClick()
-
-				visibleDialog?.setOnDismissListener(null)
-				visibleDialog?.dismiss()
-
-				return@setOnClickListener
-			}
-
-			ioScope.launch {
-				val request = subscribeRequest(currentChat.id)
-				val resp = connectionsManager.performRequest(request)
-				val error = resp as? TLRPC.TL_error
-
-				mainScope.launch {
-					visibleDialog?.setOnDismissListener {
-						val args = Bundle()
-						args.putBoolean(SubscriptionResultFragment.SUCCESS, error == null)
-
-						val originalError = error?.text?.lowercase()
-
-						if (originalError?.contains("enough") == true && originalError.contains("money")) {
-							args.putString(SubscriptionResultFragment.DESCRIPTION, view.context.getString(R.string.insufficient_funds_message))
-							args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, R.drawable.panda_payment_error)
-							args.putBoolean(SubscriptionResultFragment.SHOW_TOPUP, true)
-						}
-						else {
-							args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, if (error == null) R.drawable.panda_success else R.drawable.panda_error)
-
-							if (isOnlineCourse(currentChat)) {
-								args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) view.context.getString(R.string.online_course_success) else (error.text ?: ""))
+							else if (route.startsWith("#") || route.startsWith("$")) {
+								BulletinFactory.of(this@ChatActivity).createSimpleBulletin(R.raw.copy, context.getString(R.string.HashtagCopied)).show()
 							}
 							else {
-								args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) view.context.getString(R.string.subscription_success) else (error.text ?: ""))
+								BulletinFactory.of(this@ChatActivity).createSimpleBulletin(R.raw.copy, context.getString(R.string.LinkCopied)).show()
 							}
 						}
-
-						presentFragment(SubscriptionResultFragment(args), true)
 					}
+				}
+				builder.show()
+			}
+		}, subscribeClickListener = object : OnClickListener {
+			override fun onClick(v: View) {
+				if (!isPaidChannel(currentChat)) {
+					bottomOverlayChatText?.performClick()
 
+					visibleDialog?.setOnDismissListener(null)
 					visibleDialog?.dismiss()
+
+					return
+				}
+
+				ioScope.launch {
+					val request = subscribeRequest(currentChat.id)
+					val resp = connectionsManager.performRequest(request)
+					val error = resp as? TLRPC.TL_error
+
+					mainScope.launch {
+						visibleDialog?.setOnDismissListener {
+							val args = Bundle()
+							args.putBoolean(SubscriptionResultFragment.SUCCESS, error == null)
+
+							val originalError = error?.text?.lowercase()
+
+							if (originalError?.contains("enough") == true && originalError.contains("money")) {
+								args.putString(SubscriptionResultFragment.DESCRIPTION, v.context.getString(R.string.insufficient_funds_message))
+								args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, R.drawable.panda_payment_error)
+								args.putBoolean(SubscriptionResultFragment.SHOW_TOPUP, true)
+							}
+							else {
+								args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, if (error == null) R.drawable.panda_success else R.drawable.panda_error)
+
+								if (isOnlineCourse(currentChat)) {
+									args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) v.context.getString(R.string.online_course_success) else (error.text ?: ""))
+								}
+								else {
+									args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) v.context.getString(R.string.subscription_success) else (error.text ?: ""))
+								}
+							}
+
+							presentFragment(SubscriptionResultFragment(args), true)
+						}
+
+						visibleDialog?.dismiss()
+					}
 				}
 			}
-		}
+		})
 
 		if (!showingDialog) {
 			val builder = BottomSheet.Builder(context)
 			builder.setApplyTopPadding(true)
-			builder.customView = binding.root
+			builder.customView = alert.view
 
 			val dialog = builder.create()
 			dialog.setCanDismissWithSwipe(false)
 
-			binding.closeButton.setOnClickListener {
+			alert.setCloseButtonClickListener {
 				dialog.dismiss()
 			}
 
@@ -10501,7 +10425,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 		else if (!show && blurredView?.tag != null) {
 			blurredView?.animate()?.setListener(null)?.cancel()
-			blurredView?.animate()?.setListener(HideViewAfterAnimation(blurredView))?.alpha(0f)?.start()
+			blurredView?.animate()?.setListener(HideViewAfterAnimation(blurredView!!))?.alpha(0f)?.start()
 			blurredView?.tag = null
 
 			chatListView?.invalidate()
@@ -10558,7 +10482,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			progressView?.visibility = if (show) {
 				loaderAnimationView?.playAnimation()
 				View.VISIBLE
-			} else {
+			}
+			else {
 				loaderAnimationView?.stopAnimation()
 				View.INVISIBLE
 			}
@@ -10671,7 +10596,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		if (floatingDateView != null) {
-			floatingDateView!!.translationY = chatListView!!.translationY - searchExpandOffset + chatListViewPadding + floatingDateViewOffset - AndroidUtilities.dp(4f)
+			floatingDateView?.translationY = chatListView!!.translationY - searchExpandOffset + chatListViewPadding + floatingDateViewOffset - AndroidUtilities.dp(4f)
 		}
 
 		val p = chatListView!!.measuredHeight * 2 / 3
@@ -12482,7 +12407,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			val reactionString = mediaDataController.doubleTapReaction
 
 			if (reactionString?.startsWith("animated_") == true) {
-				var available: Boolean = dialogId >= 0
+				var available = dialogId >= 0
 
 				if (!available && currentChatInfo != null) {
 					available = reactionIsAvailable(currentChatInfo, reactionString)
@@ -12497,11 +12422,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			else {
 				val reaction = mediaDataController.reactionsMap[reactionString]
 
-				if (reaction == null || view.getMessageObject()!!.isSponsored) {
+				if (reaction == null || view.getMessageObject()?.isSponsored == true) {
 					return
 				}
 
-				var available: Boolean = dialogId >= 0
+				if (isAiBot() || dialogId == BuildConfig.SUPPORT_BOT_ID || currentUser != null) {
+					return
+				}
+
+				var available = dialogId >= 0
 
 				if (!available && currentChatInfo != null) {
 					available = reactionIsAvailable(currentChatInfo, reaction.reaction)
@@ -14449,12 +14378,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				minMessageChild.getMessageObject()
 			}
 			else {
-				(minMessageChild as ChatActionCell).messageObject
+				(minMessageChild as? ChatActionCell)?.messageObject
 			}
 
 			floatingDateView?.setCustomDate(messageObject?.messageOwner?.date ?: 0, chatMode == MODE_SCHEDULED, true)
 
 		}
+
 		currentFloatingDateOnScreen = false
 		currentFloatingTopIsNotMessage = !(minChild is ChatMessageCell || minChild is ChatActionCell)
 
@@ -16830,7 +16760,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				var found = false
 
 				for (a in messArr.indices) {
-					val obj = messArr[a] ?: continue
+					val obj = messArr[a]
 
 					if (obj.id == startLoadFromMessageId) {
 						found = true
@@ -17260,7 +17190,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			while (a < N) {
 				val obj = messArr[N - a - 1]
-				val action = obj?.messageOwner?.action
+				val action = obj.messageOwner?.action
 
 				if (a == 0 && action is TL_messageActionChatCreate) {
 					createdWas = true
@@ -17779,7 +17709,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 						if (mentiondownButtonCounter != null) {
 							mentiondownButtonCounter?.visible()
-							mentiondownButtonCounter?.setText(String.format("%d", loaded_mentions_count.also { newMentionsCount = it }))
+							mentiondownButtonCounter?.setText(String.format(Locale.getDefault(), "%d", loaded_mentions_count.also { newMentionsCount = it }))
 						}
 					}
 				}
@@ -18040,10 +17970,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					return
 				}
 
-				val errorText = if (ChatObject.isOnlineCourse(currentChat)) {
+				val errorText = if (isOnlineCourse(currentChat)) {
 					context?.getString(R.string.banned_course_message)
 				}
-				else if (ChatObject.isMegagroup(currentChat)) {
+				else if (isMegagroup(currentChat)) {
 					context?.getString(R.string.banned_group_message)
 				}
 				else {
@@ -18237,7 +18167,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					processNewMessages(arr.toMutableList())
 
-					if (dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) {
+					if (isAiBot()) {
 						chatBotController.updateSubscriptionsInfo()
 					}
 				}
@@ -19610,7 +19540,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (!messages.contains(messageObject) && args[1] != null) {
 					for (a in messages.indices) {
-						if (messages[a] != null && messages[a]!!.messageOwner != null && (messages[a]!!.messageOwner?.voiceTranscriptionId == transcriptionId || messageObject != null && messageObject.id == messages[a]!!.id && messageObject.dialogId == messages[a]!!.dialogId)) {
+						if (messages[a] != null && messages[a].messageOwner != null && (messages[a].messageOwner?.voiceTranscriptionId == transcriptionId || messageObject != null && messageObject.id == messages[a].id && messageObject.dialogId == messages[a].dialogId)) {
 							messageObject = messages[a]
 							break
 						}
@@ -20840,7 +20770,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					showMentionDownButton(show = false, animated = true)
 				}
 				else {
-					mentiondownButtonCounter?.setText(String.format("%d", newMentionsCount))
+					mentiondownButtonCounter?.setText(String.format(Locale.getDefault(), "%d", newMentionsCount))
 					showMentionDownButton(show = true, animated = true)
 				}
 			}
@@ -22995,7 +22925,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							bottomOverlayChatText?.setCompoundDrawablesWithIntrinsicBounds(ResourcesCompat.getDrawable(context!!.resources, R.drawable.mouse, null), null, null, null)
 							bottomOverlayChatText?.text = if (isMegagroup(currentChat)) {
 								context!!.getString(R.string.JoinGroup).uppercase(Locale.getDefault())
-							} else {
+							}
+							else {
 								context!!.getString(R.string.ChannelJoin).uppercase(Locale.getDefault())
 							}
 							bottomOverlayChatText?.isEnabled = true
@@ -24361,7 +24292,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		var did = dialogId
 		var showAiFreeRequests = false
 
-		if ((dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) && !chatBotController.userSettingsUpdated) {
+		if ((isAiBot()) && !chatBotController.userSettingsUpdated) {
 			showAiFreeRequests = (chatBotController.lastSubscriptionInfo?.realState ?: ElloRpc.SubscriptionInfoAiBotState.NONE) != ElloRpc.SubscriptionInfoAiBotState.NONE
 			show = showAiFreeRequests
 		}
@@ -24740,7 +24671,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	fun isAiPromptsDepleted(): Boolean {
-		if (dialogId != BuildConfig.AI_BOT_ID && dialogId != BuildConfig.PHOENIX_BOT_ID && dialogId != BuildConfig.BUSINESS_BOT_ID && dialogId != BuildConfig.CANCER_BOT_ID) {
+		if (!isAiBot()) {
 			return false
 		}
 
@@ -24906,7 +24837,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							showMentionDownButton(show = false, animated = true)
 						}
 						else {
-							mentiondownButtonCounter?.setText(String.format("%d", newMentionsCount))
+							mentiondownButtonCounter?.setText(String.format(Locale.getDefault(), "%d", newMentionsCount))
 						}
 
 						messagesController.markMentionMessageAsRead(message.id, if (isChannel(currentChat)) currentChat!!.id else 0, dialogId)
@@ -27274,14 +27205,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 			})
 
-			// MARK: uncomment to enable reactions
 			var reactionsLayout: ReactionsContainerLayout? = null
 
 			if (optionsView != null) {
 				scrimPopupContainerLayout.addView(optionsView)
 			}
 			else {
-				// MARK: uncomment to enable reactions
 				reactionsLayout = ReactionsContainerLayout(this@ChatActivity, context, currentAccount)
 
 				if (isReactionsAvailable) {
@@ -27433,7 +27362,6 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 			}
 
-			// MARK: uncomment to enable reactions
 			val finalReactionsLayout1 = reactionsLayout
 
 			scrimPopupWindow = object : ActionBarPopupWindow(scrimPopupContainerLayout, LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT) {
@@ -27460,7 +27388,6 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					chatActivityEnterView?.editField?.setAllowDrawCursor(true)
 				}
 
-				// MARK: uncomment to enable reactions
 				override fun dismiss(animated: Boolean) {
 					super.dismiss(animated)
 					finalReactionsLayout1?.dismissParent(animated)
@@ -27533,7 +27460,6 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			scrimPopupContainerLayout.setMaxHeight(totalHeight - popupY)
 
-			// MARK: uncomment to enable reactions
 			val finalReactionsLayout = reactionsLayout
 
 			val showMenu = Runnable {
@@ -27543,7 +27469,6 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				scrimPopupWindow?.showAtLocation(chatListView!!, Gravity.LEFT or Gravity.TOP, finalPopupX, finalPopupY)
 
-				// MARK: uncomment to enable reactions
 				if (isReactionsAvailable && finalReactionsLayout != null) {
 					finalReactionsLayout.startEnterAnimation()
 				}
@@ -29248,14 +29173,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				view.setSpoilersSuppressed(chatListView.scrollState != RecyclerView.SCROLL_STATE_IDLE)
 			}
 			else if (view is ChatActionCell) {
-				view.setMessageObject(view.messageObject!!)
+				val actionMessageObject = view.messageObject!!
+
+				view.setMessageObject(actionMessageObject, collapseForDate = messagesByDays[actionMessageObject.dateKey]?.filter { it.messageOwner?.action == null }.isNullOrEmpty())
 				view.setSpoilersSuppressed(chatListView.scrollState != RecyclerView.SCROLL_STATE_IDLE)
 			}
 		}
-
-		// if (lastVisibleItem != RecyclerView.NO_POSITION) {
-		//   chatLayoutManager.scrollToPositionWithOffset(lastVisibleItem, top)
-		// }
 	}
 
 	private fun checkEditTimer() {
@@ -30962,7 +30885,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	inner class ChatActivityAdapter(private val mContext: Context) : AnimatableAdapter() {
 		val isBot = currentUser?.bot == true
 		var isFrozen = false
-		var frozenMessages = ArrayList<MessageObject?>()
+		val frozenMessages = mutableListOf<MessageObject>()
 		private var rowCount = 0
 		var botInfoRow = -5
 		private var botInfoEmptyRow = -5
@@ -31062,7 +30985,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			when (position) {
 				in messagesStartRow until messagesEndRow -> {
-					return messages[position - messagesStartRow]!!.stableId.toLong()
+					return messages[position - messagesStartRow].stableId.toLong()
 				}
 
 				botInfoRow, botInfoEmptyRow -> {
@@ -31577,7 +31500,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							return
 						}
 
-						if (dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) {
+						if (isAiBot()) {
 							if (!chatBotController.userSettingsUpdated) {
 								updateChatBotTopPanel()
 							}
@@ -32105,7 +32028,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								val args = Bundle()
 
 								if (messageObject.sponsoredChatInvite != null) {
-									showDialog(JoinGroupAlert(mContext, messageObject.sponsoredChatInvite, messageObject.sponsoredChatInviteHash!!, this@ChatActivity, null))
+									showDialog(JoinGroupAlert(mContext, messageObject.sponsoredChatInvite, messageObject.sponsoredChatInviteHash!!, this@ChatActivity))
 								}
 								else {
 									val peerId = MessageObject.getPeerId(messageObject.messageOwner?.from_id)
@@ -32394,7 +32317,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					view.isMegagroup = isChannel(currentChat) && currentChat!!.megagroup
 					view.isThreadChat = threadId != 0
 					view.hasDiscussion = chatMode != MODE_SCHEDULED && isChannel(currentChat) && currentChat!!.has_link && !currentChat!!.megagroup
-					view.isPinned = chatMode == 0 && (pinnedMessageObjects.containsKey(message!!.id) || groupedMessages != null && groupedMessages.messages.isNotEmpty() && pinnedMessageObjects.containsKey(groupedMessages.messages[0].id))
+					view.isPinned = chatMode == 0 && (pinnedMessageObjects.containsKey(message.id) || groupedMessages != null && groupedMessages.messages.isNotEmpty() && pinnedMessageObjects.containsKey(groupedMessages.messages[0].id))
 					view.linkedChatId = if (chatMode != MODE_SCHEDULED && currentChatInfo != null) currentChatInfo!!.linked_chat_id else 0
 					view.isRepliesChat = isReplyUser(currentUser)
 					view.isPinnedChat = chatMode == MODE_PINNED
@@ -32447,14 +32370,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val nextType = getItemViewType(nextPosition)
 					val prevType = getItemViewType(prevPosition)
 
-					if (message?.messageOwner?.reply_markup !is TL_replyInlineMarkup && nextType == holder.itemViewType) {
+					if (message.messageOwner?.reply_markup !is TL_replyInlineMarkup && nextType == holder.itemViewType) {
 						val nextMessage = messages[nextPosition - messagesStartRow]
 
-						pinnedBottom = nextMessage?.isOutOwner == message?.isOutOwner && abs(nextMessage?.messageOwner!!.date - message?.messageOwner!!.date) <= 5 * 60
+						pinnedBottom = nextMessage.isOutOwner == message.isOutOwner && abs(nextMessage.messageOwner!!.date - message.messageOwner!!.date) <= 5 * 60
 
 						if (pinnedBottom) {
-							if (message?.isImportedForward == true || nextMessage?.isImportedForward == true) {
-								pinnedBottom = if (message?.isImportedForward == true && nextMessage?.isImportedForward == true) {
+							if (message.isImportedForward || nextMessage.isImportedForward) {
+								pinnedBottom = if (message.isImportedForward && nextMessage.isImportedForward) {
 									if (abs(nextMessage.messageOwner!!.fwd_from!!.date - message.messageOwner!!.fwd_from!!.date) <= 5 * 60) {
 										if (nextMessage.messageOwner!!.fwd_from!!.from_name != null && message.messageOwner!!.fwd_from!!.from_name != null) {
 											nextMessage.messageOwner!!.fwd_from!!.from_name == message.messageOwner!!.fwd_from!!.from_name
@@ -32475,20 +32398,20 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								}
 							}
 							else if (currentChat != null) {
-								val fromId = nextMessage?.fromChatId ?: 0L
+								val fromId = nextMessage.fromChatId
 
-								pinnedBottom = (fromId == (message?.fromChatId ?: 0L))
+								pinnedBottom = (fromId == message.fromChatId)
 
 								if (!pinnedBottomByGroup && pinnedBottom && fromId < 0 && currentChat!!.megagroup) {
 									pinnedBottom = false
 								}
 							}
 							else if (isUserSelf(currentUser) || isReplyUser(currentUser)) {
-								pinnedBottom = if (message?.isPrivateForward == true || nextMessage?.isPrivateForward == true) {
+								pinnedBottom = if (message.isPrivateForward || nextMessage.isPrivateForward) {
 									false
 								}
 								else {
-									nextMessage?.senderId == (message?.senderId ?: 0L)
+									nextMessage.senderId == message.senderId
 								}
 							}
 						}
@@ -32497,11 +32420,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					if (prevType == holder.itemViewType) {
 						val prevMessage = messages[prevPosition - messagesStartRow]
 
-						pinnedTop = prevMessage?.messageOwner?.reply_markup !is TL_replyInlineMarkup && prevMessage?.isOutOwner == message?.isOutOwner && abs(prevMessage?.messageOwner!!.date - message?.messageOwner!!.date) <= 5 * 60
+						pinnedTop = prevMessage.messageOwner?.reply_markup !is TL_replyInlineMarkup && prevMessage.isOutOwner == message.isOutOwner && abs(prevMessage.messageOwner!!.date - message.messageOwner!!.date) <= 5 * 60
 
 						if (pinnedTop) {
-							if (message?.isImportedForward == true || prevMessage?.isImportedForward == true) {
-								pinnedTop = if (message?.isImportedForward == true && prevMessage?.isImportedForward == true) {
+							if (message.isImportedForward || prevMessage.isImportedForward) {
+								pinnedTop = if (message.isImportedForward && prevMessage.isImportedForward) {
 									if (abs(message.messageOwner!!.fwd_from!!.date - prevMessage.messageOwner!!.fwd_from!!.date) <= 5 * 60) {
 										if (prevMessage.messageOwner!!.fwd_from!!.from_name != null && message.messageOwner!!.fwd_from!!.from_name != null) {
 											prevMessage.messageOwner!!.fwd_from!!.from_name == message.messageOwner!!.fwd_from!!.from_name
@@ -32522,26 +32445,26 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								}
 							}
 							else if (currentChat != null) {
-								val fromId = prevMessage?.fromChatId ?: 0L
+								val fromId = prevMessage.fromChatId
 
-								pinnedTop = (fromId == message?.fromChatId) && message.isImportedForward != true && prevMessage?.isImportedForward != true
+								pinnedTop = (fromId == message.fromChatId) && message.isImportedForward != true && prevMessage.isImportedForward != true
 
 								if (!pinnedTopByGroup && pinnedTop && fromId < 0 && currentChat!!.megagroup) {
 									pinnedTop = false
 								}
 							}
 							else if (isUserSelf(currentUser) || isReplyUser(currentUser)) {
-								pinnedTop = if (message?.isPrivateForward == true || prevMessage?.isPrivateForward == true) {
+								pinnedTop = if (message.isPrivateForward == true || prevMessage.isPrivateForward == true) {
 									false
 								}
 								else {
-									prevMessage?.senderId == (message?.senderId ?: 0L)
+									prevMessage.senderId == message.senderId
 								}
 							}
 						}
 					}
 
-					if (isChannel(currentChat) && currentChat!!.megagroup && message!!.fromChatId <= 0 && message.messageOwner!!.fwd_from != null && message.messageOwner!!.fwd_from!!.saved_from_peer is TL_peerChannel) {
+					if (isChannel(currentChat) && currentChat!!.megagroup && message.fromChatId <= 0 && message.messageOwner!!.fwd_from != null && message.messageOwner!!.fwd_from!!.saved_from_peer is TL_peerChannel) {
 						if (!pinnedTopByGroup) {
 							pinnedTop = false
 						}
@@ -32553,7 +32476,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					view.setMessageObject(message, groupedMessages, pinnedBottom, pinnedTop)
 					view.setSpoilersSuppressed(chatListView?.scrollState != RecyclerView.SCROLL_STATE_IDLE)
-					view.setHighlighted(highlightMessageId != Int.MAX_VALUE && message?.id == highlightMessageId)
+					view.setHighlighted(highlightMessageId != Int.MAX_VALUE && message.id == highlightMessageId)
 
 					if (highlightMessageId != Int.MAX_VALUE) {
 						startMessageUnselect()
@@ -32564,7 +32487,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					if (animatingMessageObjects.indexOf(message).also { index = it } != -1) {
 						var applyAnimation = false
 
-						if (message?.type == MessageObject.TYPE_ROUND_VIDEO && instantCameraView?.textureView != null) {
+						if (message.type == MessageObject.TYPE_ROUND_VIDEO && instantCameraView?.textureView != null) {
 							applyAnimation = true
 
 							view.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
@@ -32650,7 +32573,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								}
 							})
 						}
-						else if (message?.isAnyKindOfSticker == true && !message.isAnimatedEmojiStickers) {
+						else if (message.isAnyKindOfSticker == true && !message.isAnimatedEmojiStickers) {
 							applyAnimation = true
 
 							view.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
@@ -32765,22 +32688,19 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 					}
 
-					if (animatingDocuments.isNotEmpty() && animatingDocuments.containsKey(message?.document)) {
-						animatingDocuments.remove(message?.document)
+					if (animatingDocuments.isNotEmpty() && animatingDocuments.containsKey(message.document)) {
+						animatingDocuments.remove(message.document)
 						chatListItemAnimator?.onGreetingStickerTransition(holder, greetingsViewContainer)
 					}
 				}
 				else if (view is ChatActionCell) {
-					view.setMessageObject(message!!)
+					view.setMessageObject(message, collapseForDate = messagesByDays[message.dateKey]?.hasServiceMessagesOnly() == true)
 					view.alpha = 1.0f
-					view.setSpoilersSuppressed(chatListView!!.scrollState != RecyclerView.SCROLL_STATE_IDLE)
+					view.setSpoilersSuppressed(chatListView?.scrollState != RecyclerView.SCROLL_STATE_IDLE)
 				}
 				else if (view is ChatUnreadCell) {
 					view.setText(mContext.getString(R.string.UnreadMessages))
-
-					if (createUnreadMessageAfterId != 0) {
-						createUnreadMessageAfterId = 0
-					}
+					createUnreadMessageAfterId = 0
 				}
 			}
 		}
@@ -32794,7 +32714,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			if (position in messagesStartRow until messagesEndRow) {
 				val messages = if (isFrozen) frozenMessages else messages
-				return messages[position - messagesStartRow]!!.contentType
+				return messages[position - messagesStartRow].contentType
 			}
 			else if (position == botInfoRow) {
 				return 3
@@ -32915,7 +32835,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val message = messages[position - messagesStartRow]
 				val view = holder.itemView
 
-				if (message?.messageOwner != null && message.messageOwner?.media_unread == true && message.messageOwner?.mentioned == true) {
+				if (message.messageOwner != null && message.messageOwner?.media_unread == true && message.messageOwner?.mentioned == true) {
 					if (!inPreviewMode && chatMode == 0) {
 						if (!message.isVoice && !message.isRoundVideo) {
 							newMentionsCount--
@@ -32926,7 +32846,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								showMentionDownButton(show = false, animated = true)
 							}
 							else {
-								mentiondownButtonCounter?.setText(String.format("%d", newMentionsCount))
+								mentiondownButtonCounter?.setText(String.format(Locale.getDefault(), "%d", newMentionsCount))
 							}
 
 							messagesController.markMentionMessageAsRead(message.id, if (isChannel(currentChat)) currentChat!!.id else 0, dialogId)
@@ -33185,7 +33105,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	private fun updateChatBotTopPanel() {
-		if (dialogId != BuildConfig.AI_BOT_ID && dialogId != BuildConfig.PHOENIX_BOT_ID && dialogId != BuildConfig.BUSINESS_BOT_ID && dialogId != BuildConfig.CANCER_BOT_ID) {
+		if (!isAiBot()) {
 			return
 		}
 
@@ -33320,7 +33240,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		private var lastStableId = 10
 		private var replacingChatActivity = false
 		private const val REGENERATE = "regenerate"
-		private const val MAX_VISIBLE_LENGTH = 130
+		const val MAX_VISIBLE_LENGTH = 130
 
 		fun isClickableLink(str: String): Boolean {
 			return str.startsWith("https://") || str.startsWith("@") || str.startsWith("#") || str.startsWith("$") || str.startsWith("video?")

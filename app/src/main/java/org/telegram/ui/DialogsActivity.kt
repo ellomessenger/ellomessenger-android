@@ -77,6 +77,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -107,6 +109,7 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
+import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.ElloRpc.unsubscribeRequest
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.tlrpc.TLObject
@@ -1318,6 +1321,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				}
 			})
 		}
+
+		loadBotsInfo()
 
 		if (allowSwitchAccount && UserConfig.activatedAccountsCount > 1) {
 			switchItem = menu.addItemWithWidth(1, 0, AndroidUtilities.dp(56f))
@@ -2730,6 +2735,30 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		commentViewPreviousTop = top
 	}
 
+	private fun loadBotsInfo() {
+		val req = ElloRpc.getAllBots()
+
+		ioScope.launch {
+			val response = connectionsManager.performRequest(req)
+			val error = response as? TLRPC.TL_error
+
+			withContext(mainScope.coroutineContext) {
+				if (error == null) {
+					if (response is TLRPC.TL_biz_dataRaw) {
+						val res = response.readData<ElloRpc.AllBotsResponse>()
+						ioScope.launch {
+							res?.bots?.forEach {
+								if (messagesController.getUser(it.botId) == null) {
+									messagesController.loadUser(it.botId ?: 0L, classGuid, true)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	private fun updateContextViewPosition() {
 		var filtersTabsHeight = 0f
 
@@ -4104,7 +4133,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			else if (`object` is TLRPC.TL_recentMeUrlChatInvite) {
 				val invite = `object`.chat_invite
 
-				if (invite.chat == null && (!invite.channel || invite.megagroup) || invite.chat != null && (!ChatObject.isChannel(invite.chat) || invite.chat.megagroup)) {
+				if (invite.chat == null && (!invite.channel || invite.megagroup) || invite.chat != null && (!ChatObject.isChannel(invite.chat) || invite.chat?.megagroup == true)) {
 					var hash = `object`.url
 					val index = hash.indexOf('/')
 
@@ -4113,18 +4142,13 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					}
 
 					parentActivity?.let {
-						showDialog(JoinGroupAlert(it, invite, hash, this@DialogsActivity, null))
+						showDialog(JoinGroupAlert(it, invite, hash, this@DialogsActivity))
 					}
 
 					return
 				}
 				else {
-					dialogId = if (invite.chat != null) {
-						-invite.chat.id
-					}
-					else {
-						return
-					}
+					dialogId = -(invite.chat?.id ?: return)
 				}
 			}
 			else if (`object` is TLRPC.TL_recentMeUrlStickerSet) {

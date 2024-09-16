@@ -149,6 +149,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.FileProvider;
 
+import com.beint.elloapp.DeviceInfo;
+
 public class PassportActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
 	public final static int TYPE_REQUEST = 0;
@@ -7725,7 +7727,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						mailer.setData(Uri.parse("mailto:"));
 						mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{"sms@ello.team"});
 						mailer.putExtra(Intent.EXTRA_SUBJECT, "Android registration/login issue " + version + " " + phone);
-						mailer.putExtra(Intent.EXTRA_TEXT, "Phone: " + phone + "\nApp version: " + version + "\nOS version: SDK " + Build.VERSION.SDK_INT + "\nDevice Name: " + Build.MANUFACTURER + Build.MODEL + "\nLocale: " + Locale.getDefault() + "\nError: " + lastError);
+						mailer.putExtra(Intent.EXTRA_TEXT, "Phone: " + phone + "\nApp version: " + version + "\nOS version: SDK " + Build.VERSION.SDK_INT + "\nDevice Name: " + DeviceInfo.getDeviceName() + "\nLocale: " + Locale.getDefault() + "\nError: " + lastError);
 						getContext().startActivity(Intent.createChooser(mailer, "Send email..."));
 					}
 					catch (Exception e) {

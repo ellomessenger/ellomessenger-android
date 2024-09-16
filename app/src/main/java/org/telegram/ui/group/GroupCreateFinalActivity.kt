@@ -507,7 +507,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 
 		showAvatarProgress(show = false, animated = false)
 
-		editText = EditTextEmoji(context, sizeNotifierFrameLayout, this, EditTextEmoji.STYLE_FRAGMENT, false, withLineColors = true)
+		editText = EditTextEmoji(context, sizeNotifierFrameLayout, this, EditTextEmoji.STYLE_FRAGMENT, false, withLineColors = true, emojiButtonIsRight = true)
 		editText?.setHint(if (chatType == ChatObject.CHAT_TYPE_CHAT || chatType == ChatObject.CHAT_TYPE_MEGAGROUP) context.getString(R.string.EnterGroupNamePlaceholder) else context.getString(R.string.EnterListName))
 
 		if (nameToSet != null) {

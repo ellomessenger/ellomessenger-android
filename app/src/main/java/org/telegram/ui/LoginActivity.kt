@@ -38,6 +38,7 @@ import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.IntDef
 import androidx.annotation.Keep
@@ -608,10 +609,12 @@ class LoginActivity : BaseFragment {
 		setPage(VIEW_VERIFICATION, true, params, false)
 	}
 
-	private fun openNewPasswordScreen(email: String, code: String) {
+	private fun openNewPasswordScreen(email: String, code: String? = null, expiration: Long? = null) {
 		val params = Bundle()
 		params.putString("email", email)
 		params.putString("code", code)
+		expiration?.let { params.putLong("expiration", it) }
+		params.putString("verificationMode", VerificationMode.PASSWORD_RESET.name)
 		setPage(VIEW_NEW_PASSWORD, true, params, false)
 	}
 
@@ -983,6 +986,7 @@ class LoginActivity : BaseFragment {
 				when {
 					username.firstOrNull()?.isDigit() == true -> {
 						binding?.regUsernameFieldLayout?.error = context.getString(R.string.UsernameInvalidStartNumber)
+						binding?.regNextButton?.isEnabled = false
 						return@addTextChangedListener
 					}
 
@@ -1013,18 +1017,21 @@ class LoginActivity : BaseFragment {
 
 			binding?.regUsernameField?.filters = arrayOf(UsernameFilter())
 
-			binding?.regPasswordField?.addTextChangedListener {
-				validateFields()
-			}
-
-			binding?.regPasswordReField?.addTextChangedListener {
-				validateFields()
-			}
-
 			binding?.regEmailField?.filters = arrayOf(LatinLettersFilter())
 
-			binding?.regEmailField?.addTextChangedListener {
-				validateFields()
+			val username = binding?.regUsernameField?.text.toString()
+
+			val textWatcher = {
+				if (username.firstOrNull()?.isDigit() == true) {
+					binding?.regNextButton?.isEnabled = false
+				} else {
+					binding?.regNextButton?.isEnabled = true
+					validateFields()
+				}
+			}
+
+			listOf(binding?.regPasswordField, binding?.regPasswordReField, binding?.regEmailField).forEach { field ->
+				field?.addTextChangedListener { textWatcher() }
 			}
 
 			binding?.countrySpinner?.addTextChangedListener {
@@ -1713,7 +1720,8 @@ class LoginActivity : BaseFragment {
 					binding.birthdayField.setText(date?.formatBirthday())
 				}, year, month, day)
 
-				datePickerDialog.datePicker.maxDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(365 * 13) // -13 years from now
+				val maxDate = Calendar.getInstance().timeInMillis
+				datePickerDialog.datePicker.maxDate = maxDate
 
 				datePickerDialog.show()
 			}
@@ -2019,7 +2027,7 @@ class LoginActivity : BaseFragment {
 
 						if (data?.status == true) {
 							ok = true
-							onPasswordResetCodeReceived(email = email, expiration = data.expirationDate)
+							openNewPasswordScreen(email = email, expiration = data.expirationDate)
 						}
 						else {
 							errorText = data?.message
@@ -2046,9 +2054,12 @@ class LoginActivity : BaseFragment {
 		}
 	}
 
-	private inner class CreatePasswordView(context: Context) : SlideView(context) {
+	private inner class CreatePasswordView(context: Context) : SlideView(context), CodeVerification {
 		private val binding: FragmentCreatePasswordBinding
 		private var email: String? = null
+		private var expiration: Long? = null
+		private var countDownTimer: CountDownTimer? = null
+		private var password: String? = null
 
 		init {
 			orientation = VERTICAL
@@ -2056,39 +2067,104 @@ class LoginActivity : BaseFragment {
 
 			binding = FragmentCreatePasswordBinding.inflate(LayoutInflater.from(context), this, false)
 
-			var passwordHasErrors = false
-			var rePasswordHasErrors = false
-
 			binding.errorLayout.gone()
+			binding.saveButton.isEnabled = false
 
 			binding.passwordField.addTextChangedListener {
 				val password = it.toString().trim()
-				passwordHasErrors = validatePassword(password, binding.passwordFieldLayout, context)
-				binding.saveButton.isEnabled = !passwordHasErrors && !rePasswordHasErrors
+				validatePassword(password, binding.passwordFieldLayout, context)
 			}
 
 			binding.passwordReField.addTextChangedListener {
 				val password = it.toString().trim()
 
-				rePasswordHasErrors = validatePassword(password, binding.passwordReFieldLayout, context)
+				validatePassword(password, binding.passwordReFieldLayout, context)
 
 				if (password != binding.passwordField.text.toString().trim()) {
 					binding.passwordReFieldLayout.error = context.getString(R.string.PasswordDoNotMatch)
-					rePasswordHasErrors = true
 				}
-
-				binding.saveButton.isEnabled = !passwordHasErrors && !rePasswordHasErrors
 			}
 
 			binding.saveButton.setOnClickListener {
-				onNextPressed(code)
+				val code = binding.codeFieldLayout.codeLayout.text.toString().trim()
+				processCode(code)
+			}
+
+			binding.codeFieldLayout.codeLayout.addTextChangedListener {
+				it?.toString()?.trim()?.takeIf { c -> c.length == 6 } ?: return@addTextChangedListener
+				binding.saveButton.isEnabled = true
 			}
 
 			addView(binding.root, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.CENTER))
 		}
 
+		private fun updateCountDown(date: Long): Long {
+			return updateCountDown(date, binding.countdownLabel)
+		}
+
+		private fun startTimer(countdownDurationMs: Long) {
+			countDownTimer = startTimer(countDownTimer, countdownDurationMs)
+		}
+
+		private fun updateCountDown(expirationDate: Long, countdownLabel: TextView?): Long {
+			val countdownDurationMs = expirationDate - System.currentTimeMillis()
+			val countdownDurationSeconds = TimeUnit.MILLISECONDS.toSeconds(countdownDurationMs).toInt()
+
+			countdownLabel?.text = context?.resources?.getQuantityString(R.plurals.seconds, countdownDurationSeconds, countdownDurationSeconds)
+
+			return countdownDurationMs
+		}
+
+		private fun startTimer(countDownTimer: CountDownTimer?, countdownDurationMs: Long): CountDownTimer {
+			binding.countdownLabel.visible()
+			binding.countdownHeader.visible()
+
+			binding.resendButton.gone()
+
+			countDownTimer?.cancel()
+
+			return object : CountDownTimer(countdownDurationMs, TimeUnit.SECONDS.toMillis(1)) {
+				override fun onTick(millisUntilFinished: Long) {
+					val secondsLeft = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished).toInt()
+					binding.countdownLabel.text = context?.resources?.getQuantityString(R.plurals.seconds, secondsLeft, secondsLeft)
+				}
+
+				override fun onFinish() {
+					binding.countdownLabel.gone()
+					binding.countdownHeader.gone()
+
+					binding.resendButton.visible()
+				}
+			}.apply {
+				start()
+			}
+		}
+
+		override fun resendCode() {
+			val req = email?.let { ElloRpc.forgotPasswordRequest(it) }
+
+			if (req != null) {
+				connectionsManager.sendRequest(req, { response, error ->
+					AndroidUtilities.runOnUIThread {
+						if (error == null && response is TL_biz_dataRaw) {
+							val data = response.readData<ElloRpc.ForgotPasswordVerifyResponse>()
+
+							if (data?.status == true) {
+								val countdownDurationMs = updateCountDown(data.expirationDate.times(1000L))
+								startTimer(countdownDurationMs)
+							}
+						}
+					}
+				}, ConnectionsManager.RequestFlagFailOnServerErrors or ConnectionsManager.RequestFlagWithoutLogin)
+			}
+		}
+
+		override fun processCode(code: String) {
+			onNextPressed(code)
+		}
+
 		override fun needBackButton(): Boolean {
-			resetPasswordFields()
+			resetCreatePasswordFields()
 			return true
 		}
 
@@ -2098,9 +2174,10 @@ class LoginActivity : BaseFragment {
 			binding.saveButton.isEnabled = enabled
 		}
 
-		private fun resetPasswordFields() {
+		private fun resetCreatePasswordFields() {
 			binding.passwordField.setText("")
 			binding.passwordReField.setText("")
+			binding.codeFieldLayout.codeLayout.clearFields()
 		}
 
 		override fun onNextPressed(code: String?) {
@@ -2159,10 +2236,11 @@ class LoginActivity : BaseFragment {
 							binding.errorSign.setImageResource(R.drawable.ic_success_mark)
 							binding.errorLabel.text = context.getString(R.string.password_update_successfully)
 							binding.errorLayout.visible()
+							setControlsEnabled(true)
 
 							postDelayed({
 								onPasswordResetFinished()
-								resetPasswordFields()
+								resetCreatePasswordFields()
 							}, TimeUnit.SECONDS.toMillis(3))
 						}
 						else {
@@ -2190,7 +2268,13 @@ class LoginActivity : BaseFragment {
 			}
 
 			email = params.getString("email")
+			expiration = params.getLong("expiration")
 			code = params.getString("code")
+
+			CodeVerificationFragment.updateResendButton(context, binding.resendButton, this@CreatePasswordView)
+
+			val countdownDurationMs = updateCountDown(expiration!! * 1000L)
+			startTimer(countdownDurationMs)
 		}
 	}
 

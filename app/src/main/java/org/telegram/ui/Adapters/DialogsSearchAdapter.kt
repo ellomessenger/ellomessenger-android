@@ -42,6 +42,7 @@ import org.telegram.messenger.Utilities
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.tlrpc.ChatInvite
 import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.tgnet.tlrpc.messages_Messages
@@ -1379,7 +1380,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 				cell.setBackgroundColor(ResourcesCompat.getColor(context.resources, R.color.background, null))
 				cell.useSeparator = realPosition != itemCount - 1
 				val messageObject = getItem(realPosition) as MessageObject
-				cell.setDialog(messageObject.dialogId, messageObject, messageObject.messageOwner!!.date, false)
+				cell.setDialog(messageObject.dialogId, messageObject, messageObject.messageOwner!!.date, false, isSearch = true)
 			}
 
 			VIEW_TYPE_HASHTAG_CELL -> {
@@ -1578,7 +1579,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 					username = obj.username
 				}
 
-				is TLRPC.ChatInvite -> {
+				is ChatInvite -> {
 					title = obj.title
 				}
 			}

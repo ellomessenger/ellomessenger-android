@@ -23,6 +23,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserObject;
+import org.telegram.tgnet.tlrpc.ChatInvite;
 import org.telegram.tgnet.tlrpc.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tlrpc.User;
@@ -139,8 +140,8 @@ public class SenderSelectView extends View {
 		else if (obj instanceof TLRPC.Chat) {
 			objName = ((TLRPC.Chat)obj).title;
 		}
-		else if (obj instanceof TLRPC.ChatInvite) {
-			objName = ((TLRPC.ChatInvite)obj).title;
+		else if (obj instanceof ChatInvite) {
+			objName = ((ChatInvite)obj).title;
 		}
 		setContentDescription(LocaleController.formatString("AccDescrSendAsPeer", R.string.AccDescrSendAsPeer, objName));
 		avatarDrawable.setInfo(obj);

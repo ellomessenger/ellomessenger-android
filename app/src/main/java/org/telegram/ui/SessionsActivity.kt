@@ -1028,12 +1028,10 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 	}
 
 	private inner class ScanQRCodeView(context: Context) : FrameLayout(context), NotificationCenterDelegate {
-		var imageView: BackupImageView
-		var textView: TextView
+		val imageView = BackupImageView(context)
+		val textView = LinksTextView(context)
 
 		init {
-			imageView = BackupImageView(context)
-
 			addView(imageView, LayoutHelper.createFrame(120, 120f, Gravity.CENTER_HORIZONTAL, 0f, 16f, 0f, 0f))
 
 			imageView.setOnClickListener {
@@ -1054,8 +1052,6 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 			colors[5] = ResourcesCompat.getColor(resources, R.color.brand, null)
 			colors[6] = 0x212020
 			colors[7] = ResourcesCompat.getColor(resources, R.color.background, null)
-
-			textView = LinksTextView(context)
 
 			addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT.toFloat(), 0, 36f, 152f, 36f, 0f))
 
@@ -1149,7 +1145,6 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 		}
 
 		private fun setSticker() {
-			val imageFilter: String?
 			var document: TLRPC.Document? = null
 			var set: TL_messages_stickerSet?
 
@@ -1163,7 +1158,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 				document = set.documents[6]
 			}
 
-			imageFilter = "130_130"
+			val imageFilter = "130_130"
 
 			var svgThumb: SvgDrawable? = null
 

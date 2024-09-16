@@ -383,6 +383,7 @@ object ElloRpc {
 			@field:SerializedName("currency") val currency: String,
 			@field:SerializedName("expire_at") val expireAt: Long,
 			@field:SerializedName("is_active") val isActive: Boolean,
+			@field:SerializedName("cancelled") val isCancelled: Boolean,
 	) : Serializable
 
 	@Keep
@@ -669,7 +670,16 @@ object ElloRpc {
 	) : Serializable
 
 	@Keep
-	data class AllBotsResponse(@field:SerializedName("bot_ids") var botIds: ArrayList<Long> = arrayListOf()) : Serializable
+	data class AllBotsResponse(@field:SerializedName("bots") var bots: ArrayList<AiSpaceBotsInfo> = arrayListOf()) : Serializable
+
+	@Keep
+	data class AiSpaceBotsInfo(
+			@field:SerializedName("bot_id") var botId: Long?,
+			@field:SerializedName("first_name") var firstName: String?,
+			@field:SerializedName("description") var description: String?,
+			@field:SerializedName("photo_id") var photoId: String?,
+			@field:SerializedName("photo_access_hash") var photoAccessHash: String?
+	) : Serializable
 
 	@Keep
 	data class CommissionInfo(
@@ -951,15 +961,16 @@ object ElloRpc {
 		return createRpcRequest(elloRequest)
 	}
 
-	const val SUBSCRIPTION_TYPE_ACTIVE_CHANNELS = 0
-	const val SUBSCRIPTION_TYPE_CANCELLED_CHANNELS = 1
-	const val SUBSCRIPTION_TYPE_ALL_CHANNELS = 2
-	const val SUBSCRIPTION_TYPE_ALL = 3
+	enum class SubscriptionType {
+		ACTIVE_CHANNELS, PAST_CHANNELS
+	}
 
-	/**
-	 * @param type // 0 - active channels, 1 - canceled channels, 2 - all channels, 3 - active all
-	 */
-	fun getSubscriptionsRequest(type: Int = SUBSCRIPTION_TYPE_ALL_CHANNELS): TL_biz_invokeBizDataRaw {
+	fun getSubscriptionsRequest(subscriptionType: SubscriptionType): TL_biz_invokeBizDataRaw {
+		val type = when (subscriptionType) {
+			SubscriptionType.ACTIVE_CHANNELS -> 0
+			SubscriptionType.PAST_CHANNELS -> 1
+		}
+
 		val elloRequest = ElloRequest(paidSubscriptionService, 100100, mapOf("filter_type" to type))
 		return createRpcRequest(elloRequest)
 	}

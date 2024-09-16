@@ -129,6 +129,7 @@ import org.telegram.messenger.UserObject
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.databinding.AccountsLimitReachedSheetBinding
+import org.telegram.messenger.databinding.AddProfilePhotoLayoutBinding
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.LinkClickListener
 import org.telegram.messenger.utils.createCombinedChatPropertiesDrawable
@@ -141,16 +142,15 @@ import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.SerializedData
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_error
 import org.telegram.tgnet.TLRPC.TL_messages_exportChatInvite
 import org.telegram.tgnet.TLRPC.TL_user
-import org.telegram.tgnet.tlrpc.TL_userProfilePhotoEmpty
 import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
 import org.telegram.tgnet.tlrpc.TL_chatBannedRights
 import org.telegram.tgnet.tlrpc.TL_photo
 import org.telegram.tgnet.tlrpc.TL_photos_photo
 import org.telegram.tgnet.tlrpc.TL_photos_updateProfilePhoto
+import org.telegram.tgnet.tlrpc.TL_userProfilePhotoEmpty
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.tgnet.tlrpc.UserFull
 import org.telegram.ui.ActionBar.ActionBar
@@ -239,34 +239,17 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-import kotlin.collections.ArrayList
-import kotlin.collections.HashSet
-import kotlin.collections.List
-import kotlin.collections.filterNot
-import kotlin.collections.find
-import kotlin.collections.forEach
-import kotlin.collections.indices
-import kotlin.collections.isNotEmpty
-import kotlin.collections.isNullOrEmpty
-import kotlin.collections.joinToString
-import kotlin.collections.map
-import kotlin.collections.max
-import kotlin.collections.min
-import kotlin.collections.mutableListOf
-import kotlin.collections.mutableMapOf
-import kotlin.collections.mutableSetOf
 import kotlin.collections.set
-import kotlin.collections.sortWith
-import kotlin.collections.toTypedArray
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.system.exitProcess
+import org.telegram.tgnet.TLRPC.TL_userProfilePhoto
 
 @SuppressLint("NotifyDataSetChanged")
-class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var sharedMediaPreloader: SharedMediaLayout.SharedMediaPreloader? = null) : BaseFragment(args), NotificationCenterDelegate, DialogsActivityDelegate, SharedMediaLayout.SharedMediaPreloaderDelegate, ImageUpdater.ImageUpdaterDelegate, SharedMediaLayout.Delegate {
+class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var sharedMediaPreloader: SharedMediaLayout.SharedMediaPreloader? = null) : BaseFragment(args), NotificationCenterDelegate, DialogsActivityDelegate, SharedMediaLayout.SharedMediaPreloaderDelegate, ImageUpdater.ImageUpdaterDelegate, SharedMediaLayout.Delegate, EditProfileFragment.ChangeBigAvatarCallback {
 	private var subscriptionExpireAt: Long = 0L
 	private val visibleChatParticipants = mutableListOf<TLRPC.ChatParticipant>()
 	private val visibleSortedUsers = mutableListOf<Int>()
@@ -500,6 +483,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	private var setAvatarCell: TextCell? = null
 	private var rowCount = 0
 	private var addAccountRow = 0
+	private var setProfilePhotoRow = 0
+	private var setProfilePhotoDividerRow = 0
 	private val accountsRows = IntArray(UserConfig.MAX_ACCOUNT_COUNT) { -1 }
 	private var shareLinkRow = 0
 	private var publicLinkRow = 0
@@ -828,15 +813,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 
 			if (ChatObject.isSubscriptionChannel(currentChat) && currentChat?.creator == false) {
-				val request = ElloRpc.getSubscriptionsRequest()
+				val request = ElloRpc.getSubscriptionsRequest(ElloRpc.SubscriptionType.ACTIVE_CHANNELS)
 
-				connectionsManager.sendRequest(request) { response: TLObject?, error: TL_error? ->
-					FileLog.e("GetSubscriptions")
-
-					if (error != null) {
-						FileLog.e(error.text ?: "GetSubscriptions error")
-					}
-					else if (response is TLRPC.TL_biz_dataRaw) {
+				connectionsManager.sendRequest(request) { response, _ ->
+					if (response is TLRPC.TL_biz_dataRaw) {
 						val subscriptions = response.readData<ElloRpc.Subscriptions>()
 						val currentSubscription = subscriptions?.items?.find { it.channelId == chatId }
 
@@ -1212,12 +1192,15 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							val args = Bundle()
 							args.putLong("user_id", userId)
 							args.putString("username", user?.username ?: "")
-							presentFragment(EditProfileFragment(args))
+							val fragment = EditProfileFragment(args)
+							fragment.setChangeBigAvatarCallback(this@ProfileActivity)
+							presentFragment(fragment)
 						}
 						else {
 							val args = Bundle()
 							args.putLong("chat_id", chatId)
 							val fragment = ChatEditActivity(args)
+							fragment.setChangeBigAvatarCallback(this@ProfileActivity)
 							fragment.setInfo(chatInfo)
 							presentFragment(fragment)
 						}
@@ -1575,7 +1558,34 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							}
 
 							if (photo == null || position == 0) {
-								messagesController.deleteUserPhoto(null)
+								val nextPhoto = avatarsViewPager.getPhoto(1)
+
+								if (nextPhoto != null) {
+									userConfig.getCurrentUser()?.photo = TL_userProfilePhoto()
+
+									val smallSize = FileLoader.getClosestPhotoSizeWithSize(nextPhoto.sizes, 90)
+									val bigSize = FileLoader.getClosestPhotoSizeWithSize(nextPhoto.sizes, 1000)
+
+									if (smallSize != null && bigSize != null) {
+										userConfig.getCurrentUser()?.photo?.photo_small = smallSize.location
+										userConfig.getCurrentUser()?.photo?.photo_big = bigSize.location
+									}
+								}
+								else {
+									userConfig.getCurrentUser()?.photo = TL_userProfilePhotoEmpty()
+								}
+
+								if (position == 0 && photo != null && nextPhoto == null) {
+									val inputPhoto = TLRPC.TL_inputPhoto()
+									inputPhoto.id = photo.id
+									inputPhoto.access_hash = photo.access_hash
+									inputPhoto.file_reference = photo.file_reference ?: ByteArray(0)
+
+									messagesController.deleteUserPhoto(inputPhoto, isLastPhoto = avatarsViewPager.realCount == 1)
+								}
+								else {
+									messagesController.deleteUserPhoto(null, isLastPhoto = avatarsViewPager.realCount == 1)
+								}
 							}
 							else {
 								val inputPhoto = TLRPC.TL_inputPhoto()
@@ -1584,6 +1594,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								inputPhoto.file_reference = photo.file_reference ?: ByteArray(0)
 
 								messagesController.deleteUserPhoto(inputPhoto)
+
 								messagesStorage.clearUserPhoto(userId, photo.id)
 							}
 
@@ -3602,6 +3613,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				writeButton?.setAnimation(cameraDrawable!!)
 				writeButton?.contentDescription = context.getString(R.string.AccDescrChangeProfilePicture)
 				writeButton?.setPadding(AndroidUtilities.dp(2f), 0, 0, AndroidUtilities.dp(2f))
+
+				//MARK: Hidden implementation of the gallery open button that was in frameLayout, instead the implementation has been moved to a separate container: VIEW_TYPE_SET_PROFILE_PHOTO
+				writeButton?.gone()
 			}
 			else {
 				writeButton?.setImageResource(R.drawable.message_circle)
@@ -3791,6 +3805,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					nameTextView[1]?.textColor = ResourcesCompat.getColor(context.resources, R.color.white, null)
 					nameTextView[1]?.leftDrawable?.apply { setTint(context.getColor(R.color.white)) }
 					onlineTextView[1]?.textColor = ResourcesCompat.getColor(context.resources, R.color.white, null)
+
+					if (messagesController.getUser(userId)?.id == userConfig.getClientUserId() && chatId == 0L) {
+						onlineTextView[1]?.setText(getUserAccountTypeString())
+					}
 				}
 				else {
 					actionBar?.setItemsBackgroundColor(ResourcesCompat.getColor(context.resources, R.color.action_bar_item, null), false)
@@ -3798,6 +3816,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					nameTextView[1]?.textColor = ResourcesCompat.getColor(context.resources, R.color.dark, null)
 					nameTextView[1]?.leftDrawable?.apply { setTint(context.getColor(R.color.dark)) }
 					onlineTextView[1]?.textColor = ResourcesCompat.getColor(context.resources, R.color.dark, null)
+
+					if (messagesController.getUser(userId)?.id == userConfig.getClientUserId() && chatId == 0L) {
+						onlineTextView[1]?.setText(getUserAccountTypeString())
+					}
 				}
 			}
 		})
@@ -6625,6 +6647,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			accountsRows[i] = -1
 		}
 
+		setProfilePhotoRow = -1
 		addAccountRow = -1
 		myAccountsDividerRow = -1
 		shareLinkRow = -1
@@ -6635,6 +6658,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		appearanceRow = -1
 		appearanceBottomDividerRow = -1
 		myNotificationsBottomDividerRow = -1
+		setProfilePhotoDividerRow = -1
 		subscriptionsBottomDividerRow = -1
 		settingsBottomDividerRow = -1
 		subscriptionsRow = -1
@@ -6729,6 +6753,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			val user = messagesController.getUser(userId)
 
 			if (isSelf()) {
+				setProfilePhotoRow = rowCount++
+				setProfilePhotoDividerRow = rowCount++
+
 				for (a in 0 until UserConfig.MAX_ACCOUNT_COUNT) {
 					val u = AccountInstance.getInstance(a).userConfig.getCurrentUser()
 
@@ -7365,11 +7392,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 
 				if (user.self) {
-					val request = ElloRpc.getSubscriptionsRequest(type = ElloRpc.SUBSCRIPTION_TYPE_ACTIVE_CHANNELS)
+					val request = ElloRpc.getSubscriptionsRequest(ElloRpc.SubscriptionType.ACTIVE_CHANNELS)
 
 					connectionsManager.sendRequest(request) { response, _ ->
 						if (response is TLRPC.TL_biz_dataRaw) {
 							val subscriptions = response.readData<ElloRpc.Subscriptions>()
+
 							paidSubscriptions = subscriptions?.items
 
 							AndroidUtilities.runOnUIThread {
@@ -8709,12 +8737,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		diffCallback.fillPositions(diffCallback.newPositionToItem)
 
-		try {
-			DiffUtil.calculateDiff(diffCallback).dispatchUpdatesTo(listAdapter!!)
-		}
-		catch (e: Exception) {
-			listAdapter?.notifyDataSetChanged()
-		}
+		listAdapter?.notifyDataSetChanged()
 
 		if (savedScrollPosition >= 0) {
 			layoutManager?.scrollToPositionWithOffset(savedScrollPosition, savedScrollOffset - listView!!.paddingTop)
@@ -9604,6 +9627,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 				}
 
+				VIEW_TYPE_SET_PROFILE_PHOTO  -> {
+					view = AddProfilePhotoLayoutBinding.inflate(LayoutInflater.from(mContext)).root
+				}
+
 				VIEW_TYPE_TEXT_DETAIL -> {
 					val textDetailCell = TextDetailCell(mContext)
 
@@ -10063,7 +10090,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								val args = Bundle()
 								args.putLong("user_id", userId)
 								args.putString("username", user.username)
-								presentFragment(EditProfileFragment(args))
+								val fragment = EditProfileFragment(args)
+								fragment.setChangeBigAvatarCallback(this@ProfileActivity)
+								presentFragment(fragment)
 							}
 						}
 					}
@@ -10079,6 +10108,106 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					cell.setRoundedType(roundTop = false, roundBottom = false)
 					cell.setShouldDrawDivider(false)
 					cell.setTextValueIcon(parentActivity.getString(R.string.AddAccount), ProfileSectionCell.NO_VALUE, R.drawable.ic_add)
+				}
+
+				VIEW_TYPE_SET_PROFILE_PHOTO  -> {
+					val binding = AddProfilePhotoLayoutBinding.bind(holder.itemView)
+
+					val writeButton = RLottieImageView(mContext)
+					val cameraDrawable = RLottieDrawable(R.raw.camera_outline, R.raw.camera_outline.toString(), AndroidUtilities.dp(42f), AndroidUtilities.dp(42f), false, null)
+					val cellCameraDrawable = RLottieDrawable(R.raw.camera_outline, R.raw.camera_outline.toString() + "_cell", AndroidUtilities.dp(20f), AndroidUtilities.dp(20f), false, null)
+
+					writeButton.setAnimation(cameraDrawable)
+					writeButton.contentDescription = mContext.getString(R.string.AccDescrChangeProfilePicture)
+					writeButton.colorFilter = PorterDuffColorFilter(ResourcesCompat.getColor(mContext.resources, R.color.brand, null), PorterDuff.Mode.SRC_IN)
+					writeButton.scaleType = ImageView.ScaleType.CENTER
+
+					binding.cameraIconContainer.removeAllViews()
+					binding.cameraIconContainer.addView(writeButton)
+
+					binding.root.setOnClickListener {
+						if (userId != 0L) {
+							if (imageUpdater != null) {
+								var user = MessagesController.getInstance(currentAccount).getUser(getInstance(currentAccount).getClientUserId())
+
+								if (user == null) {
+									user = getInstance(currentAccount).getCurrentUser()
+								}
+
+								if (user == null) {
+									return@setOnClickListener
+								}
+
+								imageUpdater?.openMenu(user.photo?.photo_big != null && user.photo !is TL_userProfilePhotoEmpty, {
+									MessagesController.getInstance(currentAccount).deleteUserPhoto(null)
+									cameraDrawable.currentFrame = 0
+									cellCameraDrawable.currentFrame = 0
+								}) {
+									if (!imageUpdater!!.isUploadingImage) {
+										cameraDrawable.customEndFrame = 86
+										cellCameraDrawable.customEndFrame = 86
+										writeButton.playAnimation()
+										setAvatarCell?.imageView?.playAnimation()
+									}
+									else {
+										cameraDrawable.setCurrentFrame(0, false)
+										cellCameraDrawable.setCurrentFrame(0, false)
+									}
+								}
+
+								cameraDrawable.currentFrame = 0
+								cameraDrawable.customEndFrame = 43
+
+								cellCameraDrawable.currentFrame = 0
+								cellCameraDrawable.customEndFrame = 43
+
+								writeButton.playAnimation()
+
+								setAvatarCell?.imageView?.playAnimation()
+							}
+							else {
+								if (playProfileAnimation != 0 && parentLayout!!.fragmentsStack[parentLayout!!.fragmentsStack.size - 2] is ChatActivity) {
+									finishFragment()
+								}
+								else {
+									val user = messagesController.getUser(userId)
+
+									if (user == null || user is TLRPC.TL_userEmpty) {
+										return@setOnClickListener
+									}
+
+									val args = Bundle()
+									args.putLong("user_id", userId)
+
+									if (!messagesController.checkCanOpenChat(args, this@ProfileActivity)) {
+										return@setOnClickListener
+									}
+
+									val removeFragment = arguments!!.getBoolean("removeFragmentOnChatOpen", true)
+
+									if (!AndroidUtilities.isTablet() && removeFragment) {
+										notificationCenter.removeObserver(this@ProfileActivity, NotificationCenter.closeChats)
+										notificationCenter.postNotificationName(NotificationCenter.closeChats)
+									}
+
+									val distance = arguments!!.getInt("nearby_distance", -1)
+
+									if (distance >= 0) {
+										args.putInt("nearby_distance", distance)
+									}
+
+									val chatActivity = ChatActivity(args)
+									chatActivity.setPreloadedSticker(mediaDataController.getGreetingsSticker(), false)
+
+									presentFragment(chatActivity, removeFragment)
+
+									if (AndroidUtilities.isTablet()) {
+										finishFragment()
+									}
+								}
+							}
+						}
+					}
 				}
 
 				VIEW_TYPE_PROFILE_SECTION -> {
@@ -10209,7 +10338,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					val account = getAccountIndex(row)
 					accountSelectCell.setAccount(account, UserConfig.selectedAccount == account)
 
-					val unreadCount = notificationsController.getUnreadCount(account, true)
+					val unreadCount = notificationsController.getTotalUnreadCount(account)
 
 					accountSelectCell.setUnreadCount(unreadCount)
 				}
@@ -10602,6 +10731,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					return VIEW_TYPE_ADD_ACCOUNT
 				}
 
+				setProfilePhotoRow -> {
+					return VIEW_TYPE_SET_PROFILE_PHOTO
+				}
+
 				logoutRow -> {
 					return VIEW_TYPE_LOGOUT
 				}
@@ -10630,7 +10763,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					return VIEW_TYPE_SHADOW
 				}
 
-				settingsBottomDividerRow, subscriptionsBottomDividerRow, myNotificationsBottomDividerRow, appearanceBottomDividerRow, myAccountsDividerRow, myProfileTopDividerRow, myProfileBioDividerRow, inviteRowDividerRow, supportDividerRow, logoutDividerRow -> {
+				settingsBottomDividerRow, subscriptionsBottomDividerRow, myNotificationsBottomDividerRow, appearanceBottomDividerRow, myAccountsDividerRow, myProfileTopDividerRow, myProfileBioDividerRow, inviteRowDividerRow, supportDividerRow, logoutDividerRow, setProfilePhotoDividerRow -> {
 					return VIEW_TYPE_SMALL_EMPTY
 				}
 
@@ -11412,6 +11545,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 			}
 
+			put(++pointer, setProfilePhotoRow, sparseIntArray)
 			put(++pointer, addAccountRow, sparseIntArray)
 			put(++pointer, myAccountsDividerRow, sparseIntArray)
 			put(++pointer, setAvatarRow, sparseIntArray)
@@ -11427,6 +11561,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			put(++pointer, appearanceRow, sparseIntArray)
 			put(++pointer, appearanceBottomDividerRow, sparseIntArray)
 			put(++pointer, myNotificationsBottomDividerRow, sparseIntArray)
+			put(++pointer, setProfilePhotoDividerRow, sparseIntArray)
 			put(++pointer, subscriptionsBottomDividerRow, sparseIntArray)
 			put(++pointer, settingsBottomDividerRow, sparseIntArray)
 			put(++pointer, referralRow, sparseIntArray)
@@ -11536,6 +11671,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		private const val VIEW_TYPE_PUBLIC_LINK = 24
 		private const val VIEW_TYPE_USER_ACCOUNT = 25
 		private const val VIEW_TYPE_ADD_ACCOUNT = 26
+		private const val VIEW_TYPE_SET_PROFILE_PHOTO = 27
 
 		// private const val PHONE_OPTION_CALL = 0
 		// private const val PHONE_OPTION_COPY = 1
@@ -11600,4 +11736,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		val account = getAccountIndex(row)
 		(parentActivity as? LaunchActivity)?.switchToAccount(account)
 	}
+
+	override fun changeBigAvatar() {
+		avatarsViewPager?.addUploadingImage(ImageLocation.getForLocal(avatarBig).also { uploadingImageLocation = it }, ImageLocation.getForLocal(avatar))
+	}
+
 }

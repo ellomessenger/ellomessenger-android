@@ -28,7 +28,7 @@ import org.telegram.messenger.FileLog
 import org.telegram.messenger.R
 import org.telegram.messenger.UserObject
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.ChatInvite
+import org.telegram.tgnet.tlrpc.ChatInvite
 import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.ActionBar.Theme
@@ -78,11 +78,6 @@ class AvatarDrawable() : Drawable() {
 		val id = user?.id ?: chat?.id ?: return
 
 		when (id) {
-			BuildConfig.AI_BOT_ID -> {
-				shouldDrawPlaceholder = false
-				drawLocal = true
-				localImage = ResourcesCompat.getDrawable(ApplicationLoader.applicationContext.resources, R.drawable.ai_bot_avatar, null)
-			}
 
 			BuildConfig.SUPPORT_BOT_ID, 333000L, 42777L -> {
 				shouldDrawPlaceholder = false
@@ -95,25 +90,6 @@ class AvatarDrawable() : Drawable() {
 				drawLocal = true
 				localImage = ResourcesCompat.getDrawable(ApplicationLoader.applicationContext.resources, R.drawable.ic_notifications_bot_avatar, null)
 			}
-
-			BuildConfig.PHOENIX_BOT_ID -> {
-				shouldDrawPlaceholder = false
-				drawLocal = true
-				localImage = ResourcesCompat.getDrawable(ApplicationLoader.applicationContext.resources, R.drawable.ai_phoenix_bot, null)
-			}
-
-			BuildConfig.BUSINESS_BOT_ID -> {
-				shouldDrawPlaceholder = false
-				drawLocal = true
-				localImage = ResourcesCompat.getDrawable(ApplicationLoader.applicationContext.resources, R.drawable.business_ai_bot_avatar, null)
-			}
-
-			BuildConfig.CANCER_BOT_ID -> {
-				shouldDrawPlaceholder = false
-				drawLocal = true
-				localImage = ResourcesCompat.getDrawable(ApplicationLoader.applicationContext.resources, R.drawable.cancer_ai_bot_avatar, null)
-			}
-
 
 			else -> {
 				shouldDrawPlaceholder = true

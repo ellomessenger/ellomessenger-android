@@ -558,7 +558,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 	fun setVerifiedMuteIcon(isMuted: Boolean, verified: Boolean?, dialogId: Long) {
 		val drawables = mutableListOf<Drawable>()
 
-		if (verified == true || dialogId == BuildConfig.AI_BOT_ID || dialogId == BuildConfig.SUPPORT_BOT_ID || dialogId == BuildConfig.NOTIFICATIONS_BOT_ID || dialogId == BuildConfig.PHOENIX_BOT_ID || dialogId == BuildConfig.BUSINESS_BOT_ID || dialogId == BuildConfig.CANCER_BOT_ID) {
+		if (verified == true) {
 			ResourcesCompat.getDrawable(resources, R.drawable.verified_icon, null)?.let { drawables.add(it) }
 			rightDrawableContentDescription = context.getString(R.string.AccDescrVerified)
 		}

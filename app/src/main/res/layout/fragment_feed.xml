@@ -76,15 +76,21 @@
 
 	</androidx.constraintlayout.widget.ConstraintLayout>
 
-	<androidx.recyclerview.widget.RecyclerView
-		android:id="@+id/recycler_view"
+	<androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+		android:id="@+id/swipe_refresh_layout"
 		android:layout_width="0dp"
 		android:layout_height="0dp"
 		android:visibility="gone"
 		app:layout_constraintBottom_toBottomOf="parent"
 		app:layout_constraintEnd_toEndOf="parent"
 		app:layout_constraintStart_toStartOf="parent"
-		app:layout_constraintTop_toBottomOf="@id/search_params_recycler_view" />
+		app:layout_constraintTop_toBottomOf="@id/search_params_recycler_view">
+
+		<androidx.recyclerview.widget.RecyclerView
+			android:id="@+id/recycler_view"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent" />
+	</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
 	<androidx.cardview.widget.CardView
 		android:id="@+id/scroll_to_top_button"
@@ -150,10 +156,10 @@
 		android:indeterminate="true"
 		android:indeterminateTint="@color/brand"
 		android:visibility="gone"
-		tools:visibility="visible"
 		app:layout_constraintBottom_toBottomOf="parent"
 		app:layout_constraintEnd_toEndOf="parent"
 		app:layout_constraintStart_toStartOf="parent"
-		app:layout_constraintTop_toTopOf="parent" />
+		app:layout_constraintTop_toTopOf="parent"
+		tools:visibility="visible" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

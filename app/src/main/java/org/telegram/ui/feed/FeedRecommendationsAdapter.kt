@@ -18,6 +18,14 @@ class FeedRecommendationsAdapter : RecyclerView.Adapter<RecommendedChannelViewHo
 	var delegate: FeedRecommendationsAdapterDelegate? = null
 	private val recommendations = mutableListOf<TLRPC.Chat>()
 
+	fun contains(chat: TLRPC.Chat): Boolean {
+		return recommendations.any { it.id == chat.id }
+	}
+
+	fun contains(chatId: Long): Boolean {
+		return recommendations.any { it.id == chatId }
+	}
+
 	fun setRecommendations(recommendations: List<TLRPC.Chat>?, append: Boolean) {
 		val prevItemCount = itemCount
 

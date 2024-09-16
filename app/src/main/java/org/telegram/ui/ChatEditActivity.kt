@@ -129,6 +129,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 	private var availableReactions: TLRPC.ChatReactions? = null
 	private var createAfterUpload = false
 	private var donePressed = false
+	private var changeBigAvatarCallback: EditProfileFragment.ChangeBigAvatarCallback? = null
 
 	init {
 		chatId = args.getLong("chat_id", 0L)
@@ -242,6 +243,10 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		}
 	}
 
+	fun setChangeBigAvatarCallback(callback: EditProfileFragment.ChangeBigAvatarCallback) {
+		this.changeBigAvatarCallback = callback
+	}
+
 	override fun onFragmentDestroy() {
 		super.onFragmentDestroy()
 
@@ -254,6 +259,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		}
 
 		nameTextView?.onDestroy()
+		changeBigAvatarCallback = null
 	}
 
 	override fun onResume() {
@@ -538,7 +544,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 			frameLayout.addView(avatarImage, createFrame(64, 64f, Gravity.TOP or if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT, if (LocaleController.isRTL) 0f else 16f, 12f, if (LocaleController.isRTL) 16f else 0f, 12f))
 		}
 
-		nameTextView = EditTextEmoji(context, sizeNotifierFrameLayout, this, EditTextEmoji.STYLE_FRAGMENT, false)
+		nameTextView = EditTextEmoji(context, sizeNotifierFrameLayout, this, EditTextEmoji.STYLE_FRAGMENT, false, emojiButtonIsRight = true)
 
 		if (isChannel) {
 			nameTextView?.setHint(context.getString(R.string.EnterChannelName))
@@ -923,7 +929,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 
 		infoContainer?.addView(reactionsCell, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 
-		if (!isChannel && !currentChat!!.gigagroup) {
+		if (!isChannel && currentChat?.gigagroup != true) {
 			infoContainer?.addView(blockCell, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 		}
 
@@ -934,7 +940,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		infoContainer?.addView(adminCell, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 		infoContainer?.addView(membersCell, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 
-		if (!isChannel && !currentChat!!.gigagroup) {
+		if (!isChannel && currentChat?.gigagroup != true && currentChat?.megagroup != true) {
 			infoContainer?.addView(removedUsersCell, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 		}
 
@@ -1203,6 +1209,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 			}
 			else {
 				avatarImage?.setImage(ImageLocation.getForLocal(avatar), "50_50", avatarDrawable, currentChat)
+				changeBigAvatarCallback?.changeBigAvatar()
 				setAvatarCell?.setTextAndIcon(context?.getString(R.string.ChangePhoto), R.drawable.msg_addphoto, true)
 
 				if (cameraDrawable == null) {

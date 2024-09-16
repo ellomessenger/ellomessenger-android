@@ -192,6 +192,7 @@ class BankRequisitesListFragment(args: Bundle) : BaseFragment(args) {
 				val args = Bundle()
 				args.putSerializable(EditBankRequisitesFragment.ARG_REQUISITE, requisite)
 				args.putFloat(WalletFragment.ARG_AMOUNT, amount)
+				args.putLong(WalletFragment.ARG_WALLET_ID, walletId)
 				args.putBoolean(EditBankRequisitesFragment.EDIT_REQUISITES, true)
 
 				presentFragment(EditBankRequisitesFragment(args))

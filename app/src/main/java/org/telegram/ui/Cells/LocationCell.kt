@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2024.
  */
 package org.telegram.ui.Cells
 
@@ -171,7 +171,6 @@ class LocationCell(context: Context, private val wrapContent: Boolean) : FrameLa
 	}
 
 	companion object {
-		@JvmStatic
 		fun getColorForIndex(index: Int): Int {
 			return when (index % 7) {
 				0 -> -0x149fa0

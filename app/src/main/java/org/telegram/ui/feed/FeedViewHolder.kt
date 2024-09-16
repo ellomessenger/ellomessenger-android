@@ -368,6 +368,11 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		setupAdapter(messages, channel)
 
 		reloadLikeButton()
+
+		binding.showMoreButton.setOnClickListener {
+			binding.messageLabel.maxLines = Int.MAX_VALUE
+			binding.showMoreButton.gone()
+		}
 	}
 
 	private fun reloadLikeButton() {
@@ -432,6 +437,13 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		binding.contactContainer.gone()
 
 		binding.messageLabel.maxLines = 10
+
+		if (binding.messageLabel.text.length > MAX_VISIBLE_TEXT_LENGTH) {
+			binding.showMoreButton.visible()
+		} else {
+			binding.showMoreButton.gone()
+		}
+
 	}
 
 	private fun clearAudio() {
@@ -482,6 +494,11 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		binding.photoVideoContainer.visible()
 
 		binding.messageLabel.maxLines = 3
+		if (binding.messageLabel.text.length > MAX_VISIBLE_PHOTO_TEXT_LENGTH) {
+			binding.showMoreButton.visible()
+		} else {
+			binding.showMoreButton.gone()
+		}
 
 		updateMediaCounter()
 	}
@@ -888,6 +905,8 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		const val MEDIA_TYPE_DOCUMENT = 10
 		const val MEDIA_TYPE_VOICE = 11
 		const val MEDIA_TYPE_WEBPAGE = 12
+		const val MAX_VISIBLE_TEXT_LENGTH = 600
+		const val MAX_VISIBLE_PHOTO_TEXT_LENGTH = 180
 		private var contentWidth = 0
 	}
 }

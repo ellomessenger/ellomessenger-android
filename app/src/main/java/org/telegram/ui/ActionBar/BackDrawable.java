@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
-
 package org.telegram.ui.ActionBar;
 
 import android.graphics.Canvas;
@@ -15,6 +15,8 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
 import android.view.animation.DecelerateInterpolator;
+
+import androidx.annotation.NonNull;
 
 import org.telegram.messenger.AndroidUtilities;
 
@@ -94,12 +96,12 @@ public class BackDrawable extends Drawable {
 	}
 
 	@Override
-	public void draw(Canvas canvas) {
+	public void draw(@NonNull Canvas canvas) {
 		if (currentRotation != finalRotation) {
 			if (lastFrameTime != 0) {
 				long dt = System.currentTimeMillis() - lastFrameTime;
 
-				currentAnimationTime += dt;
+				currentAnimationTime += (int)dt;
 
 				if (currentAnimationTime >= animationTime) {
 					currentRotation = finalRotation;
@@ -123,6 +125,7 @@ public class BackDrawable extends Drawable {
 		int rG = rotated ? (int)((Color.green(rotatedColor) - Color.green(color)) * currentRotation) : 0;
 		int rB = rotated ? (int)((Color.blue(rotatedColor) - Color.blue(color)) * currentRotation) : 0;
 		int c = Color.rgb(Color.red(color) + rD, Color.green(color) + rG, Color.blue(color) + rB);
+
 		paint.setColor(c);
 
 		canvas.save();
@@ -133,6 +136,7 @@ public class BackDrawable extends Drawable {
 		}
 
 		float rotation = currentRotation;
+
 		if (!alwaysClose) {
 			canvas.rotate(currentRotation * (reverseAngle ? -225 : 135));
 		}

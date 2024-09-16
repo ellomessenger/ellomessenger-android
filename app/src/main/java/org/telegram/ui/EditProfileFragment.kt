@@ -5,6 +5,7 @@
  *
  * Copyright Mykhailo Mykytyn, Ello 2023.
  * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Shamil Afandiyev, Ello 2024.
  */
 package org.telegram.ui
 
@@ -79,6 +80,8 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 	private var maxUsernameLength = 0
 	private var infoLoaded = false
 
+	private var changeBigAvatarCallback: ChangeBigAvatarCallback? = null
+
 	private fun userNameChanged(): Boolean {
 		return (binding?.usernameView?.text ?: "") != (arguments?.getString("username", ""))
 	}
@@ -112,6 +115,10 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 	override fun onFragmentCreate(): Boolean {
 		userId = arguments?.getLong("user_id", 0) ?: return false
 		return true
+	}
+
+	fun setChangeBigAvatarCallback(callback: ChangeBigAvatarCallback) {
+		this.changeBigAvatarCallback = callback
 	}
 
 	override fun saveSelfArgs(args: Bundle?) {
@@ -496,6 +503,7 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 		avatarImage?.setImageDrawable(null)
 		imageUpdater.clear()
 		binding = null
+		changeBigAvatarCallback = null
 	}
 
 	private fun setCountriesAdapter() {
@@ -616,6 +624,7 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 				avatarBig = bigSize?.location
 
 				avatarImage?.setImage(ImageLocation.getForLocal(avatarBig), null, avatarDrawable, null)
+				changeBigAvatarCallback?.changeBigAvatar()
 			}
 		}
 	}
@@ -645,6 +654,10 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 	override fun onPause() {
 		super.onPause()
 		saveSelfArgs(arguments)
+	}
+
+	interface ChangeBigAvatarCallback {
+		fun changeBigAvatar()
 	}
 
 }

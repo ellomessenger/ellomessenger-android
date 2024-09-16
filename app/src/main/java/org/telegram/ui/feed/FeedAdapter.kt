@@ -28,9 +28,10 @@ import org.telegram.ui.Components.RLottieImageView
 
 class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 	private val currentAccount = UserConfig.selectedAccount
+	private var isLastPage = true
+	private var isLoadingFeedData = false
 	var delegate: FeedViewHolder.Delegate? = null
 	var pinned: LongArray? = null
-	private var isLoadingFeedData = false
 
 	var feed: List<List<MessageObject>>? = null
 		private set
@@ -40,7 +41,9 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 	 * @return number of newly added messages
 	 */
 	@SuppressLint("NotifyDataSetChanged")
-	fun setFeed(feed: List<Message?>?, append: Boolean): List<List<MessageObject>> {
+	fun setFeed(feed: List<Message?>?, append: Boolean, isLastPage: Boolean): List<List<MessageObject>> {
+		this.isLastPage = isLastPage
+
 		val completeFeed = mutableSetOf<MessageObject>()
 
 		if (append) {
@@ -191,11 +194,11 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 	}
 
 	override fun getItemCount(): Int {
-		return feed?.size ?: 0
+		return (feed?.size ?: 0) + (if (isLastPage) 1 else 0)
 	}
 
 	override fun getItemViewType(position: Int): Int {
-		return if (position == itemCount - 1) VIEW_TYPE_LOADING else VIEW_TYPE_FEED
+		return if (position == (feed?.size ?: -1)) VIEW_TYPE_LOADING else VIEW_TYPE_FEED
 	}
 
 	fun updateLoadingState(isLoading: Boolean) {

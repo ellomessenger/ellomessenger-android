@@ -55,7 +55,6 @@ class AvatarsDrawable(var parent: View?, private val isInCall: Boolean) {
 	private var overrideAlpha = 1f
 	private var transitionDuration = 220L
 	private var transitionInProgress = false
-	var transitionInterpolator: Interpolator = CubicBezierInterpolator.DEFAULT
 	var height: Int = 0
 	var width: Int = 0
 

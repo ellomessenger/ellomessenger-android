@@ -10356,6 +10356,18 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 			}
 		}
 
+		Long dialogId = currentMessageObject != null ? currentMessageObject.getDialogId() : null;
+
+		if (dialogId != null) {
+			TLRPC.Chat currentChat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
+
+			if (currentChat != null && currentChat.username == null) {
+				menuItem.hideSubItem(gallery_menu_save);
+			} else {
+				menuItem.showSubItem(gallery_menu_save);
+			}
+		}
+
 		if (!sameImage) {
 			draggingDown = false;
 			translationX = 0;
@@ -14537,7 +14549,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 			}
 		}
 		if (photoViewerWebView != null && photoViewerWebView.isControllable() && isActionBarVisible) {
-			View v = photoViewerWebView.getWebView();
+			View v = photoViewerWebView.webView;
 
 			if (x >= v.getX() && x <= v.getX() + v.getWidth() && y >= v.getY() && y <= v.getY() + v.getHeight()) {
 				MotionEvent ev = MotionEvent.obtain(e);
@@ -16526,8 +16538,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 			super.draw(canvas);
 
 			if (photoViewerWebView != null && photoViewerWebView.isControllable() && videoForwardDrawable != null && videoForwardDrawable.isAnimating()) {
-				int h = (int)(photoViewerWebView.getWebView().getMeasuredHeight() * (scale - 1.0f)) / 2;
-				videoForwardDrawable.setBounds(photoViewerWebView.getLeft(), photoViewerWebView.getWebView().getTop() - h + (int)(translationY / scale), photoViewerWebView.getRight(), photoViewerWebView.getWebView().getBottom() + h + (int)(translationY / scale));
+				int h = (int)(photoViewerWebView.webView.getMeasuredHeight() * (scale - 1.0f)) / 2;
+				videoForwardDrawable.setBounds(photoViewerWebView.getLeft(), photoViewerWebView.webView.getTop() - h + (int)(translationY / scale), photoViewerWebView.getRight(), photoViewerWebView.webView.getBottom() + h + (int)(translationY / scale));
 				videoForwardDrawable.draw(canvas);
 			}
 		}

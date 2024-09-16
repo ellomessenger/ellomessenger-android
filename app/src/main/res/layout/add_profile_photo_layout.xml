@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:orientation="vertical"
+	app:cardCornerRadius="0dp"
+	app:strokeWidth="0dp"
+	app:strokeColor="@android:color/transparent">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:orientation="horizontal"
+		android:background="@color/background">
+
+		<LinearLayout
+			android:id="@+id/camera_icon_container"
+			android:layout_width="52dp"
+			android:layout_height="52dp"
+			android:gravity="center"
+			android:orientation="vertical" />
+
+		<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="@string/txt_set_profile_photo"
+			android:layout_gravity="center"
+			android:textColor="@color/brand"
+			android:layout_marginStart="10dp"
+			android:textSize="@dimen/common_size_14dp"/>
+
+	</LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

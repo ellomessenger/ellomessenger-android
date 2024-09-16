@@ -30,7 +30,8 @@ class VerificationCodeLayout @JvmOverloads constructor(context: Context, attrs: 
 	private val verificationText by lazy { VerificationText(this) }
 	private val editFields = mutableListOf<TextInputEditText>()
 	private var isInitialized = false
-	val text: CharSequence by lazy { editable }
+	val text: CharSequence
+		get() = editable
 	var afterTextChanged: (Editable?) -> Unit = {}
 
 	private val editable: Editable
@@ -136,6 +137,16 @@ class VerificationCodeLayout @JvmOverloads constructor(context: Context, attrs: 
 			}
 		}
 
+	}
+
+	fun clearFields() {
+		editFields.forEach { editText ->
+			editText.text?.clear()
+			editText.isActivated = false
+		}
+		if (editFields.isNotEmpty()) {
+			editFields[0].requestFocus()
+		}
 	}
 }
 

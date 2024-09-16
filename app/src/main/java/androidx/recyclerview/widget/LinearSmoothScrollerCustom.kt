@@ -142,6 +142,9 @@ open class LinearSmoothScrollerCustom : RecyclerView.SmoothScroller {
 		start = if (scrollPosition == POSITION_TOP) {
 			layoutManager.paddingTop + offset
 		}
+		else if (scrollPosition == POSITION_BOTTOM) {
+			0
+		}
 		else if (viewSize > boxSize) {
 			0
 		}
@@ -183,8 +186,7 @@ open class LinearSmoothScrollerCustom : RecyclerView.SmoothScroller {
 		private const val TARGET_SEEK_SCROLL_DISTANCE_PX = 10000
 		private const val TARGET_SEEK_EXTRA_SCROLL_RATIO = 1.2f
 		const val POSITION_MIDDLE = 0
-
-		// const val POSITION_END = 1
+		const val POSITION_BOTTOM = 1
 		const val POSITION_TOP = 2
 	}
 }

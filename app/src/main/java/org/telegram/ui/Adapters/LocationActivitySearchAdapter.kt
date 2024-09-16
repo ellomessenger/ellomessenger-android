@@ -24,7 +24,7 @@ open class LocationActivitySearchAdapter(private val mContext: Context) : BaseLo
 	}
 
 	override fun getItemCount(): Int {
-		return if (isSearching) 3 else places.size
+		return if (isSearching()) 3 else places.size
 	}
 
 	val isEmpty: Boolean
@@ -37,13 +37,13 @@ open class LocationActivitySearchAdapter(private val mContext: Context) : BaseLo
 
 	override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
 		val place = getItem(position)
-		val iconUrl = if (!isSearching && position >= 0 && position < iconUrls.size) iconUrls[position] else null
+		val iconUrl = if (!isSearching() && position >= 0 && position < iconUrls.size) iconUrls[position] else null
 		val locationCell = holder.itemView as LocationCell
 		locationCell.setLocation(place, iconUrl, position, position != itemCount - 1)
 	}
 
 	fun getItem(i: Int): TL_messageMediaVenue? {
-		if (isSearching) {
+		if (isSearching()) {
 			return null
 		}
 

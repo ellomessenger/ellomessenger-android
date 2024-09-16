@@ -57,10 +57,24 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 				options.gone()
 			}
 
-			if (subscription.isActive) {
+			if (subscription.isCancelled) {
+				statusLayout.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(binding.root.context, R.color.dark_gray))
+				statusIcon.setImageResource(R.drawable.ic_cancel)
+				statusText.text = binding.root.context.getString(R.string.cancelled)
+
+				statusLayout.visible()
+
+				options.setOnClickListener {
+					val peer = channel ?: user ?: return@setOnClickListener
+					action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Subscribe(subscriptionItem = subscription, peer = peer, view = it))
+				}
+			}
+			else if (subscription.isActive) {
 				statusLayout.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(binding.root.context, R.color.green))
 				statusIcon.setImageResource(R.drawable.ic_success_mark_circle_filled_white)
 				statusText.text = binding.root.context.getString(R.string.active)
+
+				statusLayout.visible()
 
 				options.setOnClickListener {
 					val peer = channel ?: user ?: return@setOnClickListener
@@ -68,9 +82,9 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 				}
 			}
 			else {
-				statusLayout.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(binding.root.context, R.color.dark_gray))
-				statusIcon.setImageResource(R.drawable.ic_cancel)
-				statusText.text = binding.root.context.getString(R.string.cancelled)
+				statusLayout.gone()
+				statusIcon.setImageDrawable(null)
+				statusText.text = null
 
 				options.setOnClickListener {
 					val peer = channel ?: user ?: return@setOnClickListener
@@ -78,7 +92,7 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 				}
 			}
 
-			price.text = binding.root.context.getString(R.string.simple_money_format, subscription.amount.toFloat()).replace("+", "")
+			price.text = binding.root.context.getString(R.string.simple_money_format, subscription.amount).replace("+", "")
 
 			if (subscription.expireAt > 0L) {
 				validDate.text = (subscription.expireAt * 1000L).toFormattedDate()
@@ -158,7 +172,7 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 			avatarImageView.setImage(null, null, avatarDrawable, chat)
 		}
 
-		binding.channelName.text = chat?.title
+		binding.channelName.text = if (chat?.deactivated == true) binding.root.context.getString(R.string.txt_deleted).uppercase() else chat?.title
 	}
 
 	private fun loadChannelPeerInfo(peerId: Long) {

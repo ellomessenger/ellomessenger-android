@@ -34,6 +34,7 @@ import android.view.ActionMode
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.View.OnClickListener
 import android.view.ViewGroup
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import android.view.Window
@@ -51,11 +52,20 @@ import com.google.android.gms.common.api.Status
 import com.google.firebase.appindexing.Action
 import com.google.firebase.appindexing.FirebaseUserActions
 import com.google.firebase.appindexing.builders.AssistActionBuilder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.BuildVars
+import org.telegram.messenger.ChatObject
 import org.telegram.messenger.ChatObject.isLeftFromChat
+import org.telegram.messenger.ChatObject.isOnlineCourse
+import org.telegram.messenger.ChatObject.isPaidChannel
 import org.telegram.messenger.ContactsController
 import org.telegram.messenger.ContactsLoadingObserver
 import org.telegram.messenger.DialogObject
@@ -82,6 +92,7 @@ import org.telegram.messenger.UserObject
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.messageobject.MessageObject
+import org.telegram.messenger.utils.LinkClickListener
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
@@ -89,9 +100,10 @@ import org.telegram.messenger.voip.VideoCapturerDevice
 import org.telegram.messenger.voip.VoIPPendingCall
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.ElloRpc.subscribeRequest
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.ChatInvite
+import org.telegram.tgnet.tlrpc.ChatInvite
 import org.telegram.tgnet.TLRPC.InputStickerSet
 import org.telegram.tgnet.TLRPC.TL_account_authorizationForm
 import org.telegram.tgnet.TLRPC.TL_account_getAuthorizationForm
@@ -105,8 +117,7 @@ import org.telegram.tgnet.TLRPC.TL_authorization
 import org.telegram.tgnet.TLRPC.TL_boolTrue
 import org.telegram.tgnet.TLRPC.TL_channels_getChannels
 import org.telegram.tgnet.TLRPC.TL_chatAdminRights
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.TLRPC.TL_chatInvitePeek
+import org.telegram.tgnet.tlrpc.TL_chatInvitePeek
 import org.telegram.tgnet.TLRPC.TL_codeSettings
 import org.telegram.tgnet.TLRPC.TL_contact
 import org.telegram.tgnet.TLRPC.TL_contacts_resolvePhone
@@ -146,11 +157,13 @@ import org.telegram.tgnet.TLRPC.Updates
 import org.telegram.tgnet.TLRPC.account_Password
 import org.telegram.tgnet.WalletHelper
 import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.tlrpc.TL_chatBannedRights
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.ActionBar.ActionBarLayout
 import org.telegram.ui.ActionBar.ActionBarLayout.ActionBarLayoutDelegate
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
+import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.ActionBar.DrawerLayoutContainer
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.ChatRightsEditActivity.ChatRightsEditActivityDelegate
@@ -180,6 +193,7 @@ import org.telegram.ui.Components.SharingLocationsAlert
 import org.telegram.ui.Components.SizeNotifierFrameLayout
 import org.telegram.ui.Components.StickerSetBulletinLayout
 import org.telegram.ui.Components.StickersAlert
+import org.telegram.ui.Components.SubscribeToChannelAlert
 import org.telegram.ui.Components.TermsOfServiceView
 import org.telegram.ui.Components.TermsOfServiceView.TermsOfServiceViewDelegate
 import org.telegram.ui.Components.ThemeEditorView
@@ -193,6 +207,7 @@ import org.telegram.ui.PaymentFormActivity.PaymentFormCallback
 import org.telegram.ui.SelectAnimatedEmojiDialog.SelectAnimatedEmojiDialogWindow
 import org.telegram.ui.WallpapersListActivity.ColorWallpaper
 import org.telegram.ui.channel.ChannelCreateActivity
+import org.telegram.ui.channel.SubscriptionResultFragment
 import org.telegram.ui.feed.FeedFragment
 import org.telegram.ui.group.GroupCallActivity
 import org.telegram.ui.group.GroupCreateFinalActivity
@@ -255,6 +270,8 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 	private var wasMutedByAdminRaisedHand = false
 	private var bottomNavigationPanel: BottomNavigationPanel? = null
 	private var forYouTab = 0
+	private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+	private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
 	@JvmField
 	var drawerLayoutContainer: DrawerLayoutContainer? = null
@@ -1392,7 +1409,8 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					var error = false
 					val type = intent.type
 
-					if (type != null && type == ContactsContract.Contacts.CONTENT_VCARD_TYPE) {
+					if (false) { // MARK: disabled sharing vcards as internal Ello contacts
+					// if (type != null && type == ContactsContract.Contacts.CONTENT_VCARD_TYPE) {
 						try {
 							val uri = intent.extras?.get(Intent.EXTRA_STREAM) as? Uri
 
@@ -3911,27 +3929,24 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							var hideProgressDialog = true
 
 							if (error == null && actionBarLayout != null) {
-								val invite = response as ChatInvite?
+								val invite = response as? ChatInvite
 
-								if (invite?.chat != null && (!isLeftFromChat(invite.chat) || !invite.chat.kicked && (!invite.chat?.username.isNullOrEmpty() || invite is TL_chatInvitePeek || invite.chat.has_geo))) {
+								if (invite?.chat != null && (!isLeftFromChat(invite.chat) || invite.chat!!.kicked != true && (!invite.chat?.username.isNullOrEmpty() || invite is TL_chatInvitePeek || invite.chat!!.has_geo))) {
 									MessagesController.getInstance(intentAccount).putChat(invite.chat, false)
 
-									val chats = ArrayList<Chat>()
-									chats.add(invite.chat)
-
-									MessagesStorage.getInstance(intentAccount).putUsersAndChats(null, chats, false, true)
+									MessagesStorage.getInstance(intentAccount).putUsersAndChats(null, listOf(invite.chat!!), false, true)
 
 									val args = Bundle()
-									args.putLong("chat_id", invite.chat.id)
+									args.putLong("chat_id", invite.chat!!.id)
 
 									if (mainFragmentsStack.isEmpty() || MessagesController.getInstance(intentAccount).checkCanOpenChat(args, mainFragmentsStack[mainFragmentsStack.size - 1])) {
-										val canceled = BooleanArray(1)
+										var canceled = false
 
 										progressDialog.setOnCancelListener {
-											canceled[0] = true
+											canceled = true
 										}
 
-										MessagesController.getInstance(intentAccount).ensureMessagesLoaded(-invite.chat.id, 0, object : MessagesLoadedCallback {
+										MessagesController.getInstance(intentAccount).ensureMessagesLoaded(-invite.chat!!.id, 0, object : MessagesLoadedCallback {
 											override fun onMessagesLoaded(fromCache: Boolean) {
 												try {
 													progressDialog.dismiss()
@@ -3940,7 +3955,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 													FileLog.e(e)
 												}
 
-												if (canceled[0]) {
+												if (canceled) {
 													return
 												}
 
@@ -3985,8 +4000,153 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 										presentFragment(chatActivity)
 									}
 									else {
-										val fragment = mainFragmentsStack[mainFragmentsStack.size - 1]
-										fragment.showDialog(JoinGroupAlert(this@LaunchActivity, invite, group, fragment, null))
+										var showDefaultAlert = true
+										val inviteChat = invite?.chat
+
+										if (inviteChat != null) {
+											if (inviteChat.adult || isPaidChannel(inviteChat)) {
+												showDefaultAlert = false
+
+												val context = this@LaunchActivity
+												val fragment = mainFragmentsStack.last()
+
+												val alert = SubscribeToChannelAlert(context = context, currentChat = inviteChat, currentChatInfo = null, subscriptionView = null, linkClickListener = object : LinkClickListener {
+													override fun onClick(route: String) {
+														Browser.openUrl(this@LaunchActivity, route)
+													}
+
+													override fun onLongClick(route: String) {
+														val builder = BottomSheet.Builder(this@LaunchActivity)
+														builder.setTitle(route)
+
+														builder.setItems(arrayOf<CharSequence>(context.getString(R.string.Open), context.getString(R.string.Copy))) { _, which ->
+															if (which == 0) {
+																Browser.openUrl(this@LaunchActivity, route)
+															}
+															else if (which == 1) {
+																AndroidUtilities.addToClipboard(route)
+
+																if (AndroidUtilities.shouldShowClipboardToast()) {
+																	if (route.startsWith("@")) {
+																		BulletinFactory.of(fragment).createSimpleBulletin(R.raw.copy, context.getString(R.string.UsernameCopied)).show()
+																	}
+																	else if (route.startsWith("#") || route.startsWith("$")) {
+																		BulletinFactory.of(fragment).createSimpleBulletin(R.raw.copy, context.getString(R.string.HashtagCopied)).show()
+																	}
+																	else {
+																		BulletinFactory.of(fragment).createSimpleBulletin(R.raw.copy, context.getString(R.string.LinkCopied)).show()
+																	}
+																}
+															}
+														}
+
+														builder.show()
+													}
+												}, subscribeClickListener = object: OnClickListener {
+													override fun onClick(v: View) {
+														if (!isPaidChannel(inviteChat)) {
+															@Suppress("NAME_SHADOWING") val req = TL_messages_importChatInvite()
+															req.hash = group
+
+															ConnectionsManager.getInstance(intentAccount).sendRequest(req, { response, error ->
+																if (error == null) {
+																	val updates = response as? Updates
+																	MessagesController.getInstance(currentAccount).processUpdates(updates, false)
+																}
+
+																AndroidUtilities.runOnUIThread {
+																	if (fragment.parentActivity == null) {
+																		return@runOnUIThread
+																	}
+
+																	if (error == null) {
+																		val updates = response as? Updates ?: return@runOnUIThread
+
+																		if (updates.chats.isNotEmpty()) {
+																			val chat = updates.chats[0]
+																			chat.left = false
+																			chat.kicked = false
+
+																			MessagesController.getInstance(currentAccount).putUsers(updates.users, false)
+																			MessagesController.getInstance(currentAccount).putChats(updates.chats, false)
+
+																			val args = Bundle()
+																			args.putLong("chat_id", chat.id)
+
+																			if (MessagesController.getInstance(currentAccount).checkCanOpenChat(args, fragment)) {
+																				val chatActivity = ChatActivity(args)
+																				fragment.presentFragment(chatActivity, fragment is ChatActivity)
+																			}
+																		}
+																	}
+																	else {
+																		AlertsCreator.processError(currentAccount, error, fragment, req)
+																	}
+																}
+															}, ConnectionsManager.RequestFlagFailOnServerErrors)
+
+															fragment.visibleDialog?.setOnDismissListener(null)
+															fragment.visibleDialog?.dismiss()
+
+															return
+														}
+
+														ioScope.launch {
+															val request = subscribeRequest(inviteChat.id)
+															val resp = ConnectionsManager.getInstance(intentAccount).performRequest(request)
+															@Suppress("NAME_SHADOWING") val error = resp as? TL_error
+
+															mainScope.launch {
+																fragment.visibleDialog?.setOnDismissListener {
+																	val args = Bundle()
+																	args.putBoolean(SubscriptionResultFragment.SUCCESS, error == null)
+
+																	val originalError = error?.text?.lowercase()
+
+																	if (originalError?.contains("enough") == true && originalError.contains("money")) {
+																		args.putString(SubscriptionResultFragment.DESCRIPTION, v.context.getString(R.string.insufficient_funds_message))
+																		args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, R.drawable.panda_payment_error)
+																		args.putBoolean(SubscriptionResultFragment.SHOW_TOPUP, true)
+																	}
+																	else {
+																		args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, if (error == null) R.drawable.panda_success else R.drawable.panda_error)
+
+																		if (isOnlineCourse(inviteChat)) {
+																			args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) v.context.getString(R.string.online_course_success) else (error.text ?: ""))
+																		}
+																		else {
+																			args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) v.context.getString(R.string.subscription_success) else (error.text ?: ""))
+																		}
+																	}
+
+																	actionBarLayout?.presentFragment(SubscriptionResultFragment(args), true)
+																}
+
+																fragment.visibleDialog?.dismiss()
+															}
+														}
+													}
+												})
+
+												val builder = BottomSheet.Builder(context)
+												builder.setApplyTopPadding(true)
+												builder.customView = alert.view
+
+												val dialog = builder.create()
+												dialog.setCanDismissWithSwipe(false)
+
+												alert.setCloseButtonClickListener {
+													dialog.dismiss()
+												}
+
+												fragment.showDialog(dialog)
+											}
+										}
+
+										if (showDefaultAlert) {
+											val fragment = mainFragmentsStack.last()
+											fragment.showDialog(JoinGroupAlert(this@LaunchActivity, invite, group, fragment))
+										}
 									}
 								}
 							}
@@ -5023,6 +5183,14 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 	}
 
 	override fun onDestroy() {
+		if (ioScope.isActive) {
+			ioScope.cancel()
+		}
+
+		if (mainScope.isActive) {
+			mainScope.cancel()
+		}
+
 		PhotoViewer.getPipInstance()?.destroyPhotoViewer()
 
 		if (PhotoViewer.hasInstance()) {
@@ -5053,11 +5221,9 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 		Theme.destroyResources()
 
-		val embedBottomSheet = EmbedBottomSheet.getInstance()
-		embedBottomSheet?.destroy()
+		EmbedBottomSheet.instance?.destroy()
 
-		val editorView = ThemeEditorView.getInstance()
-		editorView?.destroy()
+		ThemeEditorView.getInstance()?.destroy()
 
 		try {
 			visibleDialog?.dismiss()
@@ -5240,17 +5406,10 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 		checkLayout()
 
-		val pipRoundVideoView = PipRoundVideoView.getInstance()
-		pipRoundVideoView?.onConfigurationChanged()
-
-		val embedBottomSheet = EmbedBottomSheet.getInstance()
-		embedBottomSheet?.onConfigurationChanged(newConfig)
-
-		val photoViewer = PhotoViewer.getPipInstance()
-		photoViewer?.onConfigurationChanged(newConfig)
-
-		val editorView = ThemeEditorView.getInstance()
-		editorView?.onConfigurationChanged()
+		PipRoundVideoView.getInstance()?.onConfigurationChanged()
+		EmbedBottomSheet.instance?.onConfigurationChanged(newConfig)
+		PhotoViewer.getPipInstance()?.onConfigurationChanged(newConfig)
+		ThemeEditorView.getInstance()?.onConfigurationChanged()
 	}
 
 	@Deprecated("Deprecated in Java")

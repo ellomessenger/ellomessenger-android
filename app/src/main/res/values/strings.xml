@@ -442,7 +442,7 @@
 	<string name="GroupAddMembers">Add Members</string>
 	<string name="ChannelAddSubscribers">Select contacts</string>
 	<string name="LeaveChannelMenu">Unsubscribe</string>
-	<string name="LeavePaidChannelMenu">Leave the channel</string>
+	<string name="LeavePaidChannelMenu">Confirm cancellation</string>
 	<string name="ChannelSettings">Settings</string>
 	<string name="ChannelJoin">Subscribe</string>
 	<string name="ChannelJoinRequest">Subscribe</string>
@@ -3537,7 +3537,7 @@
 	<string name="StopVerification">Do you want to stop the verification process?</string>
 	<string name="AreYouSureClearHistoryWithUser">Are you sure you want to clear your chat history with **%1$s**?</string>
 	<string name="AreYouSureClearHistoryWithSecretUser">Are you sure you want to clear your secret chat history with **%1$s**?</string>
-	<string name="AreYouSureClearHistoryWithChat">Are you sure you want to clear the chat history in **%1$s** for all users?</string>
+	<string name="AreYouSureClearHistoryWithChat">Are you sure you want to delete all messages in **%1$s**</string>
 	<string name="AreYouSureClearHistoryWithChannel">Are you sure you want to clear the channel history in **%1$s**?</string>
 	<string name="AreYouSureClearHistory">Are you sure you want to delete all messages in this chat?</string>
 	<string name="AreYouSureClearHistorySavedMessages">Are you sure you want to clear **Saved Messages**?</string>
@@ -5727,10 +5727,10 @@
 	<string name="new_password">New password</string>
 	<string name="repeat_password">Confirm password</string>
 	<string name="save">Save</string>
-	<string name="personal_public_profile">Personal public profile</string>
-	<string name="personal_private_profile">Personal private profile</string>
-	<string name="business_public_profile">Public business profile</string>
-	<string name="business_private_profile">Private business profile</string>
+	<string name="personal_public_profile">Personal public account</string>
+	<string name="personal_private_profile">Personal private account</string>
+	<string name="business_public_profile">Public business account</string>
+	<string name="business_private_profile">Private business account</string>
 	<string name="public_account">Public</string>
 	<string name="private_account">Private</string>
 	<string name="personal">Personal</string>
@@ -6381,6 +6381,7 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="contact_deleted">Contact deleted</string>
 	<string name="unsubscribe_course_description">If you unsubscribe from Course channel you will lose access to the Course forever, funds will not be returned to your balance.</string>
 	<string name="unsubscribe_subchannel_description">Deleting this channel will permanently remove all members and erase all messages. Would you still like to go ahead with deletion?</string>
+	<string name="unsubscribe_paid_subchannel_description">Are you certain you want to cancel your paid subscription? Funds for the current period will not be returned to your balance in the event of cancellation.</string>
 	<string name="two_gb">2GB</string>
 	<string name="currency">Currency</string>
 	<string name="no_earnings_wallet_found">Earnings wallet not found</string>
@@ -6683,4 +6684,9 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="select_your_email_app">Select your email app</string>
 	<string name="channels_limit_username_prefix">ello.team/%1$s</string>
 	<string name="channels_subscriptions_limit_reached">You have reached the limit of %1$d subscriptions. Try unsubscribing from some channels.</string>
+	<string name="verification_prompt">Please enter the verification code that has been sent to your email. Ensure you also check your spam and junk email folders.</string>
+	<string name="not_now">Now now</string>
+	<string name="confirm_unsubscribe_paid_channel_date">If you confirm and end your subscription now, you can still access it until %s.</string>
+	<string name="txt_set_profile_photo">Set Profile Photo</string>
+	<string name="txt_deleted">deleted</string>
 </resources>

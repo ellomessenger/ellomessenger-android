@@ -407,10 +407,12 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 				VIEW_TYPE_EMPTY -> {
 					return object : RecyclerView.ViewHolder(LinearLayout(parent.context).apply {
 						orientation = LinearLayout.VERTICAL
-						setVerticalGravity(Gravity.CENTER)
-						setHorizontalGravity(Gravity.CENTER)
+						setVerticalGravity(Gravity.CENTER or Gravity.TOP)
+						setHorizontalGravity(Gravity.CENTER or Gravity.TOP)
 
-						layoutParams = LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat())
+						layoutParams = LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()).apply {
+							topMargin = AndroidUtilities.dp(100f)
+						}
 
 						val emptyImage = RLottieImageView(context)
 						emptyImage.setAutoRepeat(true)

@@ -130,7 +130,7 @@ class AiSpaceFragment : BaseFragment() {
 					if (response is TLRPC.TL_biz_dataRaw) {
 						val res = response.readData<ElloRpc.AllBotsResponse>()
 
-						res?.botIds?.let { adapter?.setBotList(it) }
+						res?.bots?.let { adapter?.setBotList(it) }
 					}
 				}
 			}

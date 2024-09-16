@@ -60,6 +60,7 @@
 		<item name="brandedWhiteButtonSmallRadiusStyle">@style/Widget.App.WhiteButtonSmallRadius</item>
 		<item name="tabStyle">@style/AppTheme.TabLayout</item>
 		<item name="popupMenuBackground">@color/background</item>
+		<item name="android:autofilledHighlight">@android:color/transparent</item>
 	</style>
 
 	<style name="Widget.App.ButtonOutlinedStyle" parent="Widget.Material3.Button.OutlinedButton">

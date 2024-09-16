@@ -54,7 +54,7 @@ import org.telegram.ui.Components.Premium.PremiumFeatureBottomSheet
 import org.telegram.ui.Components.SizeNotifierFrameLayout.SizeNotifierFrameLayoutDelegate
 import org.telegram.ui.PremiumPreviewFragment
 
-open class EditTextEmoji @JvmOverloads constructor(context: Context, private var sizeNotifierLayout: SizeNotifierFrameLayout?, private val parentFragment: BaseFragment?, private val currentStyle: Int, private val allowAnimatedEmoji: Boolean, withLineColors: Boolean = true) : FrameLayout(context), NotificationCenterDelegate, SizeNotifierFrameLayoutDelegate {
+open class EditTextEmoji @JvmOverloads constructor(context: Context, private var sizeNotifierLayout: SizeNotifierFrameLayout?, private val parentFragment: BaseFragment?, private val currentStyle: Int, private val allowAnimatedEmoji: Boolean, withLineColors: Boolean = true, emojiButtonIsRight: Boolean = false) : FrameLayout(context), NotificationCenterDelegate, SizeNotifierFrameLayoutDelegate {
 	private val emojiButton = ImageView(context)
 	private var emojiIconDrawable: ReplaceableIconDrawable? = null
 	private var keyboardHeight = 0
@@ -181,7 +181,7 @@ open class EditTextEmoji @JvmOverloads constructor(context: Context, private var
 
 		val bottomMargin = if (withLineColors) 7f else 5f
 
-		addView(emojiButton, createFrame(48, 48f, Gravity.CENTER_VERTICAL or if (LocaleController.isRTL) Gravity.LEFT else Gravity.RIGHT, 0f, 0f, 0f, bottomMargin))
+		addView(emojiButton, createFrame(48, 48f, Gravity.CENTER_VERTICAL or if (emojiButtonIsRight) Gravity.RIGHT else Gravity.LEFT , 0f, if (LocaleController.isRTL) 0f else 6f, 0f, bottomMargin))
 
 		emojiButton.background = Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector))
 

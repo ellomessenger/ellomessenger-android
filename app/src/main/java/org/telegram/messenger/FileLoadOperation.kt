@@ -58,9 +58,9 @@ class FileLoadOperation {
 	private var streamPriority = false
 	private var streamOffset = 0L
 	private var streamListeners: ArrayList<FileLoadOperationStream>? = null
-	private val downloadChunkSize = 1024 * 32
-	private var downloadChunkSizeBig = 1024 * 128
-	private val cdnChunkCheckSize = 1024 * 128
+	private val downloadChunkSize = 1024 * 512 // was 32 kB
+	private var downloadChunkSizeBig = 1024 * 1024 // was 128 kB
+	private val cdnChunkCheckSize = 1024 * 1024 // was 128 kB
 	private var maxDownloadRequests = 4
 	private var maxDownloadRequestsBig = 4
 	private val bigFileSizeFrom = 10 * 1024 * 1024

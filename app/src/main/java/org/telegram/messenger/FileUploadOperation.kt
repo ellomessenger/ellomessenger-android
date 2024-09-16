@@ -39,7 +39,7 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 	private var nextPartFirst = false
 	private var operationGuid = 0
 	private var maxRequestsCount = 0
-	private var uploadChunkSize = 64 * 1024
+	private var uploadChunkSize = DEFAULT_UPLOAD_CHUNK_SIZE * 1024
 	private var slowNetwork = false
 	private var freeRequestIvs: ArrayList<ByteArray>? = null
 	private var requestNum = 0
@@ -305,7 +305,7 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 				uploadChunkSize = max((if (slowNetwork) MIN_UPLOAD_CHUNK_SLOW_NETWORK_SIZE else MIN_UPLOAD_CHUNK_SIZE).toDouble(), ((totalFileSize + 1024L * maxUploadParts - 1) / (1024L * maxUploadParts)).toDouble()).toInt()
 
 				if (1024 % uploadChunkSize != 0) {
-					var chunkSize = 64
+					var chunkSize = DEFAULT_UPLOAD_CHUNK_SIZE
 
 					while (uploadChunkSize > chunkSize) {
 						chunkSize *= 2
@@ -809,6 +809,7 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 	}
 
 	companion object {
+		private const val DEFAULT_UPLOAD_CHUNK_SIZE = 1024 * 512 // was 64 KB
 		private const val MIN_UPLOAD_CHUNK_SIZE = 128
 		private const val MIN_UPLOAD_CHUNK_SLOW_NETWORK_SIZE = 32
 		private const val INITIAL_REQUESTS_COUNT = 8

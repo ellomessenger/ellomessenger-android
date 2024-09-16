@@ -6003,6 +6003,38 @@ public class MessagesStorage extends BaseController {
 		return result[0];
 	}
 
+	@Nullable
+	public Message getLastMessage(long dialogId) {
+		CountDownLatch countDownLatch = new CountDownLatch(1);
+		AtomicReference<Integer> ref = new AtomicReference<>();
+
+		storageQueue.postRunnable(() -> {
+			getDialogMaxMessageId(dialogId, param -> {
+				ref.set(param);
+				countDownLatch.countDown();
+			});
+		});
+
+		try {
+			countDownLatch.await();
+		}
+		catch (Exception e) {
+			FileLog.e(e);
+		}
+
+		var messageId = ref.get();
+
+		if (messageId == null) {
+			return null;
+		}
+
+		if (messageId == 0) {
+			return null;
+		}
+
+		return getMessage(dialogId, messageId);
+	}
+
 	public Message getMessage(long dialogId, long msgId) {
 		CountDownLatch countDownLatch = new CountDownLatch(1);
 		AtomicReference<Message> ref = new AtomicReference<>();
@@ -13495,12 +13527,17 @@ public class MessagesStorage extends BaseController {
 		});
 	}
 
-	public void getDialogMaxMessageId(long dialog_id, IntCallback callback) {
+	/**
+	 * Get the maximum message id of a dialog. {@code callback} will be called on <strong>storageQueue</strong> thread.
+	 * @param dialogId
+	 * @param callback
+	 */
+	public void getDialogMaxMessageId(long dialogId, IntCallback callback) {
 		storageQueue.postRunnable(() -> {
 			SQLiteCursor cursor = null;
 			int[] max = new int[1];
 			try {
-				cursor = database.queryFinalized("SELECT MAX(mid) FROM messages_v2 WHERE uid = " + dialog_id);
+				cursor = database.queryFinalized("SELECT MAX(mid) FROM messages_v2 WHERE uid = " + dialogId);
 				if (cursor.next()) {
 					max[0] = cursor.intValue(0);
 				}
@@ -13513,7 +13550,8 @@ public class MessagesStorage extends BaseController {
 					cursor.dispose();
 				}
 			}
-			AndroidUtilities.runOnUIThread(() -> callback.run(max[0]));
+
+			callback.run(max[0]);
 		});
 	}
 

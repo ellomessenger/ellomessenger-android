@@ -3447,7 +3447,7 @@ public class AndroidUtilities {
 			}
 		}
 
-		PickerBottomLayout pickerBottomLayout = new PickerBottomLayout(activity, false);
+		PickerBottomLayout pickerBottomLayout = new PickerBottomLayout(activity);
 		pickerBottomLayout.setBackgroundColor(Theme.getColor(Theme.key_dialogBackground));
 		linearLayout.addView(pickerBottomLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.LEFT | Gravity.BOTTOM));
 		pickerBottomLayout.cancelButton.setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);

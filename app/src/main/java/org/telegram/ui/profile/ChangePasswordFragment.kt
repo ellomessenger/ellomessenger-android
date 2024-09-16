@@ -1,10 +1,16 @@
 package org.telegram.ui.profile
 
 import android.content.Context
-import android.os.Bundle
+import android.os.CountDownTimer
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.TextUtils
+import android.text.style.ForegroundColorSpan
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.widget.doAfterTextChanged
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.NotificationCenter
@@ -20,11 +26,12 @@ import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.tlrpc.UserFull
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
-import org.telegram.ui.LoginActivity
+import java.util.concurrent.TimeUnit
 
-class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCenterDelegate {
+class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCenterDelegate, CodeVerification  {
 	private var email: String? = null
 	private var binding: FragmentChangePasswordBinding? = null
+	private var countDownTimer: CountDownTimer? = null
 
 	override fun onFragmentCreate(): Boolean {
 		notificationCenter.addObserver(this, NotificationCenter.userInfoDidLoad)
@@ -69,6 +76,13 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		binding?.changePassword?.setOnClickListener {
 			changePassword()
 		}
+
+		binding?.codeFieldLayout?.codeLayout?.addTextChangedListener {
+			val code = it?.toString()?.trim()?.takeIf { c -> c.isNotEmpty() } ?: return@addTextChangedListener
+			processCode(code)
+		}
+
+		updateResendButton(context, binding?.resendButton!!)
 
 		fragmentView = binding?.root
 
@@ -139,7 +153,11 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 
 					if (data?.status == true) {
 						ok = true
-						verifyNewPassword(data.email ?: "", data.expirationDate, oldPassword, newPassword)
+						val countdownDurationMs = updateCountDown(data.expirationDate * 1000L)
+						startTimer(countdownDurationMs)
+
+						val code = binding?.codeFieldLayout?.codeLayout?.text?.toString()?.trim()
+						processCode(code!!)
 					}
 				}
 				else {
@@ -154,21 +172,176 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		}, ConnectionsManager.RequestFlagFailOnServerErrors)
 	}
 
-	private fun verifyNewPassword(email: String, expirationDate: Long, oldPass: String, newPass: String) {
-		val args = Bundle()
+	private fun updateCountDown(date: Long): Long {
+		return updateCountDown(date, binding?.countdownLabel)
+	}
 
-		args.putString(CodeVerificationFragment.ARG_VERIFICATION_MODE, LoginActivity.VerificationMode.CHANGE_PASSWORD.name)
-		args.putString(CodeVerificationFragment.ARG_EMAIL, email)
-		args.putLong(CodeVerificationFragment.ARG_EXPIRATION, expirationDate)
-		args.putString(CodeVerificationFragment.ARG_OLD_PASSWORD, oldPass)
-		args.putString(CodeVerificationFragment.ARG_NEW_PASSWORD, newPass)
+	private fun startTimer(countdownDurationMs: Long) {
+		countDownTimer = startTimer(countDownTimer, countdownDurationMs)
+	}
 
-		presentFragment(CodeVerificationFragment(args), true)
+	private fun updateCountDown(expirationDate: Long, countdownLabel: TextView?): Long {
+		val countdownDurationMs = expirationDate - System.currentTimeMillis()
+		val countdownDurationSeconds = TimeUnit.MILLISECONDS.toSeconds(countdownDurationMs).toInt()
+
+		countdownLabel?.text = context?.resources?.getQuantityString(R.plurals.seconds, countdownDurationSeconds, countdownDurationSeconds)
+
+		return countdownDurationMs
+	}
+
+	private fun startTimer(countDownTimer: CountDownTimer?, countdownDurationMs: Long): CountDownTimer {
+		binding?.countdownLabel?.visible()
+		binding?.countdownHeader?.visible()
+
+		binding?.resendButton?.gone()
+
+		countDownTimer?.cancel()
+
+		return object : CountDownTimer(countdownDurationMs, TimeUnit.SECONDS.toMillis(1)) {
+			override fun onTick(millisUntilFinished: Long) {
+				val secondsLeft = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished).toInt()
+				binding?.countdownLabel?.text = context?.resources?.getQuantityString(R.plurals.seconds, secondsLeft, secondsLeft)
+			}
+
+			override fun onFinish() {
+				binding?.countdownLabel?.gone()
+				binding?.countdownHeader?.gone()
+
+				binding?.resendButton?.visible()
+			}
+		}.apply {
+			start()
+		}
+	}
+
+	private fun updateResendButton(context: Context, button: TextView) {
+		val resendColoredText = SpannableString(context.getString(R.string.resend_email)).apply {
+			setSpan(ForegroundColorSpan(ResourcesCompat.getColor(context.resources, R.color.brand, null)), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+		}
+
+		val resendText = TextUtils.expandTemplate(context.getString(R.string.resend_code_template), resendColoredText)
+
+		button.text = resendText
+
+		button.setOnClickListener {
+			resendCode()
+		}
+	}
+
+	private fun showResponseResult(ok: Boolean) {
+		val context = context ?: return
+
+		showResponseResult(binding, context, ok)
+
+		if (ok) {
+			binding?.root?.postDelayed({
+				setControlsEnabled(true)
+				finishFragment()
+			}, 3_000)
+		}
+		else {
+			setControlsEnabled(true)
+		}
+	}
+
+	private fun showResponseResult(binding: FragmentChangePasswordBinding?, context: Context?, ok: Boolean) {
+		if (binding == null) {
+			return
+		}
+
+		if (context == null) {
+			return
+		}
+
+		if (ok) {
+			binding.errorLabel.setTextColor(ResourcesCompat.getColor(context.resources, R.color.green, null))
+			binding.errorLabel.text = context.getString(R.string.code_verified)
+			binding.errorLayout.visible()
+			binding.countdownHeader.gone()
+			binding.countdownLabel.gone()
+		}
+		else {
+			binding.errorLabel.setTextColor(ResourcesCompat.getColor(context.resources, R.color.purple, null))
+			binding.errorLabel.text = context.getString(R.string.invalid_code)
+			binding.errorLayout.visible()
+		}
+
+		binding.codeFieldLayout.codeLayout.setResult(ok)
+	}
+
+	override fun resendCode() {
+		setControlsEnabled(false)
+
+		val req = email?.let {
+			ElloRpc.verificationCodeRequest(email = it, password = binding?.currentPasswordField?.text.toString().trim())
+		}
+
+		if (req != null) {
+			connectionsManager.sendRequest(req, { response, error ->
+				AndroidUtilities.runOnUIThread {
+					binding?.progressBar?.gone()
+
+					setControlsEnabled(true)
+
+					if (error == null && response is TLRPC.TL_biz_dataRaw) {
+						val data = response.readData<ElloRpc.ForgotPasswordVerifyResponse>()
+
+						if (data?.status == true) {
+							val countdownDurationMs = updateCountDown(data.expirationDate * 1000L)
+							startTimer(countdownDurationMs)
+						}
+						else {
+							Toast.makeText(context, context?.getString(R.string.error_format, data?.message), Toast.LENGTH_LONG).show()
+						}
+					}
+					else {
+						Toast.makeText(context, context?.getString(R.string.error_format, error?.text), Toast.LENGTH_LONG).show()
+					}
+				}
+			}, ConnectionsManager.RequestFlagFailOnServerErrors)
+		}
+	}
+
+	override fun processCode(code: String) {
+		if (code.length != 6) {
+			return
+		}
+
+		val oldPass = binding?.currentPasswordField?.text?.toString()?.trim()
+		val newPass = binding?.newPasswordField?.text?.toString()?.trim()
+
+		setControlsEnabled(false)
+
+		val req = ElloRpc.changePasswordRequest(oldPassword = oldPass!!, newPassword = newPass!!, code = code)
+
+		connectionsManager.sendRequest(req, { response, error ->
+			AndroidUtilities.runOnUIThread {
+				binding?.progressBar?.gone()
+
+				var ok = false
+
+				if (error == null && response is TLRPC.TL_biz_dataRaw) {
+					val data = response.readData<ElloRpc.RichVerifyResponse>()
+					ok = data?.status == true
+				}
+
+				showResponseResult(ok)
+			}
+		}, ConnectionsManager.RequestFlagFailOnServerErrors or ConnectionsManager.RequestFlagWithoutLogin)
+	}
+
+	override fun onResume() {
+		super.onResume()
+		binding?.codeFieldLayout?.input1?.codeDigit?.let {
+			binding?.errorLayout?.gone()
+		}
 	}
 
 	override fun onFragmentDestroy() {
 		super.onFragmentDestroy()
 		binding = null
+		countDownTimer?.cancel()
+		countDownTimer = null
 	}
 
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {
@@ -177,4 +350,5 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 			email = userInfo.email
 		}
 	}
+
 }

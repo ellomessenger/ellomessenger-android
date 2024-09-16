@@ -143,7 +143,7 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 			progressBar?.show()
 		}
 
-		val subscriptionsResponse = connectionsManager.performRequest(ElloRpc.getSubscriptionsRequest(type = ElloRpc.SUBSCRIPTION_TYPE_ACTIVE_CHANNELS))
+		val subscriptionsResponse = connectionsManager.performRequest(ElloRpc.getSubscriptionsRequest(ElloRpc.SubscriptionType.ACTIVE_CHANNELS))
 		val subscriptions = (subscriptionsResponse as? TL_biz_dataRaw)?.readData<ElloRpc.Subscriptions>()?.items
 		val leftoversResponse = connectionsManager.performRequest(ElloRpc.accountDeletionLeftoversRequest())
 

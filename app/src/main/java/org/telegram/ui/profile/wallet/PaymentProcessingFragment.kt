@@ -391,6 +391,14 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 		}
 	}
 
+	override fun finishFragment() {
+		super.finishFragment()
+		parentLayout?.let {
+			it.showFragment(1)
+			it.removeFragmentsUpTo(1)
+		}
+	}
+
 	override fun onFragmentDestroy() {
 		super.onFragmentDestroy()
 
