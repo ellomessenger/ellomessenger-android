@@ -605,3 +605,13 @@ fun String.isYouTubeShortsLink(): Boolean {
 fun List<MessageObject>.hasServiceMessagesOnly(): Boolean {
 	return none { it.messageOwner?.action == null }
 }
+
+fun ByteArray.toHexString(): String {
+	val result = StringBuilder(this.size * 2)
+
+	for (i in this.indices) {
+		result.append(Character.forDigit((this[i].toInt() shr 4) and 0xF, 16)).append(Character.forDigit(this[i].toInt() and 0xF, 16))
+	}
+
+	return result.toString()
+}

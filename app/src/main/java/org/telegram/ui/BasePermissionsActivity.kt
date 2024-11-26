@@ -60,7 +60,7 @@ open class BasePermissionsActivity : Activity() {
 					showPermissionErrorAlert(R.raw.permission_request_folder, message)
 				}
 				else {
-					ImageLoader.instance.checkMediaPaths()
+					ImageLoader.getInstance().checkMediaPaths()
 				}
 			}
 

@@ -77,6 +77,7 @@ import org.telegram.ui.Components.Premium.LimitReachedBottomSheet
 import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import java.util.Calendar
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -953,7 +954,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 							presentFragment(fragment)
 						}
 					}
-					else if ("PASSWORD_MISSING" == error.text || error.text.startsWith("PASSWORD_TOO_FRESH_") || error.text.startsWith("SESSION_TOO_FRESH_")) {
+					else if ("PASSWORD_MISSING" == error.text || error.text?.startsWith("PASSWORD_TOO_FRESH_") == true || error.text?.startsWith("SESSION_TOO_FRESH_") == true) {
 						passwordFragment?.needHideProgress()
 
 						val builder = AlertDialog.Builder(parentActivity)
@@ -1501,7 +1502,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 			val left = MAX_RANK_LENGTH - (currentRank?.codePointCount(0, currentRank.length) ?: 0)
 
 			if (left <= MAX_RANK_LENGTH - MAX_RANK_LENGTH * 0.7f) {
-				cell.setText2(String.format("%d", left))
+				cell.setText2(String.format(Locale.getDefault(), "%d", left))
 				val textView = cell.textView2
 				textView?.textColor = if (left < 0) cell.context.getColor(R.color.purple) else cell.context.getColor(R.color.dark_gray)
 			}

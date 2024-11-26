@@ -4,11 +4,9 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2024.
  */
 package org.telegram.tgnet;
-
-import androidx.annotation.Nullable;
 
 import org.telegram.messenger.FileLog;
 
@@ -20,7 +18,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 
-public class SerializedData extends AbstractSerializedData {
+import androidx.annotation.Nullable;
+
+public class SerializedData extends AbstractSerializedData implements AutoCloseable {
 	protected boolean isOut = true;
 	private ByteArrayOutputStream outbuf;
 	private DataOutputStream out;
@@ -595,5 +595,10 @@ public class SerializedData extends AbstractSerializedData {
 		catch (Exception e) {
 			return Integer.MAX_VALUE;
 		}
+	}
+
+	@Override
+	public void close() throws Exception {
+		cleanup();
 	}
 }

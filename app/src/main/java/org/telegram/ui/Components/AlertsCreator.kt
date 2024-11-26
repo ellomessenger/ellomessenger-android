@@ -130,7 +130,6 @@ import org.telegram.tgnet.TLRPC.TL_channels_joinChannel
 import org.telegram.tgnet.TLRPC.TL_channels_reportSpam
 import org.telegram.tgnet.TLRPC.TL_contacts_blockFromReplies
 import org.telegram.tgnet.TLRPC.TL_contacts_importContacts
-import org.telegram.tgnet.TLRPC.TL_error
 import org.telegram.tgnet.TLRPC.TL_help_getSupport
 import org.telegram.tgnet.TLRPC.TL_help_support
 import org.telegram.tgnet.TLRPC.TL_inputPeerUser
@@ -159,7 +158,6 @@ import org.telegram.tgnet.TLRPC.TL_messages_checkHistoryImportPeer
 import org.telegram.tgnet.TLRPC.TL_messages_createChat
 import org.telegram.tgnet.TLRPC.TL_messages_editChatAdmin
 import org.telegram.tgnet.TLRPC.TL_messages_editChatDefaultBannedRights
-import org.telegram.tgnet.tlrpc.TL_messages_editMessage
 import org.telegram.tgnet.TLRPC.TL_messages_forwardMessages
 import org.telegram.tgnet.TLRPC.TL_messages_getAttachedStickers
 import org.telegram.tgnet.TLRPC.TL_messages_importChatInvite
@@ -181,6 +179,8 @@ import org.telegram.tgnet.TLRPC.TL_updateUserName
 import org.telegram.tgnet.TLRPC.Updates
 import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.TL_channels_editBanned
+import org.telegram.tgnet.tlrpc.TL_error
+import org.telegram.tgnet.tlrpc.TL_messages_editMessage
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
@@ -318,13 +318,13 @@ object AlertsCreator {
 				else -> null
 			}
 
-			if (error.text.contains("USER_IS_BLOCKED")) {
+			if (error.text?.contains("USER_IS_BLOCKED") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorUserBlocked))
 			}
-			else if (error.text.contains("USER_NOT_MUTUAL_CONTACT")) {
+			else if (error.text?.contains("USER_NOT_MUTUAL_CONTACT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportMutualError))
 			}
-			else if (error.text.contains("IMPORT_PEER_TYPE_INVALID")) {
+			else if (error.text?.contains("IMPORT_PEER_TYPE_INVALID") == true) {
 				if (peer is TL_inputPeerUser) {
 					showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorChatInvalidUser))
 				}
@@ -332,22 +332,22 @@ object AlertsCreator {
 					showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorChatInvalidGroup))
 				}
 			}
-			else if (error.text.contains("CHAT_ADMIN_REQUIRED")) {
+			else if (error.text?.contains("CHAT_ADMIN_REQUIRED") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorNotAdmin))
 			}
-			else if (error.text.startsWith("IMPORT_FORMAT")) {
+			else if (error.text?.startsWith("IMPORT_FORMAT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorFileFormatInvalid))
 			}
-			else if (error.text.startsWith("PEER_ID_INVALID")) {
+			else if (error.text?.startsWith("PEER_ID_INVALID") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorPeerInvalid))
 			}
-			else if (error.text.contains("IMPORT_LANG_NOT_FOUND")) {
+			else if (error.text?.contains("IMPORT_LANG_NOT_FOUND") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorFileLang))
 			}
-			else if (error.text.contains("IMPORT_UPLOAD_FAILED")) {
+			else if (error.text?.contains("IMPORT_UPLOAD_FAILED") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportFailedToUpload))
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showFloodWaitAlert(error.text, fragment)
 			}
 			else {
@@ -355,10 +355,10 @@ object AlertsCreator {
 			}
 		}
 		else if (request is TL_account_saveSecureValue || request is TL_account_getAuthorizationForm) {
-			if (error.text.contains("PHONE_NUMBER_INVALID")) {
+			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidPhoneNumber))
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
 			else if ("APP_VERSION_OUTDATED" == error.text) {
@@ -399,7 +399,7 @@ object AlertsCreator {
 
 				return null
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showFloodWaitAlert(error.text, fragment)
 			}
 			else {
@@ -416,7 +416,7 @@ object AlertsCreator {
 				}
 				return null
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showFloodWaitAlert(error.text, fragment)
 			}
 			else {
@@ -430,13 +430,13 @@ object AlertsCreator {
 		}
 		else if (request is TL_messages_sendMessage || request is TL_messages_sendMedia || request is TL_messages_sendInlineBotResult || request is TL_messages_forwardMessages || request is TL_messages_sendMultiMedia || request is TL_messages_sendScheduledMessages) {
 			when (error.text) {
-				"PEER_FLOOD" -> NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, 0)
-				"USER_BANNED_IN_CHANNEL" -> NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, 5)
+				"PEER_FLOOD" -> NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.PEER_FLOOD)
+				"USER_BANNED_IN_CHANNEL" -> NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.USER_BANNED_IN_CHANNEL)
 				"SCHEDULE_TOO_MUCH" -> showSimpleToast(fragment, context.getString(R.string.MessageScheduledLimitReached))
 			}
 		}
 		else if (request is TL_messages_importChatInvite) {
-			if (error.text.startsWith("FLOOD_WAIT")) {
+			if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
 			else if (error.text == "USERS_TOO_MUCH") {
@@ -463,13 +463,13 @@ object AlertsCreator {
 			}
 		}
 		else if (request is TL_account_confirmPhone || request is TL_account_verifyPhone || request is TL_account_verifyEmail) {
-			return if (error.text.contains("PHONE_CODE_EMPTY") || error.text.contains("PHONE_CODE_INVALID") || error.text.contains("CODE_INVALID") || error.text.contains("CODE_EMPTY")) {
+			return if (error.text?.contains("PHONE_CODE_EMPTY") == true || error.text?.contains("PHONE_CODE_INVALID") == true || error.text?.contains("CODE_INVALID") == true || error.text?.contains("CODE_EMPTY") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidCode))
 			}
-			else if (error.text.contains("PHONE_CODE_EXPIRED") || error.text.contains("EMAIL_VERIFY_EXPIRED")) {
+			else if (error.text?.contains("PHONE_CODE_EXPIRED") == true || error.text?.contains("EMAIL_VERIFY_EXPIRED") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.CodeExpired))
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
 			else {
@@ -477,16 +477,16 @@ object AlertsCreator {
 			}
 		}
 		else if (request is TL_auth_resendCode) {
-			if (error.text.contains("PHONE_NUMBER_INVALID")) {
+			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				return showSimpleAlert(fragment, context.getString(R.string.InvalidPhoneNumber))
 			}
-			else if (error.text.contains("PHONE_CODE_EMPTY") || error.text.contains("PHONE_CODE_INVALID")) {
+			else if (error.text?.contains("PHONE_CODE_EMPTY") == true || error.text?.contains("PHONE_CODE_INVALID") == true) {
 				return showSimpleAlert(fragment, context.getString(R.string.InvalidCode))
 			}
-			else if (error.text.contains("PHONE_CODE_EXPIRED")) {
+			else if (error.text?.contains("PHONE_CODE_EXPIRED") == true) {
 				return showSimpleAlert(fragment, context.getString(R.string.CodeExpired))
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				return showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
 			else if (error.code != -1000) {
@@ -498,7 +498,7 @@ object AlertsCreator {
 				showSimpleAlert(fragment, context.getString(R.string.CancelLinkExpired))
 			}
 			else {
-				if (error.text.startsWith("FLOOD_WAIT")) {
+				if (error.text?.startsWith("FLOOD_WAIT") == true) {
 					showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 				}
 				else {
@@ -507,19 +507,19 @@ object AlertsCreator {
 			}
 		}
 		else if (request is TL_account_changePhone) {
-			if (error.text.contains("PHONE_NUMBER_INVALID")) {
+			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidPhoneNumber))
 			}
-			else if (error.text.contains("PHONE_CODE_EMPTY") || error.text.contains("PHONE_CODE_INVALID")) {
+			else if (error.text?.contains("PHONE_CODE_EMPTY") == true || error.text?.contains("PHONE_CODE_INVALID") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidCode))
 			}
-			else if (error.text.contains("PHONE_CODE_EXPIRED")) {
+			else if (error.text?.contains("PHONE_CODE_EXPIRED") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.CodeExpired))
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
-			else if (error.text.contains("FRESH_CHANGE_PHONE_FORBIDDEN")) {
+			else if (error.text?.contains("FRESH_CHANGE_PHONE_FORBIDDEN") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FreshChangePhoneForbidden))
 			}
 			else {
@@ -527,22 +527,22 @@ object AlertsCreator {
 			}
 		}
 		else if (request is TL_account_sendChangePhoneCode) {
-			if (error.text.contains("PHONE_NUMBER_INVALID")) {
+			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				LoginActivity.needShowInvalidAlert(fragment, (args[0] as String), false)
 			}
-			else if (error.text.contains("PHONE_CODE_EMPTY") || error.text.contains("PHONE_CODE_INVALID")) {
+			else if (error.text?.contains("PHONE_CODE_EMPTY") == true || error.text?.contains("PHONE_CODE_INVALID") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidCode))
 			}
-			else if (error.text.contains("PHONE_CODE_EXPIRED")) {
+			else if (error.text?.contains("PHONE_CODE_EXPIRED") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.CodeExpired))
 			}
-			else if (error.text.startsWith("FLOOD_WAIT")) {
+			else if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
-			else if (error.text.startsWith("PHONE_NUMBER_OCCUPIED")) {
+			else if (error.text?.startsWith("PHONE_NUMBER_OCCUPIED") == true) {
 				showSimpleAlert(fragment, LocaleController.formatString("ChangePhoneNumberOccupied", R.string.ChangePhoneNumberOccupied, args[0]))
 			}
-			else if (error.text.startsWith("PHONE_NUMBER_BANNED")) {
+			else if (error.text?.startsWith("PHONE_NUMBER_BANNED") == true) {
 				LoginActivity.needShowInvalidAlert(fragment, (args[0] as String), true)
 			}
 			else {
@@ -557,7 +557,7 @@ object AlertsCreator {
 			}
 		}
 		else if (request is TL_contacts_importContacts) {
-			if (error.text.startsWith("FLOOD_WAIT")) {
+			if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
 			else {
@@ -565,8 +565,8 @@ object AlertsCreator {
 			}
 		}
 		else if (request is TL_account_getPassword || request is TL_account_getTmpPassword) {
-			if (error.text.startsWith("FLOOD_WAIT")) {
-				showSimpleToast(fragment, getFloodWaitString(error.text))
+			if (error.text?.startsWith("FLOOD_WAIT") == true) {
+				showSimpleToast(fragment, getFloodWaitString(error.text!!))
 			}
 			else {
 				showSimpleToast(fragment, error.text)

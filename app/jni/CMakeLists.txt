@@ -185,6 +185,8 @@ add_library(tgnet STATIC
         tgnet/ConnectionSocket.cpp
         tgnet/Datacenter.cpp
         tgnet/EventObject.cpp
+        tgnet/ExponentialBackoffStrategy.cpp
+        tgnet/JitterSource.cpp
         tgnet/FileLog.cpp
         tgnet/MTProtoScheme.cpp
         tgnet/NativeByteBuffer.cpp

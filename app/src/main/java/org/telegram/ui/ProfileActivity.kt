@@ -1486,7 +1486,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 										avatarsViewPager?.replaceFirstPhoto(photo, response.photo)
 
 										if (user != null) {
-											user.photo?.photo_id = response.photo?.id
+											user.photo?.photo_id = response.photo?.id ?: 0L
 											userConfig.setCurrentUser(user)
 											userConfig.saveConfig(true)
 										}
@@ -2883,8 +2883,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					presentFragment(CurrentSubscriptionsFragment())
 				}
 				else if (position == myNotificationsRow) {
-					loadBotUser(777000L) {
-						openBot(777000L)
+					loadBotUser(BuildConfig.NOTIFICATIONS_BOT_ID) {
+						openBot(BuildConfig.NOTIFICATIONS_BOT_ID)
 					}
 				}
 				else if (position == aiChatBotRow) {
@@ -3887,7 +3887,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 			}
 
-			override fun zoomEnabled(child: View, receiver: ImageReceiver): Boolean {
+			override fun zoomEnabled(child: View, receiver: ImageReceiver?): Boolean {
 				return if (!super.zoomEnabled(child, receiver)) {
 					false
 				}
@@ -6949,10 +6949,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 				else if (!currentChat?.username.isNullOrEmpty()) {
 					userAboutHeaderRow = rowCount++
-
-					if (messagesController.getUser(userId)?.is_public == true) {
-						usernameRow = rowCount++
-					}
+					usernameRow = rowCount++
 				}
 
 				if (publicLinkRow == -1 && !chatInfo?.about.isNullOrEmpty()) {
@@ -7289,7 +7286,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			var newString: CharSequence? = UserObject.getUserName(user)
 			val newString2: String
 
-			if (user.id == 333000L || user.id == 777000L || user.id == 42777L) {
+			if (user.id == 333000L || user.id == BuildConfig.NOTIFICATIONS_BOT_ID || user.id == 42777L) {
 				newString2 = parentActivity.getString(R.string.ServiceNotifications)
 			}
 			else if (MessagesController.isSupportUser(user)) {
@@ -7356,7 +7353,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						nameTextViewRightDrawableContentDescription = parentActivity.getString(R.string.AccDescrPremium)
 					}
 					else if (messagesController.isDialogMuted(if (dialogId != 0L) dialogId else userId)) {
-						rightIcon = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.msg_mute, null)
+						rightIcon = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.volume_slash, null)
 						nameTextViewRightDrawableContentDescription = parentActivity.getString(R.string.NotificationsMuted)
 					}
 					else {
@@ -7635,7 +7632,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						nameTextView[a]?.rightDrawable = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.verified_icon, null)
 					}
 					else if (messagesController.isDialogMuted(-chatId)) {
-						nameTextView[a]?.rightDrawable = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.msg_mute, null)
+						nameTextView[a]?.rightDrawable = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.volume_slash, null)
 					}
 				}
 
@@ -7679,6 +7676,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			if (changed) {
 				needLayout(true)
 			}
+
+			avatarsViewPager?.removePhotoAtIndex(0)
 
 			var photoBig: TLRPC.FileLocation? = null
 
@@ -7754,11 +7753,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				selfUser = true
 			}
 			else {
-				if (userInfo?.phone_calls_available == true && userInfo?.id != 333000L && userInfo?.id != 777000L && userInfo?.id != 42777L) {
+				if (userInfo?.phone_calls_available == true && userInfo?.id != 333000L && userInfo?.id != BuildConfig.NOTIFICATIONS_BOT_ID && userInfo?.id != 42777L) {
 					callItemVisible = true
-					// MARK: uncomment to enable video calls
-					// videoCallItemVisible = userInfo!!.video_calls_available
-					videoCallItemVisible = false
+					videoCallItemVisible = userInfo?.video_calls_available == true
 				}
 
 				if (isBot || contactsController.contactsDict[userId] == null) {
@@ -7816,7 +7813,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 
 				// TODO: uncomment to enable "Gift Premium" and "Start secret chat" actions
-//				if (!UserObject.isDeleted(user) && !isBot && currentEncryptedChat == null && !userBlocked && userId != 333000L && userId != 777000L && userId != 42777L) {
+//				if (!UserObject.isDeleted(user) && !isBot && currentEncryptedChat == null && !userBlocked && userId != 333000L && userId != BuildConfig.NOTIFICATIONS_BOT_ID && userId != 42777L) {
 //					if (!user.premium && !BuildVars.IS_BILLING_UNAVAILABLE && !user.self && userInfo != null && !messagesController.premiumLocked && userInfo!!.premium_gifts.isNotEmpty()) {
 //						otherItem?.addSubItem(gift_premium, R.drawable.msg_gift_premium, LocaleController.getString(R.string.GiftPremium))
 //					}
@@ -7931,7 +7928,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			// otherItem?.visibility = View.GONE
 		}
 
-		if (userInfo?.id == 777000L) { // hide overflow menu for service notifications
+		if (userInfo?.id == BuildConfig.NOTIFICATIONS_BOT_ID) { // hide overflow menu for service notifications
 			otherItem?.gone()
 		}
 
@@ -8376,7 +8373,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							val videoSize = photosPhoto.photo?.video_sizes?.firstOrNull()
 
 							user.photo = TLRPC.TL_userProfilePhoto()
-							user.photo?.photo_id = photosPhoto.photo?.id
+							user.photo?.photo_id = photosPhoto.photo?.id ?: 0L
 
 							if (small != null) {
 								user.photo?.photo_small = small.location
@@ -8396,7 +8393,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								val newKey = small.location.volume_id.toString() + "_" + small.location.local_id + "@50_50"
 
 								ImageLocation.getForUserOrChat(user, ImageLocation.TYPE_SMALL)?.let {
-									ImageLoader.instance.replaceImageInCache(oldKey, newKey, it, false)
+									ImageLoader.getInstance().replaceImageInCache(oldKey, newKey, it, false)
 								}
 							}
 
@@ -9931,9 +9928,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 					when (position) {
 						userAboutHeaderRow -> {
-							if (messagesController.getUser(userId)?.is_public == true) {
-								headerCell.setText(parentActivity.getString(R.string.about))
-							}
+							headerCell.setText(parentActivity.getString(R.string.about))
 						}
 
 						membersHeaderRow -> {
@@ -10033,7 +10028,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								isBot && user?.id == BuildConfig.AI_BOT_ID /* && !user.bot_description.isNullOrEmpty()*/ -> {
 									description = aboutLinkCell.context.getString(R.string.UserBio)
 
-									val info = context?.getString(R.string.bot_description)
+									val info = userInfo?.about
 									info
 								}
 
@@ -11738,7 +11733,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	}
 
 	override fun changeBigAvatar() {
-		avatarsViewPager?.addUploadingImage(ImageLocation.getForLocal(avatarBig).also { uploadingImageLocation = it }, ImageLocation.getForLocal(avatar))
+		if (isSelf()) {
+			avatarsViewPager?.addUploadingImage(ImageLocation.getForLocal(avatarBig).also { uploadingImageLocation = it }, ImageLocation.getForLocal(avatar))
+		}
 	}
 
 }

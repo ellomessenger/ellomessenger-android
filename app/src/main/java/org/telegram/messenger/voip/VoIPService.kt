@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Grishka, 2013-2016.
+ * Copyright Telegram, 2013-2024.
  * Copyright Nikita Denin, Ello 2023-2024.
  */
 package org.telegram.messenger.voip
@@ -58,6 +58,7 @@ import org.telegram.tgnet.TLRPC.*
 import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.tgnet.tlrpc.Vector
+import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarDrawable
@@ -80,7 +81,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 @SuppressLint("NewApi")
-class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, ConnectionStateListener, NotificationCenterDelegate {
+class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, ConnectionStateListener, NotificationCenterDelegate, VoIPServiceState {
 	private var currentAccount = -1
 	private var lastNetInfo: NetworkInfo? = null
 	private var currentState = 0
@@ -127,9 +128,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	private var playedConnectedSound = false
 	private var switchingStream = false
 	private var switchingAccount = false
-
-	@JvmField
-	var privateCall: PhoneCall? = null
+	private var privateCall: PhoneCall? = null
 
 	@JvmField
 	var groupCall: ChatObject.Call? = null
@@ -173,7 +172,6 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	@JvmField
 	var currentBluetoothDeviceName: String? = null
 
-	@JvmField
 	val sharedUIParams = SharedUIParams()
 	private var user: User? = null
 	private var callReqId = 0
@@ -195,6 +193,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 	@JvmField
 	var micSwitching = false
+
 	private val afterSoundRunnable = Runnable {
 		val am = getSystemService(AUDIO_SERVICE) as AudioManager
 		am.abandonAudioFocus(this@VoIPService)
@@ -293,7 +292,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 						1
 					}
 
-					setAudioOutput(1)
+					setAudioOutput(AUDIO_OUTPUT_EARPIECE)
 				}
 				else {
 					if (previousAudioOutput >= 0) {
@@ -516,14 +515,6 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		proxyVideoSinkLruCache.evictAll()
 	}
 
-	fun setAudioRoute(route: Int) {
-		when (route) {
-			AUDIO_ROUTE_SPEAKER -> setAudioOutput(0)
-			AUDIO_ROUTE_EARPIECE -> setAudioOutput(1)
-			AUDIO_ROUTE_BLUETOOTH -> setAudioOutput(2)
-		}
-	}
-
 	class ProxyVideoSink : VideoSink {
 		var target: VideoSink? = null
 			set(value) {
@@ -634,6 +625,10 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		notificationsDisabled = intent.getBooleanExtra("notifications_disabled", false)
 		isMuted = intent.getBooleanExtra("is_muted", false)
 
+		val instantAccept = intent.getBooleanExtra("accept", false);
+
+		val openFragment = intent.getBooleanExtra("openFragment", false)
+
 		if (userID != 0L) {
 			user = MessagesController.getInstance(currentAccount).getUser(userID)
 		}
@@ -687,7 +682,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			}
 
 			if (!isBtHeadsetConnected && !isHeadsetPlugged) {
-				setAudioOutput(0)
+				setAudioOutput(AUDIO_OUTPUT_SPEAKER)
 			}
 		}
 
@@ -737,12 +732,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				startGroupCall(0, null, false)
 
 				if (!isBtHeadsetConnected && !isHeadsetPlugged) {
-					setAudioOutput(0)
+					setAudioOutput(AUDIO_OUTPUT_SPEAKER)
 				}
 			}
 
 			if (intent.getBooleanExtra("start_incall_activity", false)) {
-				val intent1 = Intent(this, LaunchActivity::class.java).setAction(if (user != null) "voip" else "voip_chat").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+				val intent1 = Intent(this, LaunchActivity::class.java).setAction(if (user != null) VoIPPreNotificationService.VOIP_ACTION else VoIPPreNotificationService.VOIP_CHAT_ACTION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
 				if (chat != null) {
 					intent1.putExtra("currentAccount", currentAccount)
@@ -762,17 +757,32 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			}
 
 			if (videoCall && !isBtHeadsetConnected && !isHeadsetPlugged) {
-				setAudioOutput(0)
+				setAudioOutput(AUDIO_OUTPUT_SPEAKER)
 			}
 
 			callIShouldHavePutIntoIntent = null
 
-			if (USE_CONNECTION_SERVICE) {
+			if (instantAccept) {
+				acceptIncomingCall()
+			}
+			else if (USE_CONNECTION_SERVICE) {
 				acknowledgeCall(false)
 				showNotification()
 			}
 			else {
 				acknowledgeCall(true)
+			}
+
+			if (openFragment) {
+				var activity = AndroidUtilities.findActivity(this)
+
+				if (activity == null) {
+					activity = AndroidUtilities.findActivity(ApplicationLoader.applicationContext)
+				}
+
+				if (activity != null) {
+					VoIPFragment.show(activity, currentAccount)
+				}
 			}
 		}
 
@@ -785,7 +795,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return START_NOT_STICKY
 	}
 
-	fun getUser(): User? {
+	override fun getUser(): User? {
 		return user
 	}
 
@@ -793,7 +803,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return chat
 	}
 
-	fun setNoiseSupressionEnabled(enabled: Boolean) {
+	fun setNoiseSuppressionEnabled(enabled: Boolean) {
 		tgVoip[CAPTURE_DEVICE_CAMERA]?.setNoiseSuppressionEnabled(enabled)
 	}
 
@@ -856,6 +866,14 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				}
 			}
 		}
+	}
+
+	override fun declineIncomingCall() {
+		declineIncomingCall(DISCARD_REASON_HANGUP, null)
+	}
+
+	override fun getPrivateCall(): PhoneCall? {
+		return privateCall
 	}
 
 	private fun startOutgoingCall() {
@@ -1826,7 +1844,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				}
 				else {
 					AndroidUtilities.runOnUIThread {
-						NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, 6, error?.text)
+						NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.GROUP_CALL_FAILED, error?.text)
 						hangUp(0)
 					}
 				}
@@ -1889,8 +1907,6 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 					val updates = response as Updates
 					val selfId = getSelfId()
-					var a = 0
-					val N = updates.updates.size
 
 					updates.updates.forEach { update ->
 						if (update is TL_updateGroupCallParticipants) {
@@ -1952,7 +1968,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 									MessagesController.getInstance(currentAccount).loadFullChat(chat!!.id, 0, true)
 								}
 
-								NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, 6, error?.text)
+								NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.GROUP_CALL_FAILED, error?.text)
 
 								hangUp(0)
 							}
@@ -2361,7 +2377,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 							}
 						}
 						else {
-							val status: Int = if ("TIME_TOO_BIG" == error.text || error.text.startsWith("FLOOD_WAIT")) {
+							val status = if ("TIME_TOO_BIG" == error.text || error.text?.startsWith("FLOOD_WAIT") == true) {
 								0
 							}
 							else {
@@ -2528,7 +2544,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	}
 
 	fun setParticipantsVolume() {
-		val instance = tgVoip[CAPTURE_DEVICE_CAMERA] ?: return
+//		val instance = tgVoip[CAPTURE_DEVICE_CAMERA] ?: return
 
 		var a = 0
 		val N = groupCall!!.participants.size()
@@ -2617,7 +2633,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				}
 			}
 
-			nprefs.edit().putStringSet("calls_access_hashes", hashes).commit()
+			nprefs.edit().putStringSet("calls_access_hashes", hashes).apply()
 
 			var sysAecAvailable = false
 			var sysNsAvailable = false
@@ -2818,9 +2834,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	}
 
 	fun isVideoAvailable(): Boolean {
-		return false
-		// MARK: uncomment to enable video calls
-		// return isVideoAvailable
+		return isVideoAvailable
 	}
 
 	fun onMediaButtonEvent(ev: KeyEvent?) {
@@ -3082,14 +3096,14 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		if (USE_CONNECTION_SERVICE && systemCallConnection != null) {
 			when (which) {
-				2 -> systemCallConnection?.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
-				1 -> systemCallConnection?.setAudioRoute(CallAudioState.ROUTE_WIRED_OR_EARPIECE)
-				0 -> systemCallConnection?.setAudioRoute(CallAudioState.ROUTE_SPEAKER)
+				AUDIO_OUTPUT_BLUETOOTH -> systemCallConnection?.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
+				AUDIO_OUTPUT_EARPIECE -> systemCallConnection?.setAudioRoute(CallAudioState.ROUTE_WIRED_OR_EARPIECE)
+				AUDIO_OUTPUT_SPEAKER -> systemCallConnection?.setAudioRoute(CallAudioState.ROUTE_SPEAKER)
 			}
 		}
 		else if (audioConfigured && !USE_CONNECTION_SERVICE) {
 			when (which) {
-				2 -> {
+				AUDIO_OUTPUT_BLUETOOTH -> {
 					if (!bluetoothScoActive) {
 						needSwitchToBluetoothAfterScoActivates = true
 
@@ -3108,7 +3122,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					audioRouteToSet = AUDIO_ROUTE_BLUETOOTH
 				}
 
-				1 -> {
+				AUDIO_OUTPUT_EARPIECE -> {
 					needSwitchToBluetoothAfterScoActivates = false
 
 					if (bluetoothScoActive || bluetoothScoConnecting) {
@@ -3124,7 +3138,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					audioRouteToSet = AUDIO_ROUTE_EARPIECE
 				}
 
-				0 -> {
+				AUDIO_OUTPUT_SPEAKER -> {
 					needSwitchToBluetoothAfterScoActivates = false
 
 					if (bluetoothScoActive || bluetoothScoConnecting) {
@@ -3145,17 +3159,17 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 		else {
 			when (which) {
-				2 -> {
+				AUDIO_OUTPUT_BLUETOOTH -> {
 					audioRouteToSet = AUDIO_ROUTE_BLUETOOTH
 					speakerphoneStateToSet = false
 				}
 
-				1 -> {
+				AUDIO_OUTPUT_EARPIECE -> {
 					audioRouteToSet = AUDIO_ROUTE_EARPIECE
 					speakerphoneStateToSet = false
 				}
 
-				0 -> {
+				AUDIO_OUTPUT_SPEAKER -> {
 					audioRouteToSet = AUDIO_ROUTE_SPEAKER
 					speakerphoneStateToSet = true
 				}
@@ -3206,7 +3220,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return tgVoip[CAPTURE_DEVICE_CAMERA]?.debugInfo ?: ""
 	}
 
-	fun getCallDuration(): Long {
+	override fun getCallDuration(): Long {
 		return if (callStartTime == 0L) {
 			0
 		}
@@ -3215,7 +3229,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	fun stopRinging() {
+	override fun stopRinging() {
 		ringtonePlayer?.stop()
 		ringtonePlayer?.release()
 		ringtonePlayer = null
@@ -3225,7 +3239,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	}
 
 	private fun showNotification(name: String, photo: Bitmap?) {
-		val intent = Intent(this, LaunchActivity::class.java).setAction(if (groupCall != null) "voip_chat" else "voip")
+		val intent = Intent(this, LaunchActivity::class.java).setAction(if (groupCall != null) VoIPPreNotificationService.VOIP_CHAT_ACTION else VoIPPreNotificationService.VOIP_ACTION)
 
 		if (groupCall != null) {
 			intent.putExtra("currentAccount", currentAccount)
@@ -3409,7 +3423,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 
 		if (tgVoip[CAPTURE_DEVICE_CAMERA] != null) {
-			StatsController.getInstance(currentAccount).incrementTotalCallsTime(getStatsNetworkType(), (getCallDuration() / 1000).toInt() % 5)
+			StatsController.getInstance(currentAccount).incrementTotalCallsTime(getStatsNetworkType(), (callDuration / 1000).toInt() % 5)
 
 			onTgVoipPreStop()
 
@@ -3508,9 +3522,9 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 
 		if (USE_CONNECTION_SERVICE) {
-			if (!didDeleteConnectionServiceContact) {
-				// ContactsController.getInstance(currentAccount).deleteConnectionServiceContact()
-			}
+			// if (!didDeleteConnectionServiceContact) {
+			// ContactsController.getInstance(currentAccount).deleteConnectionServiceContact()
+			// }
 
 			if (!playingSound) {
 				systemCallConnection?.destroy()
@@ -3539,7 +3553,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		hangUp(0, onDone)
 	}
 
-	fun acceptIncomingCall() {
+	override fun acceptIncomingCall() {
 		MessagesController.getInstance(currentAccount).ignoreSetOnline = false
 		stopRinging()
 		showNotification()
@@ -3640,7 +3654,6 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	@JvmOverloads
 	fun declineIncomingCall(reason: Int = DISCARD_REASON_HANGUP, onDone: Runnable? = null) {
 		stopRinging()
 
@@ -3688,7 +3701,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		req.peer = TL_inputPhoneCall()
 		req.peer.access_hash = privateCall!!.access_hash
 		req.peer.id = privateCall!!.id
-		req.duration = (getCallDuration() / 1000).toInt()
+		req.duration = (callDuration / 1000).toInt()
 		req.connection_id = if (tgVoip[CAPTURE_DEVICE_CAMERA] != null) tgVoip[CAPTURE_DEVICE_CAMERA]!!.preferredRelayId else 0
 
 		when (reason) {
@@ -3764,7 +3777,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				FileLog.d("Starting incall activity for incoming call")
 
 				try {
-					PendingIntent.getActivity(this@VoIPService, 12345, Intent(this@VoIPService, LaunchActivity::class.java).setAction("voip"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE).send()
+					PendingIntent.getActivity(this@VoIPService, 12345, Intent(this@VoIPService, LaunchActivity::class.java).setAction(VoIPPreNotificationService.VOIP_ACTION), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE).send()
 				}
 				catch (x: Exception) {
 					FileLog.e("Error starting incall activity", x)
@@ -3794,7 +3807,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			if (error == null) {
 				val data = (response as TL_dataJSON).data
 				setGlobalServerConfig(data)
-				preferences.edit().putString("voip_server_config", data).commit()
+				preferences.edit().putString("voip_server_config", data).apply()
 			}
 		}
 	}
@@ -4257,7 +4270,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return lastError
 	}
 
-	fun getCallState(): Int {
+	override fun getCallState(): Int {
 		return currentState
 	}
 
@@ -4305,88 +4318,9 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).activeNetworkInfo
 	}
 
-	private fun getRoundAvatarBitmap(userOrChat: TLObject?): Bitmap {
-		var bitmap: Bitmap? = null
-
-		try {
-			if (userOrChat is User) {
-				if (userOrChat.photo?.photo_small != null) {
-					val img = ImageLoader.instance.getImageFromMemory(userOrChat.photo?.photo_small, null, "50_50")
-
-					if (img != null) {
-						bitmap = img.bitmap.copy(Bitmap.Config.ARGB_8888, true)
-					}
-					else {
-						try {
-							val opts = BitmapFactory.Options()
-							opts.inMutable = true
-							bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(currentAccount).getPathToAttach(userOrChat.photo?.photo_small, true).toString(), opts)
-						}
-						catch (e: Throwable) {
-							FileLog.e(e)
-						}
-					}
-				}
-			}
-			else {
-				val chat = userOrChat as Chat?
-
-				if (chat?.photo?.photo_small != null) {
-					val img = ImageLoader.instance.getImageFromMemory(chat.photo.photo_small, null, "50_50")
-
-					if (img != null) {
-						bitmap = img.bitmap.copy(Bitmap.Config.ARGB_8888, true)
-					}
-					else {
-						try {
-							val opts = BitmapFactory.Options()
-							opts.inMutable = true
-							bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(currentAccount).getPathToAttach(chat.photo.photo_small, true).toString(), opts)
-						}
-						catch (e: Throwable) {
-							FileLog.e(e)
-						}
-					}
-				}
-			}
-		}
-		catch (e: Throwable) {
-			FileLog.e(e)
-		}
-
-		if (bitmap == null) {
-			Theme.createDialogsResources(this)
-
-			val placeholder: AvatarDrawable = if (userOrChat is User) {
-				AvatarDrawable(userOrChat as User?)
-			}
-			else {
-				AvatarDrawable(userOrChat as Chat?)
-			}
-
-			bitmap = Bitmap.createBitmap(AndroidUtilities.dp(42f), AndroidUtilities.dp(42f), Bitmap.Config.ARGB_8888)
-
-			placeholder.setBounds(0, 0, bitmap.width, bitmap.height)
-			placeholder.draw(Canvas(bitmap))
-		}
-
-		val canvas = Canvas(bitmap!!)
-
-		val circlePath = Path()
-		circlePath.addCircle((bitmap.width / 2).toFloat(), (bitmap.height / 2).toFloat(), (bitmap.width / 2).toFloat(), Path.Direction.CW)
-		circlePath.toggleInverseFillType()
-
-		val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-		paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-
-		canvas.drawPath(circlePath, paint)
-
-		return bitmap
-	}
-
 	private fun showIncomingNotification(name: String, userOrChat: TLObject?, video: Boolean) {
 		val intent = Intent(this, LaunchActivity::class.java)
-		intent.action = "voip"
+		intent.action = VoIPPreNotificationService.VOIP_ACTION
 
 		val builder: Notification.Builder = Notification.Builder(this).setContentTitle(if (video) getString(R.string.VoipInVideoCallBranding) else getString(R.string.VoipInCallBranding)).setSmallIcon(R.drawable.ic_call).setContentIntent(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_MUTABLE))
 
@@ -4417,7 +4351,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 					chanIndex++
 
-					nprefs.edit().putInt("calls_notification_channel", chanIndex).commit()
+					nprefs.edit().putInt("calls_notification_channel", chanIndex).apply()
 				}
 				else {
 					needCreate = false
@@ -4553,7 +4487,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			req.peer = TL_inputPhoneCall()
 			req.peer.access_hash = privateCall!!.access_hash
 			req.peer.id = privateCall!!.id
-			req.duration = (getCallDuration() / 1000).toInt()
+			req.duration = (callDuration / 1000).toInt()
 			req.connection_id = if (tgVoip[CAPTURE_DEVICE_CAMERA] != null) tgVoip[CAPTURE_DEVICE_CAMERA]!!.preferredRelayId else 0
 			req.reason = TL_phoneCallDiscardReasonDisconnect()
 
@@ -4789,7 +4723,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	fun isOutgoing(): Boolean {
+	override fun isOutgoing(): Boolean {
 		return isOutgoing
 	}
 
@@ -4829,7 +4763,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		acceptIncomingCall()
 
 		try {
-			PendingIntent.getActivity(this@VoIPService, 0, Intent(this@VoIPService, getUIActivityClass()).setAction("voip"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE).send()
+			PendingIntent.getActivity(this@VoIPService, 0, Intent(this@VoIPService, getUIActivityClass()).setAction(VoIPPreNotificationService.VOIP_ACTION), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE).send()
 		}
 		catch (x: Exception) {
 			FileLog.e("Error starting incall activity", x)
@@ -4895,6 +4829,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			audioModeIsVoip = true
 		}
 
+		@Deprecated("Deprecated in Java")
 		override fun onCallAudioStateChanged(state: CallAudioState) {
 			FileLog.d("ConnectionService call audio state changed: $state")
 
@@ -4975,6 +4910,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		const val ACTION_HEADSET_PLUG = "android.intent.action.HEADSET_PLUG"
 		private const val ID_ONGOING_CALL_NOTIFICATION = 201
 		private const val ID_INCOMING_CALL_NOTIFICATION = 202
+		const val ID_INCOMING_CALL_PRENOTIFICATION = 203
 		const val QUALITY_SMALL = 0
 		const val QUALITY_MEDIUM = 1
 		const val QUALITY_FULL = 2
@@ -4987,8 +4923,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		const val AUDIO_ROUTE_EARPIECE = 0
 		const val AUDIO_ROUTE_SPEAKER = 1
 		const val AUDIO_ROUTE_BLUETOOTH = 2
-		private val USE_CONNECTION_SERVICE = isDeviceCompatibleWithConnectionServiceAPI
+		private const val USE_CONNECTION_SERVICE = false
 		private const val PROXIMITY_SCREEN_OFF_WAKE_LOCK = 32
+		const val AUDIO_OUTPUT_SPEAKER = 0
+		const val AUDIO_OUTPUT_EARPIECE = 1
+		const val AUDIO_OUTPUT_BLUETOOTH = 2
 
 		@JvmStatic
 		var sharedInstance: VoIPService? = null
@@ -4997,15 +4936,96 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		private var setModeRunnable: Runnable? = null
 		private val sync = Any()
 
-		@JvmField
 		var callIShouldHavePutIntoIntent: PhoneCall? = null
+			set(value) {
+				field = value
+				FileLog.d("callIShouldHavePutIntoIntent = $value")
+			}
 
 		@JvmField
 		var audioLevelsCallback: AudioLevelsCallback? = null
 
-		@JvmStatic
 		fun hasRtmpStream(): Boolean {
-			return sharedInstance != null && sharedInstance!!.groupCall != null && sharedInstance!!.groupCall!!.call!!.rtmp_stream
+			return sharedInstance?.groupCall?.call?.rtmp_stream == true
+		}
+
+		fun getRoundAvatarBitmap(userOrChat: TLObject?): Bitmap {
+			var bitmap: Bitmap? = null
+
+			try {
+				if (userOrChat is User) {
+					if (userOrChat.photo?.photo_small != null) {
+						val img = ImageLoader.getInstance().getImageFromMemory(userOrChat.photo?.photo_small, null, "50_50")
+
+						if (img != null) {
+							bitmap = img.bitmap.copy(Bitmap.Config.ARGB_8888, true)
+						}
+						else {
+							try {
+								val opts = BitmapFactory.Options()
+								opts.inMutable = true
+								bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(userOrChat.photo?.photo_small, true).toString(), opts)
+							}
+							catch (e: Throwable) {
+								FileLog.e(e)
+							}
+						}
+					}
+				}
+				else {
+					val chat = userOrChat as Chat?
+
+					if (chat?.photo?.photo_small != null) {
+						val img = ImageLoader.getInstance().getImageFromMemory(chat.photo.photo_small, null, "50_50")
+
+						if (img != null) {
+							bitmap = img.bitmap.copy(Bitmap.Config.ARGB_8888, true)
+						}
+						else {
+							try {
+								val opts = BitmapFactory.Options()
+								opts.inMutable = true
+								bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(chat.photo.photo_small, true).toString(), opts)
+							}
+							catch (e: Throwable) {
+								FileLog.e(e)
+							}
+						}
+					}
+				}
+			}
+			catch (e: Throwable) {
+				FileLog.e(e)
+			}
+
+			if (bitmap == null) {
+				Theme.createDialogsResources(ApplicationLoader.applicationContext)
+
+				val placeholder: AvatarDrawable = if (userOrChat is User) {
+					AvatarDrawable(userOrChat as User?)
+				}
+				else {
+					AvatarDrawable(userOrChat as Chat?)
+				}
+
+				bitmap = Bitmap.createBitmap(AndroidUtilities.dp(42f), AndroidUtilities.dp(42f), Bitmap.Config.ARGB_8888)
+
+				placeholder.setBounds(0, 0, bitmap.width, bitmap.height)
+				placeholder.draw(Canvas(bitmap))
+			}
+
+			val canvas = Canvas(bitmap)
+
+			val circlePath = Path()
+			circlePath.addCircle((bitmap.width / 2).toFloat(), (bitmap.height / 2).toFloat(), (bitmap.width / 2).toFloat(), Path.Direction.CW)
+			circlePath.toggleInverseFillType()
+
+			val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+			paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+
+			canvas.drawPath(circlePath, paint)
+
+			return bitmap
 		}
 
 		@Throws(Exception::class)
@@ -5023,6 +5043,18 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			return sb.toString()
 		}
 
+		fun getSharedState(): VoIPServiceState? {
+			if (sharedInstance != null) {
+				return sharedInstance
+			}
+
+			if (Build.VERSION.SDK_INT >= 33) {
+				return VoIPPreNotificationService.state
+			}
+
+			return null
+		}
+
 		@Throws(Exception::class)
 		fun getStringFromFile(filePath: String): String {
 			return FileInputStream(File(filePath)).use {
@@ -5032,40 +5064,10 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		val isAnyKindOfCallActive: Boolean
 			get() = if (sharedInstance != null) {
-				sharedInstance?.getCallState() != STATE_WAITING_INCOMING
+				sharedInstance?.callState != STATE_WAITING_INCOMING
 			}
 			else {
 				false
 			}
-		// some non-Google devices don't implement the ConnectionService API correctly so, sadly,
-		// we'll have to whitelist only a handful of known-compatible devices for now
-		// /*"angler".equals(Build.PRODUCT)            // Nexus 6P
-		// || "bullhead".equals(Build.PRODUCT)        // Nexus 5X
-		// || "sailfish".equals(Build.PRODUCT)        // Pixel
-		// || "marlin".equals(Build.PRODUCT)        // Pixel XL
-		// || "walleye".equals(Build.PRODUCT)        // Pixel 2
-		// || "taimen".equals(Build.PRODUCT)        // Pixel 2 XL
-		// || "blueline".equals(Build.PRODUCT)        // Pixel 3
-		// || "crosshatch".equals(Build.PRODUCT)    // Pixel 3 XL
-		// || MessagesController.getGlobalMainSettings().getBoolean("dbg_force_connection_service", false);
-
-		private val isDeviceCompatibleWithConnectionServiceAPI: Boolean
-			get() = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-				false
-			}
-			else {
-				false
-			}
-		// some non-Google devices don't implement the ConnectionService API correctly so, sadly,
-		// we'll have to whitelist only a handful of known-compatible devices for now
-		/*"angler".equals(Build.PRODUCT)            // Nexus 6P
-               || "bullhead".equals(Build.PRODUCT)        // Nexus 5X
-               || "sailfish".equals(Build.PRODUCT)        // Pixel
-               || "marlin".equals(Build.PRODUCT)        // Pixel XL
-               || "walleye".equals(Build.PRODUCT)        // Pixel 2
-               || "taimen".equals(Build.PRODUCT)        // Pixel 2 XL
-               || "blueline".equals(Build.PRODUCT)        // Pixel 3
-               || "crosshatch".equals(Build.PRODUCT)    // Pixel 3 XL
-               || MessagesController.getGlobalMainSettings().getBoolean("dbg_force_connection_service", false);*/
 	}
 }

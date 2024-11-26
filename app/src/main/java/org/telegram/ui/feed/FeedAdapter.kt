@@ -83,7 +83,7 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 				}
 			}
 			else {
-				flatFeed.add(messages.sortedByDescending { it.messageOwner?.date ?: 0 })
+				flatFeed.add(messages.sortedBy { it.messageOwner?.id ?: 0 })
 			}
 		}
 
@@ -169,7 +169,7 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 				val feedItem = feed?.get(position)
 
 				(holder as FeedViewHolder).let {
-					it.bind(feedItem, pinned?.contains(feedItem?.firstOrNull()?.messageOwner?.getChannel()?.id ?: Long.MAX_VALUE) ?: false)
+					it.bind(feedItem, pinned?.contains(feedItem?.firstOrNull()?.messageOwner?.getChannel()?.id ?: Long.MAX_VALUE) == true)
 
 					it.binding.root.setOnClickListener {
 						feedItem?.firstOrNull()?.let { message ->

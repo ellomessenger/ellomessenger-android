@@ -1283,38 +1283,6 @@ public class TLRPC {
 		}
 	}
 
-	public static class TL_error extends TLObject {
-		public static int constructor = 0xc4b9f9bb;
-
-		public int code;
-		public String text;
-
-		public static TL_error TLdeserialize(AbstractSerializedData stream, int constructor, boolean exception) {
-			if (TL_error.constructor != constructor) {
-				if (exception) {
-					throw new RuntimeException(String.format("can't parse magic %x in TL_error", constructor));
-				}
-				else {
-					return null;
-				}
-			}
-			TL_error result = new TL_error();
-			result.readParams(stream, exception);
-			return result;
-		}
-
-		public void readParams(AbstractSerializedData stream, boolean exception) {
-			code = stream.readInt32(exception);
-			text = stream.readString(exception);
-		}
-
-		public void serializeToStream(AbstractSerializedData stream) {
-			stream.writeInt32(constructor);
-			stream.writeInt32(code);
-			stream.writeString(text);
-		}
-	}
-
 	public static abstract class UrlAuthResult extends TLObject {
 
 		public static UrlAuthResult TLdeserialize(AbstractSerializedData stream, int constructor, boolean exception) {

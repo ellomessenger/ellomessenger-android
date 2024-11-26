@@ -65,6 +65,7 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.tlrpc.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -1423,14 +1424,14 @@ public class TwoStepVerificationSetupActivity extends BaseFragment {
                         TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) currentPassword.current_algo;
                         req.password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, algo);
                         if (req.password == null) {
-                            TLRPC.TL_error error = new TLRPC.TL_error();
+                            TL_error error = new TL_error();
                             error.text = "ALGO_INVALID";
                             requestDelegate.run(null, error);
                             return;
                         }
                         ConnectionsManager.getInstance(currentAccount).sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin);
                     } else {
-                        TLRPC.TL_error error = new TLRPC.TL_error();
+                        TL_error error = new TL_error();
                         error.text = "PASSWORD_HASH_INVALID";
                         requestDelegate.run(null, error);
                     }
@@ -2072,14 +2073,14 @@ public class TwoStepVerificationSetupActivity extends BaseFragment {
                         TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) currentPassword.new_algo;
                         new_settings.new_password_hash = SRPHelper.getVBytes(newPasswordBytes, algo);
                         if (new_settings.new_password_hash == null) {
-                            TLRPC.TL_error error = new TLRPC.TL_error();
+                            TL_error error = new TL_error();
                             error.text = "ALGO_INVALID";
                             requestDelegate.run(null, error);
                         }
                     }
                     ConnectionsManager.getInstance(currentAccount).sendRequest(request, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin);
                 } else {
-                    TLRPC.TL_error error = new TLRPC.TL_error();
+                    TL_error error = new TL_error();
                     error.text = "PASSWORD_HASH_INVALID";
                     requestDelegate.run(null, error);
                 }

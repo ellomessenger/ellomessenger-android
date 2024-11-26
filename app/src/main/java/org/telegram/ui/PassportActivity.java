@@ -96,6 +96,7 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.tgnet.tlrpc.User;
 import org.telegram.tgnet.tlrpc.Vector;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -1911,7 +1912,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 
 				@Override
-				public void run(final TLObject response, final TLRPC.TL_error error) {
+				public void run(final TLObject response, final TL_error error) {
 					if (error != null && "SRP_ID_INVALID".equals(error.text)) {
 						TLRPC.TL_account_getPassword getPasswordReq = new TLRPC.TL_account_getPassword();
 						ConnectionsManager.getInstance(currentAccount).sendRequest(getPasswordReq, (response2, error2) -> AndroidUtilities.runOnUIThread(() -> {
@@ -2053,7 +2054,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)currentPassword.current_algo;
 				req.password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, algo);
 				if (req.password == null) {
-					TLRPC.TL_error error = new TLRPC.TL_error();
+					TL_error error = new TL_error();
 					error.text = "ALGO_INVALID";
 					requestDelegate.run(null, error);
 					return;
@@ -2062,7 +2063,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				ConnectionsManager.getInstance(currentAccount).bindRequestToGuid(reqId, classGuid);
 			}
 			else {
-				TLRPC.TL_error error = new TLRPC.TL_error();
+				TL_error error = new TL_error();
 				error.text = "PASSWORD_HASH_INVALID";
 				requestDelegate.run(null, error);
 			}
@@ -5893,7 +5894,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					req.secure_secret_id = secureSecretId;
 					ConnectionsManager.getInstance(currentAccount).sendRequest(req, new RequestDelegate() {
 
-						private void onResult(final TLRPC.TL_error error, final TLRPC.TL_secureValue newValue, final TLRPC.TL_secureValue newPendingValue) {
+						private void onResult(final TL_error error, final TLRPC.TL_secureValue newValue, final TLRPC.TL_secureValue newPendingValue) {
 							AndroidUtilities.runOnUIThread(() -> {
 								if (error != null) {
 									if (errorRunnable != null) {
@@ -5982,7 +5983,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						}
 
 						@Override
-						public void run(final TLObject response, final TLRPC.TL_error error) {
+						public void run(final TLObject response, final TL_error error) {
 							if (error != null) {
 								if (error.text.equals("EMAIL_VERIFICATION_NEEDED")) {
 									TLRPC.TL_account_sendVerifyEmailCode req = new TLRPC.TL_account_sendVerifyEmailCode();

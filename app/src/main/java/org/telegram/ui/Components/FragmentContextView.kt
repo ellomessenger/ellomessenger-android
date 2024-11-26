@@ -65,6 +65,7 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.voip.StateListener
+import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC.TL_groupCallDiscarded
@@ -707,7 +708,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 				}
 			}
 			else if (currentStyle == STYLE_CONNECTING_GROUP_CALL) {
-				val intent = Intent(getContext(), LaunchActivity::class.java).setAction("voip")
+				val intent = Intent(getContext(), LaunchActivity::class.java).setAction(VoIPPreNotificationService.VOIP_ACTION)
 				getContext().startActivity(intent)
 			}
 			else if (currentStyle == STYLE_LIVE_LOCATION) {

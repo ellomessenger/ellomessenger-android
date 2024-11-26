@@ -4,6 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2015-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
 
 #ifndef TIMER_H
@@ -19,10 +20,13 @@ class Timer {
 
 public:
     Timer(int32_t instance, std::function<void()> function);
+
     ~Timer();
 
     void start();
+
     void stop();
+
     void setTimeout(uint32_t ms, bool repeat);
 
 private:

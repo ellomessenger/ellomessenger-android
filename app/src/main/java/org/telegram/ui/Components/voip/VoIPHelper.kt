@@ -44,6 +44,7 @@ import org.telegram.messenger.SendMessagesHelper
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.voip.Instance
+import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC.Chat
@@ -215,7 +216,7 @@ object VoIPHelper {
 				val key2: Int
 
 				if (callerId > 0) {
-					val callUser = voIPService.getUser()!!
+					val callUser = voIPService.user!!
 
 					oldName = ContactsController.formatName(callUser.first_name, callUser.last_name)
 
@@ -263,7 +264,7 @@ object VoIPHelper {
 			}
 			else {
 				if (user != null || activity !is LaunchActivity) {
-					activity.startActivity(Intent(activity, LaunchActivity::class.java).setAction(if (user != null) "voip" else "voip_chat"))
+					activity.startActivity(Intent(activity, LaunchActivity::class.java).setAction(if (user != null) VoIPPreNotificationService.VOIP_ACTION else VoIPPreNotificationService.VOIP_CHAT_ACTION))
 				}
 				else {
 					if (!hash.isNullOrEmpty()) {
@@ -760,7 +761,7 @@ object VoIPHelper {
 			val force = preferences.getBoolean("dbg_force_tcp_in_calls", false)
 			val editor = preferences.edit()
 			editor.putBoolean("dbg_force_tcp_in_calls", !force)
-			editor.commit()
+			editor.apply()
 			tcpCell.isChecked = !force
 		}
 
@@ -774,7 +775,7 @@ object VoIPHelper {
 				val force = preferences.getBoolean("dbg_dump_call_stats", false)
 				val editor = preferences.edit()
 				editor.putBoolean("dbg_dump_call_stats", !force)
-				editor.commit()
+				editor.apply()
 				dumpCell.isChecked = !force
 			}
 
@@ -789,7 +790,7 @@ object VoIPHelper {
 				val force = preferences.getBoolean("dbg_force_connection_service", false)
 				val editor = preferences.edit()
 				editor.putBoolean("dbg_force_connection_service", !force)
-				editor.commit()
+				editor.apply()
 				connectionServiceCell.isChecked = !force
 			}
 

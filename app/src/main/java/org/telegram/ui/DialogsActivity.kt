@@ -72,6 +72,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScrollerCustom
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.Recycler
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -688,6 +692,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		AndroidUtilities.runOnUIThread {
 			Theme.createChatResources(context, false)
 		}
+
+		handleAppUpdate(context)
 
 		val menu = actionBar!!.createMenu()
 
@@ -1322,8 +1328,6 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			})
 		}
 
-		loadBotsInfo()
-
 		if (allowSwitchAccount && UserConfig.activatedAccountsCount > 1) {
 			switchItem = menu.addItemWithWidth(1, 0, AndroidUtilities.dp(56f))
 
@@ -1936,7 +1940,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 		if (onlySelect) {
 			if (initialDialogsType == 3 && selectAlertString == null) {
-				searchViewPager?.dialogsSearchAdapter?.ignoredIds = longArrayOf(BuildConfig.AI_BOT_ID, 333000L, 42777L, 777000L)
+				searchViewPager?.dialogsSearchAdapter?.ignoredIds = longArrayOf(BuildConfig.AI_BOT_ID, 333000L, 42777L, BuildConfig.NOTIFICATIONS_BOT_ID)
 			}
 		}
 
@@ -2622,6 +2626,19 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		return fragmentView
 	}
 
+	private fun handleAppUpdate(context: Context) {
+		val appUpdateManager = AppUpdateManagerFactory.create(context)
+		val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+
+		appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+			if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
+				parentActivity?.let {
+					appUpdateManager.startUpdateFlowForResult(appUpdateInfo, it, AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build(), update_app)
+				}
+			}
+		}.addOnFailureListener { exception -> FileLog.e("Failed to check for updates: ${exception.message}") }
+	}
+
 	fun showSelectStatusDialog() {
 		if (selectAnimatedEmojiDialog != null || SharedConfig.appLocked) {
 			return
@@ -2733,30 +2750,6 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		}
 
 		commentViewPreviousTop = top
-	}
-
-	private fun loadBotsInfo() {
-		val req = ElloRpc.getAllBots()
-
-		ioScope.launch {
-			val response = connectionsManager.performRequest(req)
-			val error = response as? TLRPC.TL_error
-
-			withContext(mainScope.coroutineContext) {
-				if (error == null) {
-					if (response is TLRPC.TL_biz_dataRaw) {
-						val res = response.readData<ElloRpc.AllBotsResponse>()
-						ioScope.launch {
-							res?.bots?.forEach {
-								if (messagesController.getUser(it.botId) == null) {
-									messagesController.loadUser(it.botId ?: 0L, classGuid, true)
-								}
-							}
-						}
-					}
-				}
-			}
-		}
 	}
 
 	private fun updateContextViewPosition() {
@@ -5673,9 +5666,10 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			else {
 				messagesController.deleteDialog(selectedDialog, 0, revoke)
 
-				if (isBot) {
-					messagesController.blockPeer(selectedDialog.toInt().toLong())
-				}
+				// MARK: uncomment to block bot when clearing history
+//				if (isBot) {
+//					messagesController.blockPeer(selectedDialog.toInt().toLong())
+//				}
 			}
 
 			if (AndroidUtilities.isTablet()) {
@@ -5858,7 +5852,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			if (folderId == 1 || dialog.folder_id == 1) {
 				canUnarchiveCount++
 			}
-			else if (selectedDialog != selfUserId && selectedDialog != 777000L && !messagesController.isPromoDialog(selectedDialog, false)) {
+			else if (selectedDialog != selfUserId && selectedDialog != BuildConfig.NOTIFICATIONS_BOT_ID && !messagesController.isPromoDialog(selectedDialog, false)) {
 				canArchiveCount++
 			}
 
@@ -6504,7 +6498,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 				when (permissions[a]) {
 					Manifest.permission.WRITE_EXTERNAL_STORAGE -> if (grantResults[a] == PackageManager.PERMISSION_GRANTED) {
-						ImageLoader.instance.checkMediaPaths()
+						ImageLoader.getInstance().checkMediaPaths()
 					}
 				}
 			}
@@ -9335,7 +9329,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0)
 				}
 				else {
-					if (filterTabsView?.visibility == View.VISIBLE && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_FOLDERS || !allowSwipeDuringCurrentTouch || dialogId == userConfig.clientUserId || dialogId == 777000L && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE || messagesController.isPromoDialog(dialogId, false) && messagesController.promoDialogType != MessagesController.PROMO_TYPE_PSA) {
+					if (filterTabsView?.visibility == View.VISIBLE && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_FOLDERS || !allowSwipeDuringCurrentTouch || dialogId == userConfig.clientUserId || dialogId == BuildConfig.NOTIFICATIONS_BOT_ID && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE || messagesController.isPromoDialog(dialogId, false) && messagesController.promoDialogType != MessagesController.PROMO_TYPE_PSA) {
 						return 0
 					}
 
@@ -9631,6 +9625,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		private const val pin2 = 108
 		private const val add_to_folder = 109
 		private const val remove_from_folder = 110
+		private const val update_app = 111
 		private const val ARCHIVE_ITEM_STATE_PINNED = 0
 		private const val ARCHIVE_ITEM_STATE_SHOWED = 1
 		private const val ARCHIVE_ITEM_STATE_HIDDEN = 2

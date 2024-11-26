@@ -1,22 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:app="http://schemas.android.com/apk/res-auto"
 	xmlns:tools="http://schemas.android.com/tools"
 	android:layout_width="match_parent"
-	android:layout_height="match_parent">
+	android:layout_height="match_parent"
+	android:fillViewport="true">
 
-	<LinearLayout
+	<androidx.constraintlayout.widget.ConstraintLayout
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
 		android:orientation="vertical"
 		android:padding="14dp">
 
 		<LinearLayout
+			android:id="@+id/linearLayout"
 			android:layout_width="wrap_content"
 			android:layout_height="wrap_content"
 			android:layout_gravity="center"
 			android:gravity="center"
-			android:orientation="vertical">
+			android:orientation="vertical"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			app:layout_constraintBottom_toTopOf="@id/bot_list">
 
 			<ImageView
 				android:layout_width="wrap_content"
@@ -71,12 +77,12 @@
 					android:layout_height="wrap_content"
 					android:layout_gravity="center"
 					android:layout_marginStart="16dp"
-					android:gravity="end"
 					android:layout_weight="1"
+					android:gravity="end"
+					android:text="0"
 					android:textColor="@color/dark"
 					android:textSize="16sp"
-					android:textStyle="bold"
-					android:text="0" />
+					android:textStyle="bold" />
 			</LinearLayout>
 
 			<LinearLayout
@@ -108,12 +114,12 @@
 					android:layout_height="wrap_content"
 					android:layout_gravity="center"
 					android:layout_marginStart="4dp"
-					android:gravity="end"
 					android:layout_weight="1"
+					android:gravity="end"
+					android:text="0"
 					android:textColor="@color/dark"
 					android:textSize="16sp"
-					android:textStyle="bold"
-					android:text="0" />
+					android:textStyle="bold" />
 			</LinearLayout>
 
 			<com.google.android.material.button.MaterialButton
@@ -122,20 +128,34 @@
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
 				android:layout_marginTop="16dp"
-				app:cornerRadius="6dp"
 				android:padding="13dp"
 				android:text="@string/buy_ai_pack"
-				android:textSize="16sp" />
+				android:textSize="16sp"
+				app:cornerRadius="6dp" />
 		</LinearLayout>
+
+		<LinearLayout
+			android:id="@+id/loader"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:orientation="vertical"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@+id/linearLayout" />
 
 		<androidx.recyclerview.widget.RecyclerView
 			android:id="@+id/bot_list"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"
-			android:layout_marginTop="10dp"
-			tools:listitem="@layout/item_bot_layout"
-			tools:itemCount="1"/>
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@+id/linearLayout"
+			tools:itemCount="5"
+			tools:listitem="@layout/item_bot_layout" />
 
-	</LinearLayout>
+	</androidx.constraintlayout.widget.ConstraintLayout>
 
-</ScrollView>
+</androidx.core.widget.NestedScrollView>

@@ -10,6 +10,7 @@ package org.telegram.tgnet
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.UserConfig
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.Country
 
 class CountriesDataSource private constructor() {
@@ -22,7 +23,7 @@ class CountriesDataSource private constructor() {
 	private val connectionsManager: ConnectionsManager
 		get() = AccountInstance.getInstance(currentAccount).connectionsManager
 
-	fun loadCountries(callback: ((List<Country>?, TLRPC.TL_error?) -> Unit)? = null) {
+	fun loadCountries(callback: ((List<Country>?, TL_error?) -> Unit)? = null) {
 		countries?.let {
 			if (it.isNotEmpty()) {
 				AndroidUtilities.runOnUIThread {

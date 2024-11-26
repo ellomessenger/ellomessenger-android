@@ -35,26 +35,26 @@ thread_local static SHA256_CTX sha256Ctx;
 Datacenter::Datacenter(int32_t instance, uint32_t id) {
     instanceNum = instance;
     datacenterId = id;
-    for (auto & a : uploadConnection) {
+    for (auto &a: uploadConnection) {
         a = nullptr;
     }
-    for (auto & a : downloadConnection) {
+    for (auto &a: downloadConnection) {
         a = nullptr;
     }
-    for (auto & a : proxyConnection) {
+    for (auto &a: proxyConnection) {
         a = nullptr;
     }
 }
 
 Datacenter::Datacenter(int32_t instance, NativeByteBuffer *data) {
     instanceNum = instance;
-    for (auto & a : uploadConnection) {
+    for (auto &a: uploadConnection) {
         a = nullptr;
     }
-    for (auto & a : downloadConnection) {
+    for (auto &a: downloadConnection) {
         a = nullptr;
     }
-    for (auto & a : proxyConnection) {
+    for (auto &a: proxyConnection) {
         a = nullptr;
     }
     uint32_t currentVersion = data->readUint32(nullptr);
@@ -97,12 +97,14 @@ Datacenter::Datacenter(int32_t instance, NativeByteBuffer *data) {
                 std::string secret;
                 if (currentVersion >= 7) {
                     flags = data->readInt32(nullptr);
-                } else {
+                }
+                else {
                     flags = 0;
                 }
                 if (currentVersion >= 11) {
                     secret = data->readString(nullptr);
-                } else if (currentVersion >= 9) {
+                }
+                else if (currentVersion >= 9) {
                     secret = data->readString(nullptr);
                     if (!secret.empty()) {
                         size_t size = secret.size() / 2;
@@ -126,7 +128,8 @@ Datacenter::Datacenter(int32_t instance, NativeByteBuffer *data) {
         }
         if (currentVersion >= 4) {
             authKeyPermId = data->readInt64(nullptr);
-        } else {
+        }
+        else {
             len = data->readUint32(nullptr);
             if (len != 0) {
                 authKeyPermId = data->readInt64(nullptr);
@@ -184,7 +187,8 @@ Datacenter::Datacenter(int32_t instance, NativeByteBuffer *data) {
             currentAddressNumIpv6Download = buffer->readUint32(nullptr);
         }
         buffer->reuse();
-    } else {
+    }
+    else {
         currentPortNumIpv4 = 0;
         currentAddressNumIpv4 = 0;
         currentPortNumIpv6 = 0;
@@ -205,19 +209,23 @@ TcpAddress *Datacenter::getCurrentAddress(uint32_t flags) {
     if ((flags & TcpAddressFlagTemp) != 0) {
         currentAddressNum = currentAddressNumIpv4Temp;
         addresses = &addressesIpv4Temp;
-    } else if ((flags & TcpAddressFlagDownload) != 0) {
+    }
+    else if ((flags & TcpAddressFlagDownload) != 0) {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentAddressNum = currentAddressNumIpv6Download;
             addresses = &addressesIpv6Download;
-        } else {
+        }
+        else {
             currentAddressNum = currentAddressNumIpv4Download;
             addresses = &addressesIpv4Download;
         }
-    } else {
+    }
+    else {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentAddressNum = currentAddressNumIpv6;
             addresses = &addressesIpv6;
-        } else {
+        }
+        else {
             currentAddressNum = currentAddressNumIpv4;
             addresses = &addressesIpv4;
         }
@@ -226,7 +234,7 @@ TcpAddress *Datacenter::getCurrentAddress(uint32_t flags) {
         return nullptr;
     }
     if ((flags & TcpAddressFlagStatic) != 0) {
-        for (auto & addresse : *addresses) {
+        for (auto &addresse: *addresses) {
             if ((addresse.flags & TcpAddressFlagStatic) != 0) {
                 return &addresse;
             }
@@ -236,16 +244,20 @@ TcpAddress *Datacenter::getCurrentAddress(uint32_t flags) {
         currentAddressNum = 0;
         if ((flags & TcpAddressFlagTemp) != 0) {
             currentAddressNumIpv4Temp = currentAddressNum;
-        } else if ((flags & TcpAddressFlagDownload) != 0) {
+        }
+        else if ((flags & TcpAddressFlagDownload) != 0) {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentAddressNumIpv6Download = currentAddressNum;
-            } else {
+            }
+            else {
                 currentAddressNumIpv4Download = currentAddressNum;
             }
-        } else {
+        }
+        else {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentAddressNumIpv6 = currentAddressNum;
-            } else {
+            }
+            else {
                 currentAddressNumIpv4 = currentAddressNum;
             }
         }
@@ -264,22 +276,26 @@ int32_t Datacenter::getCurrentPort(uint32_t flags) {
         currentAddressNum = currentAddressNumIpv4Temp;
         currentPortNum = currentPortNumIpv4Temp;
         addresses = &addressesIpv4Temp;
-    } else if ((flags & TcpAddressFlagDownload) != 0) {
+    }
+    else if ((flags & TcpAddressFlagDownload) != 0) {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentAddressNum = currentAddressNumIpv6Download;
             currentPortNum = currentPortNumIpv6Download;
             addresses = &addressesIpv6Download;
-        } else {
+        }
+        else {
             currentAddressNum = currentAddressNumIpv4Download;
             currentPortNum = currentPortNumIpv4Download;
             addresses = &addressesIpv4Download;
         }
-    } else {
+    }
+    else {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentAddressNum = currentAddressNumIpv6;
             currentPortNum = currentPortNumIpv6;
             addresses = &addressesIpv6;
-        } else {
+        }
+        else {
             currentAddressNum = currentAddressNumIpv4;
             currentPortNum = currentPortNumIpv4;
             addresses = &addressesIpv4;
@@ -291,7 +307,7 @@ int32_t Datacenter::getCurrentPort(uint32_t flags) {
 
     if ((flags & TcpAddressFlagStatic) != 0) {
         uint32_t num = 0;
-        for (auto & addresse : *addresses) {
+        for (auto &addresse: *addresses) {
             if ((addresse.flags & TcpAddressFlagStatic) != 0) {
                 currentAddressNum = num;
                 break;
@@ -303,16 +319,20 @@ int32_t Datacenter::getCurrentPort(uint32_t flags) {
         currentAddressNum = 0;
         if ((flags & TcpAddressFlagTemp) != 0) {
             currentAddressNumIpv4Temp = currentAddressNum;
-        } else if ((flags & TcpAddressFlagDownload) != 0) {
+        }
+        else if ((flags & TcpAddressFlagDownload) != 0) {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentAddressNumIpv6Download = currentAddressNum;
-            } else {
+            }
+            else {
                 currentAddressNumIpv4Download = currentAddressNum;
             }
-        } else {
+        }
+        else {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentAddressNumIpv6 = currentAddressNum;
-            } else {
+            }
+            else {
                 currentAddressNumIpv4 = currentAddressNum;
             }
         }
@@ -321,25 +341,30 @@ int32_t Datacenter::getCurrentPort(uint32_t flags) {
         currentPortNum = 0;
         if ((flags & TcpAddressFlagTemp) != 0) {
             currentPortNumIpv4Temp = currentAddressNum;
-        } else if ((flags & TcpAddressFlagDownload) != 0) {
+        }
+        else if ((flags & TcpAddressFlagDownload) != 0) {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentPortNumIpv6Download = currentPortNum;
-            } else {
+            }
+            else {
                 currentPortNumIpv4Download = currentPortNum;
             }
-        } else {
+        }
+        else {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentPortNumIpv6 = currentPortNum;
-            } else {
+            }
+            else {
                 currentPortNumIpv4 = currentPortNum;
             }
         }
     }
-    TcpAddress *address = &((*addresses) [currentAddressNum]);
+    TcpAddress *address = &((*addresses)[currentAddressNum]);
     int32_t port;
     if (!address->secret.empty()) {
         port = -1;
-    } else {
+    }
+    else {
         port = defaultPorts[currentPortNum];
     }
     if (port == -1) {
@@ -352,20 +377,24 @@ void Datacenter::addAddressAndPort(std::string address, uint32_t port, uint32_t 
     std::vector<TcpAddress> *addresses;
     if ((flags & TcpAddressFlagTemp) != 0) {
         addresses = &addressesIpv4Temp;
-    } else if ((flags & TcpAddressFlagDownload) != 0) {
+    }
+    else if ((flags & TcpAddressFlagDownload) != 0) {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             addresses = &addressesIpv6Download;
-        } else {
+        }
+        else {
             addresses = &addressesIpv4Download;
         }
-    } else {
+    }
+    else {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             addresses = &addressesIpv6;
-        } else {
+        }
+        else {
             addresses = &addressesIpv4;
         }
     }
-    for (auto & addresse : *addresses) {
+    for (auto &addresse: *addresses) {
         if (addresse.address == address && addresse.port == port) {
             return;
         }
@@ -384,22 +413,26 @@ void Datacenter::nextAddressOrPort(uint32_t flags) {
         currentPortNum = currentPortNumIpv4Temp;
         currentAddressNum = currentAddressNumIpv4Temp;
         addresses = &addressesIpv4Temp;
-    } else if ((flags & TcpAddressFlagDownload) != 0) {
+    }
+    else if ((flags & TcpAddressFlagDownload) != 0) {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentPortNum = currentPortNumIpv6Download;
             currentAddressNum = currentAddressNumIpv6Download;
             addresses = &addressesIpv6Download;
-        } else {
+        }
+        else {
             currentPortNum = currentPortNumIpv4Download;
             currentAddressNum = currentAddressNumIpv4Download;
             addresses = &addressesIpv4Download;
         }
-    } else {
+    }
+    else {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentPortNum = currentPortNumIpv6;
             currentAddressNum = currentAddressNumIpv6;
             addresses = &addressesIpv6;
-        } else {
+        }
+        else {
             currentPortNum = currentPortNumIpv4;
             currentAddressNum = currentAddressNumIpv4;
             addresses = &addressesIpv4;
@@ -413,10 +446,12 @@ void Datacenter::nextAddressOrPort(uint32_t flags) {
     }
     if (tryNextPort && currentPortNum + 1 < 4) {
         currentPortNum++;
-    } else {
+    }
+    else {
         if (currentAddressNum + 1 < addresses->size()) {
             currentAddressNum++;
-        } else {
+        }
+        else {
             repeatCheckingAddresses = true;
             currentAddressNum = 0;
         }
@@ -425,19 +460,23 @@ void Datacenter::nextAddressOrPort(uint32_t flags) {
     if ((flags & TcpAddressFlagTemp) != 0) {
         currentPortNumIpv4Temp = currentPortNum;
         currentAddressNumIpv4Temp = currentAddressNum;
-    } else if ((flags & TcpAddressFlagDownload) != 0) {
+    }
+    else if ((flags & TcpAddressFlagDownload) != 0) {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentPortNumIpv6Download = currentPortNum;
             currentAddressNumIpv6Download = currentAddressNum;
-        } else {
+        }
+        else {
             currentPortNumIpv4Download = currentPortNum;
             currentAddressNumIpv4Download = currentAddressNum;
         }
-    } else {
+    }
+    else {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentPortNumIpv6 = currentPortNum;
             currentAddressNumIpv6 = currentAddressNum;
-        } else {
+        }
+        else {
             currentPortNumIpv4 = currentPortNum;
             currentAddressNumIpv4 = currentAddressNum;
         }
@@ -451,16 +490,20 @@ bool Datacenter::isCustomPort(uint32_t flags) {
     }
     if ((flags & TcpAddressFlagTemp) != 0) {
         currentPortNum = currentPortNumIpv4Temp;
-    } else if ((flags & TcpAddressFlagDownload) != 0) {
+    }
+    else if ((flags & TcpAddressFlagDownload) != 0) {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentPortNum = currentPortNumIpv6Download;
-        } else {
+        }
+        else {
             currentPortNum = currentPortNumIpv4Download;
         }
-    } else {
+    }
+    else {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             currentPortNum = currentPortNumIpv6;
-        } else {
+        }
+        else {
             currentPortNum = currentPortNumIpv4;
         }
     }
@@ -503,16 +546,20 @@ void Datacenter::replaceAddresses(std::vector<TcpAddress> &newAddresses, uint32_
     std::string currentAddress = currentTcpAddress != nullptr ? currentTcpAddress->address : "";
     if ((flags & TcpAddressFlagTemp) != 0) {
         addressesIpv4Temp = newAddresses;
-    } else if ((flags & TcpAddressFlagDownload) != 0) {
+    }
+    else if ((flags & TcpAddressFlagDownload) != 0) {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             addressesIpv6Download = newAddresses;
-        } else {
+        }
+        else {
             addressesIpv4Download = newAddresses;
         }
-    } else {
+    }
+    else {
         if ((flags & TcpAddressFlagIpv6) != 0) {
             addressesIpv6 = newAddresses;
-        } else {
+        }
+        else {
             addressesIpv4 = newAddresses;
         }
     }
@@ -521,16 +568,20 @@ void Datacenter::replaceAddresses(std::vector<TcpAddress> &newAddresses, uint32_
     if (currentAddress.compare(newAddress)) {
         if ((flags & TcpAddressFlagTemp) != 0) {
             currentPortNumIpv4Temp = 0;
-        } else if ((flags & TcpAddressFlagDownload) != 0) {
+        }
+        else if ((flags & TcpAddressFlagDownload) != 0) {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentPortNumIpv6Download = 0;
-            } else {
+            }
+            else {
                 currentPortNumIpv4Download = 0;
             }
-        } else {
+        }
+        else {
             if ((flags & TcpAddressFlagIpv6) != 0) {
                 currentPortNumIpv6 = 0;
-            } else {
+            }
+            else {
                 currentPortNumIpv4 = 0;
             }
         }
@@ -577,21 +628,24 @@ void Datacenter::serializeToStream(NativeByteBuffer *stream) {
     if (authKeyPerm != nullptr) {
         stream->writeInt32(authKeyPerm->length);
         stream->writeBytes(authKeyPerm);
-    } else {
+    }
+    else {
         stream->writeInt32(0);
     }
     stream->writeInt64(authKeyPermId);
     if (authKeyTemp != nullptr) {
         stream->writeInt32(authKeyTemp->length);
         stream->writeBytes(authKeyTemp);
-    } else {
+    }
+    else {
         stream->writeInt32(0);
     }
     stream->writeInt64(authKeyTempId);
     if (authKeyMediaTemp != nullptr) {
         stream->writeInt32(authKeyMediaTemp->length);
         stream->writeBytes(authKeyMediaTemp);
-    } else {
+    }
+    else {
         stream->writeInt32(0);
     }
     stream->writeInt64(authKeyMediaTempId);
@@ -662,7 +716,8 @@ int64_t Datacenter::getServerSalt(bool media) {
         TL_future_salt *salt = salts[a].get();
         if (salt->valid_until < date) {
             cleanupNeeded = true;
-        } else if (salt->valid_since <= date && salt->valid_until > date) {
+        }
+        else if (salt->valid_since <= date && salt->valid_until > date) {
             if (maxRemainingInterval == 0 || abs(salt->valid_until - date) > maxRemainingInterval) {
                 maxRemainingInterval = abs(salt->valid_until - date);
                 result = salt->salt;
@@ -753,12 +808,12 @@ void Datacenter::suspendConnections(bool suspendPush) {
     if (tempConnection != nullptr) {
         tempConnection->suspendConnection();
     }
-    for (auto & a : uploadConnection) {
+    for (auto &a: uploadConnection) {
         if (a != nullptr) {
             a->suspendConnection();
         }
     }
-    for (auto & a : downloadConnection) {
+    for (auto &a: downloadConnection) {
         if (a != nullptr) {
             a->suspendConnection();
         }
@@ -775,17 +830,17 @@ void Datacenter::getSessions(std::vector<int64_t> &sessions) {
     if (tempConnection != nullptr) {
         sessions.push_back(tempConnection->getSessionId());
     }
-    for (auto & a : uploadConnection) {
+    for (auto &a: uploadConnection) {
         if (a != nullptr) {
             sessions.push_back(a->getSessionId());
         }
     }
-    for (auto & a : downloadConnection) {
+    for (auto &a: downloadConnection) {
         if (a != nullptr) {
             sessions.push_back(a->getSessionId());
         }
     }
-    for (auto & a : proxyConnection) {
+    for (auto &a: proxyConnection) {
         if (a != nullptr) {
             sessions.push_back(a->getSessionId());
         }
@@ -800,19 +855,19 @@ void Datacenter::recreateSessions(HandshakeType type) {
         if (tempConnection != nullptr) {
             tempConnection->recreateSession();
         }
-        for (auto & a : uploadConnection) {
+        for (auto &a: uploadConnection) {
             if (a != nullptr) {
                 a->recreateSession();
             }
         }
-        for (auto & a : proxyConnection) {
+        for (auto &a: proxyConnection) {
             if (a != nullptr) {
                 a->recreateSession();
             }
         }
     }
     if (type == HandshakeTypeAll || type == HandshakeTypeMediaTemp || type == HandshakeTypePerm) {
-        for (auto & a : downloadConnection) {
+        for (auto &a: downloadConnection) {
             if (a != nullptr) {
                 a->recreateSession();
             }
@@ -844,10 +899,54 @@ Connection *Datacenter::createUploadConnection(uint8_t num) {
     return uploadConnection[num];
 }
 
+std::vector<Connection *> Datacenter::getAllConnections() {
+    std::vector<Connection *> result;
+
+    if (genericConnection != nullptr) {
+        result.push_back(genericConnection);
+    }
+
+    if (genericMediaConnection != nullptr) {
+        result.push_back(genericMediaConnection);
+    }
+
+    if (pushConnection != nullptr) {
+        result.push_back(pushConnection);
+    }
+
+    if (tempConnection != nullptr) {
+        result.push_back(tempConnection);
+    }
+
+    for (auto &a: uploadConnection) {
+        if (a != nullptr) {
+            result.push_back(a);
+        }
+    }
+
+    for (auto &a: downloadConnection) {
+        if (a != nullptr) {
+            result.push_back(a);
+        }
+    }
+
+    for (auto &a: proxyConnection) {
+        if (a != nullptr) {
+            result.push_back(a);
+        }
+    }
+
+    return result;
+}
+
 Connection *Datacenter::createGenericConnection() {
     if (genericConnection == nullptr) {
         genericConnection = new Connection(this, ConnectionTypeGeneric, 0);
     }
+    else if (!genericConnection->canReconnect()) {
+        return nullptr;
+    }
+
     return genericConnection;
 }
 
@@ -887,7 +986,7 @@ bool Datacenter::isHandshaking(bool media) {
     if (media && (isCdnDatacenter || !PFS_ENABLED)) {
         media = false;
     }
-    for (auto & iter : handshakes) {
+    for (auto &iter: handshakes) {
         Handshake *handshake = iter.get();
         if (handshake->getType() == HandshakeTypePerm || (media && handshake->getType() == HandshakeTypeMediaTemp) || (!media && handshake->getType() != HandshakeTypeMediaTemp)) {
             return true;
@@ -900,7 +999,7 @@ bool Datacenter::isHandshaking(HandshakeType type) {
     if (handshakes.empty()) {
         return false;
     }
-    for (auto & iter : handshakes) {
+    for (auto &iter: handshakes) {
         Handshake *handshake = iter.get();
         if (handshake->getType() == type) {
             return true;
@@ -911,18 +1010,20 @@ bool Datacenter::isHandshaking(HandshakeType type) {
 
 void Datacenter::beginHandshake(HandshakeType handshakeType, bool reconnect) {
     if (handshakeType == HandshakeTypeCurrent) {
-        for (auto & iter : handshakes) {
+        for (auto &iter: handshakes) {
             Handshake *handshake = iter.get();
             handshake->beginHandshake(reconnect);
         }
-    } else {
+    }
+    else {
         if (authKeyPerm == nullptr) {
             if (!isHandshaking(HandshakeTypePerm)) {
                 auto handshake = new Handshake(this, HandshakeTypePerm, this);
                 handshakes.push_back(std::unique_ptr<Handshake>(handshake));
                 handshake->beginHandshake(reconnect);
             }
-        } else if (PFS_ENABLED) {
+        }
+        else if (PFS_ENABLED) {
             if (handshakeType == HandshakeTypeAll || handshakeType == HandshakeTypeTemp) {
                 if (!isHandshaking(HandshakeTypeTemp)) {
                     auto handshake = new Handshake(this, HandshakeTypeTemp, this);
@@ -946,7 +1047,7 @@ void Datacenter::onHandshakeConnectionClosed(Connection *connection) {
         return;
     }
     bool media = connection->getConnectionType() == ConnectionTypeGenericMedia;
-    for (auto & iter : handshakes) {
+    for (auto &iter: handshakes) {
         Handshake *handshake = iter.get();
         if ((media && handshake->getType() == HandshakeTypeMediaTemp) || (!media && handshake->getType() != HandshakeTypeMediaTemp)) {
             handshake->onHandshakeConnectionClosed();
@@ -959,7 +1060,7 @@ void Datacenter::onHandshakeConnectionConnected(Connection *connection) {
         return;
     }
     bool media = connection->getConnectionType() == ConnectionTypeGenericMedia;
-    for (auto & iter : handshakes) {
+    for (auto &iter: handshakes) {
         Handshake *handshake = iter.get();
         if ((media && handshake->getType() == HandshakeTypeMediaTemp) || (!media && handshake->getType() != HandshakeTypeMediaTemp)) {
             handshake->onHandshakeConnectionConnected();
@@ -977,12 +1078,13 @@ void Datacenter::aesIgeEncryption(uint8_t *buffer, uint8_t *key, uint8_t *iv, bo
     if (!encrypt) {
         AES_set_decrypt_key(key, 32 * 8, &akey);
         AES_ige_encrypt(buffer, buffer, length, &akey, ivBytes, AES_DECRYPT);
-    } else {
+    }
+    else {
         AES_set_encrypt_key(key, 32 * 8, &akey);
         AES_ige_encrypt(buffer, buffer, length, &akey, ivBytes, AES_ENCRYPT);
     }
     if (!changeIv) {
-        delete [] ivBytes;
+        delete[] ivBytes;
     }
 }
 
@@ -990,7 +1092,7 @@ void Datacenter::processHandshakeResponse(bool media, TLObject *message, int64_t
     if (handshakes.empty()) {
         return;
     }
-    for (auto & iter : handshakes) {
+    for (auto &iter: handshakes) {
         Handshake *handshake = iter.get();
         if ((media && handshake->getType() == HandshakeTypeMediaTemp) || (!media && handshake->getType() != HandshakeTypeMediaTemp)) {
             handshake->processHandshakeResponse(message, messageId);
@@ -1002,7 +1104,7 @@ TLObject *Datacenter::getCurrentHandshakeRequest(bool media) {
     if (handshakes.empty()) {
         return nullptr;
     }
-    for (auto & iter : handshakes) {
+    for (auto &iter: handshakes) {
         Handshake *handshake = iter.get();
         if ((media && handshake->getType() == HandshakeTypeMediaTemp) || (!media && handshake->getType() != HandshakeTypeMediaTemp)) {
             return handshake->getCurrentHandshakeRequest();
@@ -1069,11 +1171,12 @@ ByteArray *Datacenter::getAuthKey(ConnectionType connectionType, bool perm, int6
             *authKeyId = authKeyPermId;
         }
         return authKeyPerm;
-    } else {
+    }
+    else {
         bool media = Connection::isMediaConnectionType(connectionType) && hasMediaAddress();
         ByteArray *authKeyPending = nullptr;
         int64_t authKeyPendingId = 0;
-        for (auto & iter : handshakes) {
+        for (auto &iter: handshakes) {
             Handshake *handshake = iter.get();
             if ((media && handshake->getType() == HandshakeTypeMediaTemp) || (!media && handshake->getType() == HandshakeTypeTemp)) {
                 authKeyPending = handshake->getPendingAuthKey();
@@ -1086,12 +1189,14 @@ ByteArray *Datacenter::getAuthKey(ConnectionType connectionType, bool perm, int6
                 *authKeyId = authKeyPendingId;
             }
             return authKeyPending;
-        } else if (media) {
+        }
+        else if (media) {
             if (authKeyId != nullptr) {
                 *authKeyId = authKeyMediaTempId;
             }
             return authKeyMediaTemp;
-        } else {
+        }
+        else {
             if (authKeyId != nullptr) {
                 *authKeyId = authKeyTempId;
             }
@@ -1117,7 +1222,8 @@ NativeByteBuffer *Datacenter::createRequestsData(std::vector<std::unique_ptr<Net
 
         if (networkMessage->message->outgoingBody != nullptr) {
             messageBody = networkMessage->message->outgoingBody;
-        } else {
+        }
+        else {
             messageBody = networkMessage->message->body.get();
         }
         if (LOGS_ENABLED) DEBUG_D("connection(%p, account%u, dc%u, type %d) send message (session: 0x%" PRIx64 ", seqno: %d, messageid: %lld  0x%" PRIx64 "): %s(%p)", connection, instanceNum, datacenterId, connection->getConnectionType(), (uint64_t) connection->getSessionId(), networkMessage->message->seqno, networkMessage->message->msg_id, (uint64_t) networkMessage->message->msg_id, typeid(*messageBody).name(), messageBody);
@@ -1134,11 +1240,13 @@ NativeByteBuffer *Datacenter::createRequestsData(std::vector<std::unique_ptr<Net
             messageBody = messageContainer;
             messageSeqNo = connection->generateMessageSeqNo(false);
             freeMessageBody = true;
-        } else {
+        }
+        else {
             messageId = networkMessage->message->msg_id;
             messageSeqNo = networkMessage->message->seqno;
         }
-    } else {
+    }
+    else {
         if (LOGS_ENABLED) DEBUG_D("start write messages to container");
         auto messageContainer = new TL_msg_container();
         size_t count = requests.size();
@@ -1146,7 +1254,8 @@ NativeByteBuffer *Datacenter::createRequestsData(std::vector<std::unique_ptr<Net
             NetworkMessage *networkMessage = requests[a].get();
             if (networkMessage->message->outgoingBody != nullptr) {
                 messageBody = networkMessage->message->outgoingBody;
-            } else {
+            }
+            else {
                 messageBody = networkMessage->message->body.get();
             }
             if (LOGS_ENABLED) DEBUG_D("connection(%p, account%u, dc%u, type %d) send message (session: 0x%" PRIx64 ", seqno: %d, messageid: %lld 0x%" PRIx64 "): %s(%p)", connection, instanceNum, datacenterId, connection->getConnectionType(), (uint64_t) connection->getSessionId(), networkMessage->message->seqno, networkMessage->message->msg_id, (uint64_t) networkMessage->message->msg_id, typeid(*messageBody).name(), messageBody);
@@ -1161,7 +1270,8 @@ NativeByteBuffer *Datacenter::createRequestsData(std::vector<std::unique_ptr<Net
     int32_t mtProtoVersion;
     if (pfsInit) {
         mtProtoVersion = 1;
-    } else {
+    }
+    else {
         mtProtoVersion = 2;
     }
     uint32_t messageSize = messageBody->getObjectSize();
@@ -1184,7 +1294,8 @@ NativeByteBuffer *Datacenter::createRequestsData(std::vector<std::unique_ptr<Net
         buffer->writeInt64(value);
         RAND_bytes((uint8_t *) &value, 8);
         buffer->writeInt64(value);
-    } else {
+    }
+    else {
         buffer->writeInt64(getServerSalt(Connection::isMediaConnectionType(connection->getConnectionType())));
         buffer->writeInt64(connection->getSessionId());
     }
@@ -1336,13 +1447,20 @@ Connection *Datacenter::getUploadConnection(uint8_t num, bool create) {
 }
 
 Connection *Datacenter::getGenericConnection(bool create, int32_t allowPendingKey) {
-    ByteArray *authKey = getAuthKey(ConnectionTypeGeneric, false, nullptr, allowPendingKey);
+    auto *authKey = getAuthKey(ConnectionTypeGeneric, false, nullptr, allowPendingKey);
+
     if (authKey == nullptr) {
         return nullptr;
     }
+
     if (create) {
-        createGenericConnection()->connect();
+        auto connection = createGenericConnection();
+
+        if (connection != nullptr && connection->canReconnect()) {
+            connection->connect();
+        }
     }
+
     return genericConnection;
 }
 
@@ -1380,9 +1498,10 @@ Connection *Datacenter::getTempConnection(bool create) {
 }
 
 Connection *Datacenter::getConnectionByType(uint32_t connectionType, bool create, int32_t allowPendingKey) {
-    uint8_t connectionNum = (uint8_t) (connectionType >> 16);
-    connectionType = connectionType & 0x0000ffff;
-    switch (connectionType) {
+    auto connectionNum = (uint8_t) (connectionType >> 16);
+    // connectionType = connectionType & 0x0000ffff;
+
+    switch (connectionType & 0x0000ffff) {
         case ConnectionTypeGeneric:
             return getGenericConnection(create, allowPendingKey);
         case ConnectionTypeGenericMedia:
@@ -1413,12 +1532,14 @@ void Datacenter::onHandshakeComplete(Handshake *handshake, int64_t keyId, ByteAr
                 if (!isCdnDatacenter && PFS_ENABLED) {
                     beginHandshake(HandshakeTypeAll, false);
                 }
-            } else {
+            }
+            else {
                 if (type == HandshakeTypeTemp) {
                     authKeyTempId = keyId;
                     authKeyTemp = authKey;
                     lastInitVersion = 0;
-                } else if (type == HandshakeTypeMediaTemp) {
+                }
+                else if (type == HandshakeTypeMediaTemp) {
                     authKeyMediaTempId = keyId;
                     authKeyMediaTemp = authKey;
                     lastInitMediaVersion = 0;
@@ -1449,12 +1570,14 @@ void Datacenter::exportAuthorization() {
                 if (error2 == nullptr) {
                     authorized = true;
                     ConnectionsManager::getInstance(instanceNum).onDatacenterExportAuthorizationComplete(this);
-                } else {
+                }
+                else {
                     if (LOGS_ENABLED) DEBUG_D("dc%u failed import authorization", datacenterId);
                 }
                 exportingAuthorization = false;
             }, nullptr, RequestFlagEnableUnauthorized | RequestFlagWithoutLogin, datacenterId, ConnectionTypeGeneric, true);
-        } else {
+        }
+        else {
             if (LOGS_ENABLED) DEBUG_D("dc%u failed export authorization", datacenterId);
             exportingAuthorization = false;
         }
@@ -1467,10 +1590,11 @@ bool Datacenter::isExportingAuthorization() {
 
 bool Datacenter::hasMediaAddress() {
     std::vector<TcpAddress> *addresses;
-    int strategy = ConnectionsManager::getInstance(instanceNum).getIpStratagy();
+    int strategy = ConnectionsManager::getInstance(instanceNum).getIpStrategy();
     if (strategy == USE_IPV6_ONLY) {
         addresses = &addressesIpv6Download;
-    } else {
+    }
+    else {
         addresses = &addressesIpv4Download;
     }
     return !addresses->empty();
@@ -1526,7 +1650,7 @@ TL_help_configSimple *Datacenter::decodeSimpleConfig(NativeByteBuffer *buffer) {
             unsigned char sha256_out[32];
             unsigned olen = 0;
             EVP_MD_CTX_init(&ctx);
-            EVP_DigestInit_ex(&ctx, EVP_sha256(), NULL);
+            EVP_DigestInit_ex(&ctx, EVP_sha256(), nullptr);
             EVP_DigestUpdate(&ctx, bytes + 32, 256 - 32 - 16);
             EVP_DigestFinal_ex(&ctx, sha256_out, &olen);
             EVP_MD_CTX_cleanup(&ctx);
@@ -1543,10 +1667,12 @@ TL_help_configSimple *Datacenter::decodeSimpleConfig(NativeByteBuffer *buffer) {
                                 result = nullptr;
                             }
                         }
-                    } else {
+                    }
+                    else {
                         if (LOGS_ENABLED) DEBUG_E("TL data length field invalid - %d", data_len);
                     }
-                } else {
+                }
+                else {
                     if (LOGS_ENABLED) DEBUG_E("RSA signature check FAILED (SHA256 mismatch)");
                 }
             }

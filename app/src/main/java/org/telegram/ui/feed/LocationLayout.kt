@@ -87,7 +87,7 @@ class LocationLayout(context: Context, private val contentWidth: Int) : FrameLay
 			locationExpired = false
 
 			if (addedForTest && currentUrl != null && currentWebFile != null) {
-				ImageLoader.instance.removeTestWebFile(currentUrl)
+				ImageLoader.getInstance().removeTestWebFile(currentUrl)
 			}
 
 			currentWebFile = null
@@ -147,7 +147,7 @@ class LocationLayout(context: Context, private val contentWidth: Int) : FrameLay
 			}
 			else {
 				if (provider == MessagesController.MAP_PROVIDER_YANDEX_WITH_ARGS || provider == MessagesController.MAP_PROVIDER_GOOGLE) {
-					ImageLoader.instance.addTestWebFile(currentUrl, currentWebFile)
+					ImageLoader.getInstance().addTestWebFile(currentUrl, currentWebFile)
 					addedForTest = true
 				}
 
@@ -200,7 +200,7 @@ class LocationLayout(context: Context, private val contentWidth: Int) : FrameLay
 		val currentWebFile = currentWebFile
 
 		if (addedForTest && currentUrl != null && currentWebFile != null) {
-			ImageLoader.instance.removeTestWebFile(currentUrl)
+			ImageLoader.getInstance().removeTestWebFile(currentUrl)
 			addedForTest = false
 		}
 	}

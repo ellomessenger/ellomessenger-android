@@ -47,6 +47,7 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.tlrpc.TL_photo
 import org.telegram.tgnet.tlrpc.TL_reactionEmoji
 import org.telegram.ui.ActionBar.ActionBar
@@ -1312,7 +1313,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		var needTitleCheck = false
 		if (currentChat?.title != nameTextView.text?.toString()) {
 			needTitleCheck = true
-			messagesController.changeChatTitle(chatId, nameTextView.text?.toString()) { _, error: TLRPC.TL_error? ->
+			messagesController.changeChatTitle(chatId, nameTextView.text?.toString()) { _, error: TL_error? ->
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
 						finishFragment()

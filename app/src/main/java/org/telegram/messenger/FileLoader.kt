@@ -1180,7 +1180,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			}
 
 			if (type == 2) {
-				ImageLoader.instance.clearMemory()
+				ImageLoader.getInstance().clearMemory()
 			}
 		}
 	}
@@ -1737,7 +1737,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 //			return false
 //		}
 
-		fun isSamePhoto(location: FileLocation?, photo: TLRPC.Photo): Boolean {
+		fun isSamePhoto(location: FileLocation?, photo: TLRPC.Photo?): Boolean {
 			if (location == null || photo !is TL_photo) {
 				return false
 			}

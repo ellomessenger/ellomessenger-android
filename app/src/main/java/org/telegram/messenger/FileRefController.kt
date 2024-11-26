@@ -32,7 +32,7 @@ import org.telegram.tgnet.TLRPC.TL_channel
 import org.telegram.tgnet.TLRPC.TL_channels_getChannels
 import org.telegram.tgnet.TLRPC.TL_channels_getMessages
 import org.telegram.tgnet.TLRPC.TL_chat
-import org.telegram.tgnet.TLRPC.TL_error
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.TLRPC.TL_help_appUpdate
 import org.telegram.tgnet.TLRPC.TL_help_getAppUpdate
 import org.telegram.tgnet.TLRPC.TL_inputDocumentFileLocation

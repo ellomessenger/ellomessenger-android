@@ -1066,6 +1066,7 @@ class NotificationCenter private constructor(private val currentAccount: Int) {
 		val updateUnreadBadge = totalEvents++
 
 		val chatIsBlocked = totalEvents++
+		val feedSettingsUpdated = totalEvents++
 
 		private val Instance = arrayOfNulls<NotificationCenter>(UserConfig.MAX_ACCOUNT_COUNT)
 

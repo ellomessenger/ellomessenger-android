@@ -70,7 +70,7 @@ class ApplicationLoader : Application() {
 
 		ConnectionsManager.native_setJava(false)
 
-		object : ForegroundDetector(this) {
+		object : ForegroundDetector(this@ApplicationLoader) {
 			override fun onActivityStarted(activity: Activity) {
 				val wasInBackground = isBackground
 

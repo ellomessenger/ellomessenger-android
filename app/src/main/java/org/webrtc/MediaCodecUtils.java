@@ -16,9 +16,9 @@ import android.media.MediaCodecInfo.CodecCapabilities;
 import android.media.MediaCodecList;
 import android.os.Build;
 
-import org.telegram.messenger.FileLog;
-
 import androidx.annotation.Nullable;
+
+import org.telegram.messenger.FileLog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,6 +33,7 @@ class MediaCodecUtils {
 
   // Prefixes for supported hardware encoder/decoder component names.
   static final String EXYNOS_PREFIX = "OMX.Exynos.";
+  static final String EXYNOS_PREFIX_C2 = "c2.exynos.";
   static final String INTEL_PREFIX = "OMX.Intel.";
   static final String NVIDIA_PREFIX = "OMX.Nvidia.";
   static final String QCOM_PREFIX = "OMX.qcom.";

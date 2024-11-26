@@ -64,7 +64,6 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.combineDrawables
-import org.telegram.messenger.utils.getUser
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
@@ -79,7 +78,6 @@ import org.telegram.tgnet.TLRPC.TL_encryptedChat
 import org.telegram.tgnet.TLRPC.TL_encryptedChatDiscarded
 import org.telegram.tgnet.TLRPC.TL_encryptedChatRequested
 import org.telegram.tgnet.TLRPC.TL_encryptedChatWaiting
-import org.telegram.tgnet.TLRPC.TL_messageActionChannelMigrateFrom
 import org.telegram.tgnet.TLRPC.TL_messageActionHistoryClear
 import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
 import org.telegram.tgnet.TLRPC.TL_messageMediaGame
@@ -297,6 +295,13 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 	var message: MessageObject? = null
 		private set(value) {
 			field = value
+
+			// MARK: remove this check to draw service messages
+			if (message?.messageOwner is TL_messageService) {
+				field = MessagesStorage.getInstance(currentAccount).getLastNonServiceMessage(value?.dialogId)?.let {
+					MessageObject(currentAccount, it, generateLayout = false, checkMediaExists = true)
+				}
+			}
 		}
 
 	var messageId = 0
@@ -1092,9 +1097,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 							checkMessage = false
 							messageString = formatArchivedDialogNames()
 						}
-						else if (message!!.messageOwner is TL_messageService) {
+						else if (message?.messageOwner is TL_messageService) {
 							// MARK: uncomment to show service messages in dialogs list
-//							if (ChatObject.isChannelAndNotMegaGroup(chat) && message?.messageOwner?.action is TL_messageActionChannelMigrateFrom) {
+//							if (ChatObject.isChannelAndNotMegaGroup(chat) && message?.messageOwner?.action is TLRPC.TL_messageActionChannelMigrateFrom) {
 //								messageString = ""
 //								showChecks = false
 //							}
@@ -1849,13 +1854,21 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		val avatarTop = AndroidUtilities.dp(9.5f)
 		val thumbLeft: Int
 
-		if (isPinned && unreadCount == 0) {
-			timeTop = AndroidUtilities.dp(32f)
-			countTop = AndroidUtilities.dp(52f)
-		}
-		else {
-			timeTop = AndroidUtilities.dp(15f)
-			countTop = AndroidUtilities.dp(35f)
+		when {
+			isPinned && unreadCount == 0 -> {
+				timeTop = AndroidUtilities.dp(32f)
+				countTop = AndroidUtilities.dp(52f)
+			}
+
+			isPinned && unreadCount != 0 -> {
+				timeTop = AndroidUtilities.dp(28f)
+				countTop = AndroidUtilities.dp(44f)
+			}
+
+			else -> {
+				timeTop = AndroidUtilities.dp(15f)
+				countTop = AndroidUtilities.dp(35f)
+			}
 		}
 
 		pinTop = AndroidUtilities.dp(8f)
@@ -2315,7 +2328,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 					if (isSearch == true) {
 						thumbImage.setImageX(messageLeft)
-					} else {
+					}
+					else {
 						thumbImage.setImageX(messageLeft + offset)
 					}
 				}
@@ -2379,9 +2393,10 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		else if (drawCheck2) {
 			if (drawCheck1) {
 				val offsetY = if (isPinned) {
-					 AndroidUtilities.dp(24F)
-				} else {
-					 AndroidUtilities.dp(8F)
+					AndroidUtilities.dp(24F)
+				}
+				else {
+					AndroidUtilities.dp(8F)
 				}
 
 				setDrawableBounds(Theme.dialogs_halfCheckDrawable, halfCheckDrawLeft, checkDrawTop + offsetY)
@@ -2422,7 +2437,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			else {
 				val offsetY = if (isPinned) {
 					AndroidUtilities.dp(24F)
-				} else {
+				}
+				else {
 					AndroidUtilities.dp(8F)
 				}
 
@@ -2592,7 +2608,14 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 					if (mask == 0) {
 						clearingDialog = MessagesController.getInstance(currentAccount).isClearingDialog(dialog.id)
 						message = MessagesController.getInstance(currentAccount).dialogMessage[dialog.id]
-						lastUnreadState = message != null && message!!.isUnread
+
+						if (message == null) {
+							message = MessagesStorage.getInstance(currentAccount).getLastMessage(dialog.id)?.let {
+								MessageObject(currentAccount, it, generateLayout = false, checkMediaExists = true)
+							}
+						}
+
+						lastUnreadState = (message?.isUnread == true)
 
 						if (dialog is TL_dialogFolder) {
 							unreadCount = MessagesStorage.getInstance(currentAccount).archiveUnreadCount
@@ -3536,7 +3559,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 			if (isLastCharUpperCaseOrDigit(user, chat)) {
 				setDrawableBounds(verifiedMuteIcons, nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else Gravity.CENTER.toFloat() + 2.1f))
-			} else {
+			}
+			else {
 				setDrawableBounds(verifiedMuteIcons, nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else Gravity.CENTER.toFloat() + 2.3f))
 			}
 
@@ -3765,6 +3789,15 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			}
 		}
 		else if (isPinned) {
+			Theme.dialogs_pinnedDrawable.colorFilter = pinIconColorFilter
+			Theme.dialogs_pinnedDrawable.alpha = ((1.0f - reorderIconProgress) * 255).toInt()
+
+			setDrawableBounds(Theme.dialogs_pinnedDrawable, pinLeft, pinTop)
+
+			Theme.dialogs_pinnedDrawable.draw(canvas)
+		}
+
+		if (isPinned && unreadCount != 0) {
 			Theme.dialogs_pinnedDrawable.colorFilter = pinIconColorFilter
 			Theme.dialogs_pinnedDrawable.alpha = ((1.0f - reorderIconProgress) * 255).toInt()
 

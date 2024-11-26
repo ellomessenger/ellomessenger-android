@@ -332,7 +332,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 		val chat = parentFragment.currentChat
 		val imageReceiver = avatarImageView.imageReceiver
 		val key = imageReceiver.imageKey
-		val imageLoader = ImageLoader.instance
+		val imageLoader = ImageLoader.getInstance()
 
 		if (key != null && !imageLoader.isInMemCache(key, false)) {
 			val drawable = imageReceiver.drawable
@@ -863,7 +863,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 				else if (user.id == getInstance(currentAccount).getClientUserId()) {
 					newStatus = context.getString(R.string.ChatYourSelf)
 				}
-				else if (user.id == 333000L || user.id == 777000L || user.id == 42777L) {
+				else if (user.id == 333000L || user.id == BuildConfig.NOTIFICATIONS_BOT_ID || user.id == 42777L) {
 					newStatus = context.getString(R.string.ServiceNotifications)
 				}
 				else if (MessagesController.isSupportUser(user)) {

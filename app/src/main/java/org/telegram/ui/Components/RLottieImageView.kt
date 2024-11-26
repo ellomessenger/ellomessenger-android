@@ -117,7 +117,7 @@ open class RLottieImageView(context: Context) : ImageView(context) {
 			var thumbDrawable: Drawable? = null
 			val probableCacheKey = document.id.toString() + "@" + w + "_" + h
 
-			if (!ImageLoader.instance.hasLottieMemCache(probableCacheKey)) {
+			if (!ImageLoader.getInstance().hasLottieMemCache(probableCacheKey)) {
 				val svgThumb = DocumentObject.getSvgThumb(document.thumbs, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 0.2f)
 				svgThumb?.overrideWidthAndHeight(512, 512)
 				thumbDrawable = svgThumb

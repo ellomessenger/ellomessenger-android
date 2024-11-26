@@ -4,11 +4,13 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Telegram, 2013-2024.
  * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
  */
 package org.telegram.messenger
 
+import android.Manifest
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -28,6 +30,7 @@ import android.util.SparseArray
 import android.util.SparseBooleanArray
 import android.util.SparseIntArray
 import androidx.collection.LongSparseArray
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.util.Consumer
@@ -49,9 +52,9 @@ import org.telegram.messenger.PushListenerController.PushType
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.support.LongSparseIntArray
 import org.telegram.messenger.support.LongSparseLongArray
+import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.ConnectionsManager.Companion.generateClassGuid
 import org.telegram.tgnet.NativeByteBuffer
 import org.telegram.tgnet.RequestDelegate
 import org.telegram.tgnet.SerializedData
@@ -62,6 +65,7 @@ import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
 import org.telegram.tgnet.tlrpc.TL_channels_editBanned
 import org.telegram.tgnet.tlrpc.TL_chatBannedRights
 import org.telegram.tgnet.tlrpc.TL_config
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.tlrpc.TL_folders_editPeerFolders
 import org.telegram.tgnet.tlrpc.TL_inputPhotoEmpty
 import org.telegram.tgnet.tlrpc.TL_message
@@ -1674,7 +1678,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		notificationCenter.postNotificationName(NotificationCenter.dialogFiltersUpdated)
 	}
 
-	private fun loadAppConfig() {
+	fun loadAppConfig() {
 		if (loadingAppConfig) {
 			return
 		}
@@ -3922,7 +3926,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return false
 		}
 
-		fromCache = fromCache && user.id / 1000 != 333L && user.id != 777000L
+		fromCache = fromCache && user.id / 1000 != 333L && user.id != BuildConfig.NOTIFICATIONS_BOT_ID
 
 		val oldUser = users[user.id]
 
@@ -7444,7 +7448,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					nextTosCheckTime = response.expires
 
 					AndroidUtilities.runOnUIThread {
-						notificationCenter.postNotificationName(NotificationCenter.needShowAlert, 4, response.terms_of_service)
+						notificationCenter.postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.TERMS_UPDATED, response.terms_of_service)
 					}
 				}
 
@@ -8975,7 +8979,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					continue
 				}
 
-				if (folderId == 1 && (dialogId == selfUserId || dialogId == 777000L || isPromoDialog(dialogId, false))) {
+				if (folderId == 1 && (dialogId == selfUserId || dialogId == BuildConfig.NOTIFICATIONS_BOT_ID || isPromoDialog(dialogId, false))) {
 					a++
 					continue
 				}
@@ -16089,7 +16093,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				is TL_updateServiceNotification -> {
 					if (baseUpdate.popup && !baseUpdate.message.isNullOrEmpty()) {
 						AndroidUtilities.runOnUIThread {
-							notificationCenter.postNotificationName(NotificationCenter.needShowAlert, 2, baseUpdate.message, baseUpdate.type)
+							notificationCenter.postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.SERVICE_NOTIFICATION, baseUpdate.message, baseUpdate.type)
 						}
 					}
 
@@ -17326,8 +17330,6 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										}
 									}
 
-									val tm = ApplicationLoader.applicationContext.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-
 									val discardCallInvocation = {
 										FileLog.d("Auto-declining call " + call.id + " because there's already active one")
 
@@ -17344,8 +17346,36 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										}
 									}
 
-									if (svc != null || VoIPService.callIShouldHavePutIntoIntent != null || tm.callState != TelephonyManager.CALL_STATE_IDLE) {
+									val tm = ApplicationLoader.applicationContext.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+									var callStateIsIdle = true
+
+									try {
+										if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+											// TODO: check
+											if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+												callStateIsIdle = tm.callStateForSubscription == TelephonyManager.CALL_STATE_IDLE
+											}
+										}
+										else {
+											callStateIsIdle = tm.callState == TelephonyManager.CALL_STATE_IDLE
+										}
+									}
+									catch (e: Throwable) {
+										FileLog.e(e)
+									}
+
+									if (svc != null || (VoIPService.callIShouldHavePutIntoIntent != null && VoIPService.callIShouldHavePutIntoIntent !is TL_phoneCallDiscarded) || !callStateIsIdle) {
+										if (VoIPService.callIShouldHavePutIntoIntent?.id == call.id) {
+											continue
+										}
+
+										FileLog.d("Will discard call with params:")
+										FileLog.d("svc = $svc")
+										FileLog.d("callIShouldHavePutIntoIntent = ${VoIPService.callIShouldHavePutIntoIntent}")
+										FileLog.d("callStateIsIdle = $callStateIsIdle")
+
 										discardCallInvocation()
+
 										continue
 									}
 
@@ -17365,7 +17395,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 									val continuation = {
 										try {
-											if (!notificationsDisabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+											if (Build.VERSION.SDK_INT >= 33) {
+												intent.putExtra("accept", true)
+												VoIPPreNotificationService.show(ApplicationLoader.applicationContext, intent, call)
+											}
+											else if (!notificationsDisabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 												ApplicationLoader.applicationContext.startForegroundService(intent)
 											}
 											else {
@@ -17406,13 +17440,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									if (svc != null && call != null) {
 										svc.onCallUpdated(call)
 									}
-									else if (VoIPService.callIShouldHavePutIntoIntent != null) {
-										if (BuildConfig.DEBUG) {
-											FileLog.d("Updated the call while the service is starting")
+									else {
+										if (call is TL_phoneCallDiscarded) {
+											VoIPPreNotificationService.dismiss(ApplicationLoader.applicationContext)
 										}
 
-										if (call.id == VoIPService.callIShouldHavePutIntoIntent?.id) {
-											VoIPService.callIShouldHavePutIntoIntent = call
+										if (VoIPService.callIShouldHavePutIntoIntent != null) {
+											FileLog.d("Updated the call while the service is starting")
+
+											if (call.id == VoIPService.callIShouldHavePutIntoIntent?.id) {
+												VoIPService.callIShouldHavePutIntoIntent = if (call is TL_phoneCallDiscarded) null else call
+											}
 										}
 									}
 								}
@@ -18980,7 +19018,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						else if (d.id != selfId) {
 							dialogsUsersOnly.add(d)
 
-							if (d.id == BuildConfig.AI_BOT_ID || d.id == 333000L || d.id == 777000L || d.id == 42777L) {
+							if (d.id == BuildConfig.AI_BOT_ID || d.id == 333000L || d.id == BuildConfig.NOTIFICATIONS_BOT_ID || d.id == 42777L) {
 								canAddToForward = false
 							}
 
@@ -19270,7 +19308,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		val finalMessageId = messageId
-		val classGuid = generateClassGuid()
+		val classGuid = ConnectionsManager.generateClassGuid()
 
 		val chatId = if (DialogObject.isChatDialog(dialogId)) {
 			-dialogId
@@ -20177,7 +20215,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		@JvmStatic
 		fun isSupportUser(user: User?): Boolean {
-			return user != null && (user.support || user.id == 777000L || user.id == 333000L || user.id == 4240000L || user.id == 4244000L || user.id == 4245000L || user.id == 4246000L || user.id == 410000L || user.id == 420000L || user.id == 431000L || user.id == 431415000L || user.id == 434000L || user.id == 4243000L || user.id == 439000L || user.id == 449000L || user.id == 450000L || user.id == 452000L || user.id == 454000L || user.id == 4254000L || user.id == 455000L || user.id == 460000L || user.id == 470000L || user.id == 479000L || user.id == 796000L || user.id == 482000L || user.id == 490000L || user.id == 496000L || user.id == 497000L || user.id == 498000L || user.id == 4298000L)
+			return user != null && (user.support || user.id == BuildConfig.NOTIFICATIONS_BOT_ID || user.id == 333000L || user.id == 4240000L || user.id == 4244000L || user.id == 4245000L || user.id == 4246000L || user.id == 410000L || user.id == 420000L || user.id == 431000L || user.id == 431415000L || user.id == 434000L || user.id == 4243000L || user.id == 439000L || user.id == 449000L || user.id == 450000L || user.id == 452000L || user.id == 454000L || user.id == 4254000L || user.id == 455000L || user.id == 460000L || user.id == 470000L || user.id == 479000L || user.id == 796000L || user.id == 482000L || user.id == 490000L || user.id == 496000L || user.id == 497000L || user.id == 498000L || user.id == 4298000L)
 		}
 
 		private fun getUpdatePts(update: Update): Int {

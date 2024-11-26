@@ -49,7 +49,7 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC.TL_biz_dataRaw
-import org.telegram.tgnet.TLRPC.TL_error
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.AvatarImageView
@@ -84,7 +84,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 
 	override fun createView(context: Context): View? {
 		actionBar?.setBackButtonImage(R.drawable.ic_back_arrow)
-		actionBar?.setTitle(context.getString(R.string.referral_program))
+		actionBar?.setTitle(context.getString(R.string.refer_a_friend))
 
 		actionBar?.setActionBarMenuOnItemClick(object : ActionBar.ActionBarMenuOnItemClick() {
 			override fun onItemClick(id: Int) {
@@ -224,7 +224,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 			loadReferralUsers()
 		}
 		else {
-			referralProgressFragmentBinding?.totalRevenue?.setText(R.string.earned_revenue)
+			referralProgressFragmentBinding?.totalRevenue?.setText(R.string.your_bonus)
 			referralProgressFragmentBinding?.shareButton?.setText(R.string.share)
 			linearLayout?.addView(referralProgressFragmentBinding?.root, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT))
 		}
@@ -423,7 +423,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 
 						val textView = TextView(context)
 						textView.gravity = Gravity.CENTER
-						textView.text = context.getString(R.string.no_referrals_yet)
+						textView.text = context.getString(R.string.referrals_list_empty)
 						textView.setTextColor(ResourcesCompat.getColor(context.resources, R.color.disabled_text, null))
 
 						addView(textView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 24f, 6f, 24f, 0f))

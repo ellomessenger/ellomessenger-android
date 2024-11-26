@@ -62,7 +62,7 @@ import org.telegram.tgnet.TLRPC.TL_auth_acceptLoginToken
 import org.telegram.tgnet.TLRPC.TL_auth_resetAuthorizations
 import org.telegram.tgnet.TLRPC.TL_authorization
 import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.TLRPC.TL_error
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
 import org.telegram.tgnet.TLRPC.TL_webAuthorization
 import org.telegram.ui.ActionBar.ActionBar

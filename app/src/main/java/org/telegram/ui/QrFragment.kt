@@ -113,17 +113,12 @@ class QrFragment(args: Bundle?) : BaseFragment(args) {
 
 		val newLink = link ?: ("https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + username)
 
-		if (isPublic) {
-			val avatarImageView = BackupImageView(context)
-			avatarImageView.setRoundRadius(AndroidUtilities.dp(40f))
-			avatarImageView.setSize(AndroidUtilities.dp(80f), AndroidUtilities.dp(80f))
-			avatarImageView.setImage(imageLocation, "84_84", imageLocationSmall, "50_50", avatarDrawable, null, null, 0, null)
+		val avatarImageView = BackupImageView(context)
+		avatarImageView.setRoundRadius(AndroidUtilities.dp(40f))
+		avatarImageView.setSize(AndroidUtilities.dp(80f), AndroidUtilities.dp(80f))
+		avatarImageView.setImage(imageLocation, "84_84", imageLocationSmall, "50_50", avatarDrawable, null, null, 0, null)
 
-			binding?.avatarContainer?.addView(avatarImageView, LayoutHelper.createFrame(80, 80f))
-		}
-		else {
-			binding?.avatarContainer?.gone()
-		}
+		binding?.avatarContainer?.addView(avatarImageView, LayoutHelper.createFrame(80, 80f))
 
 		prepareContent(newLink, binding?.qrCodeHolder)
 

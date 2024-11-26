@@ -437,7 +437,7 @@
 	</style>
 
 	<style name="Widget.App.BrandedButton.Green">
-		<item name="backgroundTint">#44BE2E</item><!-- todo -->
+		<item name="backgroundTint">@color/online</item>
 	</style>
 
 	<style name="Widget.App.BrandedButtonSmallRadius" parent="Widget.App.BrandedButton">

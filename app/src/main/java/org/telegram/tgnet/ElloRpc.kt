@@ -10,6 +10,7 @@
 package org.telegram.tgnet
 
 import androidx.annotation.Keep
+import com.google.android.recaptcha.RecaptchaAction
 import com.google.gson.annotations.SerializedName
 import org.telegram.messenger.FileLog
 import org.telegram.messenger.utils.formatDate
@@ -517,9 +518,11 @@ object ElloRpc {
 			@field:SerializedName("img_expire_at") val imgExpireAt: Long,
 			@field:SerializedName("img_sub_active") val isImgSubscriptionActive: Boolean,
 			@field:SerializedName("state") private val state: Int, // 0 - none, 1 - text, 2 - image
+			@field:SerializedName("bot_id") val botId: Int,
+			@field:SerializedName("promo_list_active") val promoListActive: List<Long>
 	) : Serializable {
 		val realState: SubscriptionInfoAiBotState
-			get() = SubscriptionInfoAiBotState.values().find { it.state == state } ?: SubscriptionInfoAiBotState.NONE
+			get() = SubscriptionInfoAiBotState.entries.find { it.state == state } ?: SubscriptionInfoAiBotState.NONE
 	}
 
 	enum class SubscriptionInfoAiBotState(val state: Int) {
@@ -673,6 +676,12 @@ object ElloRpc {
 	data class AllBotsResponse(@field:SerializedName("bots") var bots: ArrayList<AiSpaceBotsInfo> = arrayListOf()) : Serializable
 
 	@Keep
+	data class AdditionalInfoResponse(
+			@SerializedName("text_limit_error") var textLimitError: String?,
+			@SerializedName("image_limit_error") var imageLimitError: String?
+	) : Serializable
+
+	@Keep
 	data class AiSpaceBotsInfo(
 			@field:SerializedName("bot_id") var botId: Long?,
 			@field:SerializedName("first_name") var firstName: String?,
@@ -713,12 +722,19 @@ object ElloRpc {
 		return createRpcRequest(request)
 	}
 
-	fun authRequest(username: String, password: String): TL_biz_invokeBizDataRaw {
-		val elloRequest = ElloRequest(authService, 100200, mapOf("username" to username, "password" to password))
+	fun authRequest(username: String, password: String, token: String? = null, recaptchaAction: String? = null, platform: Int = 0): TL_biz_invokeBizDataRaw {
+		val data = mutableMapOf<String, Any>()
+		data["username"] = username
+		data["password"] = password
+		token?.let { data["token"] = it }
+		recaptchaAction?.let { data["recaptcha_action"] = it }
+		data["platform"] = platform //MARK: 0-Android, 1-IOS
+
+		val elloRequest = ElloRequest(authService, 100200, data.toMap())
 		return createRpcRequest(elloRequest)
 	}
 
-	fun signupRequest(username: String, password: String, gender: String?, birthday: String?, email: String, phone: String?, country: String?, kind: LoginActivity.AccountType, type: LoginActivity.LoginMode, referralCode: String?): TL_biz_invokeBizDataRaw {
+	fun signupRequest(username: String, password: String, gender: String?, birthday: String?, email: String, phone: String?, country: String?, kind: LoginActivity.AccountType, type: LoginActivity.LoginMode, referralCode: String?, token: String? = null, recaptchaAction: String? = null, platform: Int = 0): TL_biz_invokeBizDataRaw {
 		val data = mutableMapOf<String, Any>()
 		data["username"] = username
 		data["password"] = password
@@ -730,6 +746,9 @@ object ElloRpc {
 		data["kind"] = kind.name.lowercase()
 		data["type"] = type.name.lowercase()
 		data["code"] = referralCode ?: ""
+		token?.let { data["token"] = it }
+		recaptchaAction?.let { data["recaptcha_action"] = it }
+		data["platform"] = platform //MARK: 0-Android, 1-IOS
 
 		val elloRequest = ElloRequest(authService, 100100, data.toMap())
 		return createRpcRequest(elloRequest)
@@ -762,6 +781,11 @@ object ElloRpc {
 
 	fun changePasswordRequest(oldPassword: String, newPassword: String, code: String): TL_biz_invokeBizDataRaw {
 		val elloRequest = ElloRequest(profileService, 100200, mapOf("prev_pass" to oldPassword, "new_pass" to newPassword, "code" to code))
+		return createRpcRequest(elloRequest)
+	}
+
+	fun verificationCodeRequest(email: String): TL_biz_invokeBizDataRaw {
+		val elloRequest = ElloRequest(profileService, 100500, mapOf("email" to email))
 		return createRpcRequest(elloRequest)
 	}
 
@@ -1054,7 +1078,7 @@ object ElloRpc {
 	 * @param paymentId existing payment id (optional, used to recalculate fees)
 	 * @param bankWithdrawRequisitesId id of previously saved bank requisites (optional)
 	 */
-	fun getWithdrawCreatePayment(assetId: Int, walletId: Long, currency: String, paypalEmail: String?, paymentId: String?, bankWithdrawRequisitesId: Long?, amount: Float): TL_biz_invokeBizDataRaw {
+	fun getWithdrawCreatePayment(assetId: Int, walletId: Long, currency: String, paypalEmail: String?, paymentId: String?, bankWithdrawRequisitesId: Long?, amount: Float, withdrawSystem: String? = null): TL_biz_invokeBizDataRaw {
 		val data = mutableMapOf<String, Any>()
 		data["asset_id"] = assetId
 		data["wallet_id"] = walletId
@@ -1064,6 +1088,7 @@ object ElloRpc {
 		paypalEmail?.let { data["paypal_email"] = paypalEmail }
 		paymentId?.let { data["payment_id"] = paymentId }
 		bankWithdrawRequisitesId?.let { data["bank_withdraw_requisites_id"] = bankWithdrawRequisitesId }
+		withdrawSystem?.let { data["withdraw_system"] = withdrawSystem }
 
 		val elloRequest = ElloRequest(walletService, 100800, data.toMap())
 		return createRpcRequest(elloRequest)
@@ -1150,8 +1175,8 @@ object ElloRpc {
 		return createRpcRequest(elloRequest)
 	}
 
-	fun startChatBot(): TL_biz_invokeBizDataRaw {
-		val elloRequest = ElloRequest(aiGenCustomizeService, 100200, mapOf())
+	fun startChatBot(botId: Long): TL_biz_invokeBizDataRaw {
+		val elloRequest = ElloRequest(aiGenCustomizeService, 100200, mapOf("bot_id" to botId))
 		return createRpcRequest(elloRequest)
 	}
 
@@ -1179,12 +1204,17 @@ object ElloRpc {
 	/**
 	 * subscription information for the current user.
 	 */
-	fun getSubscriptionsChatBotRequest() = createRpcRequest(ElloRequest(aiGenCustomizeService, 100100, mapOf()))
+	fun getSubscriptionsChatBotRequest(botId: Long) = createRpcRequest(ElloRequest(aiGenCustomizeService, 100100, mapOf("bot_id" to botId)))
 
 	/**
 	 * request to get all bots.
 	 */
 	fun getAllBots() = createRpcRequest(ElloRequest(aiGenCustomizeService, 100800, mapOf()))
+
+	/**
+	 * request to get additional info.
+	 */
+	fun getAdditionalInfo(botId: Long) = createRpcRequest(ElloRequest(aiGenCustomizeService, 101100,  mapOf("bot_id" to botId)))
 
 	/**
 	 * @param from Source wallet ID

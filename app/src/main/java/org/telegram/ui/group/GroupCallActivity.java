@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Telegram, 2013-2024.
+ * Copyright Nikita Denin, Ello 2024.
+ */
 package org.telegram.ui.group;
 
 import android.Manifest;
@@ -83,10 +91,10 @@ import org.telegram.messenger.voip.Instance;
 import org.telegram.messenger.voip.StateListener;
 import org.telegram.messenger.voip.VoIPService;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tlrpc.TLObject;
 import org.telegram.tgnet.tlrpc.TL_photos_photo;
 import org.telegram.tgnet.tlrpc.TL_userProfilePhotoEmpty;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tlrpc.User;
 import org.telegram.tgnet.tlrpc.UserFull;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -501,7 +509,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 		}
 
 		@Override
-		public void draw(Canvas canvas) {
+		public void draw(@NonNull Canvas canvas) {
 			int cx = getBounds().centerX();
 			int cy = getBounds().centerY();
 			if (parentView instanceof SimpleTextView) {
@@ -858,7 +866,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			int prevColor = currentColor;
 			if (currentProgress < 0.25f) {
 				currentColor = 0xffCC5757;
@@ -1260,10 +1268,12 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			setMicAmplitude(amplitude);
 		}
 		else if (id == NotificationCenter.needShowAlert) {
-			int num = (Integer)args[0];
-			if (num == 6) {
+			var reason = (AlertDialog.AlertReason)args[0];
+
+			if (reason == AlertDialog.AlertReason.GROUP_CALL_FAILED) {
 				String text = (String)args[1];
 				String error;
+
 				if ("GROUPCALL_PARTICIPANTS_TOO_MUCH".equals(text)) {
 					if (ChatObject.isChannelOrGiga(currentChat)) {
 						error = LocaleController.getString("VoipChannelTooMuch", R.string.VoipChannelTooMuch);
@@ -1286,6 +1296,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 
 				AlertDialog.Builder builder = AlertsCreator.createSimpleAlert(getContext(), LocaleController.getString("VoipGroupVoiceChat", R.string.VoipGroupVoiceChat), error);
 				builder.setOnDismissListener(dialog -> dismiss());
+
 				try {
 					builder.show();
 				}
@@ -1971,7 +1982,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 							builder.setMessage(LocaleController.getString("VoipGroupStopRecordingText", R.string.VoipGroupStopRecordingText));
 						}
 						builder.setPositiveButton(LocaleController.getString("Stop", R.string.Stop), (dialogInterface, i) -> {
-							call.toggleRecord(null, 0);
+							call.toggleRecord(null, ChatObject.Call.RECORD_TYPE_AUDIO);
 							getUndoView().showWithAction(0, video ? UndoView.ACTION_VOIP_VIDEO_RECORDING_FINISHED : UndoView.ACTION_VOIP_RECORDING_FINISHED, null);
 						});
 						builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
@@ -2226,7 +2237,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 					if (service == null) {
 						return;
 					}
-					service.setNoiseSupressionEnabled(SharedConfig.noiseSupression);
+					service.setNoiseSuppressionEnabled(SharedConfig.noiseSupression);
 				}
 				else if (id == sound_item) {
 					VoIPService service = VoIPService.getSharedInstance();
@@ -2747,7 +2758,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			}
 
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				int offset = AndroidUtilities.dp(74);
 				float top = scrollOffsetY - offset;
 
@@ -2795,7 +2806,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			final HashMap<Object, View> listCells = new HashMap<>();
 
 			@Override
-			protected void dispatchDraw(Canvas canvas) {
+			protected void dispatchDraw(@NonNull Canvas canvas) {
 				if (isTabletMode) {
 					buttonsContainer.setTranslationY(0);
 					fullscreenUsersListView.setTranslationY(0);
@@ -3125,7 +3136,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			}
 
 			@Override
-			protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+			protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 				if (!isTabletMode && renderersContainer.progressToFullscreenMode == 1f && (child == actionBar || child == actionBarShadow || child == actionBarBackground || child == titleTextView || child == menuItemsContainer)) {
 					return true;
 				}
@@ -3205,7 +3216,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 				}
 
 				@Override
-				protected void onDraw(Canvas canvas) {
+				protected void onDraw(@NonNull Canvas canvas) {
 					float moveProgress = 0.0f;
 					if (linearGradient != null) {
 						if (call != null && call.isScheduled()) {
@@ -3276,7 +3287,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			}
 
 			@Override
-			protected void dispatchDraw(Canvas canvas) {
+			protected void dispatchDraw(@NonNull Canvas canvas) {
 				float inMaxBottom = 0;
 				float inMinTop = Float.MAX_VALUE;
 
@@ -3377,7 +3388,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 		listView.setItemAnimator(itemAnimator);
 		listView.setOnScrollListener(new RecyclerView.OnScrollListener() {
 			@Override
-			public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+			public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
 				if (listView.getChildCount() <= 0 || call == null) {
 					return;
 				}
@@ -3389,7 +3400,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			}
 
 			@Override
-			public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+			public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
 				if (newState == RecyclerView.SCROLL_STATE_IDLE) {
 					int offset = AndroidUtilities.dp(74);
 					float top = scrollOffsetY - offset;
@@ -3856,7 +3867,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 
 			@SuppressLint("DrawAllocation")
 			@Override
-			protected void dispatchDraw(Canvas canvas) {
+			protected void dispatchDraw(@NonNull Canvas canvas) {
 				if (contentFullyOverlayed && useBlur) {
 					return;
 				}
@@ -4206,7 +4217,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			}
 
 			@Override
-			protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+			protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 				if (child == muteButton && child.getScaleX() != 1f) {
 					canvas.save();
 					float s = 1f / muteButton.getScaleX();
@@ -5028,7 +5039,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 			}
 
 			@Override
-			protected void dispatchDraw(Canvas canvas) {
+			protected void dispatchDraw(@NonNull Canvas canvas) {
 				if (progressToAvatarPreview != 1) {
 					if (scrimView != null && hasScrimAnchorView) {
 						canvas.save();
@@ -5269,7 +5280,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 					}
 					else {
 						AndroidUtilities.runOnUIThread(() -> {
-							accountInstance.getNotificationCenter().postNotificationName(NotificationCenter.needShowAlert, 6, error.text);
+							accountInstance.getNotificationCenter().postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.GROUP_CALL_FAILED, error.text);
 							dismiss();
 						});
 					}
@@ -5418,7 +5429,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 		avatarsViewPager.setPinchToZoomHelper(pinchToZoomHelper);
 
 		cameraButton.setOnClickListener((View) -> {
-			if (Build.VERSION.SDK_INT >= 23 && parentActivity != null && parentActivity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+			if (parentActivity != null && parentActivity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
 				parentActivity.requestPermissions(new String[]{Manifest.permission.CAMERA}, 104);
 				return;
 			}
@@ -5435,7 +5446,7 @@ public class GroupCallActivity extends BottomSheet implements NotificationCenter
 					previewDialog = new PrivateVideoPreviewDialog(context, true, VoIPService.getSharedInstance().getVideoState(true) != Instance.VIDEO_STATE_ACTIVE) {
 						@Override
 						public void onDismiss(boolean screencast, boolean apply) {
-							boolean showMicIcon = previewDialog.micEnabled;
+							boolean showMicIcon = previewDialog.getMicEnabled();
 							previewDialog = null;
 							VoIPService service = VoIPService.getSharedInstance();
 							if (apply) {

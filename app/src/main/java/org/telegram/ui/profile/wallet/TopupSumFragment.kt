@@ -268,7 +268,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 
 				withContext(mainScope.coroutineContext) {
 					if (fee > 0f) {
-						binding?.commissionInfoLabel?.text = context.getString(R.string.transfer_out_commission_hint, context.getString(R.string.ello), fee).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
+						binding?.commissionInfoLabel?.text = context.getString(R.string.transfer_out_commission_hint, fee).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
 						binding?.commissionInfoLabel?.visible()
 					}
 					else {
@@ -283,7 +283,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 			return
 		}
 
-		walletHelper.createWithdrawPaymentRequest(walletId = walletId, amount = amount, paymentId = walletHelper.currentTransferOutPaymentId) { paymentId, _, _, withdrawMax, _, fee, paymentSystemFee, error ->
+		walletHelper.createWithdrawPaymentRequest(walletId = walletId, amount = amount, paymentId = walletHelper.currentTransferOutPaymentId, withdrawSystem = if (mode == WalletFragment.PAYPAL) CALCULATE_PAYPAL else CALCULATE_BANK) { paymentId, _, _, withdrawMax, _, fee, paymentSystemFee, error ->
 			if (error != null) {
 				binding?.amountField?.setTextColor(ResourcesCompat.getColor(context.resources, R.color.purple, null))
 				binding?.topupButton?.isEnabled = false
@@ -295,19 +295,34 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 			walletHelper.currentTransferOutPaymentId = paymentId
 
 			if (fee != null) {
-				binding?.elloCommissionInfoLabel?.text = context.getString(R.string.transfer_out_commission_hint, context.getString(R.string.ello), fee).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
-				binding?.elloCommissionInfoLabel?.visible()
+				binding?.elloCommissionInfoLabel?.text = context.getString(R.string.transfer_out_commission_hint, fee).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
+				if (fee > 0f) {
+					binding?.elloCommissionInfoLabel?.visible()
+				} else {
+					binding?.elloCommissionInfoLabel?.gone()
+				}
 			}
 
 			if (paymentSystemFee != null) {
-				val commissionSource = when (mode) {
-					WalletFragment.PAYPAL -> context.getString(R.string.paypal)
-					WalletFragment.MY_BALANCE -> context.getString(R.string.ello)
-					else -> context.getString(R.string.bank)
+				 when (mode) {
+					WalletFragment.PAYPAL -> {
+						if (paymentSystemFee > 0f) {
+							binding?.commissionInfoLabel?.visible()
+						} else {
+							binding?.commissionInfoLabel?.gone()
+						}
+					}
+					WalletFragment.MY_BALANCE -> {
+						if (paymentSystemFee > 0f) {
+							binding?.commissionInfoLabel?.visible()
+						} else {
+							binding?.commissionInfoLabel?.gone()
+						}
+					}
+					else -> binding?.commissionInfoLabel?.gone()
 				}
 
-				binding?.commissionInfoLabel?.text = context.getString(R.string.transfer_out_commission_hint, commissionSource, paymentSystemFee).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
-				binding?.commissionInfoLabel?.visible()
+				binding?.commissionInfoLabel?.text = context.getString(R.string.transfer_out_commission_hint, paymentSystemFee).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
 			}
 
 			if (!isTopUp && mode != WalletFragment.MY_BALANCE) {
@@ -370,5 +385,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 
 	companion object {
 		const val ARG_COMMISSION_INFO = "commission_info"
+		const val CALCULATE_PAYPAL = "paypal"
+		const val CALCULATE_BANK = "bank"
 	}
 }

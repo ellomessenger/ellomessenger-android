@@ -203,50 +203,51 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 				return currentCount
 			}
 
-			if (messagesController.allFoldersDialogsCount <= 10 && ContactsController.getInstance(currentAccount).doneLoadingContacts && ContactsController.getInstance(currentAccount).contacts.isNotEmpty()) {
-				if (onlineContacts == null || prevDialogsCount != dialogsCount || prevContactsCount != ContactsController.getInstance(currentAccount).contacts.size) {
-					onlineContacts = ArrayList(ContactsController.getInstance(currentAccount).contacts)
-					prevContactsCount = onlineContacts?.size ?: 0
-					prevDialogsCount = messagesController.dialogs_dict.size()
-
-					val selfId = UserConfig.getInstance(currentAccount).clientUserId
-					var a = 0
-					var n = onlineContacts?.size ?: 0
-
-					while (a < n) {
-						val userId = onlineContacts?.getOrNull(a)?.user_id ?: 0L
-
-						if (userId == selfId || messagesController.dialogs_dict[userId] != null) {
-							onlineContacts?.removeAt(a)
-							a--
-							n--
-						}
-
-						a++
-					}
-
-					if (onlineContacts.isNullOrEmpty()) {
-						onlineContacts = null
-					}
-
-					sortOnlineContacts(false)
-
-					if (parentFragment.getContactsAlpha() == 0f) {
-						registerAdapterDataObserver(object : AdapterDataObserver() {
-							override fun onChanged() {
-								parentFragment.setContactsAlpha(0f)
-								parentFragment.animateContactsAlpha(1f)
-								unregisterAdapterDataObserver(this)
-							}
-						})
-					}
-				}
-
-				onlineContacts?.let {
-					count += it.size + 2
-					hasContacts = true
-				}
-			}
+			// MARK: uncomment to show contacts on empty dialogs screen
+//			if (messagesController.allFoldersDialogsCount <= 10 && ContactsController.getInstance(currentAccount).doneLoadingContacts && ContactsController.getInstance(currentAccount).contacts.isNotEmpty()) {
+//				if (onlineContacts == null || prevDialogsCount != dialogsCount || prevContactsCount != ContactsController.getInstance(currentAccount).contacts.size) {
+//					onlineContacts = ArrayList(ContactsController.getInstance(currentAccount).contacts)
+//					prevContactsCount = onlineContacts?.size ?: 0
+//					prevDialogsCount = messagesController.dialogs_dict.size()
+//
+//					val selfId = UserConfig.getInstance(currentAccount).clientUserId
+//					var a = 0
+//					var n = onlineContacts?.size ?: 0
+//
+//					while (a < n) {
+//						val userId = onlineContacts?.getOrNull(a)?.user_id ?: 0L
+//
+//						if (userId == selfId || messagesController.dialogs_dict[userId] != null) {
+//							onlineContacts?.removeAt(a)
+//							a--
+//							n--
+//						}
+//
+//						a++
+//					}
+//
+//					if (onlineContacts.isNullOrEmpty()) {
+//						onlineContacts = null
+//					}
+//
+//					sortOnlineContacts(false)
+//
+//					if (parentFragment.getContactsAlpha() == 0f) {
+//						registerAdapterDataObserver(object : AdapterDataObserver() {
+//							override fun onChanged() {
+//								parentFragment.setContactsAlpha(0f)
+//								parentFragment.animateContactsAlpha(1f)
+//								unregisterAdapterDataObserver(this)
+//							}
+//						})
+//					}
+//				}
+//
+//				onlineContacts?.let {
+//					count += it.size + 2
+//					hasContacts = true
+//				}
+//			}
 		}
 
 		if (folderId == 0 && !hasContacts && dialogsCount == 0 && forceUpdatingContacts) {
@@ -522,9 +523,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 
 			VIEW_TYPE_EMPTY -> {
 				if (MessagesController.getGlobalMainSettings().getBoolean("newlyRegistered", false)) {
-					val aiSpaceBubblePopup = MaterialAlertDialogBuilder(context, R.style.TransparentDialog2)
-							.setView(LayoutInflater.from(context).inflate(R.layout.ai_space_bubble_popup, null))
-							.show()
+					val aiSpaceBubblePopup = MaterialAlertDialogBuilder(context, R.style.TransparentDialog2).setView(LayoutInflater.from(context).inflate(R.layout.ai_space_bubble_popup, null)).show()
 
 					aiSpaceBubblePopup.window?.setBackgroundDrawableResource(android.R.color.transparent)
 

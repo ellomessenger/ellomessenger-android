@@ -119,6 +119,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
@@ -204,6 +205,7 @@ import org.telegram.messenger.utils.hasServiceMessagesOnly
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
+import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.messenger.voip.VoIPService.Companion.sharedInstance
 import org.telegram.tgnet.ConnectionsManager
@@ -338,6 +340,7 @@ import org.telegram.tgnet.tlrpc.Message
 import org.telegram.tgnet.tlrpc.MessageEntity
 import org.telegram.tgnet.tlrpc.ReactionCount
 import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.tlrpc.TL_inputMessageEntityMentionName
 import org.telegram.tgnet.tlrpc.TL_message
 import org.telegram.tgnet.tlrpc.TL_messageEntityBold
@@ -716,6 +719,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	private var mediaBanTooltip: HintView? = null
 	private var searchAsListHint: HintView? = null
 	private var scheduledOrNoSoundHint: HintView? = null
+	private var isCommandPromoCode = false
 
 	private val showScheduledOrNoSoundRunnable = Runnable {
 		val chatActivityEnterView = chatActivityEnterView
@@ -2873,7 +2877,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		if (chatMode == 0 && threadId == 0 && !isReplyUser(currentUser) && reportType < 0) {
 			var userFull: UserFull? = null
 
-			if (currentUser != null && !currentUser!!.self && currentUser!!.id != 333000L && currentUser!!.id != 777000L && currentUser!!.id != 42777L) {
+			if (currentUser != null && !currentUser!!.self && currentUser!!.id != 333000L && currentUser!!.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser!!.id != 42777L) {
 				audioCallIconItem = menu.addItem(call, R.drawable.chat_calls_voice)
 				audioCallIconItem?.contentDescription = context.getString(R.string.Call)
 
@@ -2891,7 +2895,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				avatarContainer?.setTitleExpand(showAudioCallAsIcon)
 			}
 
-			if (currentUser?.id != 333000L && currentUser?.id != 777000L && currentUser?.id != 42777L) {
+			if (currentUser?.id != 333000L && currentUser?.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser?.id != 42777L) {
 				val headerItem = menu.addItem(0, R.drawable.overflow_menu).also {
 					this@ChatActivity.headerItem = it
 				}
@@ -2981,20 +2985,17 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (currentUser != null && currentUser?.self != true) {
 					headerItem.addSubItem(call, R.drawable.msg_callback, context.getString(R.string.Call))
-
-					// MARK: uncomment to enable video calls
-					// headerItem.addSubItem(video_call, R.drawable.msg_videocall, getContext().getString(R.string.VideoCall));
+					headerItem.addSubItem(video_call, R.drawable.msg_videocall, context.getString(R.string.VideoCall))
 
 					if (userFull != null && userFull.phone_calls_available) {
 						headerItem.showSubItem(call)
 
-						// MARK: uncomment to enable video calls
-//					if (userFull.video_calls_available) {
-//						headerItem.showSubItem(video_call);
-//					}
-//					else {
-						headerItem.hideSubItem(video_call)
-						//					}
+						if (userFull.video_calls_available) {
+							headerItem.showSubItem(video_call)
+						}
+						else {
+							headerItem.hideSubItem(video_call)
+						}
 					}
 					else {
 						headerItem.hideSubItem(call)
@@ -3017,7 +3018,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					timeItem2 = headerItem.addSubItem(chat_enc_timer, R.drawable.msg_autodelete, context.getString(R.string.SetTimer))
 				}
 
-				if (!isBot() && currentUser?.id != 333000L && currentUser?.id != 777000L && currentUser?.id != 42777L) {
+				if (!isBot() && currentUser?.id != 333000L && currentUser?.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser?.id != 42777L) {
 					if (!isChannel(currentChat)) { // MARK: remove this check to enable clearing history for all channel types
 						clearHistoryItem = headerItem.addSubItem(clear_history, R.drawable.msg_clear, context.getString(R.string.ClearHistory))
 					}
@@ -3040,7 +3041,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						val leaveItem = headerItem.addSubItem(delete_chat, R.drawable.msg_leave, context.getString(R.string.DeleteAndExit))
 						leaveItem.setColors(ResourcesCompat.getColor(context.resources, R.color.purple, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
-					else if (currentUser?.self != true && !isBot() && currentUser?.id != 333000L && currentUser?.id != 777000L && currentUser?.id != 42777L) {
+					else if (currentUser?.self != true && !isBot() && currentUser?.id != 333000L && currentUser?.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser?.id != 42777L) {
 						val deleteItem = headerItem.addSubItem(delete_chat, R.drawable.msg_delete, context.getString(R.string.DeleteChatUser))
 						deleteItem.setColors(ResourcesCompat.getColor(context.resources, R.color.dark, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
@@ -4646,10 +4647,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				else if (chatMode == MODE_SCHEDULED) {
 					emptyMessage = context.getString(R.string.NoScheduledMessages)
 				}
-				else if (currentUser != null && currentUser!!.id != 777000L && currentUser!!.id != 429000L && currentUser!!.id != 4244000L && MessagesController.isSupportUser(currentUser)) {
+				else if (currentUser != null && currentUser!!.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser!!.id != 429000L && currentUser!!.id != 4244000L && MessagesController.isSupportUser(currentUser)) {
 					emptyMessage = context.getString(R.string.GotAQuestion)
 				}
-				else if (currentUser == null || currentUser!!.self || currentUser!!.deleted || userBlocked) {
+				else if (currentUser == null || currentUser?.self == true || currentUser?.deleted == true || userBlocked) {
 					emptyMessage = context.getString(R.string.NoMessages)
 				}
 
@@ -8069,7 +8070,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		bottomMessagesActionContainer?.setOnTouchListener { _, _ -> true }
 
-		chatActivityEnterView = object : ChatActivityEnterView(parentActivity!!, contentView, this@ChatActivity, true, isAiBot()) {
+		chatActivityEnterView = object : ChatActivityEnterView(parentActivity!!, contentView, this@ChatActivity, true, isBot()) {
 			var lastContentViewHeight = 0
 			var messageEditTextPredrawHeigth = 0
 			var messageEditTextPredrawScrollY = 0
@@ -8227,6 +8228,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			var isEditTextItemVisibilitySuppressed = false
 
 			override fun onBotCommandSelected(command: String) {
+				isCommandPromoCode = command == PROMO_CODE_COMMAND
 				updateChatBotTopPanel()
 			}
 
@@ -9067,6 +9069,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			val parentActivity = parentActivity ?: return@setOnClickListener
 
+			if (isChannel(currentChat)) {
+				messagesController.loadAppConfig()
+			}
+
 			if (reportType >= 0) {
 				showDialog(object : ReportAlert(parentActivity, reportType) {
 					override fun onSend(type: Int, message: String?) {
@@ -9631,6 +9637,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 		}, subscribeClickListener = object : OnClickListener {
 			override fun onClick(v: View) {
+				messagesController.loadAppConfig()
+
 				if (!isPaidChannel(currentChat)) {
 					bottomOverlayChatText?.performClick()
 
@@ -9640,10 +9648,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					return
 				}
 
+				showBottomOverlayProgress(show = true, animated = true)
+
 				ioScope.launch {
 					val request = subscribeRequest(currentChat.id)
 					val resp = connectionsManager.performRequest(request)
-					val error = resp as? TLRPC.TL_error
+					val error = resp as? TL_error
 
 					mainScope.launch {
 						visibleDialog?.setOnDismissListener {
@@ -11569,7 +11579,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return
 		}
 
-		if (currentUser?.id == 333000L || currentUser?.id == 777000L || currentUser?.id == 42777L) {
+		if (currentUser?.id == 333000L || currentUser?.id == BuildConfig.NOTIFICATIONS_BOT_ID || currentUser?.id == 42777L) {
 			return
 		}
 
@@ -16945,7 +16955,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		else if (!chatWasReset && startLoadFromMessageId != 0 && (load_type == 3 || load_type == 4)) {
 			last_message_id = args[5] as Int
 		}
-		else if (did == 777000L && load_type == 2) {
+		else if (did == BuildConfig.NOTIFICATIONS_BOT_ID && load_type == 2) {
 			var unreadCount = args[6] as Int
 			unreadCount--
 
@@ -17647,7 +17657,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							startLoadFromMessageOffset = Int.MAX_VALUE
 						}
 						else if (scrollToMessagePosition == -9000) {
-							yOffset = getScrollOffsetForMessage(scrollToMessage!!)
+							// MARK: this was causing selected messages to show randomly in the middle of the screen
+							// yOffset = getScrollOffsetForMessage(scrollToMessage!!)
+							// MARK: this makes them to show at the top of the screen
+							yOffset = 0
 							bottom = false
 						}
 						else if (scrollToMessagePosition == -10000) {
@@ -17663,7 +17676,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							yOffset = scrollToMessagePosition
 						}
 
-						yOffset += AndroidUtilities.dp(50f) // in case pinned message view is visible
+						if (pinnedMessageIds.isNotEmpty() || pinnedMessageObjects.isNotEmpty()) {
+							yOffset += AndroidUtilities.dp(50f) // in case pinned message view is visible
+						}
 
 						if (!postponedScroll) {
 							if (messages.isNotEmpty()) {
@@ -18168,7 +18183,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					processNewMessages(arr.toMutableList())
 
 					if (isAiBot()) {
-						chatBotController.updateSubscriptionsInfo()
+						chatBotController.updateSubscriptionsInfo(dialogId)
 					}
 				}
 				else if (isChannel(currentChat) && !currentChat!!.megagroup && currentChatInfo != null && did == -currentChatInfo!!.linked_chat_id) {
@@ -21187,7 +21202,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val mid = obj.replyAnyMsgId
 
 					if (threadMessage?.id == mid) {
-						threadMessage!!.messageOwner!!.replies!!.replies++
+						threadMessage?.messageOwner?.replies?.let {
+							it.replies += 1
+						}
 					}
 				}
 
@@ -23173,7 +23190,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 		}
 
-		if (currentUser != null && (currentUser!!.id == 333000L || currentUser!!.id == 777000L || currentUser!!.id == 42777L)) {
+		if (currentUser != null && (currentUser!!.id == 333000L || currentUser!!.id == BuildConfig.NOTIFICATIONS_BOT_ID || currentUser!!.id == 42777L)) {
 			bottomOverlayChatText?.text = context!!.getString(R.string.ServiceNotifications).uppercase(Locale.getDefault())
 			bottomOverlayChatText?.setCompoundDrawables(null, null, null, null)
 			bottomOverlayChatText?.isEnabled = false
@@ -24294,7 +24311,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		if ((isAiBot()) && !chatBotController.userSettingsUpdated) {
 			showAiFreeRequests = (chatBotController.lastSubscriptionInfo?.realState ?: ElloRpc.SubscriptionInfoAiBotState.NONE) != ElloRpc.SubscriptionInfoAiBotState.NONE
-			show = showAiFreeRequests
+			show = if (chatBotController.lastSubscriptionInfo?.promoListActive?.contains(dialogId) == true) { false } else { showAiFreeRequests }
 		}
 		else if (currentEncryptedChat != null) {
 			show = !(currentEncryptedChat!!.admin_id == userConfig.getClientUserId() || contactsController.isLoadingContacts()) && contactsController.contactsDict[currentUser!!.id] == null
@@ -24670,12 +24687,41 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		checkListViewPaddings()
 	}
 
+	private fun getAdditionalInfo(): ElloRpc.AdditionalInfoResponse? {
+		val req = ElloRpc.getAdditionalInfo(dialogId)
+
+		return runBlocking {
+			val response = withContext(ioScope.coroutineContext) {
+				connectionsManager.performRequest(req)
+			}
+
+			val error = response as? TL_error
+
+			if (error == null && response is TL_biz_dataRaw) {
+				response.readData<ElloRpc.AdditionalInfoResponse>()
+			}
+			else {
+				null
+			}
+		}
+	}
+
 	fun isAiPromptsDepleted(): Boolean {
 		if (!isAiBot()) {
 			return false
 		}
 
+		if (chatBotController.lastSubscriptionInfo?.promoListActive?.contains(dialogId) == true) {
+			return false
+		}
+
+		if (isCommandPromoCode) {
+			isCommandPromoCode = false
+			return false
+		}
+
 		val lastSubscriptionInfo = chatBotController.lastSubscriptionInfo
+		val additionalInfo = getAdditionalInfo()
 
 		if (lastSubscriptionInfo != null) {
 			var aiPromptsDepleted: String? = null
@@ -24683,7 +24729,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			val counterLeft = when (lastSubscriptionInfo.realState) {
 				ElloRpc.SubscriptionInfoAiBotState.IMAGE -> {
 					if (lastSubscriptionInfo.imgTotal <= 0) {
-						aiPromptsDepleted = context?.getString(R.string.ai_image_prompt)
+						aiPromptsDepleted = additionalInfo?.imageLimitError ?: context?.getString(R.string.ai_image_prompt)
 					}
 
 					lastSubscriptionInfo.imgTotal
@@ -24691,7 +24737,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				ElloRpc.SubscriptionInfoAiBotState.TEXT -> {
 					if (lastSubscriptionInfo.textTotal <= 0) {
-						aiPromptsDepleted = context?.getString(R.string.ai_text_prompt)
+						aiPromptsDepleted = additionalInfo?.textLimitError ?: context?.getString(R.string.ai_text_prompt)
 					}
 
 					lastSubscriptionInfo.textTotal
@@ -25043,7 +25089,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return
 		}
 
-		chatBotController.startChatBot()
+		chatBotController.startChatBot(dialogId)
 	}
 
 	override fun onPause() {
@@ -25745,7 +25791,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							GroupCallActivity.create(parentActivity as LaunchActivity?, AccountInstance.getInstance(currentAccount), null, null, false, null)
 						}
 						else {
-							val intent = Intent(parentActivity, LaunchActivity::class.java).setAction("voip_chat")
+							val intent = Intent(parentActivity, LaunchActivity::class.java).setAction(VoIPPreNotificationService.VOIP_CHAT_ACTION)
 							intent.putExtra("currentAccount", VoIPService.sharedInstance!!.getAccount())
 
 							parentActivity!!.startActivity(intent)
@@ -28761,7 +28807,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							}
 							else if (error.text != null) {
 								AndroidUtilities.runOnUIThread {
-									if (error.text.startsWith("SLOWMODE_WAIT_")) {
+									if (error.text?.startsWith("SLOWMODE_WAIT_") == true) {
 										AlertsCreator.showSimpleToast(this@ChatActivity, context!!.getString(R.string.SlowmodeSendError))
 									}
 									else if (error.text == "CHAT_SEND_MEDIA_FORBIDDEN") {
@@ -29461,7 +29507,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 
 			if (chatActivity.threadMessage?.messageOwner?.replies != null) {
-				originalMessage?.messageOwner?.replies?.replies = chatActivity.threadMessage?.messageOwner?.replies?.replies
+				originalMessage?.messageOwner?.replies?.replies = chatActivity.threadMessage?.messageOwner?.replies?.replies ?: 0
 			}
 
 			if (originalMessage?.messageOwner?.originalReactions != null) {
@@ -33241,6 +33287,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		private var replacingChatActivity = false
 		private const val REGENERATE = "regenerate"
 		const val MAX_VISIBLE_LENGTH = 130
+		private const val PROMO_CODE_COMMAND = "/promoPromo code"
 
 		fun isClickableLink(str: String): Boolean {
 			return str.startsWith("https://") || str.startsWith("@") || str.startsWith("#") || str.startsWith("$") || str.startsWith("video?")

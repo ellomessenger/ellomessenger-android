@@ -11,7 +11,13 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.widget.addTextChangedListener
 import androidx.core.widget.doAfterTextChanged
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.R
@@ -32,6 +38,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 	private var email: String? = null
 	private var binding: FragmentChangePasswordBinding? = null
 	private var countDownTimer: CountDownTimer? = null
+	private var debounceJob: Job? = null
 
 	override fun onFragmentCreate(): Boolean {
 		notificationCenter.addObserver(this, NotificationCenter.userInfoDidLoad)
@@ -73,13 +80,21 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 			binding?.confirmNewPasswordField?.error = null
 		}
 
-		binding?.changePassword?.setOnClickListener {
-			changePassword()
+		binding?.currentPasswordField?.addTextChangedListener {
+			debounceJob?.cancel()
+			debounceJob = CoroutineScope(Dispatchers.Main).launch {
+				delay(3000L)
+
+				val password = it.toString()
+				if (password.length >= 6) {
+					changePassword()
+				}
+			}
 		}
 
-		binding?.codeFieldLayout?.codeLayout?.addTextChangedListener {
-			val code = it?.toString()?.trim()?.takeIf { c -> c.isNotEmpty() } ?: return@addTextChangedListener
-			processCode(code)
+		binding?.changePassword?.setOnClickListener {
+			val code = binding?.codeFieldLayout?.codeLayout?.text?.toString()?.trim()
+			processCode(code!!)
 		}
 
 		updateResendButton(context, binding?.resendButton!!)
@@ -98,49 +113,8 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 
 	private fun changePassword() {
 		val context = context ?: return
-		val oldPassword = binding?.currentPasswordField?.text?.toString()?.trim()
 
-		if (oldPassword.isNullOrEmpty()) {
-			binding?.currentPasswordFieldLayout?.error = context.getString(R.string.password_is_empty)
-			return
-		}
-
-		val newPassword = binding?.newPasswordField?.text?.toString()?.trim()
-
-		if (newPassword.isNullOrEmpty()) {
-			binding?.newPasswordFieldLayout?.error = context.getString(R.string.password_is_empty)
-			return
-		}
-
-		if (!newPassword.validatePassword()) {
-			binding?.newPasswordFieldLayout?.error = context.getString(R.string.password_fail_rules)
-			return
-		}
-
-		if (oldPassword == newPassword) {
-			binding?.newPasswordFieldLayout?.error = context.getString(R.string.passwords_the_same)
-			return
-		}
-
-		val confirmNewPassword = binding?.confirmNewPasswordField?.text?.toString()?.trim()
-
-		if (confirmNewPassword.isNullOrEmpty()) {
-			binding?.confirmNewPasswordFieldLayout?.error = context.getString(R.string.password_is_empty)
-			return
-		}
-
-		if (newPassword != confirmNewPassword) {
-			binding?.confirmNewPasswordFieldLayout?.error = context.getString(R.string.PasswordDoNotMatch)
-			return
-		}
-
-		setControlsEnabled(false)
-
-		binding?.progressBar?.visible()
-
-		AndroidUtilities.hideKeyboard(binding?.root)
-
-		val req = ElloRpc.verificationCodeRequest(email = email ?: "", password = oldPassword)
+		val req = ElloRpc.verificationCodeRequest(email = email ?: "")
 
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
@@ -158,6 +132,10 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 
 						val code = binding?.codeFieldLayout?.codeLayout?.text?.toString()?.trim()
 						processCode(code!!)
+
+						if (debounceJob?.isActive == true) {
+							debounceJob?.cancel()
+						}
 					}
 				}
 				else {
@@ -228,10 +206,10 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		}
 	}
 
-	private fun showResponseResult(ok: Boolean) {
+	private fun showResponseResult(ok: Boolean, errorText: String?) {
 		val context = context ?: return
 
-		showResponseResult(binding, context, ok)
+		showResponseResult(binding, context, ok, errorText)
 
 		if (ok) {
 			binding?.root?.postDelayed({
@@ -244,7 +222,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		}
 	}
 
-	private fun showResponseResult(binding: FragmentChangePasswordBinding?, context: Context?, ok: Boolean) {
+	private fun showResponseResult(binding: FragmentChangePasswordBinding?, context: Context?, ok: Boolean, errorText: String?) {
 		if (binding == null) {
 			return
 		}
@@ -262,7 +240,10 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		}
 		else {
 			binding.errorLabel.setTextColor(ResourcesCompat.getColor(context.resources, R.color.purple, null))
-			binding.errorLabel.text = context.getString(R.string.invalid_code)
+			when(errorText) {
+				INVALID_CODE -> binding.errorLabel.text = context.getString(R.string.invalid_code)
+				INVALID_PASSWORD -> binding.errorLabel.text = context.getString(R.string.invalid_password)
+			}
 			binding.errorLayout.visible()
 		}
 
@@ -303,6 +284,8 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 	}
 
 	override fun processCode(code: String) {
+		val context = context ?: return
+
 		if (code.length != 6) {
 			return
 		}
@@ -310,9 +293,47 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		val oldPass = binding?.currentPasswordField?.text?.toString()?.trim()
 		val newPass = binding?.newPasswordField?.text?.toString()?.trim()
 
+		if (oldPass.isNullOrEmpty()) {
+			binding?.currentPasswordFieldLayout?.error = context.getString(R.string.password_is_empty)
+			return
+		}
+
+		if (newPass.isNullOrEmpty()) {
+			binding?.newPasswordFieldLayout?.error = context.getString(R.string.password_is_empty)
+			return
+		}
+
+		if (!newPass.validatePassword()) {
+			binding?.newPasswordFieldLayout?.error = context.getString(R.string.password_fail_rules)
+			return
+		}
+
+		if (oldPass == newPass) {
+			binding?.newPasswordFieldLayout?.error = context.getString(R.string.passwords_the_same)
+			return
+		}
+
+		val confirmNewPassword = binding?.confirmNewPasswordField?.text?.toString()?.trim()
+
+		if (confirmNewPassword.isNullOrEmpty()) {
+			binding?.confirmNewPasswordFieldLayout?.error = context.getString(R.string.password_is_empty)
+			return
+		}
+
+		if (newPass != confirmNewPassword) {
+			binding?.confirmNewPasswordFieldLayout?.error = context.getString(R.string.PasswordDoNotMatch)
+			return
+		}
+
 		setControlsEnabled(false)
 
-		val req = ElloRpc.changePasswordRequest(oldPassword = oldPass!!, newPassword = newPass!!, code = code)
+		binding?.progressBar?.visible()
+
+		AndroidUtilities.hideKeyboard(binding?.root)
+
+		setControlsEnabled(false)
+
+		val req = ElloRpc.changePasswordRequest(oldPassword = oldPass, newPassword = newPass, code = code)
 
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
@@ -325,7 +346,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 					ok = data?.status == true
 				}
 
-				showResponseResult(ok)
+				showResponseResult(ok, error?.text)
 			}
 		}, ConnectionsManager.RequestFlagFailOnServerErrors or ConnectionsManager.RequestFlagWithoutLogin)
 	}
@@ -342,6 +363,9 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		binding = null
 		countDownTimer?.cancel()
 		countDownTimer = null
+		if (debounceJob?.isActive == true) {
+			debounceJob?.cancel()
+		}
 	}
 
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {
@@ -349,6 +373,11 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 			val userInfo = args[1] as UserFull
 			email = userInfo.email
 		}
+	}
+
+	companion object {
+		private const val INVALID_PASSWORD = "password is not matched"
+		private const val INVALID_CODE = "code mismatch"
 	}
 
 }

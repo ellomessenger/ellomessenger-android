@@ -122,7 +122,7 @@ import org.telegram.tgnet.TLRPC.TL_documentAttributeSticker
 import org.telegram.tgnet.TLRPC.TL_documentAttributeSticker_layer55
 import org.telegram.tgnet.TLRPC.TL_documentAttributeVideo
 import org.telegram.tgnet.TLRPC.TL_document_layer82
-import org.telegram.tgnet.TLRPC.TL_error
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.TLRPC.TL_fileLocationUnavailable
 import org.telegram.tgnet.TLRPC.TL_fileLocation_layer82
 import org.telegram.tgnet.TLRPC.TL_game
@@ -1097,11 +1097,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					when (val sendRequest = message.sendRequest) {
 						is TL_messages_sendMedia -> {
-							media = (sendRequest as? TL_messages_sendMedia)?.media
+							media = sendRequest.media
 						}
 
 						is TL_messages_editMessage -> {
-							media = (sendRequest as? TL_messages_editMessage)?.media
+							media = sendRequest.media
 						}
 
 						is TL_messages_sendMultiMedia -> {
@@ -1487,7 +1487,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						Utilities.globalQueue.postRunnable {
 							val document = message.obj?.document
 
-							if (document?.thumbs.isNullOrEmpty() || document?.thumbs?.firstOrNull()?.location is TL_fileLocationUnavailable) {
+							if (document?.thumbs.isNullOrEmpty() || document.thumbs?.firstOrNull()?.location is TL_fileLocationUnavailable) {
 								try {
 									val bitmap = ImageLoader.loadBitmap(cacheFile.absolutePath, null, 90f, 90f, true)
 
@@ -1508,7 +1508,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								message.obj?.messageOwner?.attachPath = cacheFile.toString()
 
 								if (!document?.thumbs.isNullOrEmpty()) {
-									val photoSize = document?.thumbs?.firstOrNull()
+									val photoSize = document.thumbs?.firstOrNull()
 
 									if (photoSize !is TL_photoStrippedSize) {
 										message.photoSize = photoSize
@@ -1702,7 +1702,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						message.sendDelayedRequests()
 						MediaController.getInstance().cancelVideoConvert(message.obj)
 
-						if (messages.size == 0) {
+						if (messages.isEmpty()) {
 							keysToRemove.add(key)
 
 							if (message.sendEncryptedRequest != null) {
@@ -1720,7 +1720,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			val key = keysToRemove[a]
 
 			if (key.startsWith("http")) {
-				ImageLoader.instance.cancelLoadHttpFile(key)
+				ImageLoader.getInstance().cancelLoadHttpFile(key)
 			}
 			else {
 				fileLoader.cancelFileUpload(key, enc)
@@ -2076,7 +2076,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				AndroidUtilities.runOnUIThread {
 					if (bitmapFinal[0] != null && keyFinal[0] != null) {
-						ImageLoader.instance.putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, bitmapFinal[0]), keyFinal[0], false)
+						ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, bitmapFinal[0]), keyFinal[0], false)
 					}
 
 					sendMessage(document as TL_document, null, null, peer, replyToMsg, replyToTopMsg, null, null, null, null, notify, scheduleDate, 0, parentObject, sendAnimationData, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
@@ -2929,23 +2929,23 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				if (photo != null) {
 					newMsg?.media = TL_messageMediaPhoto()
-					newMsg?.media?.flags = newMsg!!.media!!.flags or 3
-					newMsg.media?.photo = photo
+					newMsg?.media?.flags = newMsg.media!!.flags or 3
+					newMsg?.media?.photo = photo
 
 					type = 2
 
 					if (!path.isNullOrEmpty() && path.startsWith("http")) {
-						newMsg.attachPath = path
+						newMsg?.attachPath = path
 					}
 					else {
 						val location1 = photo.sizes[photo.sizes.size - 1].location
-						newMsg.attachPath = FileLoader.getInstance(currentAccount).getPathToAttach(location1, true).toString()
+						newMsg?.attachPath = FileLoader.getInstance(currentAccount).getPathToAttach(location1, true).toString()
 					}
 				}
 				else if (document != null) {
 					newMsg?.media = TL_messageMediaDocument()
-					newMsg?.media?.flags = newMsg!!.media!!.flags or 3
-					newMsg.media?.document = document
+					newMsg?.media?.flags = newMsg.media!!.flags or 3
+					newMsg?.media?.document = document
 
 					type = if (MessageObject.isVideoDocument(document) || videoEditedInfo != null) {
 						3
@@ -2959,7 +2959,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						params["ve"] = ve
 					}
 
-					newMsg.attachPath = path
+					newMsg?.attachPath = path
 				}
 				else {
 					type = 1
@@ -2994,16 +2994,16 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					if (type == 1) {
 						if (messageObject.editingMessageEntities != null) {
 							newMsg?.entities = ArrayList(messageObject.editingMessageEntities!!)
-							newMsg?.flags = newMsg!!.flags or 128
+							newMsg?.flags = newMsg.flags or 128
 						}
 						else if (!TextUtils.equals(oldMessage, newMsg?.message)) {
-							newMsg?.flags = newMsg!!.flags and 128.inv()
+							newMsg?.flags = newMsg.flags and 128.inv()
 						}
 					}
 					else {
 						if (messageObject.editingMessageEntities != null) {
 							newMsg?.entities = ArrayList(messageObject.editingMessageEntities!!)
-							newMsg?.flags = newMsg!!.flags or 128
+							newMsg?.flags = newMsg.flags or 128
 						}
 						else {
 							val message = arrayOf(messageObject.editingMessage)
@@ -3011,10 +3011,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 							if (!entities.isNullOrEmpty()) {
 								newMsg?.entities = ArrayList(entities)
-								newMsg?.flags = newMsg!!.flags or 128
+								newMsg?.flags = newMsg.flags or 128
 							}
 							else if (!TextUtils.equals(oldMessage, newMsg?.message)) {
-								newMsg?.flags = newMsg!!.flags and 128.inv()
+								newMsg?.flags = newMsg.flags and 128.inv()
 							}
 						}
 
@@ -3818,7 +3818,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							parentFragment.showDialog(builder.create())
 						}
 					}
-					else if ("PASSWORD_MISSING" == error.text || error.text.startsWith("PASSWORD_TOO_FRESH_") || error.text.startsWith("SESSION_TOO_FRESH_")) {
+					else if ("PASSWORD_MISSING" == error.text || error.text?.startsWith("PASSWORD_TOO_FRESH_") == true || error.text?.startsWith("SESSION_TOO_FRESH_") == true) {
 						passwordFragment?.needHideProgress()
 
 						val builder = AlertDialog.Builder(parentFragment.parentActivity!!)
@@ -4576,7 +4576,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				if (!entities.isNullOrEmpty()) {
 					newMsg?.entities = ArrayList(entities)
-					newMsg?.flags = newMsg!!.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
+					newMsg?.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
 				}
 
 				if (caption != null) {
@@ -4591,25 +4591,25 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 
 				newMsg?.id = userConfig.newMessageId
-				newMsg?.local_id = newMsg!!.id
-				newMsg.out = true
+				newMsg?.local_id = newMsg.id
+				newMsg?.out = true
 
 				if (isChannel && sendToPeer != null) {
-					newMsg.from_id = TL_peerChannel()
-					newMsg.from_id!!.channel_id = sendToPeer.channel_id
+					newMsg?.from_id = TL_peerChannel()
+					newMsg?.from_id?.channel_id = sendToPeer.channel_id
 				}
 				else if (fromPeer != null) {
-					newMsg.from_id = fromPeer
+					newMsg?.from_id = fromPeer
 
 					if (rank != null) {
-						newMsg.post_author = rank
-						newMsg.flags = newMsg.flags or 65536
+						newMsg?.post_author = rank
+						newMsg?.flags = newMsg.flags or 65536
 					}
 				}
 				else {
-					newMsg.from_id = TL_peerUser()
-					newMsg.from_id!!.user_id = myId
-					newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_FROM_ID
+					newMsg?.from_id = TL_peerUser()
+					newMsg?.from_id?.user_id = myId
+					newMsg?.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_FROM_ID
 				}
 
 				userConfig.saveConfig(false)
@@ -5962,7 +5962,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		if (message?.type == 0) {
 			if (message.httpLocation != null) {
 				putToDelayedMessages(message.httpLocation, message)
-				ImageLoader.instance.loadHttpFile(message.httpLocation, "file", currentAccount)
+				ImageLoader.getInstance().loadHttpFile(message.httpLocation, "file", currentAccount)
 			}
 			else {
 				if (message.sendRequest != null) {
@@ -6097,7 +6097,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		else if (message?.type == 2) {
 			if (message.httpLocation != null) {
 				putToDelayedMessages(message.httpLocation, message)
-				ImageLoader.instance.loadHttpFile(message.httpLocation, "gif", currentAccount)
+				ImageLoader.getInstance().loadHttpFile(message.httpLocation, "gif", currentAccount)
 			}
 			else {
 				if (message.sendRequest != null) {
@@ -6259,7 +6259,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						putToDelayedMessages(message.httpLocation, message)
 						message.extraHashMap!![messageObject] = message.httpLocation!!
 						message.extraHashMap!![message.httpLocation!!] = messageObject
-						ImageLoader.instance.loadHttpFile(message.httpLocation!!, "file", currentAccount)
+						ImageLoader.getInstance().loadHttpFile(message.httpLocation!!, "file", currentAccount)
 						message.httpLocation = null
 					}
 					else {
@@ -6974,7 +6974,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				val maxDelayedMessage = findMaxDelayedMessageForMessageId(msgObj!!.id, msgObj.dialogId)
 
 				if (maxDelayedMessage != null) {
-					maxDelayedMessage.addDelayedRequest(req, msgObj, originalPath, parentObject, delayedMessage, parentMessage?.scheduled ?: false)
+					maxDelayedMessage.addDelayedRequest(req, msgObj, originalPath, parentObject, delayedMessage, parentMessage?.scheduled == true)
 
 					if (parentMessage?.requests != null) {
 						maxDelayedMessage.requests?.addAll(parentMessage.requests!!)
@@ -6996,7 +6996,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 				else if (delayedMessage != null) {
 					AndroidUtilities.runOnUIThread {
-						removeFromSendingMessages(newMsgObj!!.id, scheduled)
+						removeFromSendingMessages(newMsgObj.id, scheduled)
 
 						if (req is TL_messages_sendMedia) {
 							if (req.media is TL_inputMediaPhoto) {
@@ -7027,7 +7027,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (req is TL_messages_editMessage) {
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
-						val attachPath = newMsgObj?.attachPath
+						val attachPath = newMsgObj.attachPath
 						val updates = response as Updates
 						val updatesArr = response.updates
 						var message: Message? = null
@@ -7058,7 +7058,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							messagesController.processUpdates(updates, false)
 
 							AndroidUtilities.runOnUIThread {
-								processSentMessage(newMsgObj!!.id)
+								processSentMessage(newMsgObj.id)
 								removeFromSendingMessages(newMsgObj.id, scheduled)
 							}
 						}
@@ -7074,7 +7074,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							stopVideoService(newMsgObj.attachPath)
 						}
 
-						removeFromSendingMessages(newMsgObj!!.id, scheduled)
+						removeFromSendingMessages(newMsgObj.id, scheduled)
 						revertEditingMessageObject(msgObj)
 					}
 				}
@@ -7085,7 +7085,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					var isSentError = false
 
 					if (error == null) {
-						val oldId = newMsgObj!!.id
+						val oldId = newMsgObj.id
 						val sentMessages = ArrayList<Message>()
 						val attachPath = newMsgObj.attachPath
 						val existFlags: Int
@@ -7218,35 +7218,35 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							if (message != null) {
 								MessageObject.getDialogId(message)
 
-								if (scheduledOnline && message!!.date != 0x7FFFFFFE) {
+								if (scheduledOnline && message.date != 0x7FFFFFFE) {
 									currentSchedule = false
 								}
 
-								ImageLoader.saveMessageThumbs(message!!)
+								ImageLoader.saveMessageThumbs(message)
 
 								if (!currentSchedule) {
-									var value = messagesController.dialogs_read_outbox_max[message!!.dialog_id]
+									var value = messagesController.dialogs_read_outbox_max[message.dialog_id]
 
 									if (value == null) {
-										value = messagesStorage.getDialogReadMax(message!!.out, message!!.dialog_id)
-										messagesController.dialogs_read_outbox_max[message!!.dialog_id] = value
+										value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
+										messagesController.dialogs_read_outbox_max[message.dialog_id] = value
 									}
 
-									message!!.unread = value < message!!.id
+									message.unread = value < message.id
 								}
 
-								msgObj.messageOwner?.post_author = message!!.post_author
+								msgObj.messageOwner?.post_author = message.post_author
 
-								if (message!!.flags and 33554432 != 0) {
-									msgObj.messageOwner?.ttl_period = message!!.ttl_period
+								if (message.flags and 33554432 != 0) {
+									msgObj.messageOwner?.ttl_period = message.ttl_period
 									msgObj.messageOwner?.flags = msgObj.messageOwner!!.flags or 33554432
 								}
 
-								msgObj.messageOwner?.entities = message!!.entities
+								msgObj.messageOwner?.entities = message.entities
 
-								updateMediaPaths(msgObj, message, message!!.id, originalPath, false)
+								updateMediaPaths(msgObj, message, message.id, originalPath, false)
 								existFlags = msgObj.mediaExistanceFlags
-								newMsgObj.id = message!!.id
+								newMsgObj.id = message.id
 							}
 							else {
 								isSentError = true
@@ -7315,7 +7315,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					if (isSentError) {
 						messagesStorage.markMessageAsSendError(newMsgObj, scheduled)
-						newMsgObj!!.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+						newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 						notificationCenter.postNotificationName(NotificationCenter.messageSendError, newMsgObj.id)
 						processSentMessage(newMsgObj.id)
 
@@ -7327,17 +7327,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 
 					if (error?.text?.lowercase()?.contains("blocked") == true) {
-						newMsgObj?.dialog_id?.let {
+						newMsgObj.dialog_id.let {
 							notificationCenter.postNotificationName(NotificationCenter.chatIsBlocked, abs(it), NotificationCenter.ERROR_CHAT_BLOCKED)
 						}
 					}
 				}
 			}
 		}, {
-			val msgId = newMsgObj?.id ?: 0
+			val msgId = newMsgObj.id
 
 			AndroidUtilities.runOnUIThread {
-				newMsgObj?.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
+				newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
 				notificationCenter.postNotificationName(NotificationCenter.messageReceivedByAck, msgId)
 			}
 		}, ConnectionsManager.RequestFlagCanCompress or ConnectionsManager.RequestFlagInvokeAfter or if (req is TL_messages_sendMessage) ConnectionsManager.RequestFlagNeedQuickAck else 0)
@@ -7423,7 +7423,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 
 				ImageLocation.getForObject(strippedNew, photoObject)?.let {
-					ImageLoader.instance.replaceImageInCache(oldKey, newKey, it, post)
+					ImageLoader.getInstance().replaceImageInCache(oldKey, newKey, it, post)
 				}
 			}
 		}
@@ -7478,7 +7478,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							cacheFile.renameTo(cacheFile2)
 
 							ImageLocation.getForPhoto(size, sentMessage.media?.photo)?.let {
-								ImageLoader.instance.replaceImageInCache(fileName, fileName2, it, post)
+								ImageLoader.getInstance().replaceImageInCache(fileName, fileName2, it, post)
 							}
 
 							size2.location = size.location
@@ -7501,7 +7501,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							val key = location?.getKey(sentMessage, null, false)
 
 							if (location != null && key != null) {
-								ImageLoader.instance.replaceImageInCache(fileName, key, location, post)
+								ImageLoader.getInstance().replaceImageInCache(fileName, key, location, post)
 							}
 						}
 					}
@@ -7547,7 +7547,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					cacheFile.renameTo(cacheFile2)
 
 					ImageLocation.getForDocument(size, sentMessage.media?.document)?.let {
-						ImageLoader.instance.replaceImageInCache(fileName, fileName2, it, post)
+						ImageLoader.getInstance().replaceImageInCache(fileName, fileName2, it, post)
 					}
 
 					size2.location = size.location
@@ -7668,7 +7668,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			if (sentMessage.reply_markup != null) {
 				newMsg?.reply_markup = sentMessage.reply_markup
-				newMsg?.flags = newMsg!!.flags or TLRPC.MESSAGE_FLAG_HAS_MARKUP
+				newMsg?.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_MARKUP
 			}
 		}
 		else if (sentMessage.media is TL_messageMediaPoll) {
@@ -7755,7 +7755,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	val isImportingStickers: Boolean
-		get() = importingStickersMap.size != 0
+		get() = importingStickersMap.isNotEmpty()
 
 	val isImportingHistory: Boolean
 		get() = importingHistoryMap.size() != 0
@@ -8382,7 +8382,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			if (!isEncrypted && groupId != null) {
-				if (docType != null && prevType != null && prevType !== docType[0]) {
+				if (docType != null && prevType != null && prevType != docType[0]) {
 					finishGroup(accountInstance, groupId[0], scheduleDate)
 					groupId[0] = Utilities.random.nextLong()
 				}
@@ -8595,7 +8595,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val count = uris.size
 
 					for (a in uris.indices) {
-						val captionFinal = if (a == 0 && (paths == null || paths.size == 0)) caption else null
+						val captionFinal = if (a == 0 && (paths.isNullOrEmpty())) caption else null
 
 						if (!isEncrypted && count > 1 && mediaCount % 10 == 0) {
 							if (groupId[0] != 0L) {
@@ -9012,7 +9012,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					AndroidUtilities.runOnUIThread {
 						if (finalDocument != null) {
 							if (precachedThumb[0] != null && precachedKey[0] != null) {
-								ImageLoader.instance.putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, precachedThumb[0]), precachedKey[0], false)
+								ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, precachedThumb[0]), precachedKey[0], false)
 							}
 
 							accountInstance.sendMessagesHelper.sendMessage(finalDocument, null, finalPathFinal, dialogId, replyToMsg, replyToTopMsg, result.send_message.message, result.send_message.entities, result.send_message.reply_markup, params, notify, scheduleDate, 0, result, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
@@ -9192,7 +9192,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 
 					if (!smallExists) {
-						val size = ImageLoader.scaleAndSaveImage(smallSize, bitmap, 90f, 90f, 55, cache = true, forceCacheDir = false)
+						val size = ImageLoader.scaleAndSaveImage(smallSize, bitmap, 90f, 90f, 55, true, false)
 
 						if (size !== smallSize) {
 							`object`.sizes.add(0, size)
@@ -9222,7 +9222,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 							val side = if (isEncrypted) 90 else 320
 
-							`object`.thumbs[0] = ImageLoader.scaleAndSaveImage(photoSize, thumb, side.toFloat(), side.toFloat(), if (side > 90) 80 else 55, cache = false, forceCacheDir = true)
+							`object`.thumbs[0] = ImageLoader.scaleAndSaveImage(photoSize, thumb, side.toFloat(), side.toFloat(), if (side > 90) 80 else 55, false, true)
 						}
 					}
 				}
@@ -9872,7 +9872,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 								AndroidUtilities.runOnUIThread {
 									if (thumbFinal != null && thumbKeyFinal != null) {
-										ImageLoader.instance.putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, thumbFinal), thumbKeyFinal, false)
+										ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, thumbFinal), thumbKeyFinal, false)
 									}
 
 									if (editingMessageObject != null) {
@@ -10103,7 +10103,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 									AndroidUtilities.runOnUIThread {
 										if (bitmapFinal[0] != null && keyFinal[0] != null) {
-											ImageLoader.instance.putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, bitmapFinal[0]), keyFinal[0], false)
+											ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, bitmapFinal[0]), keyFinal[0], false)
 										}
 
 										if (editingMessageObject != null) {
@@ -10560,7 +10560,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					AndroidUtilities.runOnUIThread {
 						if (thumbFinal != null && thumbKeyFinal != null) {
-							ImageLoader.instance.putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, thumbFinal), thumbKeyFinal, false)
+							ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, thumbFinal), thumbKeyFinal, false)
 						}
 
 						if (editingMessageObject != null) {

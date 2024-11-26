@@ -42,6 +42,7 @@ import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.tgnet.tlrpc.User;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BottomSheet;
@@ -265,7 +266,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 				}
 
 				@Override
-				public void onError(TLRPC.TL_error error) {
+				public void onError(TL_error error) {
 					Toast.makeText(getContext(), error.text, Toast.LENGTH_SHORT).show();
 				}
 			}, true);

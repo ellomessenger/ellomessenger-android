@@ -27,6 +27,7 @@ import android.view.animation.Interpolator
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AndroidUtilities
@@ -674,6 +675,11 @@ class DialogOrContactPickerActivity : BaseFragment() {
 		val parentActivity = parentActivity ?: return
 
 		if (user == null) {
+			return
+		}
+
+		if (user.bot) {
+			Toast.makeText(context, context?.getString(R.string.system_bots_block_alert), Toast.LENGTH_SHORT).show()
 			return
 		}
 

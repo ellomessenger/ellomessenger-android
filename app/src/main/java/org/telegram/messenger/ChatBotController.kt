@@ -70,16 +70,16 @@ class ChatBotController(account: Int) : BaseController(account) {
 		}
 	}
 
-	fun startChatBot() = getSubscriptionInfo(START_ID)
+	fun startChatBot(botId: Long) = getSubscriptionInfo(START_ID, botId)
 
-	fun updateSubscriptionsInfo() = getSubscriptionInfo(INFO_ID)
+	fun updateSubscriptionsInfo(botId: Long) = getSubscriptionInfo(INFO_ID, botId)
 
 	// fun stopChatBot() = getSubscriptionInfo(STOP_ID)
 
-	private fun getSubscriptionInfo(methodId: Int) {
+	private fun getSubscriptionInfo(methodId: Int, botId: Long? = null) {
 		val (req, id) = when (methodId) {
-			START_ID -> Pair(ElloRpc.startChatBot(), NotificationCenter.aiBotStarted)
-			INFO_ID -> Pair(ElloRpc.getSubscriptionsChatBotRequest(), NotificationCenter.aiSubscriptionStatusReceived)
+			START_ID -> Pair(ElloRpc.startChatBot(botId ?: 0L), NotificationCenter.aiBotStarted)
+			INFO_ID -> Pair(ElloRpc.getSubscriptionsChatBotRequest(botId ?: 0L), NotificationCenter.aiSubscriptionStatusReceived)
 			STOP_ID -> Pair(ElloRpc.stopChatBot(), NotificationCenter.aiBotStopped)
 			else -> throw IllegalArgumentException()
 		}

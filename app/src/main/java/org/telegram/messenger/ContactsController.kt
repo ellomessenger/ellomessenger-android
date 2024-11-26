@@ -1281,6 +1281,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			}
 		}
 
+		@JvmStatic
 		fun formatName(user: User?): String {
 			if (user == null) {
 				return ""

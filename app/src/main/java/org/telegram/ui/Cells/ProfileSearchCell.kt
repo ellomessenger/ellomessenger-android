@@ -18,6 +18,7 @@ import android.text.TextUtils
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.BuildConfig
 import org.telegram.messenger.ChatObject
 import org.telegram.messenger.DialogObject
 import org.telegram.messenger.Emoji
@@ -428,7 +429,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 				else if (user.bot) {
 					statusString = context.getString(R.string.Bot)
 				}
-				else if (user.id == 333000L || user.id == 777000L) {
+				else if (user.id == 333000L || user.id == BuildConfig.NOTIFICATIONS_BOT_ID) {
 					statusString = context.getString(R.string.ServiceNotifications)
 				}
 				else {

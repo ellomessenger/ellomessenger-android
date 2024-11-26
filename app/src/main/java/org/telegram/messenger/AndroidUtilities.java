@@ -2933,25 +2933,32 @@ public class AndroidUtilities {
 		return key_hash;
 	}
 
-	public static void openDocument(MessageObject message, Activity activity, BaseFragment parentFragment) {
+	public static void openDocument(@Nullable MessageObject message, Activity activity, BaseFragment parentFragment) {
 		if (message == null) {
 			return;
 		}
+
 		TLRPC.Document document = message.getDocument();
+
 		if (document == null) {
 			return;
 		}
+
 		File f = null;
 		String fileName = message.messageOwner.media != null ? FileLoader.getAttachFileName(document) : "";
+
 		if (message.messageOwner.attachPath != null && message.messageOwner.attachPath.length() != 0) {
 			f = new File(message.messageOwner.attachPath);
 		}
-		if (f == null || f != null && !f.exists()) {
+
+		if (f == null || !f.exists()) {
 			f = FileLoader.getInstance(UserConfig.selectedAccount).getPathToMessage(message.messageOwner);
 		}
-		if (f != null && f.exists()) {
+
+		if (f.exists()) {
 			if (parentFragment != null && f.getName().toLowerCase().endsWith("attheme")) {
 				Theme.ThemeInfo themeInfo = Theme.applyThemeFile(f, message.getDocumentName(), null, true);
+
 				if (themeInfo != null) {
 					parentFragment.presentFragment(new ThemePreviewActivity(themeInfo));
 				}
@@ -2965,27 +2972,34 @@ public class AndroidUtilities {
 			}
 			else {
 				String realMimeType = null;
+
 				try {
 					Intent intent = new Intent(Intent.ACTION_VIEW);
 					intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 					MimeTypeMap myMime = MimeTypeMap.getSingleton();
 					int idx = fileName.lastIndexOf('.');
+
 					if (idx != -1) {
 						String ext = fileName.substring(idx + 1);
+
 						realMimeType = myMime.getMimeTypeFromExtension(ext.toLowerCase());
+
 						if (realMimeType == null) {
 							realMimeType = document.mime_type;
-							if (realMimeType == null || realMimeType.length() == 0) {
+
+							if (realMimeType == null || realMimeType.isEmpty()) {
 								realMimeType = null;
 							}
 						}
 					}
+
 					if (Build.VERSION.SDK_INT >= 24) {
 						intent.setDataAndType(FileProvider.getUriForFile(activity, ApplicationLoader.getApplicationId() + ".provider", f), realMimeType != null ? realMimeType : "text/plain");
 					}
 					else {
 						intent.setDataAndType(Uri.fromFile(f), realMimeType != null ? realMimeType : "text/plain");
 					}
+
 					if (realMimeType != null) {
 						try {
 							activity.startActivityForResult(intent, 500);
@@ -2997,6 +3011,7 @@ public class AndroidUtilities {
 							else {
 								intent.setDataAndType(Uri.fromFile(f), "text/plain");
 							}
+
 							activity.startActivityForResult(intent, 500);
 						}
 					}
@@ -3008,10 +3023,12 @@ public class AndroidUtilities {
 					if (activity == null) {
 						return;
 					}
+
 					AlertDialog.Builder builder = new AlertDialog.Builder(activity);
 					builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
 					builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), null);
 					builder.setMessage(LocaleController.formatString("NoHandleAppInstalled", R.string.NoHandleAppInstalled, message.getDocument().mime_type));
+
 					if (parentFragment != null) {
 						parentFragment.showDialog(builder.create());
 					}

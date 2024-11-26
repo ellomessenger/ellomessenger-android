@@ -216,7 +216,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 	fun cancelLoadImage() {
 		isForceLoading = false
-		ImageLoader.instance.cancelLoadingForImageReceiver(this, true)
+		ImageLoader.getInstance().cancelLoadingForImageReceiver(this, true)
 		canceledLoading = true
 	}
 
@@ -398,7 +398,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 			(staticThumb as? SvgDrawable)?.setParent(this)
 
-			ImageLoader.instance.cancelLoadingForImageReceiver(this, true)
+			ImageLoader.getInstance().cancelLoadingForImageReceiver(this, true)
 
 			invalidate()
 
@@ -581,7 +581,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 	}
 
 	private fun loadImage() {
-		ImageLoader.instance.loadImageForImageReceiver(this)
+		ImageLoader.getInstance().loadImageForImageReceiver(this)
 		invalidate()
 	}
 
@@ -638,7 +638,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 	}
 
 	fun setImageBitmap(bitmap: Drawable?) {
-		ImageLoader.instance.cancelLoadingForImageReceiver(this, true)
+		ImageLoader.getInstance().cancelLoadingForImageReceiver(this, true)
 
 		if (crossfadeWithOldImage) {
 			if (currentImageDrawable != null) {
@@ -844,7 +844,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 			recycleBitmap(null, a)
 		}
 
-		ImageLoader.instance.cancelLoadingForImageReceiver(this, true)
+		ImageLoader.getInstance().cancelLoadingForImageReceiver(this, true)
 	}
 
 	fun onDetachedFromWindow() {
@@ -1595,15 +1595,15 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 	private fun onBitmapException(bitmapDrawable: Drawable) {
 		if (bitmapDrawable === currentMediaDrawable && mediaKey != null) {
-			ImageLoader.instance.removeImage(mediaKey)
+			ImageLoader.getInstance().removeImage(mediaKey)
 			mediaKey = null
 		}
 		else if (bitmapDrawable === currentImageDrawable && imageKey != null) {
-			ImageLoader.instance.removeImage(imageKey)
+			ImageLoader.getInstance().removeImage(imageKey)
 			imageKey = null
 		}
 		else if (bitmapDrawable === currentThumbDrawable && thumbKey != null) {
-			ImageLoader.instance.removeImage(thumbKey)
+			ImageLoader.getInstance().removeImage(thumbKey)
 			thumbKey = null
 		}
 
@@ -2359,7 +2359,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 			if (drawable !is AnimatedFileDrawable) {
 				imageKey?.let {
-					ImageLoader.instance.incrementUseCount(it)
+					ImageLoader.getInstance().incrementUseCount(it)
 				}
 
 				if (videoThumbIsSame) {
@@ -2372,7 +2372,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 				if (animatedFileDrawable.isWebmSticker) {
 					imageKey?.let {
-						ImageLoader.instance.incrementUseCount(it)
+						ImageLoader.getInstance().incrementUseCount(it)
 					}
 				}
 
@@ -2427,7 +2427,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 			if (drawable !is AnimatedFileDrawable) {
 				mediaKey?.let {
-					ImageLoader.instance.incrementUseCount(it)
+					ImageLoader.getInstance().incrementUseCount(it)
 				}
 			}
 			else {
@@ -2436,7 +2436,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 				if (animatedFileDrawable.isWebmSticker) {
 					mediaKey?.let {
-						ImageLoader.instance.incrementUseCount(it)
+						ImageLoader.getInstance().incrementUseCount(it)
 					}
 				}
 
@@ -2498,7 +2498,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 			}
 
 			thumbKey?.let {
-				ImageLoader.instance.incrementUseCount(it)
+				ImageLoader.getInstance().incrementUseCount(it)
 			}
 
 			currentThumbDrawable = drawable
@@ -2607,7 +2607,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 		}
 
 		if (key != null && (key.startsWith("-") || key.startsWith("strippedmessage-"))) {
-			val replacedKey = ImageLoader.instance.getReplacedKey(key)
+			val replacedKey = ImageLoader.getInstance().getReplacedKey(key)
 
 			if (replacedKey != null) {
 				key = replacedKey
@@ -2624,9 +2624,9 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 
 		if (key != null && (newKey == null || newKey != key) && image != null) {
 			if (image is RLottieDrawable) {
-				val canDelete = ImageLoader.instance.decrementUseCount(key)
+				val canDelete = ImageLoader.getInstance().decrementUseCount(key)
 
-				if (!ImageLoader.instance.isInMemCache(key, true)) {
+				if (!ImageLoader.getInstance().isInMemCache(key, true)) {
 					if (canDelete) {
 						image.recycle()
 					}
@@ -2634,9 +2634,9 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 			}
 			else if (image is AnimatedFileDrawable) {
 				if (image.isWebmSticker) {
-					val canDelete = ImageLoader.instance.decrementUseCount(key)
+					val canDelete = ImageLoader.getInstance().decrementUseCount(key)
 
-					if (!ImageLoader.instance.isInMemCache(key, true)) {
+					if (!ImageLoader.getInstance().isInMemCache(key, true)) {
 						if (canDelete) {
 							image.recycle()
 						}
@@ -2653,9 +2653,9 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 			}
 			else if (image is BitmapDrawable) {
 				val bitmap = image.bitmap
-				val canDelete = ImageLoader.instance.decrementUseCount(key)
+				val canDelete = ImageLoader.getInstance().decrementUseCount(key)
 
-				if (!ImageLoader.instance.isInMemCache(key, false)) {
+				if (!ImageLoader.getInstance().isInMemCache(key, false)) {
 					if (canDelete) {
 						val bitmapToRecycle = ArrayList<Bitmap>()
 						bitmapToRecycle.add(bitmap)
@@ -2787,7 +2787,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 	}
 
 	fun moveImageToFront() {
-		ImageLoader.instance.let {
+		ImageLoader.getInstance().let {
 			it.moveToFront(imageKey)
 			it.moveToFront(thumbKey)
 		}
@@ -2807,10 +2807,10 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 		}
 
 		if (key != null) { // && drawable != null) {
-			ImageLoader.instance.moveToFront(key)
+			ImageLoader.getInstance().moveToFront(key)
 
-			if (!ImageLoader.instance.isInMemCache(key, true)) {
-				ImageLoader.instance.lottieMemCache.put(key, drawable)
+			if (!ImageLoader.getInstance().isInMemCache(key, true)) {
+				ImageLoader.getInstance().lottieMemCache.put(key, drawable)
 			}
 		}
 	}
@@ -2901,7 +2901,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 			orientation = o
 
 			key?.let {
-				ImageLoader.instance.incrementUseCount(it)
+				ImageLoader.getInstance().incrementUseCount(it)
 			}
 		}
 
@@ -2911,7 +2911,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 			orientation = o
 
 			key?.let {
-				ImageLoader.instance.incrementUseCount(it)
+				ImageLoader.getInstance().incrementUseCount(it)
 			}
 		}
 
@@ -2941,9 +2941,9 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 				return
 			}
 
-			val canDelete = ImageLoader.instance.decrementUseCount(key!!)
+			val canDelete = ImageLoader.getInstance().decrementUseCount(key!!)
 
-			if (!ImageLoader.instance.isInMemCache(key, false)) {
+			if (!ImageLoader.getInstance().isInMemCache(key, false)) {
 				if (canDelete) {
 					if (bitmap != null) {
 						bitmap?.recycle()

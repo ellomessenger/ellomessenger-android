@@ -3966,7 +3966,12 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 		timeItem.setImageResource(R.drawable.msg_autodelete);
 		timeItem.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR));
 		timeItem.setContentDescription(LocaleController.getString("SetTimer", R.string.SetTimer));
-		itemsLayout.addView(timeItem, LayoutHelper.createLinear(48, 48));
+
+		// MARK: uncomment to show self-destruct button
+		// itemsLayout.addView(timeItem, LayoutHelper.createLinear(48, 48));
+		// MARK: and remove this placeholder
+		itemsLayout.addView(new View(parentActivity), LayoutHelper.createLinear(48, 48));
+
 		timeItem.setOnClickListener(v -> {
 			if (parentActivity == null || captionEditText.getTag() != null) {
 				return;

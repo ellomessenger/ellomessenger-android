@@ -19,6 +19,7 @@ import org.telegram.messenger.utils.encrypt
 import org.telegram.messenger.utils.fromJson
 import org.telegram.messenger.utils.toJson
 import org.telegram.tgnet.ElloRpc.readData
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.profile.wallet.TransactionsView
 import java.lang.ref.WeakReference
 import kotlin.coroutines.suspendCoroutine
@@ -171,7 +172,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 	 * @param callback callback with (optional) link to payment page and (optional) error
 	 * @return request id
 	 */
-	fun getPayPalPaymentLink(assetId: Int, walletId: Long, currency: String, message: String, amount: Float, callback: ((link: String?, paymentId: Long?, error: TLRPC.TL_error?) -> Unit)?): Int {
+	fun getPayPalPaymentLink(assetId: Int, walletId: Long, currency: String, message: String, amount: Float, callback: ((link: String?, paymentId: Long?, error: TL_error?) -> Unit)?): Int {
 		val req = ElloRpc.paypalPaymentRequest(assetId = assetId, walletId = walletId, currency = currency, message = message, coin = amount, amount = null)
 
 		return connectionsManager.sendRequest(req, { response, error ->
@@ -292,13 +293,13 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 	}
 
 	@Synchronized
-	fun createWithdrawPaymentRequest(walletId: Long, amount: Float, currency: String = DEFAULT_CURRENCY, paypalEmail: String? = null, paymentId: String? = null, bankWithdrawRequisitesId: Long? = null, callback: ((paymentId: String?, amount: Float?, amountFiat: Float?, withdrawMax: Float?, withdrawMin: Float?, fee: Float?, paymentSystemFee: Float?, error: TLRPC.TL_error?) -> Unit)? = null): Int {
+	fun createWithdrawPaymentRequest(walletId: Long, amount: Float, currency: String = DEFAULT_CURRENCY, paypalEmail: String? = null, paymentId: String? = null, bankWithdrawRequisitesId: Long? = null, withdrawSystem: String? = null, callback: ((paymentId: String?, amount: Float?, amountFiat: Float?, withdrawMax: Float?, withdrawMin: Float?, fee: Float?, paymentSystemFee: Float?, error: TL_error?) -> Unit)? = null): Int {
 		if (withdrawPaymentRequestId != 0) {
 			connectionsManager.cancelRequest(withdrawPaymentRequestId, true)
 			withdrawPaymentRequestId = 0
 		}
 
-		val req = ElloRpc.getWithdrawCreatePayment(assetId = DEFAULT_ASSET_ID, walletId = walletId, currency = currency, paypalEmail = paypalEmail, paymentId = paymentId, bankWithdrawRequisitesId = bankWithdrawRequisitesId, amount = amount)
+		val req = ElloRpc.getWithdrawCreatePayment(assetId = DEFAULT_ASSET_ID, walletId = walletId, currency = currency, paypalEmail = paypalEmail, paymentId = paymentId, bankWithdrawRequisitesId = bankWithdrawRequisitesId, amount = amount, withdrawSystem = withdrawSystem)
 
 		withdrawPaymentRequestId = connectionsManager.sendRequest(req, { response, error ->
 			var receivedPaymentId: String? = null

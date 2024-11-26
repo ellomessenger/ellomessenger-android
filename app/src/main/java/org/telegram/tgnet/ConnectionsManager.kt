@@ -9,6 +9,7 @@
 package org.telegram.tgnet
 
 import android.app.Activity
+import android.content.Context
 import android.os.AsyncTask
 import android.os.Build
 import android.os.SystemClock
@@ -16,6 +17,7 @@ import android.util.Base64
 import androidx.annotation.Keep
 import com.beint.elloapp.DeviceInfo
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
+import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import org.telegram.messenger.AccountInstance
@@ -37,10 +39,11 @@ import org.telegram.messenger.StatsController
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.utils.getHostByNameSync
-import org.telegram.tgnet.TLRPC.TL_error
 import org.telegram.tgnet.TLRPC.Updates
 import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.TL_config
+import org.telegram.tgnet.tlrpc.TL_error
+import org.telegram.ui.ActionBar.AlertDialog
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.Inet4Address
@@ -80,7 +83,10 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	data class ResolvedDomain(private val addresses: List<String>, val ttl: Long) {
+	data class ResolvedDomain(
+			@field:SerializedName("addresses") val addresses: List<String>,
+			@field:SerializedName("ttl") val ttl: Long,
+	) {
 		val address: String
 			get() = addresses[Utilities.random.nextInt(addresses.size)]
 	}
@@ -270,10 +276,10 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 				`object`.freeResources()
 
 				native_sendRequest(currentAccount, buffer.address, { response, errorCode, errorText, networkType, timestamp ->
-					try {
-						var resp: TLObject? = null
-						var error: TL_error? = null
+					var resp: TLObject? = null
+					var error: TL_error? = null
 
+					try {
 						if (response != 0L) {
 							val buff = NativeByteBuffer.wrap(response)
 
@@ -287,6 +293,7 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 							error = TL_error()
 							error.code = errorCode
 							error.text = errorText
+
 							FileLog.e(`object`.toString() + " got error " + error.code + " " + error.text)
 						}
 
@@ -300,14 +307,20 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 						resp?.networkType = networkType
 
 						FileLog.d("java received $resp error = $error")
-
-						Utilities.stageQueue.postRunnable {
-							onComplete?.run(resp, error) ?: onCompleteTimestamp?.run(resp, error, timestamp)
-							resp?.freeResources()
-						}
 					}
 					catch (e: Exception) {
 						FileLog.e(e)
+
+						if (error == null) {
+							error = TL_error()
+							error.code = TL_error.UNKNOWN_ERROR
+							error.text = e.localizedMessage
+						}
+					}
+
+					Utilities.stageQueue.postRunnable {
+						onComplete?.run(resp, error) ?: onCompleteTimestamp?.run(resp, error, timestamp)
+						resp?.freeResources()
 					}
 				}, onQuickAck, onWriteToSocket, flags, datacenterId, connectionType, immediate, requestToken)
 			}
@@ -380,6 +393,10 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		native_init(currentAccount, version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, systemLangCode, configPath, logPath, regId, cFingerprint, installer, packageId, timezoneOffset, userId, enablePushConnection, ApplicationLoader.isNetworkOnline, ApplicationLoader.currentNetworkType)
 
 		checkConnection()
+	}
+
+	fun resumeNetwork() {
+		native_resumeNetwork(currentAccount, false)
 	}
 
 	fun resumeNetworkMaybe() {
@@ -556,6 +573,8 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 
 			if (result != null) {
 				dnsCache[currentHostName] = result
+
+				saveDnsCache()
 			}
 
 			resolvingHostnameTasks.remove(currentHostName)
@@ -737,6 +756,8 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		override fun onPostExecute(result: ResolvedDomain?) {
 			if (result != null) {
 				dnsCache[currentHostName] = result
+
+				saveDnsCache()
 
 				for (address in addresses) {
 					native_onHostNameResolved(currentHostName, address, result.address)
@@ -1248,6 +1269,66 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 			val threadPoolExecutor = ThreadPoolExecutor(CORE_POOL_SIZE, MAXIMUM_POOL_SIZE, KEEP_ALIVE_SECONDS.toLong(), TimeUnit.SECONDS, sPoolWorkQueue, sThreadFactory)
 			threadPoolExecutor.allowCoreThreadTimeOut(true)
 			DNS_THREAD_POOL_EXECUTOR = threadPoolExecutor
+
+			loadDnsCache()
+		}
+
+		private fun loadDnsCache() {
+			val prefs = ApplicationLoader.applicationContext.getSharedPreferences("dns_cache", Context.MODE_PRIVATE)
+			val keys = prefs.all.keys
+
+			for (key in keys) {
+				val value = prefs.getString(key, null) ?: continue
+				val parts = value.split(",")
+
+				if (parts.size < 3) {
+					continue
+				}
+
+				val ttl = parts[0].toLong()
+				val timestamp = parts[1].toLong()
+
+				if (ttl < 0 || timestamp < 0) {
+					continue
+				}
+
+				if (SystemClock.elapsedRealtime() - ttl > 5 * 60 * 1000) {
+					continue
+				}
+
+				val addresses = ArrayList<String>(parts.size - 2)
+
+				for (a in 2 until parts.size) {
+					if (parts[a].isNotEmpty()) {
+						addresses.add(parts[a])
+					}
+				}
+
+				dnsCache[key] = ResolvedDomain(addresses, ttl)
+			}
+		}
+
+		private fun saveDnsCache() {
+			val prefs = ApplicationLoader.applicationContext.getSharedPreferences("dns_cache", Context.MODE_PRIVATE)
+			val editor = prefs.edit()
+
+			for ((key, value) in dnsCache) {
+				val builder = StringBuilder()
+				builder.append(value.ttl)
+				builder.append(",")
+				builder.append(SystemClock.elapsedRealtime())
+				builder.append(",")
+
+				for (address in value.addresses) {
+					if (address.isNotEmpty()) {
+						builder.append(',').append(address)
+					}
+				}
+
+				editor.putString(key, builder.toString())
+			}
+
+			editor.apply()
 		}
 
 		@Synchronized
@@ -1306,6 +1387,14 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 
 			for (a in 0 until UserConfig.MAX_ACCOUNT_COUNT) {
 				native_setSystemLangCode(a, langCode)
+			}
+		}
+
+		@Keep
+		@JvmStatic
+		fun onConnectionRetriesDepleted(currentAccount: Int) {
+			AndroidUtilities.runOnUIThread {
+				NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.CONNECTION_RETRIES_DEPLETED)
 			}
 		}
 
@@ -1452,7 +1541,7 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		@JvmStatic
 		fun onProxyError() {
 			AndroidUtilities.runOnUIThread {
-				NotificationCenter.globalInstance.postNotificationName(NotificationCenter.needShowAlert, 3)
+				NotificationCenter.globalInstance.postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.PROXY_ERROR)
 			}
 		}
 

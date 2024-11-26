@@ -102,6 +102,7 @@ import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.tlrpc.Message;
 import org.telegram.tgnet.tlrpc.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.tgnet.tlrpc.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarLayout;
@@ -3674,14 +3675,14 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
 						TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)currentPassword.new_algo;
 						req.new_settings.new_password_hash = SRPHelper.getVBytes(newPasswordBytes, algo);
 						if (req.new_settings.new_password_hash == null) {
-							TLRPC.TL_error error = new TLRPC.TL_error();
+							TL_error error = new TL_error();
 							error.text = "ALGO_INVALID";
 							requestDelegate.run(null, error);
 						}
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin);
 					}
 					else {
-						TLRPC.TL_error error = new TLRPC.TL_error();
+						TL_error error = new TL_error();
 						error.text = "PASSWORD_HASH_INVALID";
 						requestDelegate.run(null, error);
 					}
@@ -4239,7 +4240,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
 							TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)currentPassword.current_algo;
 							req1.password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, algo);
 							if (req1.password == null) {
-								TLRPC.TL_error error2 = new TLRPC.TL_error();
+								TL_error error2 = new TL_error();
 								error2.text = "ALGO_INVALID";
 								requestDelegate.run(null, error2);
 								return;
@@ -4247,7 +4248,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
 							ConnectionsManager.getInstance(currentAccount).sendRequest(req1, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin);
 						}
 						else {
-							TLRPC.TL_error error2 = new TLRPC.TL_error();
+							TL_error error2 = new TL_error();
 							error2.text = "PASSWORD_HASH_INVALID";
 							requestDelegate.run(null, error2);
 						}

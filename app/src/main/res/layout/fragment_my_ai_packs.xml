@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:padding="@dimen/common_size_24dp"
+	android:background="@drawable/my_ai_packs_background">
+
+	<ImageView
+		android:id="@+id/back"
+		android:layout_width="32dp"
+		android:layout_height="32dp"
+		android:clickable="true"
+		android:layout_marginTop="@dimen/common_size_20dp"
+		android:focusable="true"
+		android:scaleType="center"
+		android:src="@drawable/ic_back_arrow"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		android:tint="@color/white"
+		app:tint="@color/white" />
+
+	<TextView
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:gravity="center|start"
+		android:text="@string/my_ai_packs"
+		android:textColor="@color/white"
+		android:textStyle="bold"
+		android:textSize="18sp"
+		android:layout_marginTop="22dp"
+		android:layout_marginStart="20dp"
+		app:layout_constraintStart_toEndOf="@+id/back"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<TextView
+		android:id="@+id/take_prompting_to_the_next_level"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:gravity="center|start"
+		android:text="@string/take_prompting_to_the_next_level"
+		android:textColor="@color/white"
+		android:textSize="32sp"
+		android:textStyle="bold"
+		android:layout_marginTop="24dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@+id/back" />
+
+	<com.google.android.material.card.MaterialCardView
+		android:id="@+id/my_ai_pack_button"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:backgroundTint="@color/transparent_background"
+		android:orientation="vertical"
+		app:cardCornerRadius="24dp"
+		android:layout_marginTop="@dimen/common_size_16dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@+id/take_prompting_to_the_next_level"
+		app:strokeColor="@color/white_semi_transparent"
+		app:strokeWidth="1dp">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_gravity="center"
+			android:background="@color/white_semi_transparent"
+			android:padding="@dimen/common_size_16dp"
+			android:orientation="vertical">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="@string/ai_empowerment"
+				android:textColor="@color/white"
+				android:textSize="18sp" />
+
+		</LinearLayout>
+
+	</com.google.android.material.card.MaterialCardView>
+
+	<com.google.android.material.card.MaterialCardView
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:backgroundTint="@color/transparent_background"
+		android:orientation="vertical"
+		app:cardCornerRadius="24dp"
+		android:layout_marginTop="@dimen/common_size_16dp"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@+id/my_ai_pack_button"
+		app:strokeColor="@color/white_semi_transparent"
+		app:strokeWidth="1dp">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_gravity="center"
+			android:background="@color/white_semi_transparent"
+			android:orientation="vertical"
+			android:gravity="center"
+			android:padding="@dimen/common_size_16dp">
+
+			<ImageView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:src="@drawable/ic_ai_chat"/>
+
+			<TextView
+				android:id="@+id/text_prompts_count"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="10dp"
+				android:text="0"
+				android:textColor="@color/white"
+				android:textSize="20sp"/>
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:textColor="@color/white"
+				android:layout_marginTop="10dp"
+				android:textSize="16sp"
+				android:text="@string/ai_chat_prompts_remaining"/>
+
+		</LinearLayout>
+
+	</com.google.android.material.card.MaterialCardView>
+
+	<com.google.android.material.card.MaterialCardView
+		android:id="@+id/materialCardView"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="16dp"
+		android:backgroundTint="@color/transparent_background"
+		android:orientation="vertical"
+		app:cardCornerRadius="24dp"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toBottomOf="@+id/my_ai_pack_button"
+		app:strokeColor="@color/white_semi_transparent"
+		app:strokeWidth="1dp">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_gravity="center"
+			android:background="@color/white_semi_transparent"
+			android:gravity="center"
+			android:orientation="vertical"
+			android:padding="@dimen/common_size_16dp">
+
+			<ImageView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:src="@drawable/ic_ai_photo" />
+
+			<TextView
+				android:id="@+id/image_prompts_count"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="10dp"
+				android:text="0"
+				android:textColor="@color/white"
+				android:textSize="20sp" />
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="10dp"
+				android:text="@string/ai_image_prompts_remaining"
+				android:textColor="@color/white"
+				android:textSize="16sp" />
+
+		</LinearLayout>
+
+	</com.google.android.material.card.MaterialCardView>
+
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/buy_ai_pack"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:backgroundTint="@color/white"
+		app:cornerRadius="12dp"
+		android:padding="16dp"
+		android:textStyle="bold"
+		android:textColor="@color/dark_fixed"
+		android:text="@string/buy_ai_pack"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

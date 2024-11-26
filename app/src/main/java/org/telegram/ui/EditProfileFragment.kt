@@ -586,7 +586,7 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 								val newKey = small.location.volume_id.toString() + "_" + small.location.local_id + "@50_50"
 
 								ImageLocation.getForUserOrChat(user, ImageLocation.TYPE_SMALL)?.let {
-									ImageLoader.instance.replaceImageInCache(oldKey, newKey, it, false)
+									ImageLoader.getInstance().replaceImageInCache(oldKey, newKey, it, false)
 								}
 							}
 

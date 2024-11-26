@@ -45,7 +45,7 @@ import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.TL_biz_dataRaw
-import org.telegram.tgnet.TLRPC.TL_error
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ChatActivity
@@ -259,7 +259,8 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 	}
 
 	private inner class ButtonViewHolder(private val binding: LeftoversButtonViewHolderBinding) : RecyclerView.ViewHolder(binding.root) {
-		fun setMode(mode: SectionMode) {
+		fun setMode(mode: SectionMode, isButtonGone: Boolean) {
+
 			when (mode) {
 				SectionMode.WALLET -> {
 					binding.button.text = binding.root.context.getString(R.string.go_to_ello_pay)
@@ -267,6 +268,8 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 					binding.button.setOnClickListener {
 						presentFragment(WalletFragment())
 					}
+
+					binding.button.apply { if (isButtonGone) gone() else visible() }
 				}
 
 				SectionMode.SUBSCRIPTIONS -> {
@@ -275,6 +278,8 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 					binding.button.setOnClickListener {
 						presentFragment(CurrentSubscriptionsFragment())
 					}
+
+					binding.button.apply { if (isButtonGone) gone() else visible() }
 				}
 
 				SectionMode.OWN -> {
@@ -288,6 +293,8 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 
 						presentFragment(DeleteAccountMyChannels(args))
 					}
+
+					binding.button.apply { if (isButtonGone) gone() else visible() }
 				}
 
 				SectionMode.AI -> {
@@ -298,6 +305,8 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 							openBot()
 						}
 					}
+
+					binding.button.apply { if (isButtonGone) gone() else visible() }
 				}
 			}
 		}
@@ -622,7 +631,7 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 					var offset = 1 + wallets.size
 
 					if (position == offset) {
-						(holder as ButtonViewHolder).setMode(SectionMode.WALLET)
+						(holder as ButtonViewHolder).setMode(SectionMode.WALLET, wallets.sumOf { it.amount.toDouble() } == 0.0)
 						return
 					}
 
@@ -631,7 +640,7 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 					offset += 1 + activeSubscriptions.size
 
 					if (position == offset) {
-						(holder as ButtonViewHolder).setMode(SectionMode.SUBSCRIPTIONS)
+						(holder as ButtonViewHolder).setMode(SectionMode.SUBSCRIPTIONS, activeSubscriptions.isEmpty())
 						return
 					}
 
@@ -640,7 +649,7 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 					offset += 1 + ownChats.size
 
 					if (position == offset) {
-						(holder as ButtonViewHolder).setMode(SectionMode.OWN)
+						(holder as ButtonViewHolder).setMode(SectionMode.OWN, ownChats.isEmpty())
 						return
 					}
 
@@ -649,7 +658,7 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 					offset += 1 + (aiPacks?.let { 2 } ?: 0)
 
 					if (position == offset) {
-						(holder as ButtonViewHolder).setMode(SectionMode.AI)
+						(holder as ButtonViewHolder).setMode(SectionMode.AI, aiPacks == null || (aiPacks?.textTotal == 0 && aiPacks?.imgTotal == 0))
 						return
 					}
 				}

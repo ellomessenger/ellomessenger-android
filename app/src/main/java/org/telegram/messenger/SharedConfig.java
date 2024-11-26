@@ -790,7 +790,7 @@ public class SharedConfig {
 		SharedPreferences preferences = MessagesController.getGlobalMainSettings();
 		preferences.edit().putInt("save_gallery_flags", saveToGalleryFlags).commit();
 		ImageLoader.getInstance().checkMediaPaths();
-		ImageLoader.getInstance().cacheOutQueue.postRunnable(SharedConfig::checkSaveToGalleryFiles);
+		ImageLoader.getInstance().getCacheOutQueue().postRunnable(SharedConfig::checkSaveToGalleryFiles);
 	}
 
 	public static void toggleAutoplayGifs() {

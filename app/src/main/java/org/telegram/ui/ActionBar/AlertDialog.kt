@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2024.
  */
 package org.telegram.ui.ActionBar
 
@@ -62,11 +62,8 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 			return@Runnable
 		}
 
-		try {
+		runCatching {
 			show()
-		}
-		catch (e: Exception) {
-			// ignored
 		}
 	}
 
@@ -112,7 +109,7 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 	private var progressViewStyle: Int // TODO: Use constants here
 	private var currentProgress = 0
 	private var messageTextViewClickable = true
-	private var canCacnel = true
+	private var canCancel = true
 	private var dismissDialogByButtons = true
 	private var drawBackground = false
 	private var notDrawBackgroundOnTopView = false
@@ -734,8 +731,8 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 						for (a in 0 until count) {
 							val child = getChildAt(a)
 
-							if (child is TextView && child.getTag() != null) {
-								totalWidth += child.getMeasuredWidth()
+							if (child is TextView && child.tag != null) {
+								totalWidth += child.measuredWidth
 							}
 						}
 
@@ -977,7 +974,7 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 	}
 
 	private fun showCancelAlert() {
-		if (!canCacnel || cancelDialog != null) {
+		if (!canCancel || cancelDialog != null) {
 			return
 		}
 
@@ -995,11 +992,8 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 			cancelDialog = null
 		}
 
-		try {
+		runCatching {
 			cancelDialog = builder.show()
-		}
-		catch (e: Exception) {
-			// ignored
 		}
 	}
 
@@ -1062,7 +1056,7 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 	}
 
 	fun setCanCancel(value: Boolean) {
-		canCacnel = value
+		canCancel = value
 	}
 
 	private fun canTextInput(v: View): Boolean {
@@ -1096,11 +1090,8 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 		onDismissListener?.onDismiss(this)
 		cancelDialog?.dismiss()
 
-		try {
+		runCatching {
 			super.dismiss()
-		}
-		catch (e: Throwable) {
-			// ignored
 		}
 
 		AndroidUtilities.cancelRunOnUIThread(showRunnable)
@@ -1475,5 +1466,9 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 			alertDialog.onDismissListener = onDismissListener
 			return this
 		}
+	}
+
+	enum class AlertReason {
+		CONNECTION_RETRIES_DEPLETED, GROUP_CALL_FAILED, NO_GROUP_MUTUAL_CONTACT, PEER_FLOOD, PROXY_ERROR, SERVICE_NOTIFICATION, TERMS_UPDATED, USER_BANNED_IN_CHANNEL,
 	}
 }

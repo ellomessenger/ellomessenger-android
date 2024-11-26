@@ -13,17 +13,24 @@ package org.telegram.ui.channel
 import android.app.DatePickerDialog
 import android.content.Context
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import org.telegram.messenger.R
+import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.databinding.FragmentChannelPriceBinding
 import org.telegram.messenger.utils.formatBirthday
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.parseBirthday
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
+import org.telegram.ui.information.InformationFragment.Companion.TERMS_AND_CONDITIONS_URL
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -102,6 +109,8 @@ class ChannelPriceFragment(args: Bundle) : BaseFragment(args) {
 			binding?.endDateLayout?.gone()
 			binding?.dateDescription?.gone()
 		}
+
+		setAgreementTextWithLink(context, binding?.agreementText, if (isCourse) context.getString(R.string.online_course).lowercase() else context.getString(R.string.subscription_channel).lowercase())
 
 		fragmentView = binding?.root
 
@@ -192,6 +201,27 @@ class ChannelPriceFragment(args: Bundle) : BaseFragment(args) {
 			// DateTime(date).withZone(DateTimeZone.UTC).toString("MMMM dd YYYY")
 			textView.text = date?.formatBirthday()
 		}, year, month, day)
+	}
+
+	private fun setAgreementTextWithLink(context: Context, textView: TextView?, channelType: String) {
+		val agreementText = textView?.context?.getString(R.string.agreement_text, channelType)
+
+		val userAgreementStart = agreementText?.indexOf(context.getString(R.string.UserAgreement))
+		val userAgreementEnd = userAgreementStart?.plus(context.getString(R.string.UserAgreement).length)
+
+		val spannableString = SpannableString(agreementText)
+
+		val clickableSpan = object : ClickableSpan() {
+			override fun onClick(widget: View) {
+				Browser.openUrl(context, TERMS_AND_CONDITIONS_URL)
+			}
+		}
+
+		spannableString.setSpan(clickableSpan, userAgreementStart ?: 0, userAgreementEnd ?: 0, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+		spannableString.setSpan(ForegroundColorSpan(context.getColor(R.color.dark)), userAgreementStart ?: 0, userAgreementEnd ?: 0, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+		textView?.text = spannableString
+		textView?.movementMethod = LinkMovementMethod.getInstance()
 	}
 
 	companion object {

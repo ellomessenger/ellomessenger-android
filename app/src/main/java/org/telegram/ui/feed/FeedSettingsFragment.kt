@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.FileLog
+import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.FragmentFeedSettingsBinding
 import org.telegram.tgnet.ConnectionsManager
@@ -164,14 +165,14 @@ class FeedSettingsFragment : BaseFragment() {
 		)
 
 		connectionsManager.sendRequest(req, { response, error ->
-			AndroidUtilities.runOnUIThread {
-				val context = context ?: return@runOnUIThread
+			val context = context ?: return@sendRequest
 
-				if (error == null && response is TLRPC.TL_biz_dataRaw) {
-					val data = response.readData<ElloRpc.SimpleStatusResponse>()
+			if (error == null && response is TLRPC.TL_biz_dataRaw) {
+				val data = response.readData<ElloRpc.SimpleStatusResponse>()
 
-					FileLog.d("Save feed settings: ${response.readString()}")
+				FileLog.d("Save feed settings: ${response.readString()}")
 
+				AndroidUtilities.runOnUIThread {
 					if (data?.status != true) {
 						Toast.makeText(parentActivity, context.getString(R.string.unknown_error), Toast.LENGTH_SHORT).show()
 					}
@@ -179,13 +180,20 @@ class FeedSettingsFragment : BaseFragment() {
 						showRecommended = binding?.recommendationsSwitch?.isChecked ?: showRecommended
 						showSubscriptionsOnly = binding?.subscriptionsSwitch?.isChecked ?: showSubscriptionsOnly
 						showAdult = binding?.showAdultSwitch?.isChecked ?: showAdult
+
+						notificationCenter.postNotificationName(NotificationCenter.feedSettingsUpdated)
 					}
 				}
-				else if (error != null) {
+			}
+			else if (error != null) {
+				AndroidUtilities.runOnUIThread {
 					Toast.makeText(parentActivity, error.text, Toast.LENGTH_SHORT).show()
 				}
-				else {
-					FileLog.e("Unexpected response type: ${response?.javaClass?.simpleName}")
+			}
+			else {
+				FileLog.e("Unexpected response type: ${response?.javaClass?.simpleName}")
+
+				AndroidUtilities.runOnUIThread {
 					Toast.makeText(parentActivity, context.getString(R.string.unknown_error), Toast.LENGTH_SHORT).show()
 				}
 			}

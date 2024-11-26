@@ -24,6 +24,7 @@ import org.telegram.messenger.time.FastDateFormat;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.tgnet.tlrpc.User;
 import org.telegram.tgnet.tlrpc.Vector;
 import org.xmlpull.v1.XmlPullParser;
@@ -2365,7 +2366,7 @@ public class LocaleController {
 			else {
 				TLRPC.TL_langpack_getLangPack req = new TLRPC.TL_langpack_getLangPack();
 				req.lang_code = localeInfo.getBaseLangCode();
-				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TLRPC.TL_error error) -> {
+				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TL_error error) -> {
 					if (response != null) {
 						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TL_langPackDifference)response, currentAccount));
 					}
@@ -2390,7 +2391,7 @@ public class LocaleController {
 				}
 				TLRPC.TL_langpack_getLangPack req = new TLRPC.TL_langpack_getLangPack();
 				req.lang_code = localeInfo.getLangCode();
-				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TLRPC.TL_error error) -> {
+				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TL_error error) -> {
 					if (response != null) {
 						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TL_langPackDifference)response, currentAccount));
 					}

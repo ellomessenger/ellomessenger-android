@@ -4,9 +4,11 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2015-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
 
 #include <algorithm>
+#include <utility>
 #include "Request.h"
 #include "TLObject.h"
 #include "MTProtoScheme.h"
@@ -19,9 +21,9 @@ Request::Request(int32_t instance, int32_t token, ConnectionType type, uint32_t 
     connectionType = type;
     requestFlags = flags;
     datacenterId = datacenter;
-    onCompleteRequestCallback = completeFunc;
-    onQuickAckCallback = quickAckFunc;
-    onWriteToSocketCallback = writeToSocketFunc;
+    onCompleteRequestCallback = std::move(completeFunc);
+    onQuickAckCallback = std::move(quickAckFunc);
+    onWriteToSocketCallback = std::move(writeToSocketFunc);
     dataType = (uint8_t) (requestFlags >> 24);
     instanceNum = instance;
 }
@@ -44,7 +46,7 @@ Request::~Request() {
 }
 
 void Request::addRespondMessageId(int64_t id) {
-    respondsToMessageIds.push_back(messageId);
+    respondsToMessageIds.push_back(id);
 }
 
 bool Request::respondsToMessageId(int64_t id) {
@@ -55,43 +57,59 @@ void Request::clear(bool time) {
     messageId = 0;
     messageSeqNo = 0;
     connectionToken = 0;
+
     if (time) {
         startTime = 0;
         minStartTime = 0;
     }
 }
 
-void Request::onComplete(TLObject *result, TL_error *error, int32_t networkType, int64_t responseTime) {
+void Request::onComplete(TLObject *result, TL_error *error, int32_t networkType, int64_t responseTime) const {
     if (onCompleteRequestCallback != nullptr && (result != nullptr || error != nullptr)) {
         onCompleteRequestCallback(result, error, networkType, responseTime);
     }
 }
 
-void Request::onWriteToSocket() {
+void Request::onWriteToSocket() const {
     if (onWriteToSocketCallback != nullptr) {
         onWriteToSocketCallback();
     }
 }
 
-bool Request::hasInitFlag() {
+uint32_t Request::getMaxRetryCount() const {
+    uint32_t retryMax = 10;
+
+    if (!(requestFlags & RequestFlagForceDownload)) {
+        if (failedByFloodWait) {
+            retryMax = 2;
+        }
+        else {
+            retryMax = 6;
+        }
+    }
+
+    return retryMax;
+}
+
+bool Request::hasInitFlag() const {
     return isInitRequest || isInitMediaRequest;
 }
 
-bool Request::isMediaRequest() {
+bool Request::isMediaRequest() const {
     return Connection::isMediaConnectionType(connectionType);
 }
 
-bool Request::needInitRequest(Datacenter *datacenter, uint32_t currentVersion) {
+bool Request::needInitRequest(Datacenter *datacenter, uint32_t currentVersion) const {
     bool media = PFS_ENABLED && datacenter != nullptr && isMediaRequest() && datacenter->hasMediaAddress();
-    return !media && datacenter->lastInitVersion != currentVersion || media && datacenter->lastInitMediaVersion != currentVersion;
+    return (!media && datacenter->lastInitVersion != currentVersion) || (media && datacenter->lastInitMediaVersion != currentVersion);
 }
 
-void Request::onQuickAck() {
+void Request::onQuickAck() const {
     if (onQuickAckCallback != nullptr) {
         onQuickAckCallback();
     }
 }
 
-TLObject *Request::getRpcRequest() {
+TLObject *Request::getRpcRequest() const {
     return rpcRequest.get();
 }

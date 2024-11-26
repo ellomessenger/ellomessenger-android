@@ -4899,9 +4899,10 @@ open class MessageObject {
 			if (preview) {
 				return true
 			}
+
 			val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(null, null, messageOwner?.peer_id?.channel_id) else null
 
-			if (messageOwner?.out != true || (messageOwner?.from_id !is TL_peerUser) && (messageOwner?.from_id !is TL_peerChannel || ChatObject.isChannel(chat) && !chat.megagroup) || messageOwner?.post == true) {
+			if (messageOwner?.out != true || (messageOwner?.from_id !is TL_peerUser) && (messageOwner?.from_id !is TL_peerChannel || ChatObject.isChannel(chat) && !chat.megagroup) || ((ChatObject.isChannel(chat) && !chat.megagroup) && messageOwner?.post == true)) {
 				return false
 			}
 

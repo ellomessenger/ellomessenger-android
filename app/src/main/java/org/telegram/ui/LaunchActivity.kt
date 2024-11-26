@@ -25,7 +25,6 @@ import android.os.StatFs
 import android.os.StrictMode
 import android.os.StrictMode.VmPolicy
 import android.os.SystemClock
-import android.provider.ContactsContract
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Base64
@@ -62,7 +61,6 @@ import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.BuildVars
-import org.telegram.messenger.ChatObject
 import org.telegram.messenger.ChatObject.isLeftFromChat
 import org.telegram.messenger.ChatObject.isOnlineCourse
 import org.telegram.messenger.ChatObject.isPaidChannel
@@ -98,12 +96,12 @@ import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.messenger.voip.VideoCapturerDevice
 import org.telegram.messenger.voip.VoIPPendingCall
+import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc.subscribeRequest
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.tlrpc.ChatInvite
 import org.telegram.tgnet.TLRPC.InputStickerSet
 import org.telegram.tgnet.TLRPC.TL_account_authorizationForm
 import org.telegram.tgnet.TLRPC.TL_account_getAuthorizationForm
@@ -117,7 +115,6 @@ import org.telegram.tgnet.TLRPC.TL_authorization
 import org.telegram.tgnet.TLRPC.TL_boolTrue
 import org.telegram.tgnet.TLRPC.TL_channels_getChannels
 import org.telegram.tgnet.TLRPC.TL_chatAdminRights
-import org.telegram.tgnet.tlrpc.TL_chatInvitePeek
 import org.telegram.tgnet.TLRPC.TL_codeSettings
 import org.telegram.tgnet.TLRPC.TL_contact
 import org.telegram.tgnet.TLRPC.TL_contacts_resolvePhone
@@ -126,7 +123,6 @@ import org.telegram.tgnet.TLRPC.TL_contacts_resolvedPeer
 import org.telegram.tgnet.TLRPC.TL_emojiStatus
 import org.telegram.tgnet.TLRPC.TL_emojiStatusEmpty
 import org.telegram.tgnet.TLRPC.TL_emojiStatusUntil
-import org.telegram.tgnet.TLRPC.TL_error
 import org.telegram.tgnet.TLRPC.TL_help_deepLinkInfo
 import org.telegram.tgnet.TLRPC.TL_help_getDeepLinkInfo
 import org.telegram.tgnet.TLRPC.TL_help_termsOfService
@@ -156,8 +152,11 @@ import org.telegram.tgnet.TLRPC.TL_webPage
 import org.telegram.tgnet.TLRPC.Updates
 import org.telegram.tgnet.TLRPC.account_Password
 import org.telegram.tgnet.WalletHelper
+import org.telegram.tgnet.tlrpc.ChatInvite
 import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.TL_chatBannedRights
+import org.telegram.tgnet.tlrpc.TL_chatInvitePeek
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.ActionBar.ActionBarLayout
 import org.telegram.ui.ActionBar.ActionBarLayout.ActionBarLayoutDelegate
@@ -1184,7 +1183,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 					drawerLayoutContainer?.setAllowOpenDrawer(true, false)
 
-					if (mainFragmentsStack.size > 0) {
+					if (mainFragmentsStack.isNotEmpty()) {
 						mainFragmentsStack[mainFragmentsStack.size - 1].onResume()
 					}
 
@@ -1315,13 +1314,14 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 		switchToAccount(intentAccount[0])
 
-		val isVoipIntent = action != null && action == "voip"
+		val isVoipIntent = (action == VoIPPreNotificationService.VOIP_ACTION)
+		val isVoipAnswerIntent = (action == VoIPPreNotificationService.VOIP_ANSWER_ACTION)
 
 		if (!fromPassword && (AndroidUtilities.needShowPasscode(true) || SharedConfig.isWaitingForPasscodeEnter)) {
 			showPasscodeActivity(fingerprint = true, animated = false, x = -1, y = -1, onShow = null, onStart = null)
 			UserConfig.getInstance(currentAccount).saveConfig(false)
 
-			if (!isVoipIntent) {
+			if (!isVoipIntent && !isVoipAnswerIntent) {
 				passcodeSaveIntent = intent
 				passcodeSaveIntentIsNew = isNew
 				passcodeSaveIntentIsRestore = restore
@@ -1410,7 +1410,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					val type = intent.type
 
 					if (false) { // MARK: disabled sharing vcards as internal Ello contacts
-					// if (type != null && type == ContactsContract.Contacts.CONTENT_VCARD_TYPE) {
+						// if (type != null && type == ContactsContract.Contacts.CONTENT_VCARD_TYPE) {
 						try {
 							val uri = intent.extras?.get(Intent.EXTRA_STREAM) as? Uri
 
@@ -1474,7 +1474,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								parcelable = Uri.parse(parcelable.toString())
 							}
 
-							val uri = parcelable as Uri?
+							val uri = parcelable as? Uri
 
 							if (uri != null) {
 								if (AndroidUtilities.isInternalUri(uri)) {
@@ -1986,11 +1986,11 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 											else if (path.isNotEmpty()) {
 												val segments = (data?.pathSegments ?: emptyList()).toMutableList()
 
-												if (segments.size > 0 && segments[0] == "s") {
+												if (segments.isNotEmpty() && segments[0] == "s") {
 													segments.removeAt(0)
 												}
 
-												if (segments.size > 0) {
+												if (segments.isNotEmpty()) {
 													username = segments[0]
 
 													if (segments.size > 1) {
@@ -2545,7 +2545,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 				else if (intent.action == "org.tmessages.openlocations") {
 					showLocations = true
 				}
-				else if (action == "voip_chat") {
+				else if (action == VoIPPreNotificationService.VOIP_CHAT_ACTION) {
 					showGroupVoip = true
 				}
 			}
@@ -2963,7 +2963,10 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			}
 		}
 
-		if (isVoipIntent) {
+		if (isVoipAnswerIntent) {
+			VoIPPreNotificationService.answer(ApplicationLoader.applicationContext)
+		}
+		else if (isVoipIntent) {
 			VoIPFragment.show(this, intentAccount[0])
 		}
 
@@ -3021,7 +3024,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		fragment.setDelegate(this)
 
 		val removeLast = if (AndroidUtilities.isTablet()) {
-			layersActionBarLayout!!.fragmentsStack.size > 0 && layersActionBarLayout!!.fragmentsStack[layersActionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
+			layersActionBarLayout!!.fragmentsStack.isNotEmpty() && layersActionBarLayout!!.fragmentsStack[layersActionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
 		}
 		else {
 			actionBarLayout!!.fragmentsStack.size > 1 && actionBarLayout!!.fragmentsStack[actionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
@@ -3231,7 +3234,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						fragment.setDelegate(this)
 
 						val removeLast = if (AndroidUtilities.isTablet()) {
-							layersActionBarLayout!!.fragmentsStack.size > 0 && layersActionBarLayout!!.fragmentsStack[layersActionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
+							layersActionBarLayout!!.fragmentsStack.isNotEmpty() && layersActionBarLayout!!.fragmentsStack[layersActionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
 						}
 						else {
 							actionBarLayout!!.fragmentsStack.size > 1 && actionBarLayout!!.fragmentsStack[actionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
@@ -3577,7 +3580,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								}
 
 								val removeLast = if (AndroidUtilities.isTablet()) {
-									layersActionBarLayout!!.fragmentsStack.size > 0 && layersActionBarLayout!!.fragmentsStack[layersActionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
+									layersActionBarLayout!!.fragmentsStack.isNotEmpty() && layersActionBarLayout!!.fragmentsStack[layersActionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
 								}
 								else {
 									actionBarLayout!!.fragmentsStack.size > 1 && actionBarLayout!!.fragmentsStack[actionBarLayout!!.fragmentsStack.size - 1] is DialogsActivity
@@ -3773,7 +3776,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 									0
 								}
 
-								if (botUser != null && res.users.size > 0 && res.users[0].bot) {
+								if (botUser != null && res.users.isNotEmpty() && res.users[0].bot) {
 									args.putString("botUser", botUser)
 									isBot = true
 								}
@@ -3890,7 +3893,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								if (mainFragmentsStack.isNotEmpty()) {
 									val fragment = mainFragmentsStack[mainFragmentsStack.size - 1]
 
-									if (error?.text != null && error.text.startsWith("FLOOD_WAIT")) {
+									if (error?.text?.startsWith("FLOOD_WAIT") == true) {
 										BulletinFactory.of(fragment).createErrorBulletin(getString(R.string.FloodWait)).show()
 									}
 									else if (AndroidUtilities.isNumeric(username)) {
@@ -3931,7 +3934,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							if (error == null && actionBarLayout != null) {
 								val invite = response as? ChatInvite
 
-								if (invite?.chat != null && (!isLeftFromChat(invite.chat) || invite.chat!!.kicked != true && (!invite.chat?.username.isNullOrEmpty() || invite is TL_chatInvitePeek || invite.chat!!.has_geo))) {
+								if (invite?.chat != null && (!isLeftFromChat(invite.chat) || invite.chat?.kicked != true && (!invite.chat?.username.isNullOrEmpty() || invite is TL_chatInvitePeek || invite.chat!!.has_geo))) {
 									MessagesController.getInstance(intentAccount).putChat(invite.chat, false)
 
 									MessagesStorage.getInstance(intentAccount).putUsersAndChats(null, listOf(invite.chat!!), false, true)
@@ -4042,7 +4045,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 														builder.show()
 													}
-												}, subscribeClickListener = object: OnClickListener {
+												}, subscribeClickListener = object : OnClickListener {
 													override fun onClick(v: View) {
 														if (!isPaidChannel(inviteChat)) {
 															@Suppress("NAME_SHADOWING") val req = TL_messages_importChatInvite()
@@ -4154,10 +4157,10 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								val builder = AlertDialog.Builder(this@LaunchActivity)
 								builder.setTitle(getString(R.string.AppName))
 
-								if (error!!.text.startsWith("FLOOD_WAIT")) {
+								if (error?.text?.startsWith("FLOOD_WAIT") == true) {
 									builder.setMessage(getString(R.string.FloodWait))
 								}
-								else if (error.text.startsWith("INVITE_HASH_EXPIRED")) {
+								else if (error?.text?.startsWith("INVITE_HASH_EXPIRED") == true) {
 									builder.setTitle(getString(R.string.ExpiredLink))
 									builder.setMessage(getString(R.string.InviteExpired))
 								}
@@ -4227,7 +4230,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								val builder = AlertDialog.Builder(this@LaunchActivity)
 								builder.setTitle(getString(R.string.AppName))
 
-								if (error.text.startsWith("FLOOD_WAIT")) {
+								if (error.text?.startsWith("FLOOD_WAIT") == true) {
 									builder.setMessage(getString(R.string.FloodWait))
 								}
 								else if (error.text == "USERS_TOO_MUCH") {
@@ -4899,7 +4902,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					var videoEditorOpened = false
 
 					if (fragment != null) {
-						val withoutAnimation = dialogsFragment == null || videoPath != null || photoPathsArray != null && photoPathsArray!!.size > 0
+						val withoutAnimation = dialogsFragment == null || videoPath != null || photoPathsArray != null && photoPathsArray!!.isNotEmpty()
 
 						actionBarLayout?.presentFragment(fragment, dialogsFragment != null, withoutAnimation, true, false)
 
@@ -4908,7 +4911,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							videoEditorOpened = true
 							sendingText = null
 						}
-						else if (photoPathsArray != null && photoPathsArray!!.size > 0) {
+						else if (photoPathsArray != null && photoPathsArray!!.isNotEmpty()) {
 							photosEditorOpened = fragment.openPhotosEditor(photoPathsArray!!, if (message.isNullOrEmpty()) sendingText else message)
 
 							if (photosEditorOpened) {
@@ -5094,18 +5097,18 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			return
 		}
 
-		if (actionBarLayout!!.fragmentsStack.size != 0) {
+		if (actionBarLayout!!.fragmentsStack.isNotEmpty()) {
 			val fragment = actionBarLayout!!.fragmentsStack[actionBarLayout!!.fragmentsStack.size - 1]
 			fragment.onRequestPermissionsResultFragment(requestCode, permissions, grantResults)
 		}
 
 		if (AndroidUtilities.isTablet()) {
-			if (rightActionBarLayout!!.fragmentsStack.size != 0) {
+			if (rightActionBarLayout!!.fragmentsStack.isNotEmpty()) {
 				val fragment = rightActionBarLayout!!.fragmentsStack[rightActionBarLayout!!.fragmentsStack.size - 1]
 				fragment.onRequestPermissionsResultFragment(requestCode, permissions, grantResults)
 			}
 
-			if (layersActionBarLayout!!.fragmentsStack.size != 0) {
+			if (layersActionBarLayout!!.fragmentsStack.isNotEmpty()) {
 				val fragment = layersActionBarLayout!!.fragmentsStack[layersActionBarLayout!!.fragmentsStack.size - 1]
 				fragment.onRequestPermissionsResultFragment(requestCode, permissions, grantResults)
 			}
@@ -5442,20 +5445,35 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			}
 
 			NotificationCenter.needShowAlert -> {
-				val reason = args[0] as Int
+				val reason = args[0] as AlertDialog.AlertReason
 
-				if (reason == 6 || reason == 3 && proxyErrorDialog != null) {
+				if (reason == AlertDialog.AlertReason.GROUP_CALL_FAILED || reason == AlertDialog.AlertReason.PROXY_ERROR && proxyErrorDialog != null) {
 					return
 				}
-				else if (reason == 4) {
+				else if (reason == AlertDialog.AlertReason.TERMS_UPDATED) {
 					showTosActivity(account, args[1] as TL_help_termsOfService)
 					return
 				}
 
 				val builder = AlertDialog.Builder(this)
-				builder.setTitle(getString(R.string.AppName))
 
-				if (reason != 2 && reason != 3) {
+				if (reason == AlertDialog.AlertReason.CONNECTION_RETRIES_DEPLETED) {
+					builder.setTitle(getString(R.string.system_overloaded))
+					builder.setMessage(getString(R.string.connection_retries_depleted))
+
+					builder.setPositiveButton(getString(R.string.quit_app)) { _, _ ->
+						finishAndRemoveTask()
+					}
+
+					builder.setNegativeButton(getString(R.string.Retry)) { _, _ ->
+						ConnectionsManager.getInstance(currentAccount).resumeNetwork()
+					}
+				}
+				else {
+					builder.setTitle(getString(R.string.AppName))
+				}
+
+				if (reason != AlertDialog.AlertReason.CONNECTION_RETRIES_DEPLETED && reason != AlertDialog.AlertReason.SERVICE_NOTIFICATION && reason != AlertDialog.AlertReason.PROXY_ERROR) {
 					builder.setNegativeButton(getString(R.string.MoreInfo)) { _, _ ->
 						if (mainFragmentsStack.isNotEmpty()) {
 							MessagesController.getInstance(account).openByUserName("spambot", mainFragmentsStack[mainFragmentsStack.size - 1], 1)
@@ -5463,19 +5481,19 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					}
 				}
 
-				if (reason == 5) {
+				if (reason == AlertDialog.AlertReason.USER_BANNED_IN_CHANNEL) {
 					builder.setMessage(getString(R.string.NobodyLikesSpam3))
 					builder.setPositiveButton(getString(R.string.OK), null)
 				}
-				else if (reason == 0) {
+				else if (reason == AlertDialog.AlertReason.PEER_FLOOD) {
 					builder.setMessage(getString(R.string.NobodyLikesSpam1))
 					builder.setPositiveButton(getString(R.string.OK), null)
 				}
-				else if (reason == 1) {
+				else if (reason == AlertDialog.AlertReason.NO_GROUP_MUTUAL_CONTACT) {
 					builder.setMessage(getString(R.string.NobodyLikesSpam2))
 					builder.setPositiveButton(getString(R.string.OK), null)
 				}
-				else if (reason == 2) {
+				else if (reason == AlertDialog.AlertReason.SERVICE_NOTIFICATION) {
 					builder.setMessage(args[1] as String)
 
 					val type = args[2] as String
@@ -5491,7 +5509,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						builder.setPositiveButton(getString(R.string.OK), null)
 					}
 				}
-				else if (reason == 3) {
+				else if (reason == AlertDialog.AlertReason.PROXY_ERROR) {
 					builder.setTitle(getString(R.string.Proxy))
 					builder.setMessage(getString(R.string.UseProxyTelegramError))
 					builder.setPositiveButton(getString(R.string.OK), null)
@@ -5581,11 +5599,8 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 				val nightTheme = args[0] as Boolean
 
 				if (!nightTheme) {
-					try {
+					runCatching {
 						setTaskDescription(TaskDescription(null, null, getColor(R.color.background) or -0x1000000))
-					}
-					catch (e: Exception) {
-						// ignored
 					}
 				}
 
@@ -6434,7 +6449,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			var allow = true // TODO: Make it a flag inside fragment itself, maybe BaseFragment#isDrawerOpenAllowed()?
 
 			if (fragment is LoginActivity || fragment is IntroActivity) {
-				if (mainFragmentsStack.size == 0 || mainFragmentsStack[0] is IntroActivity) {
+				if (mainFragmentsStack.isEmpty() || mainFragmentsStack[0] is IntroActivity) {
 					allow = false
 				}
 			}
@@ -6530,7 +6545,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			var allow = true
 
 			if (fragment is LoginActivity || fragment is IntroActivity) {
-				if (mainFragmentsStack.size == 0 || mainFragmentsStack[0] is IntroActivity) {
+				if (mainFragmentsStack.isEmpty() || mainFragmentsStack[0] is IntroActivity) {
 					allow = false
 				}
 			}
@@ -6653,11 +6668,8 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			var videoTimestamp = -1
 
 			if (timestampStr != null) {
-				try {
+				runCatching {
 					videoTimestamp = timestampStr.toInt()
-				}
-				catch (e: Throwable) {
-					// ignored
 				}
 
 				if (videoTimestamp == -1) {

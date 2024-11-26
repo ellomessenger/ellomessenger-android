@@ -6035,6 +6035,68 @@ public class MessagesStorage extends BaseController {
 		return getMessage(dialogId, messageId);
 	}
 
+	@Nullable
+	public Message getLastNonServiceMessage(@Nullable Long dialogId) {
+		if (dialogId == null || dialogId == 0) {
+			return null;
+		}
+
+		final int maxDepth = 5;
+		Message targetMessage;
+		int index = 0;
+
+		while (true) {
+			CountDownLatch countDownLatch = new CountDownLatch(1);
+			AtomicReference<Integer> ref = new AtomicReference<>();
+
+			int finalIndex = index;
+
+			storageQueue.postRunnable(() -> {
+				getDialogMessageIdByIndex(dialogId, finalIndex, param -> {
+					ref.set(param);
+					countDownLatch.countDown();
+				});
+			});
+
+			try {
+				countDownLatch.await();
+			}
+			catch (Exception e) {
+				FileLog.e(e);
+			}
+
+			Integer messageId = ref.get();
+
+			if (messageId == null) {
+				return null;
+			}
+
+			if (messageId == 0) {
+				return null;
+			}
+
+			targetMessage = getMessage(dialogId, messageId);
+
+			if (targetMessage == null) {
+				return null;
+			}
+
+			if (!(targetMessage instanceof TLRPC.TL_messageService)) {
+				break;
+			}
+
+			index++;
+
+			if (index > maxDepth) {
+				// do not attempt to fetch more than `maxDepth` messages
+				break;
+			}
+		}
+
+		return targetMessage;
+	}
+
+	@Nullable
 	public Message getMessage(long dialogId, long msgId) {
 		CountDownLatch countDownLatch = new CountDownLatch(1);
 		AtomicReference<Message> ref = new AtomicReference<>();
@@ -6974,7 +7036,7 @@ public class MessagesStorage extends BaseController {
 		});
 	}
 
-	public Runnable getMessagesInternal(long dialogId, long mergeDialogId, int count, int max_id, int offset_date, int minDate, int classGuid, int load_type, boolean scheduled, int replyMessageId, int loadIndex, boolean processMessages) {
+	private Runnable getMessagesInternal(long dialogId, long mergeDialogId, int count, int max_id, int offset_date, int minDate, int classGuid, int load_type, boolean scheduled, int replyMessageId, int loadIndex, boolean processMessages) {
 		TL_messages_messages res = new TL_messages_messages();
 		long currentUserId = getUserConfig().clientUserId;
 		int count_unread = 0;
@@ -7944,14 +8006,6 @@ public class MessagesStorage extends BaseController {
 
 	public void getMessages(long dialogId, long mergeDialogId, boolean loadInfo, int count, int max_id, int offset_date, int minDate, int classGuid, int load_type, boolean scheduled, int replyMessageId, int loadIndex, boolean processMessages) {
 		storageQueue.postRunnable(() -> {
-            /*if (loadInfo) {
-                if (lowerId < 0) {
-                    TLRPC.ChatFull info = loadChatInfoInternal(-lowerId, true, false, 0);
-                    if (info != null) {
-                        mergeDialogIdFinal = -info.migrated_from_chat_id;
-                    }
-                }
-            }*/
 			Utilities.stageQueue.postRunnable(getMessagesInternal(dialogId, mergeDialogId, count, max_id, offset_date, minDate, classGuid, load_type, scheduled, replyMessageId, loadIndex, processMessages));
 		});
 	}
@@ -13529,6 +13583,7 @@ public class MessagesStorage extends BaseController {
 
 	/**
 	 * Get the maximum message id of a dialog. {@code callback} will be called on <strong>storageQueue</strong> thread.
+	 *
 	 * @param dialogId
 	 * @param callback
 	 */
@@ -13538,6 +13593,7 @@ public class MessagesStorage extends BaseController {
 			int[] max = new int[1];
 			try {
 				cursor = database.queryFinalized("SELECT MAX(mid) FROM messages_v2 WHERE uid = " + dialogId);
+
 				if (cursor.next()) {
 					max[0] = cursor.intValue(0);
 				}
@@ -13552,6 +13608,30 @@ public class MessagesStorage extends BaseController {
 			}
 
 			callback.run(max[0]);
+		});
+	}
+
+	public void getDialogMessageIdByIndex(long dialogId, int index, IntCallback callback) {
+		storageQueue.postRunnable(() -> {
+			SQLiteCursor cursor = null;
+			int[] mid = new int[1];
+
+			try {
+				cursor = database.queryFinalized("SELECT mid FROM messages_v2 WHERE uid = " + dialogId + " ORDER BY mid DESC LIMIT 1 OFFSET " + index);
+				if (cursor.next()) {
+					mid[0] = cursor.intValue(0);
+				}
+			}
+			catch (Exception e) {
+				FileLog.e(e);
+			}
+			finally {
+				if (cursor != null) {
+					cursor.dispose();
+				}
+			}
+
+			callback.run(mid[0]);
 		});
 	}
 

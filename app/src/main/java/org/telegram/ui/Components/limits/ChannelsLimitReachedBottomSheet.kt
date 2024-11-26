@@ -23,6 +23,7 @@ import org.telegram.messenger.R
 import org.telegram.messenger.databinding.BottomSheetChannelsLimitReachedBinding
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.Components.limits.adapter.ChannelsLimitReachedAdapter
@@ -72,8 +73,9 @@ class ChannelsLimitReachedBottomSheet(parentFragment: BaseFragment?, needFocus: 
 
 		ioScope.launch {
 			val response = ConnectionsManager.getInstance(currentAccount).performRequest(req)
+			val error = response as? TL_error
 
-			if (response != null) {
+			if (response != null && error == null) {
 				val res = response as TLRPC.TL_messages_chats
 				mainScope.launch { adapter?.submitList(res.chats) }
 			}

@@ -10,6 +10,8 @@ package org.telegram.ui.feed
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.text.SpannableStringBuilder
+import android.text.method.LinkMovementMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
@@ -72,6 +74,8 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 	init {
 		binding.root.clipChildren = false
 		binding.root.clipToPadding = false
+
+		binding.messageLabel.movementMethod = LinkMovementMethod.getInstance()
 
 		binding.likesButton.clipToOutline = true
 		binding.likesButton.outlineProvider = getOutlineProvider(radius = AndroidUtilities.dp(16f).toFloat(), topCorners = true, bottomCorners = true)
@@ -274,12 +278,23 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		if (text.isNullOrEmpty()) {
 			binding.messageLabel.gone()
 			binding.translateButton.gone()
+			binding.showMoreButton.gone()
 		}
 		else {
 			binding.messageLabel.text = text
 			binding.messageLabel.visible()
+			binding.showMoreButton.visible()
 			// MARK: uncomment to enable 'translate' button
 			// binding.translateButton.visible()
+
+			val mainMessage = messages.first().messageOwner
+			val entities = mainMessage?.entities
+
+			if (!entities.isNullOrEmpty()) {
+				val text = SpannableStringBuilder.valueOf(text)
+				MessageObject.addEntitiesToText(text = text, entities = entities, out = false, usernames = true, photoViewer = false, useManualParse = false, messageOwnerId = mainMessage.dialog_id)
+				binding.messageLabel.text = text
+			}
 		}
 
 		viewsCount = messages.firstOrNull()?.messageOwner?.views ?: 0
@@ -303,7 +318,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 
 		val chatInfo = MessagesController.getInstance(currentAccount).getChatFull(channelId)
 		val linkedChatId = chatInfo?.linked_chat_id ?: 0
-		val linked = messages.firstOrNull()?.isLinkedToChat(linkedChatId) ?: false
+		val linked = messages.firstOrNull()?.isLinkedToChat(linkedChatId) == true
 		val hasDiscussion = ChatObject.isChannel(channel) && channel.has_link && !channel.megagroup
 
 		if (hasDiscussion && linked) {
@@ -440,7 +455,8 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 
 		if (binding.messageLabel.text.length > MAX_VISIBLE_TEXT_LENGTH) {
 			binding.showMoreButton.visible()
-		} else {
+		}
+		else {
 			binding.showMoreButton.gone()
 		}
 
@@ -494,9 +510,11 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		binding.photoVideoContainer.visible()
 
 		binding.messageLabel.maxLines = 3
+
 		if (binding.messageLabel.text.length > MAX_VISIBLE_PHOTO_TEXT_LENGTH) {
 			binding.showMoreButton.visible()
-		} else {
+		}
+		else {
 			binding.showMoreButton.gone()
 		}
 
@@ -620,7 +638,6 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 	}
 
 	private fun setupContacts(messages: List<MessageObject>) {
-		binding.contactContainer.visible()
 		val avatarDrawable = AvatarDrawable()
 		val avatarImage = AvatarImageView(binding.root.context)
 
@@ -631,14 +648,20 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 
 		val contactInfo = MessagesController.getInstance(UserConfig.selectedAccount).getUser(message.messageOwner?.media?.user_id)
 
+		if (contactInfo != null) {
+			binding.contactContainer.visible()
+		} else {
+			binding.contactContainer.gone()
+		}
+
 		avatarDrawable.setInfo(contactInfo)
 		avatarImage.setForUserOrChat(contactInfo, avatarDrawable)
 
 		avatarImage.setRoundRadius(AndroidUtilities.dp(35f))
 		binding.userAvatarContainer.addView(avatarImage, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 
-		val firstName = contactInfo?.first_name ?: ""
-		val lastName = contactInfo?.last_name ?: ""
+		val firstName = message.messageOwner?.media?.first_name ?: ""
+		val lastName = message.messageOwner?.media?.last_name ?: ""
 		val username = contactInfo?.username ?: ""
 
 		binding.userFullName.text = itemView.context.getString(R.string.full_name_template, firstName, lastName)
@@ -749,14 +772,11 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 			documentLayout.messageObject = message
 
 			binding.audioContainer.addView(documentLayout)
-		}
 
-//		binding.audioContainer.updateLayoutParams<ConstraintLayout.LayoutParams> {
-//			val margin = AndroidUtilities.dp(12f)
-//
-//			leftMargin = margin
-//			rightMargin = margin
-//		}
+			documentLayout.setOnClickListener {
+				delegate?.onOpenDocument(message)
+			}
+		}
 
 		binding.audioContainer.visible()
 	}
@@ -889,6 +909,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		fun fetchNextFeedPage()
 		fun onFeedItemClick(message: Message)
 		fun onOpenAddToContacts(user: User?)
+		fun onOpenDocument(message: MessageObject)
 	}
 
 	companion object {

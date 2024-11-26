@@ -61,7 +61,7 @@
 				android:layout_marginTop="24dp"
 				android:elevation="10dp"
 				android:gravity="center_horizontal"
-				android:text="@string/total_revenue"
+				android:text="@string/your_bonus"
 				android:textColor="@color/white"
 				android:textSize="16sp"
 				android:textStyle="bold"
@@ -113,7 +113,7 @@
 				app:layout_constraintEnd_toEndOf="parent"
 				app:layout_constraintStart_toEndOf="@id/referrals_counter_thumb"
 				app:layout_constraintTop_toTopOf="parent"
-				tools:text="456 Referrals" />
+				tools:text="456 Invites" />
 
 		</androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -246,7 +246,7 @@
 				android:layout_height="62dp"
 				android:layout_marginTop="16dp"
 				android:layout_marginBottom="16dp"
-				android:text="@string/share_with_friends" />
+				android:text="@string/share" />
 
 		</LinearLayout>
 

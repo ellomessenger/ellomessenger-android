@@ -94,7 +94,7 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 
 		binding = FragmentNewChannelTypeBinding.inflate(LayoutInflater.from(context))
 
-		val titles = listOf(R.string.Public, R.string.Private, R.string.paid)
+		val titles = listOf(R.string.public_channel, R.string.private_channel, R.string.subscription_channel)
 		val types = listOf(PUBLIC, PRIVATE, SUBSCRIPTION)
 
 		listOf(binding?.publicChannelButton, binding?.privateChannelButton, binding?.subscriptionChannelButton).forEachIndexed { index, b ->
@@ -111,7 +111,7 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 		}, null, null, null)
 
 		binding?.linkLayoutEditText?.filters = arrayOf(InputFilter { source, _, _, _, _, _ ->
-			source.toString().filter { ('0'..'9').contains(it) || ('a'..'z').contains(it) || it == '_' }
+			source.toString().filter { ('0'..'9').contains(it) || ('a'..'z').contains(it) }
 		}, InputFilter.LengthFilter(MAX_LINK_LENGTH))
 
 		binding?.linkLayoutEditText?.addTextChangedListener {

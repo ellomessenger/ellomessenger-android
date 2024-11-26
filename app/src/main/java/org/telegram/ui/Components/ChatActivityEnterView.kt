@@ -1607,7 +1607,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			botCommandsMenuButton = BotCommandsMenuView(getContext())
 
 			botCommandsMenuButton?.setOnClickListener {
-				val open = botCommandsMenuButton?.isOpened()?.not() ?: false
+				val open = botCommandsMenuButton?.isOpened()?.not() == true
 
 				botCommandsMenuButton?.setOpened(open)
 
@@ -2881,7 +2881,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 						sendPopupWindow?.dismiss()
 					}
 
-					AlertsCreator.createScheduleDatePickerDialog(parentActivity, parentFragment!!.dialogId) { notify, scheduleDate ->
+					AlertsCreator.createScheduleDatePickerDialog(parentActivity, parentFragment.dialogId) { notify, scheduleDate ->
 						sendMessageInternal(notify, scheduleDate)
 					}
 				}
@@ -3719,12 +3719,14 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		else {
 			var isChannel = false
 			var anonymously = false
+			var isOnlineCourse = false
 
 			if (DialogObject.isChatDialog(dialog_id)) {
 				val chat = accountInstance.messagesController.getChat(-dialog_id)
 				val chatFull = accountInstance.messagesController.getChatFull(-dialog_id)
 				isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 				anonymously = ChatObject.getSendAsPeerId(chat, chatFull) == chat?.id
+				isOnlineCourse = ChatObject.isOnlineCourse(chat) && chat?.megagroup == false
 			}
 
 			if (anonymously) {
@@ -3741,7 +3743,11 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					}
 				}
 				else if (isChannel) {
-					editField.setHintText(context.getString(R.string.ChannelBroadcast))
+					if (isOnlineCourse) {
+						editField.setHintText(context.getString(R.string.ChannelBroadcast))
+					} else {
+						editField.setHintText(context.getString(R.string.ChannelPublication))
+					}
 
 //					if (silent) {
 //						editField.setHintText(context.getString(R.string.ChannelSilentBroadcast), animated)
@@ -3759,6 +3765,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					}
 				}
 			}
+		}
+
+		if (dialog_id == BuildConfig.SUPPORT_BOT_ID) {
+			botSettingsButton?.gone()
 		}
 	}
 
@@ -4275,9 +4285,9 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 								scheduledButton?.tag = 1
 								scheduledButton?.pivotX = AndroidUtilities.dp(48f).toFloat()
 
-								animators.add(ObjectAnimator.ofFloat(scheduledButton, View.TRANSLATION_X, AndroidUtilities.dp(if (botButton?.visibility == VISIBLE) 96f else 48f).toFloat()))
-								animators.add(ObjectAnimator.ofFloat(scheduledButton, View.ALPHA, 1.0f))
-								animators.add(ObjectAnimator.ofFloat(scheduledButton, View.SCALE_X, 1.0f))
+								animators.add(ObjectAnimator.ofFloat(scheduledButton, TRANSLATION_X, AndroidUtilities.dp(if (botButton?.visibility == VISIBLE) 96f else 48f).toFloat()))
+								animators.add(ObjectAnimator.ofFloat(scheduledButton, ALPHA, 1.0f))
+								animators.add(ObjectAnimator.ofFloat(scheduledButton, SCALE_X, 1.0f))
 							}
 							else {
 								scheduledButton?.translationX = AndroidUtilities.dp(if (botButton?.visibility == VISIBLE) 96f else 48f).toFloat()
@@ -4471,9 +4481,9 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 							if (hasScheduled) {
 								scheduledButton?.tag = null
-								animators.add(ObjectAnimator.ofFloat(scheduledButton, View.ALPHA, 0.0f))
-								animators.add(ObjectAnimator.ofFloat(scheduledButton, View.SCALE_X, 0.0f))
-								animators.add(ObjectAnimator.ofFloat(scheduledButton, View.TRANSLATION_X, AndroidUtilities.dp(if (botButton == null || botButton?.visibility == GONE) 48f else 96f).toFloat()))
+								animators.add(ObjectAnimator.ofFloat(scheduledButton, ALPHA, 0.0f))
+								animators.add(ObjectAnimator.ofFloat(scheduledButton, SCALE_X, 0.0f))
+								animators.add(ObjectAnimator.ofFloat(scheduledButton, TRANSLATION_X, AndroidUtilities.dp(if (botButton == null || botButton?.visibility == GONE) 48f else 96f).toFloat()))
 							}
 							else {
 								scheduledButton?.alpha = 0.0f
@@ -4693,8 +4703,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					runningAnimation2 = AnimatorSet()
 
 					val animators = mutableListOf<Animator>()
-					animators.add(ObjectAnimator.ofFloat(attachLayout, View.ALPHA, 1.0f))
-					animators.add(ObjectAnimator.ofFloat(attachLayout, View.SCALE_X, 1.0f))
+					animators.add(ObjectAnimator.ofFloat(attachLayout, ALPHA, 1.0f))
+					animators.add(ObjectAnimator.ofFloat(attachLayout, SCALE_X, 1.0f))
 
 					val hasScheduled = delegate?.hasScheduledMessages() == true
 
@@ -4707,9 +4717,9 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 							scheduledButton?.visibility = VISIBLE
 							scheduledButton?.tag = 1
 							scheduledButton?.pivotX = AndroidUtilities.dp(48f).toFloat()
-							animators.add(ObjectAnimator.ofFloat(scheduledButton, View.ALPHA, 1.0f))
-							animators.add(ObjectAnimator.ofFloat(scheduledButton, View.SCALE_X, 1.0f))
-							animators.add(ObjectAnimator.ofFloat(scheduledButton, View.TRANSLATION_X, 0f))
+							animators.add(ObjectAnimator.ofFloat(scheduledButton, ALPHA, 1.0f))
+							animators.add(ObjectAnimator.ofFloat(scheduledButton, SCALE_X, 1.0f))
+							animators.add(ObjectAnimator.ofFloat(scheduledButton, TRANSLATION_X, 0f))
 						}
 						else {
 							scheduledButton?.alpha = 1.0f
@@ -4871,7 +4881,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 				// START: commented out
 				if (attachLayout != null) {
-					if (attachLayout?.visibility != View.VISIBLE) {
+					if (attachLayout?.visibility != VISIBLE) {
 						attachLayout?.visibility = VISIBLE
 						attachLayout?.alpha = 0f
 						attachLayout?.scaleX = 0f
@@ -4880,8 +4890,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					runningAnimation2 = AnimatorSet()
 
 					val animators = mutableListOf<Animator>()
-					animators.add(ObjectAnimator.ofFloat(attachLayout, View.ALPHA, 1.0f))
-					animators.add(ObjectAnimator.ofFloat(attachLayout, View.SCALE_X, 1.0f))
+					animators.add(ObjectAnimator.ofFloat(attachLayout, ALPHA, 1.0f))
+					animators.add(ObjectAnimator.ofFloat(attachLayout, SCALE_X, 1.0f))
 
 					val hasScheduled = delegate?.hasScheduledMessages() == true
 
@@ -4892,9 +4902,9 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 							scheduledButton?.visibility = VISIBLE
 							scheduledButton?.tag = 1
 							scheduledButton?.pivotX = AndroidUtilities.dp(48f).toFloat()
-							animators.add(ObjectAnimator.ofFloat(scheduledButton, View.ALPHA, 1.0f))
-							animators.add(ObjectAnimator.ofFloat(scheduledButton, View.SCALE_X, 1.0f))
-							animators.add(ObjectAnimator.ofFloat(scheduledButton, View.TRANSLATION_X, 0f))
+							animators.add(ObjectAnimator.ofFloat(scheduledButton, ALPHA, 1.0f))
+							animators.add(ObjectAnimator.ofFloat(scheduledButton, SCALE_X, 1.0f))
+							animators.add(ObjectAnimator.ofFloat(scheduledButton, TRANSLATION_X, 0f))
 						}
 						else {
 							scheduledButton?.alpha = 1.0f
@@ -5405,12 +5415,12 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					}
 				}
 
-				var oldLayoutParams: ViewGroup.LayoutParams? = null
+				var oldLayoutParams: LayoutParams? = null
 				var parent: ViewGroup? = null
 
 				if (!isInVideoMode) {
 					parent = recordedAudioPanel.parent as? ViewGroup
-					oldLayoutParams = recordedAudioPanel.layoutParams
+					oldLayoutParams = recordedAudioPanel.layoutParams as? LayoutParams
 					parent?.removeView(recordedAudioPanel)
 
 					val newLayoutParams = LayoutParams(parent?.measuredWidth ?: 0, AndroidUtilities.dp(48f))
@@ -6480,7 +6490,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	}
 
 	fun onBotWebViewBackPressed(): Boolean {
-		return botWebViewMenuContainer?.onBackPressed() ?: false
+		return botWebViewMenuContainer?.onBackPressed() == true
 	}
 
 	fun hasBotWebView(): Boolean {
@@ -8012,7 +8022,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					message.peer_id = TLRPC.TL_peerUser()
 					message.from_id = TLRPC.TL_peerUser()
 					message.from_id?.user_id = getInstance(currentAccount).getClientUserId()
-					message.peer_id?.user_id = message.from_id?.user_id
+					message.peer_id?.user_id = message.from_id?.user_id ?: 0L
 					message.date = (System.currentTimeMillis() / 1000).toInt()
 					message.message = ""
 					message.attachPath = audioToSendPath
@@ -8655,10 +8665,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		}
 
 		val isDragging: Boolean
-			get() = seekBarWaveform?.isDragging ?: false
+			get() = seekBarWaveform?.isDragging == true
 
 		override fun onTouchEvent(event: MotionEvent): Boolean {
-			val result = seekBarWaveform?.onTouch(event.action, event.x, event.y) ?: false
+			val result = seekBarWaveform?.onTouch(event.action, event.x, event.y) == true
 
 			if (result) {
 				if (event.action == MotionEvent.ACTION_DOWN) {
@@ -9570,8 +9580,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					outlineDrawable?.draw(canvas)
 					outlineDrawable?.alpha = 255
 
-					drawable.alpha = 255 - a
-					drawable.draw(canvas)
+					drawable?.alpha = 255 - a
+					drawable?.draw(canvas)
 				}
 				else if (!canceledByGesture) {
 					drawable?.alpha = alpha
@@ -9854,7 +9864,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			val y = event.y.toInt()
 
 			if (event.action == MotionEvent.ACTION_DOWN) {
-				innerPressed = cancelRect?.contains(x, y) ?: false
+				innerPressed = cancelRect?.contains(x, y) == true
 
 				if (innerPressed) {
 					selectableBackground?.setHotspot(x.toFloat(), y.toFloat())
@@ -9909,7 +9919,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			selectableBackground!!.state = drawableState
 		}
 
-		public override fun verifyDrawable(drawable: Drawable): Boolean {
+		override fun verifyDrawable(drawable: Drawable): Boolean {
 			return selectableBackground === drawable || super.verifyDrawable(drawable)
 		}
 

@@ -9,7 +9,10 @@
  */
 package org.telegram.ui.channel
 
-import android.animation.*
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.app.Dialog
 import android.content.Context
 import android.content.Intent
@@ -31,13 +34,26 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
-import android.widget.*
+import android.widget.ArrayAdapter
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.text.buildSpannedString
 import androidx.core.widget.addTextChangedListener
 import androidx.core.widget.doOnTextChanged
-import org.telegram.messenger.*
+import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.ChatObject
+import org.telegram.messenger.FileLog
+import org.telegram.messenger.ImageLocation
+import org.telegram.messenger.LocaleController
+import org.telegram.messenger.NotificationCenter
+import org.telegram.messenger.R
+import org.telegram.messenger.SvgHelper
 import org.telegram.messenger.databinding.NewMessageGroupTypeViewBinding
 import org.telegram.messenger.databinding.SpinnerLayoutBinding
 import org.telegram.messenger.utils.ClickableString
@@ -57,9 +73,16 @@ import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Adapters.ChannelCategoriesAdapter
 import org.telegram.ui.Adapters.CountriesAdapter
-import org.telegram.ui.Cells.*
+import org.telegram.ui.Cells.GroupBioContainer
 import org.telegram.ui.ChatActivity
-import org.telegram.ui.Components.*
+import org.telegram.ui.Components.AvatarDrawable
+import org.telegram.ui.Components.BackupImageView
+import org.telegram.ui.Components.EditTextEmoji
+import org.telegram.ui.Components.ImageUpdater
+import org.telegram.ui.Components.LayoutHelper
+import org.telegram.ui.Components.RadialProgressView
+import org.telegram.ui.Components.SizeNotifierFrameLayout
+import org.telegram.ui.Components.TypefaceSpan
 import org.telegram.ui.Country
 import kotlin.math.min
 
@@ -227,6 +250,8 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 	}
 
 	private fun updateDoneProgress(loading: Boolean) {
+		doneButton?.isEnabled = !loading
+
 		if (!loading) {
 			AndroidUtilities.cancelRunOnUIThread(enableDoneLoading)
 		}
@@ -240,72 +265,81 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 
 		actionBar?.setActionBarMenuOnItemClick(object : ActionBar.ActionBarMenuOnItemClick() {
 			override fun onItemClick(id: Int) {
-				if (id == ActionBar.BACK_BUTTON) {
-					if (donePressed) {
-						showDoneCancelDialog()
-						return
+				when (id) {
+					ActionBar.BACK_BUTTON -> {
+						if (donePressed) {
+							showDoneCancelDialog()
+							return
+						}
+
+						finishFragment()
 					}
 
-					finishFragment()
-				}
-				else if (id == BUTTON_DONE) {
-					if (parentActivity == null) {
-						return
+					BUTTON_DONE -> {
+						if (parentActivity == null) {
+							return
+						}
+
+						if (doneRequestId != null) {
+							return
+						}
+
+						messagesController.loadAppConfig()
+
+						val payType = if (isCourse) TLRPC.Chat.PAY_TYPE_BASE else if (isPaid) TLRPC.Chat.PAY_TYPE_SUBSCRIBE else TLRPC.Chat.PAY_TYPE_NONE
+						val adult = adultBinding?.checkbox?.isChecked ?: true
+
+						val country = (countrySpinnerLayout?.spinner?.adapter as? CountriesAdapter)?.countries?.find {
+							it.name == countrySpinnerLayout?.spinner?.text?.toString()?.trim()
+						}
+
+						val category = (categorySpinnerLayout?.spinner?.adapter as? ChannelCategoriesAdapter)?.categories?.find {
+							it == categorySpinnerLayout?.spinner?.text?.toString()?.trim()
+						}
+
+						val name = nameTextView?.text?.toString()?.trim()
+
+						if (country?.code == null) {
+							countrySpinnerLayout?.spinnerLayout?.error = context.getString(R.string.country_is_empty)
+						}
+
+						if (category.isNullOrEmpty()) {
+							categorySpinnerLayout?.spinnerLayout?.error = context.getString(R.string.category_is_empty)
+						}
+
+						if (name.isNullOrEmpty()) {
+							parentActivity?.vibrate()
+							AndroidUtilities.shakeView(nameTextView, 2f, 0)
+						}
+
+						if (country?.code == null || category.isNullOrEmpty() || name.isNullOrEmpty()) {
+							return
+						}
+
+						var genre: String? = null
+						var subgenre: String? = null
+
+						if (category.lowercase() == "music") {
+							genre = genres?.find { genreSpinnerLayout?.spinner?.text?.toString()?.trim() == it }
+							subgenre = genres?.find { subgenreSpinnerLayout?.spinner?.text?.toString()?.trim() == it }
+						}
+
+						if (donePressed) {
+							showDoneCancelDialog()
+							return
+						}
+
+						donePressed = true
+
+						AndroidUtilities.runOnUIThread(enableDoneLoading, 200)
+
+						if (imageUpdater.isUploadingImage) {
+							createAfterUpload = true
+							return
+						}
+
+						doneRequestId = messagesController.createChat(name, listOf(), bioContainer?.text, ChatObject.CHAT_TYPE_CHANNEL, false, null, null, this@NewChannelSetupFragment, adult, payType, country.code, cost, category, startDate, endDate, genre, subgenre, inviteLink)
 					}
-
-					val payType = if (isCourse) TLRPC.Chat.PAY_TYPE_BASE else if (isPaid) TLRPC.Chat.PAY_TYPE_SUBSCRIBE else TLRPC.Chat.PAY_TYPE_NONE
-					val adult = adultBinding?.checkbox?.isChecked ?: true
-
-					val country = (countrySpinnerLayout?.spinner?.adapter as? CountriesAdapter)?.countries?.find {
-						it.name == countrySpinnerLayout?.spinner?.text?.toString()?.trim()
-					}
-
-					val category = (categorySpinnerLayout?.spinner?.adapter as? ChannelCategoriesAdapter)?.categories?.find {
-						it == categorySpinnerLayout?.spinner?.text?.toString()?.trim()
-					}
-
-					val name = nameTextView?.text?.toString()?.trim()
-
-					if (country?.code == null) {
-						countrySpinnerLayout?.spinnerLayout?.error = context.getString(R.string.country_is_empty)
-					}
-
-					if (category.isNullOrEmpty()) {
-						categorySpinnerLayout?.spinnerLayout?.error = context.getString(R.string.category_is_empty)
-					}
-
-					if (name.isNullOrEmpty()) {
-						parentActivity?.vibrate()
-						AndroidUtilities.shakeView(nameTextView, 2f, 0)
-					}
-
-					if (country?.code == null || category.isNullOrEmpty() || name.isNullOrEmpty()) {
-						return
-					}
-
-					var genre: String? = null
-					var subgenre: String? = null
-
-					if (category.lowercase() == "music") {
-						genre = genres?.find { genreSpinnerLayout?.spinner?.text?.toString()?.trim() == it }
-						subgenre = genres?.find { subgenreSpinnerLayout?.spinner?.text?.toString()?.trim() == it }
-					}
-
-					if (donePressed) {
-						showDoneCancelDialog()
-						return
-					}
-
-					donePressed = true
-
-					AndroidUtilities.runOnUIThread(enableDoneLoading, 200)
-
-					if (imageUpdater.isUploadingImage) {
-						createAfterUpload = true
-						return
-					}
-
-					doneRequestId = messagesController.createChat(name, ArrayList(), bioContainer?.text, ChatObject.CHAT_TYPE_CHANNEL, false, null, null, this@NewChannelSetupFragment, adult, payType, country.code, cost, category, startDate, endDate, genre, subgenre, inviteLink)
 				}
 			}
 		})

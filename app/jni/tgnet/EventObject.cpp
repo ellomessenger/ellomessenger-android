@@ -4,6 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2015-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
 
 #include <unistd.h>
@@ -17,15 +18,15 @@ EventObject::EventObject(void *object, EventObjectType type) {
     eventType = type;
 }
 
-void EventObject::onEvent(uint32_t events) {
+void EventObject::onEvent(uint32_t events) const {
     switch (eventType) {
         case EventObjectTypeConnection: {
-            Connection *connection = (Connection *) eventObject;
+            auto *connection = (Connection *) eventObject;
             connection->onEvent(events);
             break;
         }
         case EventObjectTypeTimer: {
-            Timer *timer = (Timer *) eventObject;
+            auto *timer = (Timer *) eventObject;
             timer->onEvent();
             break;
         }
@@ -33,9 +34,11 @@ void EventObject::onEvent(uint32_t events) {
             int *pipe = (int *) eventObject;
             char ch;
             ssize_t size = 1;
+
             while (size > 0) {
                 size = read(pipe[0], &ch, 1);
             }
+
             break;
         }
         case EventObjectTypeEvent: {

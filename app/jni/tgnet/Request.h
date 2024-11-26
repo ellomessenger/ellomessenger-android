@@ -4,27 +4,33 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2015-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
 
 #ifndef REQUEST_H
 #define REQUEST_H
 
-#include <stdint.h>
+#include <cstdint>
 #include <vector>
 #include "Defines.h"
 
 #ifdef ANDROID
+
 #include <jni.h>
+
 #endif
 
 class TLObject;
+
 class TL_error;
+
 class Datacenter;
 
 class Request {
 
 public:
     Request(int32_t instance, int32_t token, ConnectionType type, uint32_t flags, uint32_t datacenter, onCompleteFunc completeFunc, onQuickAckFunc quickAckFunc, onWriteToSocketFunc writeToSocketFunc);
+
     ~Request();
 
     int64_t messageId = 0;
@@ -50,22 +56,33 @@ public:
     bool isResending = false;
     int32_t instanceNum = 0;
     uint32_t serverFailureCount = 0;
-    TLObject *rawRequest;
+    TLObject *rawRequest = nullptr;
     std::unique_ptr<TLObject> rpcRequest;
     onCompleteFunc onCompleteRequestCallback;
     onQuickAckFunc onQuickAckCallback;
     onWriteToSocketFunc onWriteToSocketCallback;
 
+    uint32_t getMaxRetryCount() const;
+
     void addRespondMessageId(int64_t id);
+
     bool respondsToMessageId(int64_t id);
+
     void clear(bool time);
-    void onComplete(TLObject *result, TL_error *error, int32_t networkType, int64_t responseTime);
-    void onQuickAck();
-    void onWriteToSocket();
-    bool isMediaRequest();
-    bool hasInitFlag();
-    bool needInitRequest(Datacenter *datacenter, uint32_t currentVersion);
-    TLObject *getRpcRequest();
+
+    void onComplete(TLObject *result, TL_error *error, int32_t networkType, int64_t responseTime) const;
+
+    void onQuickAck() const;
+
+    void onWriteToSocket() const;
+
+    bool isMediaRequest() const;
+
+    bool hasInitFlag() const;
+
+    bool needInitRequest(Datacenter *datacenter, uint32_t currentVersion) const;
+
+    TLObject *getRpcRequest() const;
 
 #ifdef ANDROID
     jobject ptr1 = nullptr;

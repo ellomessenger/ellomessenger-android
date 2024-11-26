@@ -13,6 +13,7 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.tlrpc.TL_error
 import java.io.Serializable
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -74,7 +75,7 @@ class WalletTransactionsDataSource {
 	}
 
 	@Synchronized
-	private fun processResponse(transactions: List<ElloRpc.TransactionHistoryEntry>?, offset: Int, error: TLRPC.TL_error?, isFailure: Boolean) {
+	private fun processResponse(transactions: List<ElloRpc.TransactionHistoryEntry>?, offset: Int, error: TL_error?, isFailure: Boolean) {
 		if (offset == 0) {
 			this.transactions.clear()
 		}
@@ -116,7 +117,7 @@ class WalletTransactionsDataSource {
 
 	interface WalletTransactionsListener {
 		fun onTransactionsLoaded()
-		fun onTransactionsLoadError(error: TLRPC.TL_error?)
+		fun onTransactionsLoadError(error: TL_error?)
 	}
 
 	companion object {

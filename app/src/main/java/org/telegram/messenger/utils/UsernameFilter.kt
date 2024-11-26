@@ -45,7 +45,7 @@ class UsernameFilter : InputFilter {
 	}
 
 	private fun isAllowed(c: Char): Boolean {
-		return (c in '0'..'9') || (c in 'a'..'z') || (c in 'A'..'Z') || mAllowed.indexOf(c) != -1
+		return (c in '0'..'9') || (c in 'a'..'z') || (c in 'A'..'Z') //MARK: To get the underscore back, uncomment it || mAllowed.indexOf(c) != -1
 	}
 	companion object {
 		private const val mAllowed = "_"

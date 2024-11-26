@@ -32,7 +32,7 @@ import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.toJson
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ElloRpc
-import org.telegram.tgnet.TLRPC.TL_error
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.BottomSheet

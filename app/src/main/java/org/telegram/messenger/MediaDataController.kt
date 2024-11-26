@@ -7258,12 +7258,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 					var imageReceiver = ImageReceiver()
 					imageReceiver.setImage(ImageLocation.getForDocument(document), null, null, "webp", null, 1)
 
-					ImageLoader.instance.loadImageForImageReceiver(imageReceiver)
+					ImageLoader.getInstance().loadImageForImageReceiver(imageReceiver)
 
 					imageReceiver = ImageReceiver()
 					imageReceiver.setImage(ImageLocation.getForDocument(MessageObject.getPremiumStickerAnimation(document), document), null, null, null, "tgs", null, 1)
 
-					ImageLoader.instance.loadImageForImageReceiver(imageReceiver)
+					ImageLoader.getInstance().loadImageForImageReceiver(imageReceiver)
 				}
 			}
 			return

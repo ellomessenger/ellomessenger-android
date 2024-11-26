@@ -4611,7 +4611,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			mBuilder.setDeleteIntent(PendingIntent.getBroadcast(ApplicationLoader.applicationContext, 1, dismissIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE))
 
 			if (photoPath != null) {
-				val img = ImageLoader.instance.getImageFromMemory(photoPath, null, "50_50")
+				val img = ImageLoader.getInstance().getImageFromMemory(photoPath, null, "50_50")
 
 				if (img != null) {
 					mBuilder.setLargeIcon(img.bitmap)
@@ -4996,7 +4996,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				var canReply: Boolean
 
 				if (!DialogObject.isEncryptedDialog(dialogId)) {
-					canReply = dialogId != 777000L
+					canReply = dialogId != BuildConfig.NOTIFICATIONS_BOT_ID
 
 					if (DialogObject.isUserDialog(dialogId)) {
 						user = messagesController.getUser(dialogId) ?: messagesController.loadUser(dialogId, classGuid, true)
@@ -5090,7 +5090,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					avatarFile = fileLoader.getPathToAttach(photoPath, true)
 
 					if (Build.VERSION.SDK_INT < 28) {
-						val img = ImageLoader.instance.getImageFromMemory(photoPath, null, "50_50")
+						val img = ImageLoader.getInstance().getImageFromMemory(photoPath, null, "50_50")
 
 						if (img != null) {
 							avatarBitmap = img.bitmap
@@ -5392,7 +5392,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						messagingStyle.addMessage(message, messageObject.messageOwner!!.date.toLong() * 1000, person)
 					}
 
-					if (dialogId == 777000L && messageObject.messageOwner?.reply_markup != null) {
+					if (dialogId == BuildConfig.NOTIFICATIONS_BOT_ID && messageObject.messageOwner?.reply_markup != null) {
 						rows = messageObject.messageOwner?.reply_markup?.rows
 						rowsMid = messageObject.id
 					}

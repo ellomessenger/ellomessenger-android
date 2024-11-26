@@ -11,6 +11,7 @@ package org.telegram.ui
 import android.content.Context
 import android.graphics.Rect
 import android.text.Editable
+import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
 import android.util.TypedValue
@@ -402,6 +403,10 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 		usernameTextView?.setCursorColor(context.getColor(R.color.text))
 		usernameTextView?.setCursorSize(AndroidUtilities.dp(20f))
 		usernameTextView?.setCursorWidth(1.5f)
+
+		usernameTextView?.filters = arrayOf(InputFilter { source, _, _, _, _, _ ->
+			source.toString().filter { ('0'..'9').contains(it) || ('a'..'z').contains(it) }
+		}, InputFilter.LengthFilter(MAX_LINK_LENGTH))
 
 		publicContainer?.addView(usernameTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 36))
 
@@ -1013,5 +1018,6 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 
 	companion object {
 		private const val DONE_BUTTON = 1
+		private const val MAX_LINK_LENGTH = 32
 	}
 }

@@ -1400,7 +1400,7 @@ TEST_F(CordRingTest, IsFlatSingleFlat) {
 
     // Arbitrary ranges must check true as well.
     EXPECT_TRUE(ring->IsFlat(1, 4, &fragment));
-    EXPECT_THAT(fragment, Eq("elloapp"));
+    EXPECT_THAT(fragment, Eq("ello"));
     EXPECT_TRUE(ring->IsFlat(6, 5, &fragment));
     EXPECT_THAT(fragment, Eq("world"));
   }
@@ -1430,7 +1430,7 @@ TEST_F(CordRingTest, IsFlatMultiFlat) {
 
     // Check for arbitrary partial range inside each flat.
     EXPECT_TRUE(ring->IsFlat(1, 4, &fragment));
-    EXPECT_THAT(fragment, "elloapp");
+    EXPECT_THAT(fragment, "ello");
     EXPECT_TRUE(ring->IsFlat(26, 4, &fragment));
     EXPECT_THAT(fragment, "fire");
 

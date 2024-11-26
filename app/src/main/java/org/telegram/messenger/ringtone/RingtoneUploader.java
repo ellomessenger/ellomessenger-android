@@ -9,6 +9,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.ui.Components.Bulletin;
 
 import java.io.File;
@@ -79,7 +80,7 @@ public class RingtoneUploader implements NotificationCenter.NotificationCenterDe
         MediaDataController.getInstance(currentAccount).onRingtoneUploaded(filePath, null, true);
     }
 
-    public void error(TLRPC.TL_error error) {
+    public void error(TL_error error) {
         unsubscribe();
         MediaDataController.getInstance(currentAccount).onRingtoneUploaded(filePath, null, true);
         if (error != null) {

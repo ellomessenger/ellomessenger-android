@@ -4,6 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2015-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
 
 #ifndef CONNECTIONSMANAGER_H
@@ -18,111 +19,199 @@
 #include "Defines.h"
 
 #ifdef ANDROID
+
 #include <jni.h>
+
 #endif
 
 class NativeByteBuffer;
+
 class Connection;
+
 class Datacenter;
+
 class Request;
-class DatacenterHandshake;
+
 class TLObject;
+
 class ConnectionSocket;
+
 class TL_auth_exportedAuthorization;
+
 class ByteArray;
+
 class TL_config;
+
 class EventObject;
+
 class Config;
+
 class ProxyCheckInfo;
 
 class ConnectionsManager {
 
 public:
-    ConnectionsManager(int32_t instance);
+    explicit ConnectionsManager(int32_t instance);
+
     ~ConnectionsManager();
 
     static ConnectionsManager &getInstance(int32_t instanceNum);
+
     int64_t getCurrentTimeMillis();
+
     int64_t getCurrentTimeMonotonicMillis();
+
     int32_t getCurrentTime();
+
     uint32_t getCurrentDatacenterId();
-    int32_t getTimeDifference();
+
+    int32_t getTimeDifference() const;
+
     int32_t sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate);
+
     int32_t sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate, int32_t requestToken);
+
     void cancelRequest(int32_t token, bool notifyServer);
+
     void cleanUp(bool resetKeys, int32_t datacenterId);
+
     void cancelRequestsForGuid(int32_t guid);
+
     void bindRequestToGuid(int32_t requestToken, int32_t guid);
+
     void applyDatacenterAddress(uint32_t datacenterId, std::string ipAddress, uint32_t port);
-    void setDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
+
+    void setDelegate(ConnectionsManagerDelegate *connectionsManagerDelegate);
+
     ConnectionState getConnectionState();
+
     void setUserId(int64_t userId);
+
     void resumeNetwork(bool partial);
-    void pauseNetwork();
+
+    void pauseNetwork(bool connectionsRetriesDepleted);
+
     void setNetworkAvailable(bool value, int32_t type, bool slow);
+
     void setIpStrategy(uint8_t value);
+
     void init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerprint, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType);
+
     void setProxySettings(std::string address, uint16_t port, std::string username, std::string password, std::string secret);
+
     void setLangCode(std::string langCode);
+
     void setRegId(std::string regId);
+
     void setSystemLangCode(std::string langCode);
+
     void updateDcSettings(uint32_t datacenterId, bool workaround);
+
     void setPushConnectionEnabled(bool value);
+
     void applyDnsConfig(NativeByteBuffer *buffer, std::string phone, int32_t date);
+
     int64_t checkProxy(std::string address, uint16_t port, std::string username, std::string password, std::string secret, onRequestTimeFunc requestTimeFunc, jobject ptr1);
 
 #ifdef ANDROID
+
     void sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, onWriteToSocketFunc onWriteToSocket, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate, int32_t requestToken, jobject ptr1, jobject ptr2, jobject ptr3);
+
     static void useJavaVM(JavaVM *vm, bool useJavaByteBuffers);
+
 #endif
 
 private:
     static void *ThreadProc(void *data);
 
     void initDatacenters();
+
     void loadConfig();
+
     void saveConfig();
+
     void saveConfigInternal(NativeByteBuffer *buffer);
+
     void select();
+
     void wakeup();
+
     void processServerResponse(TLObject *message, int64_t messageId, int32_t messageSeqNo, int64_t messageSalt, Connection *connection, int64_t innerMsgId, int64_t containerMessageId);
+
     void sendPing(Datacenter *datacenter, bool usePushConnection);
+
     void sendMessagesToConnection(std::vector<std::unique_ptr<NetworkMessage>> &messages, Connection *connection, bool reportAck);
+
     void sendMessagesToConnectionWithConfirmation(std::vector<std::unique_ptr<NetworkMessage>> &messages, Connection *connection, bool reportAck);
+
     void requestSaltsForDatacenter(Datacenter *datacenter, bool media, bool useTempConnection);
+
     void clearRequestsForDatacenter(Datacenter *datacenter, HandshakeType type);
+
     void registerForInternalPushUpdates();
+
     void processRequestQueue(uint32_t connectionType, uint32_t datacenterId);
+
     void moveToDatacenter(uint32_t datacenterId);
+
     void authorizeOnMovingDatacenter();
+
     void authorizedOnMovingDatacenter();
+
     Datacenter *getDatacenterWithId(uint32_t datacenterId);
+
     std::unique_ptr<TLObject> wrapInLayer(TLObject *object, Datacenter *datacenter, Request *baseRequest);
+
     void removeRequestFromGuid(int32_t requestToken);
+
     bool cancelRequestInternal(int32_t token, int64_t messageId, bool notifyServer, bool removeFromClass);
+
     int callEvents(int64_t now);
+
     int32_t sendRequestInternal(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate);
 
     void checkPendingTasks();
-    void scheduleTask(std::function<void()> task);
+
+    void scheduleTask(const std::function<void()> &task);
+
     void scheduleEvent(EventObject *eventObject, uint32_t time);
+
     void removeEvent(EventObject *eventObject);
+
+    void onConnectionRetryFailed(Connection *connection);
+
     void onConnectionClosed(Connection *connection, int reason);
+
     void onConnectionConnected(Connection *connection);
+
     void onConnectionQuickAckReceived(Connection *connection, int32_t ack);
+
     void onConnectionDataReceived(Connection *connection, NativeByteBuffer *data, uint32_t length);
+
     bool hasPendingRequestsForConnection(Connection *connection);
+
     void attachConnection(ConnectionSocket *connection);
+
     void detachConnection(ConnectionSocket *connection);
-    TLObject *TLdeserialize(TLObject *request, uint32_t bytes, NativeByteBuffer *data);
+
+    TLObject *TLdeserialize(TLObject *request, uint32_t bytes, NativeByteBuffer *data) const;
+
+    std::vector<Request*> getRequestsForConnection(Connection *connection);
+
     TLObject *getRequestWithMessageId(int64_t messageId);
+
     void onDatacenterHandshakeComplete(Datacenter *datacenter, HandshakeType type, int32_t timeDiff);
+
     void onDatacenterExportAuthorizationComplete(Datacenter *datacenter);
+
     int64_t generateMessageId();
-    uint8_t getIpStratagy();
-    bool isNetworkAvailable();
+
+    uint8_t getIpStrategy() const;
+
+    bool isNetworkAvailable() const;
 
     void scheduleCheckProxyInternal(ProxyCheckInfo *proxyCheckInfo);
+
     void checkProxyInternal(ProxyCheckInfo *proxyCheckInfo);
 
     int32_t instanceNum = 0;
@@ -133,9 +222,9 @@ private:
 
     std::map<uint32_t, Datacenter *> datacenters;
     std::map<int32_t, std::vector<std::int32_t>> quickAckIdToRequestIds;
-    int32_t pingTime;
+    int32_t pingTime = 0;
     bool clientBlocked = true;
-    std::string lastInitSystemLangcode = "";
+    std::string lastInitSystemLangcode;
     std::atomic<uint32_t> lastRequestToken{50000000};
     uint32_t currentDatacenterId = 0;
     uint32_t movingToDatacenterId = DEFAULT_DATACENTER_ID;
@@ -162,27 +251,27 @@ private:
     ConnectionState connectionState = ConnectionStateConnecting;
     std::unique_ptr<ByteArray> movingAuthorization;
     std::vector<int64_t> sessionsToDestroy;
-    int32_t lastDestroySessionRequestTime;
+    int32_t lastDestroySessionRequestTime = 0;
     std::map<int32_t, std::vector<int32_t>> requestsByGuids;
     std::map<int32_t, int32_t> guidsByRequests;
     std::map<int64_t, int64_t> resendRequests;
-    Datacenter *deserializingDatacenter;
+    Datacenter *deserializingDatacenter = nullptr;
 
-    std::string proxyUser = "";
-    std::string proxyPassword = "";
-    std::string proxyAddress = "";
-    std::string proxySecret = "";
+    std::string proxyUser;
+    std::string proxyPassword;
+    std::string proxyAddress;
+    std::string proxySecret;
     uint16_t proxyPort = 1080;
     int32_t lastPingProxyId = 2000000;
     std::vector<std::unique_ptr<ProxyCheckInfo>> proxyCheckQueue;
     std::vector<std::unique_ptr<ProxyCheckInfo>> proxyActiveChecks;
 
-    pthread_t networkThread;
-    pthread_mutex_t mutex;
+    pthread_t networkThread = 0;
+    pthread_mutex_t mutex = {};
     std::queue<std::function<void()>> pendingTasks;
     struct epoll_event *epollEvents;
-    timespec timeSpec;
-    timespec timeSpecMonotonic;
+    timespec timeSpec = {};
+    timespec timeSpecMonotonic = {};
     int32_t timeDifference = 0;
     int64_t lastOutgoingMessageId = 0;
     bool networkAvailable = true;
@@ -232,17 +321,26 @@ private:
     std::vector<Datacenter *> unauthorizedDatacenters;
     NativeByteBuffer *sizeCalculator;
 
-    ConnectiosManagerDelegate *delegate;
+    ConnectionsManagerDelegate *delegate = nullptr;
 
     friend class ConnectionSocket;
+
     friend class ConnectionSession;
+
     friend class Connection;
+
     friend class Timer;
+
     friend class Datacenter;
+
     friend class TL_message;
+
     friend class TL_rpc_result;
+
     friend class Config;
+
     friend class FileLog;
+
     friend class Handshake;
 };
 

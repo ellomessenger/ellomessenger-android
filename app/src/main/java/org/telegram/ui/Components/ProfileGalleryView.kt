@@ -56,9 +56,9 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 	private val callback: Callback?
 	private val isProfileFragment: Boolean
 	private val radialProgresses = SparseArray<RadialProgress2>()
-	var path = Path()
-	var rect = RectF()
-	var radii = FloatArray(8)
+	private val path = Path()
+	private val rect = RectF()
+	private val radii = FloatArray(8)
 	var pinchToZoomHelper: PinchToZoomHelper? = null
 	private var currentUploadingImageLocation: ImageLocation? = null
 	private var currentUploadingThumbLocation: ImageLocation? = null
@@ -72,14 +72,14 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 	private var uploadingImageLocation: ImageLocation? = null
 	private val currentAccount = UserConfig.selectedAccount
 	private var prevImageLocation: ImageLocation? = null
-	private val videoFileNames = ArrayList<String?>()
-	private val thumbsFileNames = ArrayList<String?>()
-	private val photos = ArrayList<TLRPC.Photo?>()
-	private val videoLocations = ArrayList<ImageLocation?>()
-	private val imagesLocations = ArrayList<ImageLocation?>()
-	private val thumbsLocations = ArrayList<ImageLocation?>()
-	private val imagesLocationsSizes = ArrayList<Int>()
-	private val imagesUploadProgress = ArrayList<Float?>()
+	private val videoFileNames = mutableListOf<String?>()
+	private val thumbsFileNames = mutableListOf<String?>()
+	private val photos = mutableListOf<TLRPC.Photo?>()
+	private val videoLocations = mutableListOf<ImageLocation?>()
+	private val imagesLocations = mutableListOf<ImageLocation?>()
+	private val thumbsLocations = mutableListOf<ImageLocation?>()
+	private val imagesLocationsSizes = mutableListOf<Int>()
+	private val imagesUploadProgress = mutableListOf<Float?>()
 	private var settingMainPhoto = 0
 	var createThumbFromParent = true
 	private var forceResetPosition = false
@@ -100,10 +100,11 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 
 		addOnPageChangeListener(object : OnPageChangeListener {
 			override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
+				val adapter = adapter ?: return
 				var innerPosition = position
 
 				if (positionOffsetPixels == 0) {
-					innerPosition = adapter!!.getRealPosition(innerPosition)
+					innerPosition = adapter.getRealPosition(innerPosition)
 
 					if (hasActiveVideo) {
 						innerPosition--
@@ -113,7 +114,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 
 					for (a in 0 until count) {
 						val child = getChildAt(a) as? BackupImageView ?: continue
-						var p = adapter!!.getRealPosition(adapter!!.imageViews.indexOf(child))
+						var p = adapter.getRealPosition(adapter.imageViews.indexOf(child))
 
 						if (hasActiveVideo) {
 							p--
@@ -188,16 +189,17 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 
 		addOnPageChangeListener(object : OnPageChangeListener {
 			override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
+				val adapter = adapter ?: return
 				var innerPosition = position
 
 				if (positionOffsetPixels == 0) {
-					innerPosition = adapter!!.getRealPosition(innerPosition)
+					innerPosition = adapter.getRealPosition(innerPosition)
 
 					val count = childCount
 
 					for (a in 0 until count) {
 						val child = getChildAt(a) as? BackupImageView ?: continue
-						val p = adapter!!.getRealPosition(adapter!!.imageViews.indexOf(child))
+						val p = adapter.getRealPosition(adapter.imageViews.indexOf(child))
 						val imageReceiver = child.imageReceiver
 						val currentAllow = imageReceiver.allowStartAnimation
 
@@ -331,9 +333,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 
 	@SuppressLint("ClickableViewAccessibility")
 	override fun onTouchEvent(ev: MotionEvent): Boolean {
-		if (adapter == null) {
-			return false
-		}
+		val adapter = adapter ?: return false
 
 		if (parentListView.scrollState != RecyclerView.SCROLL_STATE_IDLE && !isScrollingListView && isSwipingViewPager) {
 			isSwipingViewPager = false
@@ -346,11 +346,13 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 
 		val action = ev.action
 
+		val pinchToZoomHelper = pinchToZoomHelper
+
 		if (pinchToZoomHelper != null && currentItemView != null) {
-			if (action != MotionEvent.ACTION_DOWN && isDownReleased && !pinchToZoomHelper!!.isInOverlayMode) {
-				pinchToZoomHelper?.checkPinchToZoom(MotionEvent.obtain(0, 0, MotionEvent.ACTION_CANCEL, 0f, 0f, 0), this, currentItemView!!.imageReceiver, null)
+			if (action != MotionEvent.ACTION_DOWN && isDownReleased && !pinchToZoomHelper.isInOverlayMode) {
+				pinchToZoomHelper.checkPinchToZoom(MotionEvent.obtain(0, 0, MotionEvent.ACTION_CANCEL, 0f, 0f, 0), this, currentItemView?.imageReceiver, null)
 			}
-			else if (pinchToZoomHelper!!.checkPinchToZoom(ev, this, currentItemView!!.imageReceiver, null)) {
+			else if (pinchToZoomHelper.checkPinchToZoom(ev, this, currentItemView?.imageReceiver, null)) {
 				if (!isDownReleased) {
 					isDownReleased = true
 					callback?.onRelease()
@@ -366,7 +368,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 			scrolledByUser = true
 			downPoint[ev.x] = ev.y
 
-			if (adapter!!.count > 1) {
+			if (adapter.count > 1) {
 				callback?.onDown(ev.x < width / 3f)
 			}
 
@@ -374,19 +376,19 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 		}
 		else if (action == MotionEvent.ACTION_UP) {
 			if (!isDownReleased) {
-				val itemsCount = adapter!!.count
+				val itemsCount = adapter.count
 				var currentItem = currentItem
 
 				if (itemsCount > 1) {
 					if (ev.x > width / 3f) {
-						val extraCount = adapter!!.extraCount
+						val extraCount = adapter.extraCount
 
 						if (++currentItem >= itemsCount - extraCount) {
 							currentItem = extraCount
 						}
 					}
 					else {
-						val extraCount = adapter!!.extraCount
+						val extraCount = adapter.extraCount
 
 						if (--currentItem < extraCount) {
 							currentItem = itemsCount - extraCount - 1
@@ -453,12 +455,12 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 	fun setChatInfo(chatFull: ChatFull?) {
 		chatInfo = chatFull
 
-		if (photos.isNotEmpty() && photos[0] == null && chatInfo != null && FileLoader.isSamePhoto(imagesLocations[0]!!.location, chatInfo!!.chat_photo)) {
-			photos[0] = chatInfo!!.chat_photo
+		if (photos.isNotEmpty() && photos.firstOrNull() == null && chatInfo != null && FileLoader.isSamePhoto(imagesLocations.firstOrNull()?.location, chatInfo?.chat_photo)) {
+			photos[0] = chatInfo?.chat_photo
 
-			if (chatInfo!!.chat_photo.video_sizes.isNotEmpty()) {
-				val videoSize = chatInfo!!.chat_photo.video_sizes[0]
-				videoLocations[0] = ImageLocation.getForPhoto(videoSize, chatInfo!!.chat_photo)
+			if (!chatInfo?.chat_photo?.video_sizes.isNullOrEmpty()) {
+				val videoSize = chatInfo?.chat_photo?.video_sizes?.firstOrNull()
+				videoLocations[0] = ImageLocation.getForPhoto(videoSize, chatInfo?.chat_photo)
 				videoFileNames[0] = FileLoader.getAttachFileName(videoSize)
 				callback?.onPhotosLoaded()
 			}
@@ -557,26 +559,12 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 		}
 	}
 
-	fun getThumbLocation(index: Int): ImageLocation? {
-		return if (index < 0 || index >= thumbsLocations.size) {
-			null
-		}
-		else {
-			thumbsLocations[index]
-		}
-	}
-
 	fun hasImages(): Boolean {
 		return imagesLocations.isNotEmpty()
 	}
 
 	val currentItemView: BackupImageView?
-		get() = if (adapter != null && adapter!!.objects.isNotEmpty()) {
-			adapter!!.objects[currentItem].imageView
-		}
-		else {
-			null
-		}
+		get() = adapter?.objects?.getOrNull(currentItem)?.imageView
 
 	val isLoadingCurrentVideo: Boolean
 		get() {
@@ -646,7 +634,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 	}
 
 	fun resetCurrentItem() {
-		setCurrentItem(adapter!!.extraCount, false)
+		setCurrentItem(adapter?.extraCount ?: 0, false)
 	}
 
 	val realCount: Int
@@ -661,11 +649,11 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 		}
 
 	fun getRealPosition(position: Int): Int {
-		return adapter!!.getRealPosition(position)
+		return adapter?.getRealPosition(position) ?: -1
 	}
 
 	val realPosition: Int
-		get() = adapter!!.getRealPosition(currentItem)
+		get() = adapter?.getRealPosition(currentItem) ?: -1
 
 	fun getPhoto(index: Int): TLRPC.Photo? {
 		return photos.getOrNull(index)
@@ -816,12 +804,12 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 							thumbsLocations.add(ImageLocation.getForUserOrChat(chat, ImageLocation.TYPE_SMALL))
 							thumbsFileNames.add(null)
 
-							if (chatInfo != null && FileLoader.isSamePhoto(currentImageLocation.location, chatInfo!!.chat_photo)) {
-								photos.add(chatInfo!!.chat_photo)
+							if (chatInfo != null && FileLoader.isSamePhoto(currentImageLocation.location, chatInfo?.chat_photo)) {
+								photos.add(chatInfo?.chat_photo)
 
-								if (chatInfo!!.chat_photo.video_sizes.isNotEmpty()) {
-									val videoSize = chatInfo!!.chat_photo.video_sizes[0]
-									videoLocations.add(ImageLocation.getForPhoto(videoSize, chatInfo!!.chat_photo))
+								if (!chatInfo?.chat_photo?.video_sizes.isNullOrEmpty()) {
+									val videoSize = chatInfo?.chat_photo?.video_sizes?.firstOrNull()
+									videoLocations.add(ImageLocation.getForPhoto(videoSize, chatInfo?.chat_photo))
 									videoFileNames.add(FileLoader.getAttachFileName(videoSize))
 								}
 								else {
@@ -1166,7 +1154,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 						item.imageView?.setImageMedia(videoLocations[imageLocationPosition], filter, imagesLocations[imageLocationPosition], null, uploadingImageLocation, null, null, imagesLocationsSizes[imageLocationPosition], 1, parent)
 					}
 					else {
-						val thumbFilter = if (location!!.photoSize is TL_photoStrippedSize) "b" else null
+						val thumbFilter = if (location?.photoSize is TL_photoStrippedSize) "b" else null
 						item.imageView?.setImageMedia(videoLocation, null, imagesLocations[imageLocationPosition], null, thumbsLocations[imageLocationPosition], thumbFilter, null, imagesLocationsSizes[imageLocationPosition], 1, parent)
 					}
 				}
@@ -1320,7 +1308,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 		}
 
 		override fun onDraw(canvas: Canvas) {
-			if (pinchToZoomHelper != null && pinchToZoomHelper!!.isInOverlayMode) {
+			if (pinchToZoomHelper != null && pinchToZoomHelper?.isInOverlayMode == true) {
 				return
 			}
 
@@ -1344,12 +1332,12 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 					if (radialProgressHideAnimator == null) {
 						var startDelay: Long = 0
 
-						if (radialProgress!!.progress < 1f) {
-							radialProgress!!.setProgress(1f, true)
+						if ((radialProgress?.progress ?: 0f) < 1f) {
+							radialProgress?.setProgress(1f, true)
 							startDelay = 100
 						}
 
-						radialProgressHideAnimatorStartValue = radialProgress!!.overrideAlpha
+						radialProgressHideAnimatorStartValue = radialProgress?.overrideAlpha ?: 1.0f
 
 						radialProgressHideAnimator = ValueAnimator.ofFloat(0f, 1f)
 						radialProgressHideAnimator?.startDelay = startDelay

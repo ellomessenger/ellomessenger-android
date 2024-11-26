@@ -4,9 +4,12 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2015-2018.
+ * Copyright Nikita Denin, Ello 2024.
  */
 
 #include "Timer.h"
+
+#include <utility>
 #include "FileLog.h"
 #include "EventObject.h"
 #include "ConnectionsManager.h"
@@ -14,11 +17,12 @@
 Timer::Timer(int32_t instance, std::function<void()> function) {
     eventObject = new EventObject(this, EventObjectTypeTimer);
     instanceNum = instance;
-    callback = function;
+    callback = std::move(function);
 }
 
 Timer::~Timer() {
     stop();
+
     if (eventObject != nullptr) {
         delete eventObject;
         eventObject = nullptr;
@@ -29,7 +33,9 @@ void Timer::start() {
     if (started || timeout == 0) {
         return;
     }
+
     started = true;
+
     ConnectionsManager::getInstance(instanceNum).scheduleEvent(eventObject, timeout);
 }
 
@@ -37,7 +43,9 @@ void Timer::stop() {
     if (!started) {
         return;
     }
+
     started = false;
+
     ConnectionsManager::getInstance(instanceNum).removeEvent(eventObject);
 }
 
@@ -45,8 +53,10 @@ void Timer::setTimeout(uint32_t ms, bool repeat) {
     if (ms == timeout) {
         return;
     }
+
     repeatable = repeat;
     timeout = ms;
+
     if (started) {
         ConnectionsManager::getInstance(instanceNum).removeEvent(eventObject);
         ConnectionsManager::getInstance(instanceNum).scheduleEvent(eventObject, timeout);
@@ -55,7 +65,9 @@ void Timer::setTimeout(uint32_t ms, bool repeat) {
 
 void Timer::onEvent() {
     callback();
+
     if (LOGS_ENABLED) DEBUG_D("timer(%p) call", this);
+
     if (started && repeatable && timeout != 0) {
         ConnectionsManager::getInstance(instanceNum).scheduleEvent(eventObject, timeout);
     }

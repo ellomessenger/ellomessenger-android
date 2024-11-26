@@ -171,7 +171,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 	@SuppressLint("NotifyDataSetChanged")
 	override fun createView(context: Context): View? {
-		actionBar?.setTitle(context.getString(R.string.feed))
+		actionBar?.setTitle(context.getString(R.string.connect))
 		actionBar?.castShadows = false
 		actionBar?.shouldDestroyBackButtonOnCollapse = true
 
@@ -557,6 +557,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			it.addObserver(this, NotificationCenter.didReceiveNewMessages)
 			it.addObserver(this, NotificationCenter.dialogsNeedReload)
 			it.addObserver(this, NotificationCenter.needDeleteDialog)
+			it.addObserver(this, NotificationCenter.feedSettingsUpdated)
 		}
 
 		DialogsActivity.loadDialogs(accountInstance)
@@ -624,9 +625,9 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			it.removeObserver(this, NotificationCenter.messagesDeleted)
 			it.removeObserver(this, NotificationCenter.updateInterfaces)
 			it.removeObserver(this, NotificationCenter.didReceiveNewMessages)
-			it.removeObserver(this, NotificationCenter.chatInfoDidLoad)
 			it.removeObserver(this, NotificationCenter.dialogsNeedReload)
 			it.removeObserver(this, NotificationCenter.needDeleteDialog)
+			it.removeObserver(this, NotificationCenter.feedSettingsUpdated)
 		}
 
 		super.onFragmentDestroy()
@@ -673,6 +674,17 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		}
 
 		limit = feedAdapter.feed?.size?.takeIf { it > 0 } ?: DEFAULT_FETCH_LIMIT
+
+		withContext(mainScope.coroutineContext) {
+			if (feed.isEmpty()) {
+				binding?.swipeRefreshLayout?.gone()
+				binding?.emptyFeedContainer?.visible()
+			}
+			else {
+				binding?.swipeRefreshLayout?.visible()
+				binding?.emptyFeedContainer?.gone()
+			}
+		}
 	}
 
 	private suspend fun loadNewMessages() {
@@ -802,6 +814,8 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				val view = layoutManager.findViewByPosition(position)
 				val offset = view?.top ?: 0
 
+				fetchContactsForFeed(messages)
+
 				val newMessages = withContext(mainScope.coroutineContext) {
 					feedAdapter.setFeed(messages, append = !force, isLastPage = isLastFeedPage)
 				}
@@ -839,11 +853,24 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		}
 
 		withContext(ioScope.coroutineContext) {
-			val completeFeed = feedAdapter.feed?.flatten()?.map { it.messageOwner }
+			// save cache
+			val completeFeed = feedAdapter.feed?.flatten()?.mapNotNull { it.messageOwner } ?: emptyList()
+			messagesStorage.putFeed(completeFeed, feedAdapter.pinned?.toList() ?: listOf())
+		}
+	}
 
-			if (!completeFeed.isNullOrEmpty()) {
-				// save cache
-				messagesStorage.putFeed(completeFeed, feedAdapter.pinned?.toList() ?: listOf())
+	private suspend fun fetchContactsForFeed(messages: List<Message>?) {
+		messages?.forEach {
+			val uid = it.media?.user_id ?: 0L
+
+			if (uid != 0L) {
+				val contactsInfo = MessagesController.getInstance(currentAccount).getUser(uid)
+
+				if (contactsInfo == null) {
+					withContext(ioScope.coroutineContext) {
+						MessagesController.getInstance(currentAccount).loadUser(uid, ConnectionsManager.generateClassGuid(), true)
+					}
+				}
 			}
 		}
 	}
@@ -1086,6 +1113,10 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		mediaController.resetGoingToShowMessageObject()
 	}
 
+	override fun onOpenDocument(message: MessageObject) {
+		AndroidUtilities.openDocument(message, parentActivity, this)
+	}
+
 	override fun onContextMenuClick(messages: List<MessageObject>, dialogId: Long, view: View) {
 		val popUp = context?.showMenu(view, R.menu.feed_channel_menu)
 
@@ -1310,7 +1341,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				}
 
 				if (originalMessage != null && originalMessage.messageOwner?.replies != null && chatActivity.threadMessage?.messageOwner?.replies != null) {
-					originalMessage.messageOwner?.replies?.replies = chatActivity.threadMessage?.messageOwner?.replies?.replies
+					originalMessage.messageOwner?.replies?.replies = chatActivity.threadMessage?.messageOwner?.replies?.replies ?: 0
 				}
 
 				if (originalMessage != null && originalMessage.messageOwner?.reactions != null) {
@@ -1433,6 +1464,16 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				}
 			}
 
+			NotificationCenter.feedSettingsUpdated -> {
+				ioScope.launch {
+					if (feedLoadingJob?.isActive == true) {
+						feedLoadingJob?.cancel()
+					}
+
+					loadFeedData(true)
+				}
+			}
+
 			NotificationCenter.needDeleteDialog -> {
 				if (fragmentView == null || isPaused) {
 					return
@@ -1441,7 +1482,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				val dialogId = args[0] as Long
 				val user = args[1] as? User
 				val chat = args[2] as? TLRPC.Chat
-				val revoke = (args[3] as? Boolean) ?: false
+				val revoke = (args[3] as? Boolean) == true
 
 				if (chat != null) {
 					if (ChatObject.isNotInChat(chat)) {

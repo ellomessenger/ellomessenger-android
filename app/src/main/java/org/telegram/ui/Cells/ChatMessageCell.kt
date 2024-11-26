@@ -77,6 +77,7 @@ import androidx.core.graphics.ColorUtils
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
+import org.telegram.messenger.BuildConfig
 import org.telegram.messenger.ChatObject
 import org.telegram.messenger.ContactsController
 import org.telegram.messenger.DialogObject
@@ -3860,7 +3861,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		checkImageReceiversAttachState()
 
 		if (addedForTest && currentUrl != null && currentWebFile != null) {
-			ImageLoader.instance.removeTestWebFile(currentUrl)
+			ImageLoader.getInstance().removeTestWebFile(currentUrl)
 			addedForTest = false
 		}
 
@@ -4356,7 +4357,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			hasMiniProgress = 0
 
 			if (addedForTest && currentUrl != null && currentWebFile != null) {
-				ImageLoader.instance.removeTestWebFile(currentUrl)
+				ImageLoader.getInstance().removeTestWebFile(currentUrl)
 			}
 
 			addedForTest = false
@@ -7015,7 +7016,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					}
 					else {
 						if (currentMapProvider == MessagesController.MAP_PROVIDER_YANDEX_WITH_ARGS || currentMapProvider == MessagesController.MAP_PROVIDER_GOOGLE) {
-							ImageLoader.instance.addTestWebFile(currentUrl, currentWebFile)
+							ImageLoader.getInstance().addTestWebFile(currentUrl, currentWebFile)
 							addedForTest = true
 						}
 
@@ -7487,7 +7488,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						h = min(w, h)
 						w = h
 						drawBackground = false
-						photoImage.setRoundRadius((w * 0.45f).toInt())
+						photoImage.setRoundRadius((w * 12.45f).toInt())
 						canChangeRadius = false
 					}
 					else if (messageObject.needDrawBluredPreview() && !messageObject.hasExtendedMediaPreview()) {
@@ -7549,7 +7550,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							h += (currentPosition!!.maxY - currentPosition!!.minY) * (7 * AndroidUtilities.density).roundToInt() //TODO fix
 						}
 						else {
-							h = ceil((maxHeight * currentPosition!!.ph).toDouble()).toInt()
+							if (messageObject.isRoundVideo) {
+								h = w
+							}
+							else {
+								h = ceil((maxHeight * currentPosition!!.ph).toDouble()).toInt()
+							}
 						}
 
 						backgroundWidth = w
@@ -7844,7 +7850,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							if (location != null) {
 								val key = location.getKey(photoParentObject, null, false) + "@" + currentPhotoFilter
 
-								if (ImageLoader.instance.isInMemCache(key, false)) {
+								if (ImageLoader.getInstance().isInMemCache(key, false)) {
 									currentPhotoObjectThumb = currentPhotoObject
 									currentPhotoFilterThumb = currentPhotoFilter
 									currentPhotoFilter = filterNew
@@ -8623,12 +8629,17 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		updateFlagSecure()
 
 		if (noBackground(messageObject)) {
-			drawBackground = false
+			// MARK: temporary solution to return background for single media so reactions are displayed correctly
+			drawBackground = ChatObject.isChannelAndNotMegaGroup(currentChat)
 		}
 	}
 
 	private fun noBackground(messageObject: MessageObject): Boolean {
-		return messageObject.type == MessageObject.TYPE_PHOTO && messageObject.caption.isNullOrEmpty() && !hasDiscussion && !messageObject.isReply && !messageObject.isForwarded
+		if (messageObject.type == MessageObject.TYPE_ROUND_VIDEO) {
+			return true
+		}
+
+		return (messageObject.type == MessageObject.TYPE_PHOTO || messageObject.type == MessageObject.TYPE_VIDEO) && messageObject.caption.isNullOrEmpty() && !hasDiscussion && !messageObject.isReply && !messageObject.isForwarded
 	}
 
 	private fun calculateUnlockXY() {
@@ -11126,7 +11137,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 		if (!reactionsLayoutInBubble.isEmpty && (currentPosition == null || ((currentPosition.flags and MessageObject.POSITION_FLAG_BOTTOM) != 0 && (currentPosition.flags and MessageObject.POSITION_FLAG_LEFT) != 0)) && !reactionsLayoutInBubble.isSmall) {
 			if (currentMessageObject?.type == MessageObject.TYPE_EMOJIS || currentMessageObject!!.isAnimatedEmoji || currentMessageObject.isAnyKindOfSticker) {
-				if (currentMessageObject.isOutOwner) {
+				if (currentMessageObject?.isOutOwner == true) {
 					reactionsLayoutInBubble.x = measuredWidth - reactionsLayoutInBubble.width - AndroidUtilities.dp(16f) //AndroidUtilities.displaySize.x - maxWidth - AndroidUtilities.dp(17);
 				}
 				else {
@@ -11134,7 +11145,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else {
-				if (currentMessageObject.isOutOwner) {
+				if (currentMessageObject?.isOutOwner == true) {
 					reactionsLayoutInBubble.x = getCurrentBackgroundLeft() + AndroidUtilities.dp(11f)
 				}
 				else {
@@ -11153,13 +11164,13 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				reactionsLayoutInBubble.y -= AndroidUtilities.dp(16f)
 			}
 
-			if (captionLayout != null && (currentMessageObject.type != 2 && !(currentMessageObject.isOut && drawForwardedName && !drawPhotoImage) && !(currentMessageObject.type == MessageObject.TYPE_DOCUMENT && drawPhotoImage) || currentPosition != null) && currentMessagesGroup != null) {
+			if (captionLayout != null && (currentMessageObject?.type != 2 && !(currentMessageObject?.isOut == true && drawForwardedName && !drawPhotoImage) && !(currentMessageObject?.type == MessageObject.TYPE_DOCUMENT && drawPhotoImage) || currentPosition != null) && currentMessagesGroup != null) {
 				reactionsLayoutInBubble.y -= AndroidUtilities.dp(14f)
 			}
 
 			reactionsLayoutInBubble.y += reactionsLayoutInBubble.positionOffsetY
 
-			if (!currentMessageObject.isMediaEmpty && currentMessagesGroup == null && !currentMessageObject.messageOwner?.message.isNullOrEmpty()) {
+			if (currentMessageObject?.isMediaEmpty == false && currentMessagesGroup == null && !currentMessageObject?.messageOwner?.message.isNullOrEmpty()) {
 				reactionsLayoutInBubble.y -= AndroidUtilities.dp(12f)
 			}
 		}
@@ -12219,7 +12230,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					radialProgress.setMiniIcon(MediaActionDrawable.ICON_NONE, ifSame, animated)
 
 					if (!fromBot) {
-						val progress = ImageLoader.instance.getFileProgressSizes(currentMessageObject!!.messageOwner!!.attachPath)
+						val progress = ImageLoader.getInstance().getFileProgressSizes(currentMessageObject!!.messageOwner!!.attachPath)
 						var loadingProgress = 0f
 
 						if (progress == null && sending) {
@@ -12267,7 +12278,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						else {
 							miniButtonState = 1
 
-							val progress = ImageLoader.instance.getFileProgressSizes(fileName)
+							val progress = ImageLoader.getInstance().getFileProgressSizes(fileName)
 
 							if (progress != null) {
 								radialProgress.setProgress(DownloadController.getProgress(progress), animated)
@@ -12297,7 +12308,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					else {
 						buttonState = 4
 
-						val progress = ImageLoader.instance.getFileProgressSizes(fileName)
+						val progress = ImageLoader.getInstance().getFileProgressSizes(fileName)
 
 						if (progress != null) {
 							radialProgress.setProgress(DownloadController.getProgress(progress), animated)
@@ -12336,7 +12347,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				else {
 					buttonState = 1
 
-					val progress = ImageLoader.instance.getFileProgressSizes(fileName)
+					val progress = ImageLoader.getInstance().getFileProgressSizes(fileName)
 
 					setProgress = if (progress != null) DownloadController.getProgress(progress) else 0f
 
@@ -12392,7 +12403,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					}
 
 					if (needProgress) {
-						val progress = ImageLoader.instance.getFileProgressSizes(currentMessageObject!!.messageOwner!!.attachPath)
+						val progress = ImageLoader.getInstance().getFileProgressSizes(currentMessageObject!!.messageOwner!!.attachPath)
 						var loadingProgress = 0f
 
 						if (progress == null && sending) {
@@ -12474,7 +12485,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						else {
 							miniButtonState = 1
 
-							val progress = ImageLoader.instance.getFileProgressSizes(fileName)
+							val progress = ImageLoader.getInstance().getFileProgressSizes(fileName)
 
 							if (progress != null) {
 								createLoadingProgressLayout(progress[0], progress[1])
@@ -12594,7 +12605,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					else {
 						buttonState = 1
 
-						val progress = ImageLoader.instance.getFileProgressSizes(fileName)
+						val progress = ImageLoader.getInstance().getFileProgressSizes(fileName)
 
 						if (progress != null) {
 							createLoadingProgressLayout(progress[0], progress[1])
@@ -12830,7 +12841,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						FileLoader.getInstance(currentAccount).cancelLoadFile(documentAttach)
 					}
 					else if (currentMessageObject!!.type == MessageObject.TYPE_COMMON || currentMessageObject!!.type == MessageObject.TYPE_PHOTO || currentMessageObject!!.type == MessageObject.TYPE_EXTENDED_MEDIA_PREVIEW || currentMessageObject!!.type == 8 || currentMessageObject!!.type == MessageObject.TYPE_ROUND_VIDEO) {
-						ImageLoader.instance.cancelForceLoadingForImageReceiver(photoImage)
+						ImageLoader.getInstance().cancelForceLoadingForImageReceiver(photoImage)
 						photoImage.cancelLoadImage()
 					}
 					else if (currentMessageObject!!.type == MessageObject.TYPE_DOCUMENT) {
@@ -13159,7 +13170,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			return
 		}
 
-		val progresses = ImageLoader.instance.getFileProgressSizes(FileLoader.getDocumentFileName(document))
+		val progresses = ImageLoader.getInstance().getFileProgressSizes(FileLoader.getDocumentFileName(document))
 
 		if (progresses != null) {
 			createLoadingProgressLayout(progresses[0], progresses[1])
@@ -13312,7 +13323,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 		var hasReplies = messageObject.hasReplies()
 
-		if (messageObject.scheduled || messageObject.isLiveLocation || messageObject.messageOwner?.edit_hide == true || messageObject.dialogId == 777000L || messageObject.messageOwner?.via_bot_id != 0L || messageObject.messageOwner?.via_bot_name != null || author != null && author.bot) {
+		if (messageObject.scheduled || messageObject.isLiveLocation || messageObject.messageOwner?.edit_hide == true || messageObject.dialogId == BuildConfig.NOTIFICATIONS_BOT_ID || messageObject.messageOwner?.via_bot_id != 0L || messageObject.messageOwner?.via_bot_name != null || author != null && author.bot) {
 			edited = false
 		}
 		else if (currentPosition == null || currentMessagesGroup?.messages.isNullOrEmpty()) {
@@ -14682,7 +14693,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		// MARK: transparent background is detected here
 		val currentMessagesGroup = currentMessagesGroup ?: return false
 		val messages = currentMessagesGroup.messages
-		return messages.count { it.type == MessageObject.TYPE_PHOTO } == messages.size && messages.find { !it.caption.isNullOrEmpty() } == null && messages.find { it.isForwarded } == null
+
+		if (messages.count { it.type == MessageObject.TYPE_ROUND_VIDEO } == messages.size) {
+			return true
+		}
+
+		return messages.count { it.type == MessageObject.TYPE_PHOTO || it.type == MessageObject.TYPE_VIDEO } == messages.size && messages.find { !it.caption.isNullOrEmpty() } == null && messages.find { it.isForwarded } == null
 	}
 
 	@SuppressLint("WrongCall")
@@ -17010,7 +17026,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			timeYOffset = -if (drawCommentButton) AndroidUtilities.dp(41.3f) else 0
 
 			val paint = if (currentMessageObject!!.shouldDrawWithoutBackground()) {
-				getThemedPaint(Theme.key_paint_chatActionBackground)
+				Paint().apply { color = context.getColor(R.color.dark_transparent) }
 			}
 			else {
 				getThemedPaint(Theme.key_paint_chatTimeBackground)
@@ -17248,7 +17264,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else {
-				canvas.translate(timeTitleTimeX + additionalX.also { drawTimeX = it }, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset.also { drawTimeY = it.toFloat() })
+				val timeTopOffset = if (currentMessageObject?.isMusic == true) AndroidUtilities.dp(4f) else 0f
+				canvas.translate(timeTitleTimeX + additionalX.also { drawTimeX = it }, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset + timeTopOffset.toFloat().also { drawTimeY = it })
 				timeLayout.draw(canvas)
 			}
 
@@ -17541,7 +17558,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 		var offsetX: Float = if (reactionsLayoutInBubble.isSmall) reactionsLayoutInBubble.getCurrentWidth(1f) else 0f
 		val timeAlpha = Theme.chat_timePaint.alpha
-		val timeY = if (shouldDrawTimeOnMedia()) photoImage.imageY2 + additionalTimeOffsetY - AndroidUtilities.dp(7.3f) - timeLayout!!.height else layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout!!.height + timeYOffset
+		val topOffsetViewsCount = if (currentMessageObject?.isMusic == true) AndroidUtilities.dp(4f) else 0f
+		val timeY = if (shouldDrawTimeOnMedia()) photoImage.imageY2 + additionalTimeOffsetY - AndroidUtilities.dp(7.3f) - timeLayout!!.height else layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout!!.height + timeYOffset + topOffsetViewsCount.toFloat()
 
 		if (repliesLayout != null || transitionParams.animateReplies) {
 			var repliesX = (if (transitionParams.shouldAnimateTimeX) this.timeX.toFloat() else timeX) + offsetX
@@ -17680,7 +17698,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						Theme.chat_msgInViewsSelectedDrawable
 					}
 					else {
-						Theme.chat_msgInViewsDrawable
+						ResourcesCompat.getDrawable(context.resources, R.drawable.msg_views, null)!!.mutate().apply {
+							colorFilter = PorterDuffColorFilter(context.getColor(R.color.dark_gray), PorterDuff.Mode.MULTIPLY)
+						}
 					}
 				}
 				else {
@@ -17692,7 +17712,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 
-			val y = if (shouldDrawTimeOnMedia()) photoImage.imageY2 + additionalTimeOffsetY - AndroidUtilities.dp(5.5f) - timeLayout!!.height else layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 5.5f else 4.5f) - timeLayout!!.height + timeYOffset
+			val topOffset = if (currentMessageObject?.isMusic == true) AndroidUtilities.dp(5f) else 0f
+			val y = if (shouldDrawTimeOnMedia()) photoImage.imageY2 + additionalTimeOffsetY - AndroidUtilities.dp(5.5f) - timeLayout!!.height + topOffset.toFloat() else layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 5.5f else 4.5f) - timeLayout!!.height + timeYOffset + topOffset.toFloat()
 
 			setDrawableBounds(viewsDrawable, viewsX, y)
 
@@ -19127,7 +19148,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				rect.set(x1, y1, x1 + timeWidthAudio + AndroidUtilities.dp((8 + 12 + 2).toFloat()), y1 + AndroidUtilities.dp(17f))
 
-				val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
+				val paint = if (hasGradientService()) {
+					Paint().apply { color = context.getColor(android.R.color.transparent) }
+				}
+				else {
+					getThemedPaint(Theme.key_paint_chatActionBackground)
+				}
 
 				val oldAlpha = paint.alpha
 
@@ -19135,12 +19161,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				applyServiceShaderMatrix()
 
-				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
+				canvas.drawRoundRect(rect, AndroidUtilities.dp(26f).toFloat(), AndroidUtilities.dp(26f).toFloat(), paint)
 
 				if (hasGradientService()) {
 					val oldAlpha2 = Theme.chat_actionBackgroundGradientDarkenPaint.alpha
 					Theme.chat_actionBackgroundGradientDarkenPaint.alpha = (oldAlpha2 * timeAlpha).toInt()
-					canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), Theme.chat_actionBackgroundGradientDarkenPaint)
+					canvas.drawRoundRect(rect, AndroidUtilities.dp(26f).toFloat(), AndroidUtilities.dp(26f).toFloat(), Paint().apply { color = context.getColor(R.color.dark_transparent) })
 					Theme.chat_actionBackgroundGradientDarkenPaint.alpha = oldAlpha2
 				}
 

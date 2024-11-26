@@ -29,6 +29,7 @@ import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
+import org.telegram.ui.Components.AlertsCreator
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.RLottieImageView
 import org.telegram.ui.profile.utils.CustomDividerItemDecoration
@@ -253,24 +254,13 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 		val popUp = context?.showMenu(v, R.menu.cancel_subscription_menu)
 
 		popUp?.setOnMenuItemClickListener {
-			val context = context ?: return@setOnMenuItemClickListener true
-
 			if (it.itemId == R.id.cancel_subscription) {
-				val builder = AlertDialog.Builder(context)
-				builder.setMessage(context.getString(R.string.cancel_subs_confirm))
+				val channel = peer as? TLRPC.Chat
+				val user = peer as? User
 
-				builder.setPositiveButton(context.getString(R.string.confirm)) { _, _ ->
+				AlertsCreator.createClearOrDeleteDialogAlert(fragment = this, clear = false, chat = channel, user = user, secret = false, canDeleteHistory = false) {
 					unsubscribe(peer)
 				}
-
-				builder.setNegativeButton(context.getString(R.string.cancel), null)
-
-				val dialog = builder.create()
-
-				showDialog(dialog)
-
-				val button = dialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
-				button?.setTextColor(ResourcesCompat.getColor(context.resources, R.color.purple, null))
 			}
 
 			true

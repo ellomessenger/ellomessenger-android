@@ -21,10 +21,11 @@ import org.json.JSONObject
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.NativeByteBuffer
+import org.telegram.tgnet.SerializedData
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.TL_help_saveAppLog
 import org.telegram.tgnet.TLRPC.TL_inputAppEvent
 import org.telegram.tgnet.TLRPC.TL_jsonNull
-import org.telegram.tgnet.tlrpc.TL_message
 import org.telegram.tgnet.TLRPC.TL_messageActionPinMessage
 import org.telegram.tgnet.TLRPC.TL_messageMediaEmpty
 import org.telegram.tgnet.TLRPC.TL_peerChannel
@@ -35,6 +36,8 @@ import org.telegram.tgnet.TLRPC.TL_updateReadHistoryInbox
 import org.telegram.tgnet.TLRPC.TL_updateServiceNotification
 import org.telegram.tgnet.TLRPC.TL_updates
 import org.telegram.tgnet.TLRPC.Update
+import org.telegram.tgnet.tlrpc.TL_message
+import org.telegram.ui.Components.ForegroundDetector
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 
@@ -240,7 +243,28 @@ object PushListenerController {
 						countDownLatch.countDown()
 						return@postRunnable
 					}
+
 					when (locKey) {
+						"PHONE_CALL_REQUEST" -> {
+							if (ForegroundDetector.instance?.isBackground != false) {
+								val callBytes = Base64.decode(custom.getString("updates"), Base64.URL_SAFE)
+
+								if (callBytes != null) {
+									val updates = SerializedData(callBytes).use {
+										TLRPC.Updates.TLdeserialize(it, it.readInt32(false), false)
+									}
+
+									if (!updates?.updates.isNullOrEmpty()) {
+										MessagesController.getInstance(currentAccount).processUpdateArray(updates.updates, updates.users, updates.chats, false, updates.date)
+									}
+								}
+							}
+
+							countDownLatch.countDown()
+
+							return@postRunnable
+						}
+
 						"DC_UPDATE" -> {
 							val dc = custom.getInt("dc")
 							val addr = custom.getString("addr")
@@ -253,7 +277,6 @@ object PushListenerController {
 
 							val ip = parts[0]
 							val port = parts[1].toInt()
-
 
 							with(ConnectionsManager.getInstance(currentAccount)) {
 								applyDatacenterAddress(dc, ip, port)

@@ -18,7 +18,6 @@ import android.content.res.Configuration;
 import android.graphics.Outline;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
-import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
@@ -56,6 +55,7 @@ import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -1115,14 +1115,14 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
                     TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) currentPassword.current_algo;
                     req.password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, algo);
                     if (req.password == null) {
-                        TLRPC.TL_error error = new TLRPC.TL_error();
+                        TL_error error = new TL_error();
                         error.text = "ALGO_INVALID";
                         requestDelegate.run(null, error);
                         return;
                     }
                     ConnectionsManager.getInstance(currentAccount).sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin);
                 } else {
-                    TLRPC.TL_error error = new TLRPC.TL_error();
+                    TL_error error = new TL_error();
                     error.text = "PASSWORD_HASH_INVALID";
                     requestDelegate.run(null, error);
                 }

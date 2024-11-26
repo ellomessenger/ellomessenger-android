@@ -47,6 +47,10 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.view.updateLayoutParams
 import androidx.core.widget.addTextChangedListener
 import com.google.android.material.textfield.TextInputLayout
+import com.google.android.recaptcha.Recaptcha
+import com.google.android.recaptcha.RecaptchaAction
+import com.google.android.recaptcha.RecaptchaClient
+import com.google.android.recaptcha.RecaptchaException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -64,6 +68,8 @@ import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.BuildConfig
+import org.telegram.messenger.BuildConfig.SITE_KEY
+import org.telegram.messenger.FileLog
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.MessagesController
 import org.telegram.messenger.NotificationCenter
@@ -95,6 +101,7 @@ import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.TL_auth_authorization
 import org.telegram.tgnet.TLRPC.TL_biz_dataRaw
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -160,6 +167,7 @@ class LoginActivity : BaseFragment {
 	private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 	private val mainScope = MainScope()
 	private var usernameVerificationRequestId = -1
+	private var recaptchaClient: RecaptchaClient? = null
 
 	private class ProgressView(context: Context) : View(context) {
 		private val path = Path()
@@ -265,7 +273,17 @@ class LoginActivity : BaseFragment {
 		actionBar?.setAddToContainer(true)
 
 		val menu = actionBar?.createMenu()
-		menu?.addItem(id = help, icon = R.drawable.support)
+		menu?.addItem(id = HELP, icon = R.drawable.support)
+
+		if (!BuildConfig.DEBUG) {
+			mainScope.launch {
+				try {
+					recaptchaClient = Recaptcha.fetchClient(ApplicationLoader.applicationLoaderInstance, SITE_KEY)
+				} catch(e: RecaptchaException) {
+					FileLog.e(e)
+				}
+			}
+		}
 
 		actionBar?.setActionBarMenuOnItemClick(object : ActionBarMenuOnItemClick() {
 			override fun onItemClick(id: Int) {
@@ -276,7 +294,7 @@ class LoginActivity : BaseFragment {
 						}
 					}
 
-					help -> {
+					HELP -> {
 						Browser.openUrl(parentActivity, BuildConfig.SUPPORT_URL)
 					}
 				}
@@ -593,6 +611,7 @@ class LoginActivity : BaseFragment {
 		params.putString("loginMode", loginMode.name)
 		params.putString("verificationMode", verificationMode.name)
 		params.putString("accountType", accountType.name)
+		params.putBoolean("isRegistrationPage", true)
 
 		setPage(VIEW_VERIFICATION, true, params, false)
 	}
@@ -652,7 +671,7 @@ class LoginActivity : BaseFragment {
 			messagesController.putDialogsEndReachedAfterRegistration()
 		}
 
-		mediaDataController.loadStickersByEmojiOrName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME, false, true)
+		mediaDataController.loadStickersByEmojiOrName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME, isEmoji = false, cache = true)
 
 		needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days)
 
@@ -692,6 +711,7 @@ class LoginActivity : BaseFragment {
 		private var expirationDate = 0L
 		private var countDownTimer: CountDownTimer? = null
 		private val reportTime = 120000L
+		private var isRegistrationPage = false
 
 		override fun needBackButton(): Boolean {
 			return true
@@ -717,6 +737,8 @@ class LoginActivity : BaseFragment {
 
 				email = params.getString("email") ?: throw IllegalArgumentException("email param is missing")
 				expirationDate = params.getLong("expiration") * 1000L
+
+				isRegistrationPage = params.getBoolean("isRegistrationPage", false)
 			}
 
 			removeAllViews()
@@ -739,6 +761,8 @@ class LoginActivity : BaseFragment {
 				intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
 				context.startActivity(intent)
 			}
+
+			binding.countdownHeader.text = if (isRegistrationPage) context.getString(R.string.verification_code_required_time) else context.getString(R.string.you_can_request_new_code)
 		}
 
 		override fun onShow() {
@@ -889,37 +913,81 @@ class LoginActivity : BaseFragment {
 		}
 
 		override fun resendCode() {
-			val req = ElloRpc.authRequest(email, password)
+			ioScope.launch {
+				recaptchaClient?.execute(RecaptchaAction.LOGIN)?.onSuccess { token ->
+					if (token.isNotEmpty()) {
+						withContext(mainScope.coroutineContext) {
+							val req = ElloRpc.authRequest(email, password, token = token, RecaptchaAction.LOGIN.action)
 
-			connectionsManager.sendRequest(req, { response, error ->
-				AndroidUtilities.runOnUIThread {
-					needHideProgress(cancel = false)
+							connectionsManager.sendRequest(req, { response, error ->
+								AndroidUtilities.runOnUIThread {
+									needHideProgress(cancel = false)
 
-					@Suppress("NAME_SHADOWING") var ok = false
+									var ok = false
 
-					if (error == null) {
+									if (error == null) {
 
-						if (response is TL_biz_dataRaw) {
-							val res = response.readData<ElloRpc.SignUpResponse>()
-							@Suppress("NAME_SHADOWING") val email = res?.email
+										if (response is TL_biz_dataRaw) {
+											val res = response.readData<ElloRpc.SignUpResponse>()
+											val email = res?.email
 
-							if (email != null) {
-								startTimer(reportTime)
+											if (email != null) {
+												startTimer(reportTime)
 
-								ok = true
-							}
+												ok = true
+											}
+										}
+									}
+
+									if (!ok) {
+										needShowAlert(context.getString(R.string.RestorePasswordNoEmailTitle), error?.text ?: context.getString(R.string.failed_to_request_code))
+									}
+								}
+							}, ConnectionsManager.RequestFlagFailOnServerErrors or ConnectionsManager.RequestFlagWithoutLogin)
 						}
+					} else {
+						withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
 					}
-
-					if (!ok) {
-						needShowAlert(context.getString(R.string.RestorePasswordNoEmailTitle), error?.text ?: context.getString(R.string.failed_to_request_code))
-					}
+				}?.onFailure {
+					withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
+					FileLog.e(it)
 				}
-			}, ConnectionsManager.RequestFlagFailOnServerErrors or ConnectionsManager.RequestFlagWithoutLogin)
+			}
 		}
 
 		private fun startTimer(countdownDurationMs: Long) {
-			countDownTimer = CodeVerificationFragment.startTimer(binding, context, countDownTimer, countdownDurationMs)
+			countDownTimer = if (isRegistrationPage) {
+				startTimer(countDownTimer, countdownDurationMs)
+			}
+			else {
+				CodeVerificationFragment.startTimer(binding, context, countDownTimer, countdownDurationMs)
+			}
+		}
+
+		private fun startTimer(countDownTimer: CountDownTimer?, countdownDurationMs: Long): CountDownTimer {
+			binding.countdownLabel.visible()
+			binding.countdownHeader.visible()
+			binding.resendButton.gone()
+
+			countDownTimer?.cancel()
+
+			return object : CountDownTimer(countdownDurationMs, TimeUnit.SECONDS.toMillis(1)) {
+				override fun onTick(millisUntilFinished: Long) {
+					val secondsLeft = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished).toInt()
+					binding.countdownLabel.text = context?.resources?.getQuantityString(R.plurals.seconds, secondsLeft, secondsLeft)
+				}
+
+				override fun onFinish() {
+					binding.countdownHeader.gone()
+					binding.countdownLabel.gone()
+
+					needShowAlert(context.getString(R.string.oops), context.getString(R.string.verification_code_expired), context.getString(R.string.ok)) { _, _ ->
+						setPage(currentViewNum - 2, true, null, true)
+					}
+				}
+			}.apply {
+				start()
+			}
 		}
 
 		override fun onDestroyActivity() {
@@ -1024,7 +1092,8 @@ class LoginActivity : BaseFragment {
 			val textWatcher = {
 				if (username.firstOrNull()?.isDigit() == true) {
 					binding?.regNextButton?.isEnabled = false
-				} else {
+				}
+				else {
 					binding?.regNextButton?.isEnabled = true
 					validateFields()
 				}
@@ -1135,6 +1204,11 @@ class LoginActivity : BaseFragment {
 		private fun validateFields() {
 			var hasErrors = false
 
+			if (binding?.regUsernameField?.text.toString().firstOrNull()?.isDigit() == true) {
+				binding?.regNextButton?.isEnabled = hasErrors
+				return
+			}
+
 			when (usernameAvailability) {
 				UsernameValidationResult.AVAILABLE -> {
 					binding?.regUsernameFieldLayout?.isErrorEnabled = false
@@ -1242,7 +1316,7 @@ class LoginActivity : BaseFragment {
 					}
 				}
 				else {
-					if (error.text.contains("not available") || error.text.contains("support")) {
+					if (error.text?.contains("not available") == true || error.text?.contains("support") == true) {
 						it.resume(UsernameValidationResult.RESERVED)
 					}
 					else {
@@ -1330,6 +1404,12 @@ class LoginActivity : BaseFragment {
 				LoginMode.PERSONAL -> {
 					AndroidUtilities.hideKeyboard(binding?.root)
 					goToBirthdayGenderCountry(type = accountType, username = username, password = password, email = email, referralCode = referralCode)
+
+					mainScope.launch {
+						delay(1000)
+						binding?.regPasswordField?.setText("")
+						binding?.regPasswordReField?.setText("")
+					}
 				}
 
 				LoginMode.BUSINESS -> {
@@ -1343,8 +1423,24 @@ class LoginActivity : BaseFragment {
 						binding?.countrySpinnerLayout?.error = context.getString(R.string.country_is_empty)
 						return
 					}
-
-					signupBusinessAccount(username = username, password = password, email = email, countryCode = countryCode, accountType = accountType, referralCode = referralCode)
+					if (BuildConfig.DEBUG) {
+						signupBusinessAccount(username = username, password = password, email = email, countryCode = countryCode, accountType = accountType, referralCode = referralCode)
+					} else {
+						ioScope.launch {
+							recaptchaClient?.execute(RecaptchaAction.SIGNUP)?.onSuccess { token ->
+								if (token.isNotEmpty()) {
+									withContext(mainScope.coroutineContext) {
+										signupBusinessAccount(username = username, password = password, email = email, countryCode = countryCode, accountType = accountType, referralCode = referralCode, recaptchaToken = token, recaptchaAction = RecaptchaAction.SIGNUP.action)
+									}
+								} else {
+									withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
+								}
+							}?.onFailure {
+								withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
+								FileLog.e(it)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1356,14 +1452,18 @@ class LoginActivity : BaseFragment {
 			actionBar?.backButton?.isEnabled = enabled
 		}
 
-		private fun signupBusinessAccount(username: String, password: String, email: String, countryCode: String, accountType: AccountType, referralCode: String?) {
+		private fun signupBusinessAccount(username: String, password: String, email: String, countryCode: String, accountType: AccountType, referralCode: String?, recaptchaToken: String? = null, recaptchaAction: String? = null) {
 			cancelUsernameValidation()
 
 			setControlsEnabled(false)
 
 			AndroidUtilities.hideKeyboard(binding?.root)
 
-			val req = ElloRpc.signupRequest(username = username, password = password, gender = null, birthday = null, email = email, phone = null, country = countryCode, kind = accountType, type = LoginMode.BUSINESS, referralCode = referralCode)
+			val req = if (BuildConfig.DEBUG) {
+				ElloRpc.signupRequest(username = username, password = password, gender = null, birthday = null, email = email, phone = null, country = countryCode, kind = accountType, type = LoginMode.BUSINESS, referralCode = referralCode)
+			} else {
+				ElloRpc.signupRequest(username = username, password = password, gender = null, birthday = null, email = email, phone = null, country = countryCode, kind = accountType, type = LoginMode.BUSINESS, referralCode = referralCode, token = recaptchaToken, recaptchaAction = recaptchaAction)
+			}
 
 			val request = connectionsManager.sendRequest(req, { response, error ->
 				AndroidUtilities.runOnUIThread {
@@ -1414,6 +1514,10 @@ class LoginActivity : BaseFragment {
 								needShowAlert(context.getString(R.string.RestorePasswordNoEmailTitle), context.getString(R.string.InvalidLastName))
 							}
 
+							errorText.contains("createassessment()", ignoreCase = true) || errorText.contains("invalid action)", ignoreCase = true)  -> {
+								needShowAlert(context.getString(R.string.recaptcha_verification_failed_title), context.getString(R.string.recaptcha_verification_failed_text))
+							}
+
 							errorText.isEmpty() -> {
 								needShowAlert(context.getString(R.string.RestorePasswordNoEmailTitle), context.getString(R.string.UnknownError))
 							}
@@ -1435,6 +1539,7 @@ class LoginActivity : BaseFragment {
 	private inner class LoginModeView(context: Context) : SlideView(context), AdapterView.OnItemSelectedListener {
 		private val binding: FragmentLoginModeBinding
 		private var nextPressed = false
+		private var recaptchaToken = ""
 
 		override fun needBackButton(): Boolean {
 			// MARK: return true to show back button on first screen
@@ -1486,7 +1591,12 @@ class LoginActivity : BaseFragment {
 			binding.forgotPasswordButton.isEnabled = false
 			binding.modeSegmentControl.isEnabled = false
 
-			val req = ElloRpc.authRequest(email, password)
+
+			val req = if (BuildConfig.DEBUG) {
+				ElloRpc.authRequest(email, password)
+			} else {
+				ElloRpc.authRequest(email, password, recaptchaToken, RecaptchaAction.LOGIN.action)
+			}
 
 			ioScope.launch {
 				try {
@@ -1498,7 +1608,7 @@ class LoginActivity : BaseFragment {
 						connectionsManager.performRequest(req, ConnectionsManager.RequestFlagFailOnServerErrors or ConnectionsManager.RequestFlagWithoutLogin)
 					}
 
-					val error = response as? TLRPC.TL_error
+					val error = response as? TL_error
 
 					withContext(mainScope.coroutineContext) {
 						needHideProgress(cancel = false)
@@ -1548,6 +1658,11 @@ class LoginActivity : BaseFragment {
 								errorText?.contains("confirmed", ignoreCase = true) == true -> {
 									shouldConfirm = true
 									context.getString(R.string.email_not_confirmed)
+								}
+
+								errorText?.contains("createassessment()", ignoreCase = true) == true || errorText?.contains("invalid action)", ignoreCase = true) == true  -> {
+									needShowAlert(context.getString(R.string.recaptcha_verification_failed_title), context.getString(R.string.recaptcha_verification_failed_text))
+									""
 								}
 
 								else -> {
@@ -1667,7 +1782,25 @@ class LoginActivity : BaseFragment {
 			}
 
 			binding.loginButton.setOnClickListener {
-				onNextPressed(null)
+				if (BuildConfig.DEBUG) {
+					onNextPressed(null)
+				} else {
+					ioScope.launch {
+						recaptchaClient?.execute(RecaptchaAction.LOGIN)?.onSuccess { token ->
+							if (token.isNotEmpty()) {
+								withContext(mainScope.coroutineContext) {
+									recaptchaToken = token
+									onNextPressed(null)
+								}
+							} else {
+								withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
+							}
+						}?.onFailure {
+							withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
+							FileLog.e(it)
+						}
+					}
+				}
 			}
 
 			binding.forgotPasswordButton.setOnClickListener {
@@ -1691,16 +1824,16 @@ class LoginActivity : BaseFragment {
 	}
 
 	private inner class RegistrationBirthdayView(context: Context) : SlideView(context) {
-		private val binding: FragmentRegBirthdayBinding
+		private val binding = FragmentRegBirthdayBinding.inflate(LayoutInflater.from(context), this, false)
 		private var username: String? = null
 		private var password: String? = null
 		private var email: String? = null
 		private var referralCode: String? = null
 		private var accountType = AccountType.PUBLIC
 		private var countries: List<Country>? = null
+		private var recaptchaToken = ""
 
 		init {
-			binding = FragmentRegBirthdayBinding.inflate(LayoutInflater.from(context), this, false)
 
 			val genderAdapter = ArrayAdapter(context, android.R.layout.simple_list_item_1, resources.getStringArray(R.array.gender))
 
@@ -1758,7 +1891,25 @@ class LoginActivity : BaseFragment {
 			binding.regNextButton.isEnabled = false
 
 			binding.regNextButton.setOnClickListener {
-				onNextPressed(null)
+				if (BuildConfig.DEBUG) {
+					onNextPressed(null)
+				} else {
+					ioScope.launch {
+						recaptchaClient?.execute(RecaptchaAction.SIGNUP)?.onSuccess { token ->
+							if (token.isNotEmpty()) {
+								withContext(mainScope.coroutineContext) {
+									recaptchaToken = token
+									onNextPressed(null)
+								}
+							} else {
+								withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
+							}
+						}?.onFailure {
+							withContext(mainScope.coroutineContext) { needShowAlert(context.getString(R.string.oops), context.getString(R.string.something_went_wrong)) }
+							FileLog.e(it)
+						}
+					}
+				}
 			}
 
 			binding.termsCheckbox.setOnCheckedChangeListener { _, isChecked ->
@@ -1819,7 +1970,11 @@ class LoginActivity : BaseFragment {
 				else -> ElloRpc.Gender.OTHER
 			}
 
-			val req = ElloRpc.signupRequest(username = username, password = password, gender = gender, birthday = birthday, email = email, phone = null, country = country.code, type = LoginMode.PERSONAL, kind = accountType, referralCode = referralCode)
+			val req = if (BuildConfig.DEBUG) {
+				ElloRpc.signupRequest(username = username, password = password, gender = gender, birthday = birthday, email = email, phone = null, country = country.code, type = LoginMode.PERSONAL, kind = accountType, referralCode = referralCode)
+			} else {
+				ElloRpc.signupRequest(username = username, password = password, gender = gender, birthday = birthday, email = email, phone = null, country = country.code, type = LoginMode.PERSONAL, kind = accountType, referralCode = referralCode, token = recaptchaToken, recaptchaAction = RecaptchaAction.SIGNUP.action)
+			}
 
 			setControlsEnabled(false)
 
@@ -1832,7 +1987,7 @@ class LoginActivity : BaseFragment {
 					val response = withTimeout(60_000) {
 						connectionsManager.performRequest(req, ConnectionsManager.RequestFlagWithoutLogin or ConnectionsManager.RequestFlagFailOnServerErrors)
 					}
-					val error = response as? TLRPC.TL_error
+					val error = response as? TL_error
 
 					withContext(mainScope.coroutineContext) {
 						var ok = false
@@ -1884,6 +2039,10 @@ class LoginActivity : BaseFragment {
 
 								errorText.isEmpty() -> {
 									needShowAlert(context.getString(R.string.RestorePasswordNoEmailTitle), context.getString(R.string.UnknownError))
+								}
+
+								errorText.contains("createassessment()", ignoreCase = true) || errorText.contains("invalid action)", ignoreCase = true)  -> {
+									needShowAlert(context.getString(R.string.recaptcha_verification_failed_title), context.getString(R.string.recaptcha_verification_failed_text))
 								}
 
 								else -> {
@@ -2358,7 +2517,7 @@ class LoginActivity : BaseFragment {
 		private const val VIEW_VERIFICATION = 3
 		private const val VIEW_PASSWORD_RESET = 4
 		private const val VIEW_NEW_PASSWORD = 5
-		private const val help = 1
+		private const val HELP = 1
 
 		@JvmStatic
 		fun needShowInvalidAlert(fragment: BaseFragment?, phoneNumber: String, banned: Boolean) {

@@ -27,13 +27,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.FragmentAiSpaceBinding
+import org.telegram.messenger.utils.gone
+import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ChatActivity
+import org.telegram.ui.Components.LayoutHelper
+import org.telegram.ui.Components.RLottieImageView
 import org.telegram.ui.aibot.AiSubscriptionPlansFragment
 
 class AiSpaceFragment : BaseFragment() {
@@ -47,13 +52,16 @@ class AiSpaceFragment : BaseFragment() {
 
 	private var contactUsItem: ActionBarMenuItem? = null
 
+	private var loaderAnimationView: RLottieImageView? = null
+
 	override fun createView(context: Context): View? {
+		loaderAnimationView = RLottieImageView(context)
+
 		initActionBar(context)
 		initViewBinding(context)
 		initAdapter(context)
 		initListeners()
-
-		getAllBotRequest()
+		initLoader()
 
 		return binding?.root
 	}
@@ -98,12 +106,19 @@ class AiSpaceFragment : BaseFragment() {
 		}
 	}
 
+	private fun initLoader() {
+		loaderAnimationView?.setAutoRepeat(true)
+		loaderAnimationView?.setAnimation(R.raw.ello_loader, 50, 50)
+
+		binding?.loader?.addView(loaderAnimationView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT))
+	}
+
 	private fun getSubscriptionsChatBotRequest() {
-		val req = ElloRpc.getSubscriptionsChatBotRequest()
+		val req = ElloRpc.getSubscriptionsChatBotRequest(0L)
 
 		ioScope.launch {
 			val response = connectionsManager.performRequest(req)
-			val error = response as? TLRPC.TL_error
+			val error = response as? TL_error
 
 			withContext(mainScope.coroutineContext) {
 				if (error == null) {
@@ -120,17 +135,32 @@ class AiSpaceFragment : BaseFragment() {
 
 	private fun getAllBotRequest() {
 		val req = ElloRpc.getAllBots()
+		playAnimation()
 
 		ioScope.launch {
 			val response = connectionsManager.performRequest(req)
-			val error = response as? TLRPC.TL_error
+			val error = response as? TL_error
 
 			withContext(mainScope.coroutineContext) {
 				if (error == null) {
 					if (response is TLRPC.TL_biz_dataRaw) {
 						val res = response.readData<ElloRpc.AllBotsResponse>()
+						val bots = res?.bots
 
-						res?.bots?.let { adapter?.setBotList(it) }
+						withContext(ioScope.coroutineContext) {
+							if (!bots.isNullOrEmpty()) {
+								bots.forEach { bot ->
+									if (messagesController.getUser(bot.botId) == null) {
+										messagesController.loadUser(bot.botId ?: 0L, classGuid, true)
+									}
+								}
+
+								withContext(mainScope.coroutineContext) {
+									stopAnimation()
+									adapter?.setBotList(bots)
+								}
+							}
+						}
 					}
 				}
 			}
@@ -191,9 +221,20 @@ class AiSpaceFragment : BaseFragment() {
 		}
 	}
 
+	fun playAnimation() {
+		loaderAnimationView?.playAnimation()
+		loaderAnimationView?.visible()
+	}
+
+	fun stopAnimation() {
+		loaderAnimationView?.stopAnimation()
+		loaderAnimationView?.gone()
+	}
+
 	override fun onResume() {
 		super.onResume()
 		getSubscriptionsChatBotRequest()
+		getAllBotRequest()
 	}
 
 	override fun onFragmentDestroy() {

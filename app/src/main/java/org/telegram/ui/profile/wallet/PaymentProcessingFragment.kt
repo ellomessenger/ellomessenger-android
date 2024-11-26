@@ -24,6 +24,7 @@ import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.WalletHelper
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import java.util.Timer
@@ -151,7 +152,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 		val earningsWalletId = walletHelper.earningsWallet?.id
 
 		if (earningsWalletId == null || earningsWalletId == 0L) {
-			val error = TLRPC.TL_error()
+			val error = TL_error()
 			error.text = context.getString(R.string.no_earnings_wallet_found)
 			processError(error)
 			return
@@ -330,7 +331,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 		}
 	}
 
-	private fun processError(error: TLRPC.TL_error? = null) {
+	private fun processError(error: TL_error? = null) {
 		val context = context ?: return
 
 		walletHelper.currentTransferOutPaymentId = null

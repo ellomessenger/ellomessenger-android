@@ -11,6 +11,7 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tlrpc.TL_error;
 import org.telegram.ui.ActionBar.EmojiThemes;
 
 import java.io.File;
@@ -168,7 +169,7 @@ public class ChatThemeController extends BaseController {
                 }
             }
             @Override
-            public void onError(TLRPC.TL_error error) {
+            public void onError(TL_error error) {
                 callback.onComplete(null);
             }
         }, false);

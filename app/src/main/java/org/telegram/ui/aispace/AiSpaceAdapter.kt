@@ -66,10 +66,8 @@ class AiSpaceAdapter(private var onClickListener: (Long) -> Unit = {}) : Recycle
 		init {
 			binding.botIcon.addView(avatarImageView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 
-			val radius = AndroidUtilities.dp(24f)
-
 			avatarImageView.imageReceiver.setAllowDecodeSingleFrame(true)
-			avatarImageView.setRoundRadius(radius, radius, radius, radius)
+			avatarImageView.setRoundRadius(AndroidUtilities.dp(21f))
 			avatarImageView.setImage(null, null, avatarDrawable, null)
 		}
 

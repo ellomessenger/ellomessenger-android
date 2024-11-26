@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2024.
  */
 package org.telegram.ui.Components.voip
 
@@ -42,6 +42,7 @@ import org.telegram.messenger.R
 import org.telegram.messenger.voip.Instance
 import org.telegram.messenger.voip.StateListener
 import org.telegram.messenger.voip.VideoCapturerDevice
+import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.ui.Components.CubicBezierInterpolator
 import org.telegram.ui.Components.LayoutHelper
@@ -175,7 +176,7 @@ class VoIPPiPView(context: Context, val parentWidth: Int, val parentHeight: Int,
 				}
 				else if (context is LaunchActivity) {
 					val intent = Intent(context, LaunchActivity::class.java)
-					intent.action = "voip"
+					intent.action = VoIPPreNotificationService.VOIP_ACTION
 					context.startActivity(intent)
 				}
 			}
@@ -450,7 +451,7 @@ class VoIPPiPView(context: Context, val parentWidth: Int, val parentHeight: Int,
 						}
 						else if (context is LaunchActivity) {
 							val intent = Intent(context, LaunchActivity::class.java)
-							intent.action = "voip"
+							intent.action = VoIPPreNotificationService.VOIP_ACTION
 							context.startActivity(intent)
 						}
 

@@ -24,6 +24,7 @@ import org.telegram.tgnet.tlrpc.TLObject
 import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
 import org.telegram.tgnet.tlrpc.TL_contacts_found
 import org.telegram.tgnet.tlrpc.TL_contacts_search
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.Adapters.DialogsSearchAdapter.RecentSearchObject
 import org.telegram.ui.ChatUsersActivity
@@ -320,7 +321,7 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 		}
 
 		val gotResponses = AtomicInteger(0)
-		val responses = ArrayList<Pair<TLObject, TLRPC.TL_error>?>()
+		val responses = ArrayList<Pair<TLObject, TL_error>?>()
 
 		for (i in requests.indices) {
 			val r = requests[i]

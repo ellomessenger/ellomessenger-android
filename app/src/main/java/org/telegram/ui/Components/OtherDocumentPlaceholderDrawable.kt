@@ -309,7 +309,7 @@ class OtherDocumentPlaceholderDrawable @JvmOverloads constructor(context: Contex
 				if (loading) {
 					progressVisible = true
 
-					var progress = ImageLoader.instance.getFileProgress(fileName)
+					var progress = ImageLoader.getInstance().getFileProgress(fileName)
 
 					if (progress == null) {
 						progress = 0.0f

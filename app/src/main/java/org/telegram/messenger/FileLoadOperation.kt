@@ -20,7 +20,7 @@ import org.telegram.tgnet.TLRPC.InputWebFileLocation
 import org.telegram.tgnet.TLRPC.TL_document
 import org.telegram.tgnet.TLRPC.TL_documentAttributeVideo
 import org.telegram.tgnet.TLRPC.TL_documentEncrypted
-import org.telegram.tgnet.TLRPC.TL_error
+import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.tgnet.TLRPC.TL_fileHash
 import org.telegram.tgnet.TLRPC.TL_inputDocumentFileLocation
 import org.telegram.tgnet.TLRPC.TL_inputEncryptedFileLocation
@@ -238,7 +238,7 @@ class FileLoadOperation {
 
 			iv = ByteArray(32)
 
-			System.arraycopy(imageLocation.iv, 0, iv!!, 0, iv!!.size)
+			System.arraycopy(imageLocation.iv!!, 0, iv!!, 0, iv!!.size)
 
 			key = imageLocation.key
 		}
@@ -911,10 +911,10 @@ class FileLoadOperation {
 		}
 		else {
 			if (!encryptFile) {
-				File(storePath, storeFileName)
+				File(storePath, storeFileName ?: "")
 			}
 			else {
-				File(storePath, fileNameFinal)
+				File(storePath, fileNameFinal ?: "")
 			}
 		}
 
@@ -929,7 +929,7 @@ class FileLoadOperation {
 		}
 
 		if (!finalFileExist) {
-			cacheFileTemp = File(tempPath, fileNameTemp)
+			cacheFileTemp = File(tempPath, fileNameTemp ?: "")
 
 			if (ungzip) {
 				cacheFileGzipTemp = File(tempPath, "$fileNameTemp.gz")
@@ -1511,7 +1511,7 @@ class FileLoadOperation {
 						try {
 							if (pathSaveData != null) {
 								synchronized(lockObject) {
-									cacheFileFinal = File(storePath, storeFileName)
+									cacheFileFinal = File(storePath, storeFileName ?: "")
 
 									var count = 1
 
@@ -2034,8 +2034,8 @@ class FileLoadOperation {
 			}
 		}
 		else {
-			if (error.text.contains("FILE_MIGRATE_")) {
-				val errorMsg = error.text.replace("FILE_MIGRATE_", "")
+			if (error.text?.contains("FILE_MIGRATE_") == true) {
+				val errorMsg = error.text?.replace("FILE_MIGRATE_", "") ?: ""
 
 				val scanner = Scanner(errorMsg)
 				scanner.useDelimiter("")
@@ -2058,7 +2058,7 @@ class FileLoadOperation {
 					startDownloadRequest()
 				}
 			}
-			else if (error.text.contains("OFFSET_INVALID")) {
+			else if (error.text?.contains("OFFSET_INVALID") == true) {
 				if (downloadedBytes % currentDownloadChunkSize == 0L) {
 					try {
 						onFinishLoadingFile(true)
@@ -2072,7 +2072,7 @@ class FileLoadOperation {
 					onFail(false, 0)
 				}
 			}
-			else if (error.text.contains("RETRY_LIMIT")) {
+			else if (error.text?.contains("RETRY_LIMIT") == true) {
 				onFail(false, 2)
 			}
 			else {

@@ -122,7 +122,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 	private var bottomButtons = arrayOfNulls<VoIPToggleButton>(4)
 	private var bottomShadow: View? = null
 	private var buttonsLayout: VoIPButtonsLayout? = null
-	private var callingUser = VoIPService.sharedInstance?.getUser()
+	private var callingUser = VoIPService.sharedInstance?.user
 	private var callingUserMiniFloatingLayout: VoIPFloatingLayout? = null
 	private var callingUserMiniTextureRenderer: TextureViewRenderer? = null
 	private var callingUserPhotoView: BackupImageView? = null
@@ -133,7 +133,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 	private var cameraShowingAnimator: Animator? = null
 	private var canHideUI = false
 	private var canSwitchToPip = false
-	private var currentState = VoIPService.sharedInstance?.getCallState() ?: 0
+	private var currentState = VoIPService.sharedInstance?.callState ?: 0
 	private var currentUserCameraFloatingLayout: VoIPFloatingLayout? = null
 	private var currentUserCameraIsFullscreen = false
 	private var currentUserTextureView: VoIPTextureView? = null
@@ -223,7 +223,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 		}
 
 		if (previewDialog != null) {
-			previewDialog?.dismiss(false, false)
+			previewDialog?.dismiss(screencast = false, apply = false)
 			return
 		}
 
@@ -260,7 +260,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 	private fun setInsets(windowInsets: WindowInsets) {
 		lastInsets = windowInsets
-		(buttonsLayout?.layoutParams as? FrameLayout.LayoutParams)?.bottomMargin = windowInsets.systemWindowInsetBottom
+		(buttonsLayout?.layoutParams as? FrameLayout.LayoutParams)?.bottomMargin = windowInsets.systemWindowInsetBottom + AndroidUtilities.dp(24f)
 		(acceptDeclineView?.layoutParams as? FrameLayout.LayoutParams)?.bottomMargin = windowInsets.systemWindowInsetBottom
 		(backIcon?.layoutParams as? FrameLayout.LayoutParams)?.topMargin = windowInsets.systemWindowInsetTop
 		(speakerPhoneIcon?.layoutParams as? FrameLayout.LayoutParams)?.topMargin = windowInsets.systemWindowInsetTop
@@ -724,7 +724,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 		statusLayout = object : LinearLayout(context) {
 			override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
 				super.onInitializeAccessibilityNodeInfo(info)
-				val service = VoIPService.sharedInstance
+				val service = VoIPService.getSharedState()
 				val callingUserTitleText = callingUserTitle?.text
 
 				if (service != null && !callingUserTitleText.isNullOrEmpty()) {
@@ -732,13 +732,13 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 					builder.append(", ")
 
 					if (service.privateCall?.video == true) {
-						builder.append(service.getString(R.string.VoipInVideoCallBranding))
+						builder.append(context.getString(R.string.VoipInVideoCallBranding))
 					}
 					else {
-						builder.append(service.getString(R.string.VoipInCallBranding))
+						builder.append(context.getString(R.string.VoipInCallBranding))
 					}
 
-					val callDuration = service.getCallDuration()
+					val callDuration = service.callDuration
 
 					if (callDuration > 0) {
 						builder.append(", ")
@@ -877,14 +877,13 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 		frameLayout.addView(speakerPhoneIcon, createFrame(56, 56, Gravity.TOP or Gravity.RIGHT))
 
-		//MARK: If you need to, uncomment the button listener
-//		speakerPhoneIcon?.setOnClickListener {
-//			if (speakerPhoneIcon?.tag == null) {
-//				return@setOnClickListener
-//			}
-//
-//			VoIPService.sharedInstance?.toggleSpeakerphoneOrShowRouteSheet(activity, false)
-//		}
+		speakerPhoneIcon?.setOnClickListener {
+			if (speakerPhoneIcon?.tag == null) {
+				return@setOnClickListener
+			}
+
+			VoIPService.sharedInstance?.toggleSpeakerphoneOrShowRouteSheet(activity, false)
+		}
 
 		backIcon?.setOnClickListener {
 			if (!lockOnScreen) {
@@ -1353,6 +1352,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 		var showReconnecting = false
 		var showCallingAvatarMini = false
 		var statusLayoutOffset = 0
+		val state = VoIPService.getSharedState()
 		val service = VoIPService.sharedInstance
 
 		when (currentState) {
@@ -1362,9 +1362,9 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 				statusLayoutOffset = AndroidUtilities.dp(24f)
 				acceptDeclineView?.setRetryMod(false)
 
-				if (service != null && service.privateCall?.video == true) {
+				if (state != null && state.privateCall?.video == true) {
 					showCallingAvatarMini = currentUserIsVideo && callingUser?.photo != null
-					statusTextView?.setText(service.getString(R.string.VoipInVideoCallBranding), true, animated)
+					statusTextView?.setText(ApplicationLoader.applicationContext.getString(R.string.VoipInVideoCallBranding), true, animated)
 					acceptDeclineView?.translationY = -AndroidUtilities.dp(60f).toFloat()
 				}
 				else {
@@ -1656,7 +1656,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 				notificationsLayout?.beforeLayoutChanges()
 			}
 
-			if ((currentUserIsVideo || callingUserIsVideo) && (currentState == VoIPService.STATE_ESTABLISHED || currentState == VoIPService.STATE_RECONNECTING) && service.getCallDuration() > 500) {
+			if ((currentUserIsVideo || callingUserIsVideo) && (currentState == VoIPService.STATE_ESTABLISHED || currentState == VoIPService.STATE_RECONNECTING) && service.callDuration > 500) {
 				if (service.getRemoteAudioState() == Instance.AUDIO_STATE_MUTED) {
 					notificationsLayout?.addNotification(R.drawable.calls_mute_mini, LocaleController.formatString("VoipUserMicrophoneIsOff", R.string.VoipUserMicrophoneIsOff, UserObject.getFirstName(callingUser)), "muted", animated)
 				}
@@ -2042,8 +2042,8 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 					val animator = ObjectAnimator.ofFloat(view, View.TRANSLATION_Y, AndroidUtilities.dp(100f).toFloat(), 0f)
 
 					if (view is VoIPToggleButton) {
-						view.setTranslationY(AndroidUtilities.dp(100f).toFloat())
-						animator.startDelay = view.animationDelay.toLong()
+						view.translationY = AndroidUtilities.dp(100f).toFloat()
+						animator.startDelay = 0
 					}
 
 					return animator
@@ -2074,7 +2074,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 					speakerPhoneIcon?.animate()?.alpha(0f)?.start()
 				}
 
-				// setVideoAction(bottomButtons[1], service, animated) // MARK: uncomment to enable video call
+				setVideoAction(bottomButtons[1], service, animated)
 				setMicrophoneAction(bottomButtons[2], service, animated)
 			}
 			else {
@@ -2083,7 +2083,6 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 				bottomButtons[2]?.gone()
 			}
 
-			bottomButtons[1]?.gone() // MARK: remove to enable video call
 			bottomButtons[3]?.gone()
 		}
 		else {
@@ -2105,22 +2104,20 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 				speakerPhoneIcon?.animate()?.alpha(0f)?.start()
 			}
 
-			// setVideoAction(bottomButtons[1], service, animated) // MARK: uncomment to enable video call
+			setVideoAction(bottomButtons[1], service, animated)
 			setMicrophoneAction(bottomButtons[2], service, animated)
+
 			bottomButtons[3]?.setData(R.drawable.calls_decline, Color.WHITE, Color.parseColor("#EF4062"), service.getString(R.string.VoipEndCall), false, animated)
 
 			bottomButtons[3]?.setOnClickListener {
 				VoIPService.sharedInstance?.hangUp()
 			}
-
-			bottomButtons[1]?.gone() // MARK: remove to enable video call
 		}
 
 		var animationDelay = 0
 
 		for (i in 0..3) {
 			if (bottomButtons[i]?.visibility == View.VISIBLE) {
-				bottomButtons[i]?.animationDelay = animationDelay
 				animationDelay += 16
 			}
 		}
@@ -2212,8 +2209,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 				speakerPhoneIcon?.setImageResource(R.drawable.calls_menu_headset)
 			}
 			else {
-				//MARK: If you need to, uncomment the icon
-//				speakerPhoneIcon?.setImageResource(R.drawable.calls_menu_phone)
+				speakerPhoneIcon?.setImageResource(R.drawable.calls_menu_phone)
 			}
 		}
 	}
@@ -2283,7 +2279,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 	}
 
 	fun onScreenCastStart() {
-		previewDialog?.dismiss(true, true)
+		previewDialog?.dismiss(screencast = true, apply = true)
 	}
 
 	private fun toggleCameraInput() {
@@ -2310,7 +2306,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 				windowView?.isLockOnScreen = true
 
-				previewDialog = object : PrivateVideoPreviewDialog(fragmentView?.context, false, true) {
+				previewDialog = object : PrivateVideoPreviewDialog(fragmentView!!.context, false, false) { // MARK: pass `true` as last param to enable screencast
 					public override fun onDismiss(screencast: Boolean, apply: Boolean) {
 						previewDialog = null
 
@@ -2322,12 +2318,13 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 							currentUserIsVideo = true
 
 							if (service != null && !screencast) {
-								service.requestVideoCall(false)
-								service.setVideoState(false, Instance.VIDEO_STATE_ACTIVE)
+								service.requestVideoCall(screencast = false)
+								service.setVideoState(screencast = false, state = Instance.VIDEO_STATE_ACTIVE)
+								service.setAudioOutput(VoIPService.AUDIO_OUTPUT_SPEAKER)
 							}
 						}
 						else {
-							service?.setVideoState(false, Instance.VIDEO_STATE_INACTIVE)
+							service?.setVideoState(screencast = false, state = Instance.VIDEO_STATE_INACTIVE)
 						}
 
 						previousState = currentState
@@ -2342,14 +2339,16 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 				fragmentView?.addView(previewDialog)
 			}
+
 			return
 		}
 		else {
 			currentUserTextureView?.saveCameraLastBitmap()
-			service.setVideoState(false, Instance.VIDEO_STATE_INACTIVE)
+			service.setVideoState(screencast = false, state = Instance.VIDEO_STATE_INACTIVE)
 			service.clearCamera()
 
 		}
+
 		previousState = currentState
 
 		updateViewState()
@@ -2499,7 +2498,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 			val transitionFromPip = VoIPPiPView.getInstance() != null
 
-			if (VoIPService.sharedInstance?.getUser() == null) {
+			if (VoIPService.sharedInstance?.user == null) {
 				return
 			}
 
@@ -2523,7 +2522,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 					if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
 						if (fragment.currentState == VoIPService.STATE_WAITING_INCOMING) {
-							val service = VoIPService.sharedInstance
+							val service = VoIPService.getSharedState()
 
 							if (service != null) {
 								service.stopRinging()
