@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components.voip;
 
@@ -50,7 +50,7 @@ import org.telegram.messenger.voip.VideoCapturerDevice;
 import org.telegram.messenger.voip.VoIPPreNotificationService;
 import org.telegram.messenger.voip.VoIPService;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
@@ -99,7 +99,7 @@ public class RTMPStreamPipOverlay implements NotificationCenter.NotificationCent
 	private final CellFlickerDrawable cellFlickerDrawable = new CellFlickerDrawable();
 	private BackupImageView avatarImageView;
 	private View flickerView;
-	private TLRPC.TL_groupCallParticipant boundParticipant;
+	private TLRPC.TLGroupCallParticipant boundParticipant;
 	private boolean placeholderShown = true;
 	private boolean firstFrameRendered;
 	private boolean boundPresentation;
@@ -601,14 +601,14 @@ public class RTMPStreamPipOverlay implements NotificationCenter.NotificationCent
 
 	private void bindTextureView() {
 		if (VoIPService.getSharedInstance() != null && VoIPService.getSharedInstance().groupCall != null && !VoIPService.getSharedInstance().groupCall.visibleVideoParticipants.isEmpty()) {
-			TLRPC.TL_groupCallParticipant participant = VoIPService.getSharedInstance().groupCall.visibleVideoParticipants.get(0).participant;
+			var participant = VoIPService.getSharedInstance().groupCall.visibleVideoParticipants.get(0).participant;
 			if (boundParticipant == null || MessageObject.getPeerId(boundParticipant.peer) != MessageObject.getPeerId(participant.peer)) {
 				if (boundParticipant != null) {
 					VoIPService.getSharedInstance().removeRemoteSink(boundParticipant, boundPresentation);
 				}
 
 				boundPresentation = participant.presentation != null;
-				if (participant.self) { // For debug reasons
+				if (participant.isSelf) { // For debug reasons
 					VoIPService.getSharedInstance().setSinks(textureView.renderer, boundPresentation, null);
 				}
 				else {

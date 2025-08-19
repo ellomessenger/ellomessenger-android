@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -23,7 +23,7 @@ import org.telegram.messenger.ImageLocation
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
-import org.telegram.tgnet.tlrpc.TL_availableReaction
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.BackupImageView
@@ -33,20 +33,19 @@ import org.telegram.ui.Components.Reactions.ReactionsUtils
 import org.telegram.ui.Components.Switch
 
 class AvailableReactionCell(context: Context, checkbox: Boolean, private val canLock: Boolean) : FrameLayout(context) {
-	private val textView: SimpleTextView
+	private val textView = SimpleTextView(context)
 	private val imageView: BackupImageView
 	private var switchView: Switch? = null
 	private var checkBox: CheckBox2? = null
 	private val overlaySelectorView: View
 
 	@JvmField
-	var react: TL_availableReaction? = null
+	var react: TLRPC.TLAvailableReaction? = null
 
 	@JvmField
 	var locked = false
 
 	init {
-		textView = SimpleTextView(context)
 		textView.textColor = Theme.getColor(Theme.key_windowBackgroundWhiteBlackText)
 		textView.setTextSize(16)
 		textView.setTypeface(Theme.TYPEFACE_BOLD)
@@ -88,7 +87,7 @@ class AvailableReactionCell(context: Context, checkbox: Boolean, private val can
 		super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec((AndroidUtilities.dp(58f) + Theme.dividerPaint.strokeWidth).toInt(), MeasureSpec.EXACTLY))
 	}
 
-	fun bind(react: TL_availableReaction?, checked: Boolean, currentAccount: Int) {
+	fun bind(react: TLRPC.TLAvailableReaction?, checked: Boolean, currentAccount: Int) {
 		var animated = false
 
 		if (react != null && this.react != null && react.reaction == this.react?.reaction) {
@@ -99,9 +98,9 @@ class AvailableReactionCell(context: Context, checkbox: Boolean, private val can
 
 		textView.setText(react?.title)
 
-		val svgThumb = DocumentObject.getSvgThumb(react?.static_icon, context.getColor(R.color.light_background), 1.0f)
+		val svgThumb = DocumentObject.getSvgThumb(react?.staticIcon, context.getColor(R.color.light_background), 1.0f)
 
-		imageView.setImage(ImageLocation.getForDocument(react?.activate_animation), ReactionsUtils.ACTIVATE_ANIMATION_FILTER, "tgs", svgThumb, react)
+		imageView.setImage(ImageLocation.getForDocument(react?.activateAnimation), ReactionsUtils.ACTIVATE_ANIMATION_FILTER, "tgs", svgThumb, react)
 
 		locked = canLock && react?.premium == true && !UserConfig.getInstance(currentAccount).isPremium
 

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger;
 
@@ -18,7 +18,9 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import java.util.List;
+import java.util.Objects;
 
+import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
 
 public interface IMapsProvider {
@@ -258,9 +260,9 @@ public interface IMapsProvider {
 		public final double latitude;
 		public final double longitude;
 
-		public LatLng(double latitude, double longitude) {
-			this.latitude = latitude;
-			this.longitude = longitude;
+		public LatLng(@Nullable Double latitude, @Nullable Double longitude) {
+			this.latitude = Objects.requireNonNullElse(latitude, 0.0);
+			this.longitude = Objects.requireNonNullElse(longitude, 0.0);
 		}
 	}
 }

@@ -5,8 +5,8 @@
  *
  * Copyright Nikolai Kudashov, 2013-2018.
  * Copyright Mykhailo Mykytyn, Ello 2023.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -55,22 +55,24 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterPhoneCalls
-import org.telegram.tgnet.TLRPC.TL_inputPeerEmpty
-import org.telegram.tgnet.TLRPC.TL_messageActionHistoryClear
-import org.telegram.tgnet.TLRPC.TL_messageActionPhoneCall
-import org.telegram.tgnet.TLRPC.TL_messages_affectedFoundMessages
-import org.telegram.tgnet.TLRPC.TL_messages_deletePhoneCallHistory
-import org.telegram.tgnet.TLRPC.TL_messages_search
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonBusy
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonMissed
-import org.telegram.tgnet.TLRPC.TL_updateDeleteMessages
-import org.telegram.tgnet.TLRPC.TL_updates
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterPhoneCalls
+import org.telegram.tgnet.TLRPC.TLInputPeerEmpty
+import org.telegram.tgnet.TLRPC.TLMessageActionHistoryClear
+import org.telegram.tgnet.TLRPC.TLMessageActionPhoneCall
+import org.telegram.tgnet.TLRPC.TLMessagesAffectedFoundMessages
+import org.telegram.tgnet.TLRPC.TLMessagesDeletePhoneCallHistory
+import org.telegram.tgnet.TLRPC.TLMessagesSearch
+import org.telegram.tgnet.TLRPC.TLPhoneCallDiscardReasonBusy
+import org.telegram.tgnet.TLRPC.TLPhoneCallDiscardReasonMissed
+import org.telegram.tgnet.TLRPC.TLUpdateDeleteMessages
+import org.telegram.tgnet.TLRPC.TLUpdates
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.action
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -147,16 +149,16 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 					return
 				}
 
-				val arr = args[1] as ArrayList<MessageObject>
+				val arr = args[1] as List<MessageObject>
 
 				for (msg in arr) {
-					if (msg.messageOwner?.action is TL_messageActionPhoneCall) {
+					if (msg.messageOwner?.action is TLMessageActionPhoneCall) {
 						val fromId = msg.fromChatId
-						val userID = if (fromId == userConfig.getClientUserId()) msg.messageOwner?.peer_id?.user_id else fromId
+						val userID = if (fromId == userConfig.getClientUserId()) msg.messageOwner?.peerId?.userId else fromId
 						var callType = if (fromId == userConfig.getClientUserId()) TYPE_OUT else TYPE_IN
-						val reason = msg.messageOwner?.action?.reason
+						val reason = (msg.messageOwner?.action as? TLMessageActionPhoneCall)?.reason
 
-						if (callType == TYPE_IN && (reason is TL_phoneCallDiscardReasonMissed || reason is TL_phoneCallDiscardReasonBusy)) {
+						if (callType == TYPE_IN && (reason is TLPhoneCallDiscardReasonMissed || reason is TLPhoneCallDiscardReasonBusy)) {
 							callType = TYPE_MISSED
 						}
 						if (calls.size > 0) {
@@ -197,7 +199,7 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 				}
 
 				var didChange = false
-				val ids = args[0] as ArrayList<Int>
+				val ids = args[0] as List<Int>
 				val itrtr = calls.iterator()
 
 				while (itrtr.hasNext()) {
@@ -524,7 +526,7 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 
 			contactsFragment.setDelegate { user, _, _ ->
 				val userFull = messagesController.getUserFull(user?.id)
-				VoIPHelper.startCall(user.also { lastCallUser = it }, false, userFull != null && userFull.video_calls_available, parentActivity, null, accountInstance)
+				VoIPHelper.startCall(user.also { lastCallUser = it }, false, userFull != null && userFull.videoCallsAvailable, parentActivity, null, accountInstance)
 			}
 
 			presentFragment(contactsFragment)
@@ -617,19 +619,19 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 	}
 
 	private fun deleteAllMessages(revoke: Boolean) {
-		val req = TL_messages_deletePhoneCallHistory()
+		val req = TLMessagesDeletePhoneCallHistory()
 		req.revoke = revoke
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			if (response != null) {
-				val res = response as TL_messages_affectedFoundMessages
+				val res = response as TLMessagesAffectedFoundMessages
 
-				val updateDeleteMessages = TL_updateDeleteMessages()
-				updateDeleteMessages.messages = res.messages
+				val updateDeleteMessages = TLUpdateDeleteMessages()
+				updateDeleteMessages.messages.addAll(res.messages)
 				updateDeleteMessages.pts = res.pts
-				updateDeleteMessages.pts_count = res.pts_count
+				updateDeleteMessages.ptsCount = res.ptsCount
 
-				val updates = TL_updates()
+				val updates = TLUpdates()
 				updates.updates.add(updateDeleteMessages)
 
 				messagesController.processUpdates(updates, false)
@@ -794,12 +796,12 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 
 		listViewAdapter?.notifyDataSetChanged()
 
-		val req = TL_messages_search()
+		val req = TLMessagesSearch()
 		req.limit = count
-		req.peer = TL_inputPeerEmpty()
-		req.filter = TL_inputMessagesFilterPhoneCalls()
+		req.peer = TLInputPeerEmpty()
+		req.filter = TLInputMessagesFilterPhoneCalls()
 		req.q = ""
-		req.offset_id = maxId
+		req.offsetId = maxId
 
 		val reqId = connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
@@ -807,7 +809,7 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 
 				if (error == null) {
 					val users = LongSparseArray<User>()
-					val msgs = response as messages_Messages
+					val msgs = response as TLRPC.MessagesMessages
 
 					endReached = msgs.messages.isEmpty()
 
@@ -821,19 +823,19 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 					for (a in msgs.messages.indices) {
 						val msg = msgs.messages[a]
 
-						if (msg.action == null || msg.action is TL_messageActionHistoryClear) {
+						if (msg.action == null || msg.action is TLMessageActionHistoryClear) {
 							continue
 						}
 
 						var callType = if (MessageObject.getFromChatId(msg) == userConfig.getClientUserId()) TYPE_OUT else TYPE_IN
-						val reason = msg.action!!.reason
+						val reason = (msg.action as? TLMessageActionPhoneCall)?.reason
 
-						if (callType == TYPE_IN && (reason is TL_phoneCallDiscardReasonMissed || reason is TL_phoneCallDiscardReasonBusy)) {
+						if (callType == TYPE_IN && (reason is TLPhoneCallDiscardReasonMissed || reason is TLPhoneCallDiscardReasonBusy)) {
 							callType = TYPE_MISSED
 						}
 
 						val fromId = MessageObject.getFromChatId(msg)
-						val userID = if (fromId == userConfig.getClientUserId()) msg.peer_id!!.user_id else fromId
+						val userID = if (fromId == userConfig.getClientUserId()) msg.peerId!!.userId else fromId
 
 						if (currentRow == null || currentRow.user != null && currentRow.user!!.id != userID || currentRow.type != callType) {
 							if (currentRow != null && !calls.contains(currentRow)) {
@@ -844,7 +846,7 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 							row.calls = ArrayList()
 							row.user = users[userID]
 							row.type = callType
-							row.video = msg.action?.video == true
+							row.video = (msg.action as? TLMessageActionPhoneCall)?.video == true
 
 							currentRow = row
 						}
@@ -889,7 +891,7 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 	}
 
 	override fun onRequestPermissionsResultFragment(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-		if (requestCode == 101 || requestCode == 102 || requestCode == 103) {
+		if (requestCode == VoIPHelper.REQUEST_CODE_RECORD_AUDIO || requestCode == VoIPHelper.REQUEST_CODE_CAMERA || requestCode == 103) {
 			var allGranted = true
 
 			for (a in grantResults.indices) {
@@ -900,14 +902,14 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 			}
 
 			if (grantResults.isNotEmpty() && allGranted) {
-				if (requestCode == 103) {
+				if (requestCode == VoIPHelper.REQUEST_CODE_MERGED) {
 					lastCallChat?.let {
 						VoIPHelper.startCall(it, null, false, parentActivity, this@CallLogActivity, accountInstance)
 					}
 				}
 				else {
 					val userFull = messagesController.getUserFull(lastCallUser?.id)
-					VoIPHelper.startCall(lastCallUser, requestCode == 102, requestCode == 102 || userFull != null && userFull.video_calls_available, parentActivity, null, accountInstance)
+					VoIPHelper.startCall(lastCallUser, requestCode == VoIPHelper.REQUEST_CODE_CAMERA, requestCode == VoIPHelper.REQUEST_CODE_CAMERA || userFull != null && userFull.videoCallsAvailable, parentActivity, null, accountInstance)
 				}
 			}
 			else {
@@ -1108,7 +1110,7 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 				val row = it.tag as CallLogRow
 				val userFull = messagesController.getUserFull(row.user?.id)
 				lastCallUser = row.user
-				VoIPHelper.startCall(lastCallUser, row.video, row.video || userFull?.video_calls_available == true, parentActivity, userFull, accountInstance)
+				VoIPHelper.startCall(lastCallUser, row.video, row.video || userFull?.videoCallsAvailable == true, parentActivity, userFull, accountInstance)
 			}
 
 			imageView.contentDescription = context.getString(R.string.Call)
@@ -1404,7 +1406,7 @@ class CallLogActivity @JvmOverloads constructor(args: Bundle? = null) : BaseFrag
 						}
 					}
 					else {
-						if (chat.has_geo) {
+						if (chat.hasGeo) {
 							cell.context.getString(R.string.MegaLocation)
 						}
 						else if (chat.username.isNullOrEmpty()) {

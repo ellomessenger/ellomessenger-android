@@ -3,7 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
+ * Copyright Shamil Afandiyev, Ello 2025.
  */
 package org.telegram.ui.profile
 
@@ -11,7 +12,6 @@ import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.Toast
 import androidx.core.widget.addTextChangedListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,19 +20,25 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.LeftoversLoginPasswordFragmentBinding
+import org.telegram.messenger.utils.gone
+import org.telegram.messenger.utils.setError
+import org.telegram.messenger.utils.validateEmail
 import org.telegram.messenger.utils.visible
+import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
-import org.telegram.tgnet.TLRPC.TL_biz_dataRaw
-import org.telegram.tgnet.tlrpc.TL_error
+import org.telegram.tgnet.TLRPC.TLBizDataRaw
 import org.telegram.ui.ActionBar.ActionBar
+import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
-import org.telegram.ui.LoginActivity
 
 class DeleteAccountLoginPasswordFragment : BaseFragment() {
+
 	private var binding: LeftoversLoginPasswordFragmentBinding? = null
+
 	private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -55,10 +61,6 @@ class DeleteAccountLoginPasswordFragment : BaseFragment() {
 			validateFields()
 		}
 
-		binding?.passwordField?.addTextChangedListener {
-			validateFields()
-		}
-
 		binding?.deleteAccountButton?.setOnClickListener {
 			ioScope.launch {
 				requestVerificationCode()
@@ -71,75 +73,91 @@ class DeleteAccountLoginPasswordFragment : BaseFragment() {
 	}
 
 	private fun validateFields() {
-		val email = binding?.emailField?.text?.toString()
+		val email = binding?.emailField?.text?.toString().orEmpty()
+		val isValid = email.validateEmail()
 
-		if (email.isNullOrEmpty()) {
-			binding?.deleteAccountButton?.isEnabled = false
-			return
+		when {
+			email.isEmpty() -> {
+				binding?.emailFieldLayout?.isErrorEnabled = false
+				binding?.emailFieldLayout?.error = null
+				binding?.deleteAccountButton?.isEnabled = false
+			}
+
+			!isValid -> {
+				binding?.emailFieldLayout?.setError(context, R.string.wrong_email_format)
+				binding?.deleteAccountButton?.isEnabled = false
+			}
+
+			else -> {
+				binding?.emailFieldLayout?.isErrorEnabled = false
+				binding?.emailFieldLayout?.error = null
+				binding?.deleteAccountButton?.isEnabled = true
+			}
 		}
-
-		val password = binding?.passwordField?.text?.toString()
-
-		if (password.isNullOrEmpty()) {
-			binding?.deleteAccountButton?.isEnabled = false
-			return
-		}
-
-		binding?.deleteAccountButton?.isEnabled = true
 	}
 
 	private suspend fun requestVerificationCode() {
 		val email = binding?.emailField?.text?.toString() ?: return
-		val password = binding?.passwordField?.text?.toString() ?: return
 
 		withContext(mainScope.coroutineContext) {
-			binding?.deleteAccountButton?.isEnabled = false
-
 			binding?.progressBar?.visible()
 			binding?.progressBar?.show()
 		}
 
-		when (val resp = connectionsManager.performRequest(ElloRpc.deleteAccountVerificationCodeRequest(email = email, password = password))) {
-			is TL_biz_dataRaw -> {
-				val data = resp.readData<ElloRpc.ForgotPasswordVerifyResponse>()
+		val req = ElloRpc.sendMagicLinkRequest(usernameOrEmail = email, action = 0)
 
-				withContext(mainScope.coroutineContext) {
-					binding?.progressBar?.hide()
+		connectionsManager.sendRequest(req, { response, error ->
+			AndroidUtilities.runOnUIThread {
+				binding?.progressBar?.gone()
+				binding?.progressBar?.hide()
 
-					validateFields()
+				if (error == null && response is TLBizDataRaw) {
+					val data = response.readData<ElloRpc.ChangeEmailResponse>()
+					@Suppress("NAME_SHADOWING") val email = data?.email
 
-					if (data != null) {
+					if (email != null) {
 						val args = Bundle()
-
-						args.putString(CodeVerificationFragment.ARG_VERIFICATION_MODE, LoginActivity.VerificationMode.DELETE_ACCOUNT.name)
-						args.putString(CodeVerificationFragment.ARG_EMAIL, email)
-						args.putString(CodeVerificationFragment.ARG_NEW_PASSWORD, password)
-						args.putLong(CodeVerificationFragment.ARG_EXPIRATION, data.expirationDate)
-
-						presentFragment(CodeVerificationFragment(args), true)
+						args.putBoolean("is_delete_account", true)
+						presentFragment(EmailSentFragment(args))
 					}
 					else {
-						Toast.makeText(context, R.string.failed_to_send_verification_code, Toast.LENGTH_SHORT).show()
+						binding?.emailFieldLayout?.setError(context, R.string.error_you_entered_an_invalid_email_please_try_again)
+					}
+				}
+				else {
+					when(error?.text) {
+						"EMAIL_ALREADY_SEND" -> {
+							context?.let {
+								val dialog = AlertDialog.Builder(it).setMessage(it.getString(R.string.email_already_sent)).setPositiveButton(it.getString(R.string.ok)) { dialog, _ -> dialog.dismiss() }.create()
+
+								dialog.setCancelable(false)
+								dialog.setCanceledOnTouchOutside(false)
+								dialog.show()
+							}
+						}
+
+						"NOT_ACCOUNT_EMAIL" -> {
+							context?.let {
+								val dialog = AlertDialog.Builder(it).setMessage(it.getString(R.string.error_not_account_email)).setPositiveButton(it.getString(R.string.ok)) { dialog, _ -> dialog.dismiss() }.create()
+
+								dialog.setCancelable(false)
+								dialog.setCanceledOnTouchOutside(false)
+								dialog.show()
+							}
+						}
+						"INPUT_USER_DEACTIVATED" -> {
+							context?.let {
+								val dialog = AlertDialog.Builder(it).setMessage(it.getString(R.string.input_user_deactivated)).setPositiveButton(it.getString(R.string.ok)) { dialog, _ -> dialog.dismiss() }.create()
+
+								dialog.setCancelable(false)
+								dialog.setCanceledOnTouchOutside(false)
+								dialog.show()
+							}
+						}
 					}
 				}
 			}
-
-			is TL_error -> {
-				withContext(mainScope.coroutineContext) {
-					binding?.progressBar?.hide()
-					Toast.makeText(context, resp.text, Toast.LENGTH_SHORT).show()
-					validateFields()
-				}
-			}
-
-			else -> {
-				withContext(mainScope.coroutineContext) {
-					binding?.progressBar?.hide()
-					Toast.makeText(context, R.string.failed_to_send_verification_code, Toast.LENGTH_SHORT).show()
-					validateFields()
-				}
-			}
-		}
+		}, ConnectionsManager.RequestFlagFailOnServerErrors)
 	}
 
 	override fun onFragmentDestroy() {

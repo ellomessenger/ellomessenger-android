@@ -4,104 +4,104 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui.Components;
 
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
+import android.graphics.PixelFormat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.ui.ActionBar.Theme;
 
 public class RoundStatusDrawable extends StatusDrawable {
+	private boolean isChat = false;
+	private long lastUpdateTime = 0;
+	private boolean started = false;
+	private float progress;
+	private int progressDirection = 1;
+	private Paint currentPaint;
 
-    private boolean isChat = false;
-    private long lastUpdateTime = 0;
-    private boolean started = false;
-    private float progress;
-    private int progressDirection = 1;
+	public RoundStatusDrawable(boolean createPaint) {
+		if (createPaint) {
+			currentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		}
+	}
 
-    private Paint currentPaint;
+	@Override
+	public void setColor(int color) {
+		if (currentPaint != null) {
+			currentPaint.setColor(color);
+		}
+	}
 
-    public RoundStatusDrawable(boolean createPaint) {
-        if (createPaint) {
-            currentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        }
-    }
+	public void setIsChat(boolean value) {
+		isChat = value;
+	}
 
-    @Override
-    public void setColor(int color) {
-        if (currentPaint != null) {
-            currentPaint.setColor(color);
-        }
-    }
+	private void update() {
+		long newTime = System.currentTimeMillis();
+		long dt = newTime - lastUpdateTime;
+		lastUpdateTime = newTime;
+		if (dt > 50) {
+			dt = 50;
+		}
+		progress += progressDirection * dt / 400.0f;
+		if (progressDirection > 0 && progress >= 1.0f) {
+			progressDirection = -1;
+			progress = 1;
+		}
+		else if (progressDirection < 0 && progress <= 0) {
+			progressDirection = 1;
+			progress = 0;
+		}
+		invalidateSelf();
+	}
 
-    public void setIsChat(boolean value) {
-        isChat = value;
-    }
+	public void start() {
+		lastUpdateTime = System.currentTimeMillis();
+		started = true;
+		invalidateSelf();
+	}
 
-    private void update() {
-        long newTime = System.currentTimeMillis();
-        long dt = newTime - lastUpdateTime;
-        lastUpdateTime = newTime;
-        if (dt > 50) {
-            dt = 50;
-        }
-        progress += progressDirection * dt / 400.0f;
-        if (progressDirection > 0 && progress >= 1.0f) {
-            progressDirection = -1;
-            progress = 1;
-        } else if (progressDirection < 0 && progress <= 0) {
-            progressDirection = 1;
-            progress = 0;
-        }
-        invalidateSelf();
-    }
+	public void stop() {
+		started = false;
+	}
 
-    public void start() {
-        lastUpdateTime = System.currentTimeMillis();
-        started = true;
-        invalidateSelf();
-    }
+	@Override
+	public void draw(Canvas canvas) {
+		Paint paint = currentPaint == null ? Theme.chat_statusPaint : currentPaint;
+		paint.setAlpha(55 + (int)(200 * progress));
+		canvas.drawCircle(AndroidUtilities.dp(6), AndroidUtilities.dp(isChat ? 8 : 9), AndroidUtilities.dp(4), paint);
+		if (started) {
+			update();
+		}
+	}
 
-    public void stop() {
-        started = false;
-    }
+	@Override
+	public void setAlpha(int alpha) {
 
-    @Override
-    public void draw(Canvas canvas) {
-        Paint paint = currentPaint == null ? Theme.chat_statusPaint : currentPaint;
-        paint.setAlpha(55 + (int) (200 * progress));
-        canvas.drawCircle(AndroidUtilities.dp(6), AndroidUtilities.dp(isChat ? 8 : 9), AndroidUtilities.dp(4), paint);
-        if (started) {
-            update();
-        }
-    }
+	}
 
-    @Override
-    public void setAlpha(int alpha) {
+	@Override
+	public void setColorFilter(ColorFilter cf) {
 
-    }
+	}
 
-    @Override
-    public void setColorFilter(ColorFilter cf) {
+	@Override
+	public int getOpacity() {
+		return PixelFormat.UNKNOWN;
+	}
 
-    }
+	@Override
+	public int getIntrinsicWidth() {
+		return AndroidUtilities.dp(12);
+	}
 
-    @Override
-    public int getOpacity() {
-        return 0;
-    }
-
-    @Override
-    public int getIntrinsicWidth() {
-        return AndroidUtilities.dp(12);
-    }
-
-    @Override
-    public int getIntrinsicHeight() {
-        return AndroidUtilities.dp(10);
-    }
+	@Override
+	public int getIntrinsicHeight() {
+		return AndroidUtilities.dp(10);
+	}
 }

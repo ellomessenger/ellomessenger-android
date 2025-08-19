@@ -47,9 +47,11 @@ class ID3v2FrameHeader(input: ID3v2TagBody) {
 			2 -> { // $xx xx xx
 				data.readByte().toInt() and 0xFF shl 16 or (data.readByte().toInt() and 0xFF shl 8) or (data.readByte().toInt() and 0xFF)
 			}
+
 			3 -> { // $xx xx xx xx
 				data.readInt()
 			}
+
 			else -> { // 4 * %0xxxxxxx (sync-save integer)
 				data.readSyncsafeInt()
 			}

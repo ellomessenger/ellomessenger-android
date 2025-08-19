@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui;
 
 import android.animation.Animator;
@@ -39,9 +39,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.messageobject.MessageObject;
-import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.SerializedData;
-import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -58,27 +56,20 @@ import java.util.ArrayList;
 import androidx.annotation.NonNull;
 
 public class WebviewActivity extends BaseFragment {
-
 	private WebView webView;
 	private ActionBarMenuItem progressItem;
 	private ContextProgressView progressView;
-
-	private String currentUrl;
-	private long currentDialogId;
+	private final String currentUrl;
 	private String currentBot;
 	private String currentGame;
 	private String linkToCopy;
 	private MessageObject currentMessageObject;
 	private String short_param;
-
 	private boolean loadStats;
-
 	private final static int share = 1;
 	private final static int open_in = 2;
-
 	private static final int TYPE_GAME = 0;
 	private static final int TYPE_STAT = 1;
-
 	private final int type;
 
 	private class TelegramWebviewProxy {
@@ -89,14 +80,14 @@ public class WebviewActivity extends BaseFragment {
 					return;
 				}
 				FileLog.d(eventName);
-				switch (eventName) {
-					case "share_game":
-						currentMessageObject.messageOwner.with_my_score = false;
-						break;
-					case "share_score":
-						currentMessageObject.messageOwner.with_my_score = true;
-						break;
-				}
+//				switch (eventName) {
+//					case "share_game":
+//						currentMessageObject.messageOwner.with_my_score = false;
+//						break;
+//					case "share_score":
+//						currentMessageObject.messageOwner.with_my_score = true;
+//						break;
+//				}
 				showDialog(ShareAlert.createShareAlert(getParentActivity(), currentMessageObject, null, false, linkToCopy, false));
 			});
 		}
@@ -127,7 +118,6 @@ public class WebviewActivity extends BaseFragment {
 	public WebviewActivity(String statUrl, long did) {
 		super();
 		currentUrl = statUrl;
-		currentDialogId = did;
 		type = TYPE_STAT;
 	}
 
@@ -166,7 +156,7 @@ public class WebviewActivity extends BaseFragment {
 				}
 				else if (id == share) {
 					if (currentMessageObject != null) {
-						currentMessageObject.messageOwner.with_my_score = false;
+//						currentMessageObject.messageOwner.with_my_score = false;
 						showDialog(ShareAlert.createShareAlert(getParentActivity(), currentMessageObject, null, false, linkToCopy, false));
 					}
 				}
@@ -336,21 +326,22 @@ public class WebviewActivity extends BaseFragment {
 	}
 
 	private void reloadStats(String params) {
-		if (loadStats) {
-			return;
-		}
-		loadStats = true;
-		TLRPC.TL_messages_getStatsURL req = new TLRPC.TL_messages_getStatsURL();
-		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(currentDialogId);
-		req.params = params != null ? params : "";
-		req.dark = Theme.getCurrentTheme().isDark();
-		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-			loadStats = false;
-			if (response != null) {
-				TLRPC.TL_statsURL url = (TLRPC.TL_statsURL)response;
-				webView.loadUrl(currentUrl = url.url);
-			}
-		}));
+		// MARK: unsupported on server side
+//		if (loadStats) {
+//			return;
+//		}
+//		loadStats = true;
+//		var req = new TLRPC. TLMessagesGetStatsURL();
+//		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(currentDialogId);
+//		req.params = params != null ? params : "";
+//		req.dark = Theme.getCurrentTheme().isDark();
+//		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+//			loadStats = false;
+//			if (response != null) {
+//				TLRPC.TLStatsURL url = (TLRPC.TLStatsURL)response;
+//				webView.loadUrl(currentUrl = url.url);
+//			}
+//		}));
 	}
 
 	public static void openGameInBrowser(String urlStr, MessageObject messageObject, Activity parentActivity, String short_name, String username) {

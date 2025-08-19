@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui.Cells;
 
 import android.animation.Animator;
@@ -15,7 +15,6 @@ import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.os.Build;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -26,17 +25,15 @@ import android.widget.Checkable;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
-import androidx.core.content.res.ResourcesCompat;
-
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DocumentObject;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LocaleController;
-import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
-import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.messenger.messageobject.MessageObject;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
@@ -44,17 +41,17 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ProgressButton;
 import org.telegram.ui.Components.ViewHelper;
 
+import androidx.annotation.NonNull;
+import androidx.core.content.res.ResourcesCompat;
+
 @SuppressLint("ViewConstructor")
 public class ArchivedStickerSetCell extends FrameLayout implements Checkable {
-
 	private final boolean checkable;
-
 	private final TextView textView;
 	private final TextView valueTextView;
 	private final BackupImageView imageView;
 	private final Button deleteButton;
 	private final ProgressButton addButton;
-
 	private boolean needDivider;
 	private Button currentButton;
 	private AnimatorSet animatorSet;
@@ -65,9 +62,11 @@ public class ArchivedStickerSetCell extends FrameLayout implements Checkable {
 	public ArchivedStickerSetCell(Context context, boolean checkable) {
 		super(context);
 
-		if (this.checkable = checkable) {
+		this.checkable = checkable;
+
+		if (checkable) {
 			currentButton = addButton = new ProgressButton(context);
-			addButton.setText(LocaleController.getString("Add", R.string.Add));
+			addButton.setText(context.getString(R.string.Add));
 			addButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
 			addButton.setProgressColor(Theme.getColor(Theme.key_featuredStickers_buttonProgress));
 			addButton.setBackgroundRoundRect(Theme.getColor(Theme.key_featuredStickers_addButton), Theme.getColor(Theme.key_featuredStickers_addButtonPressed));
@@ -80,13 +79,14 @@ public class ArchivedStickerSetCell extends FrameLayout implements Checkable {
 			deleteButton.setMinimumWidth(minWidth);
 			deleteButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
 			deleteButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_removeButtonText));
-			deleteButton.setText(LocaleController.getString("StickersRemove", R.string.StickersRemove));
+			deleteButton.setText(context.getString(R.string.StickersRemove));
 			deleteButton.setBackground(Theme.getRoundRectSelectorDrawable(Theme.getColor(Theme.key_featuredStickers_removeButtonText)));
 			deleteButton.setTypeface(Theme.TYPEFACE_BOLD);
+
 			ViewHelper.setPadding(deleteButton, 8, 0, 8, 0);
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-				deleteButton.setOutlineProvider(null);
-			}
+
+			deleteButton.setOutlineProvider(null);
+
 			addView(deleteButton, LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.END, 0, 18, 14, 0));
 
 			final OnClickListener toggleListener = v -> toggle();
@@ -139,7 +139,7 @@ public class ArchivedStickerSetCell extends FrameLayout implements Checkable {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (needDivider) {
 			canvas.drawLine(0, getHeight() - 1, getWidth() - getPaddingRight(), getHeight() - 1, Theme.dividerPaint);
 		}
@@ -159,31 +159,36 @@ public class ArchivedStickerSetCell extends FrameLayout implements Checkable {
 		textView.setText(stickersSet.set.title);
 		valueTextView.setText(LocaleController.formatPluralString("Stickers", set.set.count));
 
-		TLRPC.Document sticker;
-		if (set.cover != null) {
-			sticker = set.cover;
+		TLRPC.Document sticker = null;
+
+		if (set instanceof TLRPC.TLStickerSetCovered stickerSetCovered) {
+			sticker = stickerSetCovered.cover;
 		}
-		else if (!set.covers.isEmpty()) {
-			sticker = set.covers.get(0);
+		else if (set instanceof TLRPC.TLStickerSetMultiCovered stickerSetMultiCovered) {
+			if (!stickerSetMultiCovered.covers.isEmpty()) {
+				sticker = stickerSetMultiCovered.covers.get(0);
+			}
 		}
-		else {
-			sticker = null;
-		}
+
 		if (sticker != null) {
 			TLObject object = FileLoader.getClosestPhotoSizeWithSize(set.set.thumbs, 90);
+
 			if (object == null) {
 				object = sticker;
 			}
+
 			SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(set.set.thumbs, ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), 1.0f);
-			ImageLocation imageLocation;
+			ImageLocation imageLocation = null;
 
 			if (object instanceof TLRPC.Document) {
-				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(sticker.thumbs, 90);
-				imageLocation = ImageLocation.getForDocument(thumb, sticker);
+				if (sticker instanceof TLRPC.TLDocument tlDocument) {
+					TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(tlDocument.thumbs, 90);
+					imageLocation = ImageLocation.getForDocument(thumb, sticker);
+				}
 			}
 			else {
 				TLRPC.PhotoSize thumb = (TLRPC.PhotoSize)object;
-				imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumb_version);
+				imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumbVersion);
 			}
 
 			if (object instanceof TLRPC.Document && MessageObject.isAnimatedStickerDocument(sticker, true)) {
@@ -251,7 +256,6 @@ public class ArchivedStickerSetCell extends FrameLayout implements Checkable {
 		}
 	}
 
-	//region Checkable
 	public void setOnCheckedChangeListener(OnCheckedChangeListener listener) {
 		onCheckedChangeListener = listener;
 	}
@@ -292,5 +296,4 @@ public class ArchivedStickerSetCell extends FrameLayout implements Checkable {
 	public interface OnCheckedChangeListener {
 		void onCheckedChanged(ArchivedStickerSetCell cell, boolean isChecked);
 	}
-	//endregion
 }

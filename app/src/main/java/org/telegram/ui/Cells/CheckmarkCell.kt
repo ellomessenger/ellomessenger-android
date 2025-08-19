@@ -4,6 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
 package org.telegram.ui.Cells
 
@@ -36,12 +37,11 @@ import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.LayoutHelper.createFrame
 
 class CheckmarkCell @JvmOverloads constructor(context: Context, padding: Int = 16) : FrameLayout(context) {
-	private val textView: TextView
+	private val textView = TextView(context)
 	private val checkmark: ImageView
 	private var needDivider = false
 
 	init {
-		textView = TextView(context)
 		textView.setTextColor(ResourcesCompat.getColor(context.resources, R.color.text, null))
 		textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f)
 		textView.setLines(1)

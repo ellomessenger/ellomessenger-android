@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components;
 
@@ -36,6 +36,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.voip.StateListener;
 import org.telegram.messenger.voip.VoIPPreNotificationService;
 import org.telegram.messenger.voip.VoIPService;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.voip.VoIPButtonsLayout;
 import org.telegram.ui.Components.voip.VoIPToggleButton;
@@ -304,11 +305,13 @@ public class GroupCallPipAlertView extends LinearLayout implements StateListener
 			AvatarDrawable avatarDrawable = new AvatarDrawable();
 			avatarDrawable.setColor(color2);
 			avatarDrawable.setInfo(service.getChat());
-			avatarImageView.setImage(ImageLocation.getForLocal(service.getChat().photo.photo_small), "50_50", avatarDrawable, null);
+			avatarImageView.setImage(ImageLocation.getForLocal(TLRPCExtensions.getPhotoSmall(service.getChat().photo)), "50_50", avatarDrawable, null);
 
 			String titleStr;
-			if (!TextUtils.isEmpty(service.groupCall.call.title)) {
-				titleStr = service.groupCall.call.title;
+			var callTitle = TLRPCExtensions.getTitle(service.groupCall.call);
+
+			if (!TextUtils.isEmpty(callTitle)) {
+				titleStr = callTitle;
 			}
 			else {
 				titleStr = service.getChat().title;
@@ -351,7 +354,7 @@ public class GroupCallPipAlertView extends LinearLayout implements StateListener
 				subtitleView.setText(getContext().getString(R.string.VoipGroupConnecting));
 			}
 			else {
-				subtitleView.setText(LocaleController.formatPluralString(service.groupCall.call.rtmp_stream ? "ViewersWatching" : "Participants", service.groupCall.call.participants_count));
+				subtitleView.setText(LocaleController.formatPluralString(TLRPCExtensions.getRtmpStream(service.groupCall.call) ? "ViewersWatching" : "Participants", TLRPCExtensions.getParticipantsCount(service.groupCall.call)));
 			}
 		}
 	}

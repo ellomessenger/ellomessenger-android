@@ -4,52 +4,51 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
 import android.accounts.Account
 import android.accounts.AccountManager
 import androidx.collection.LongSparseArray
+import androidx.core.content.edit
 import org.telegram.messenger.UserObject.getFirstName
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
+import org.telegram.tgnet.TLRPC.ContactsContacts
 import org.telegram.tgnet.TLRPC.PrivacyRule
-import org.telegram.tgnet.TLRPC.TL_accountDaysTTL
-import org.telegram.tgnet.TLRPC.TL_account_getAccountTTL
-import org.telegram.tgnet.TLRPC.TL_account_getGlobalPrivacySettings
-import org.telegram.tgnet.TLRPC.TL_account_getPrivacy
-import org.telegram.tgnet.TLRPC.TL_account_privacyRules
-import org.telegram.tgnet.TLRPC.TL_contact
-import org.telegram.tgnet.TLRPC.TL_contactStatus
-import org.telegram.tgnet.TLRPC.TL_contacts_addContact
-import org.telegram.tgnet.TLRPC.TL_contacts_contactsNotModified
-import org.telegram.tgnet.TLRPC.TL_contacts_deleteContacts
-import org.telegram.tgnet.TLRPC.TL_contacts_getStatuses
-import org.telegram.tgnet.TLRPC.TL_contacts_resetSaved
-import org.telegram.tgnet.TLRPC.TL_globalPrivacySettings
-import org.telegram.tgnet.TLRPC.TL_help_getInviteText
-import org.telegram.tgnet.TLRPC.TL_help_inviteText
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyAddedByPhone
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyChatInvite
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyForwards
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyPhoneCall
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyPhoneNumber
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyPhoneP2P
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyProfilePhoto
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyStatusTimestamp
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyVoiceMessages
-import org.telegram.tgnet.TLRPC.TL_user
-import org.telegram.tgnet.TLRPC.TL_userStatusLastMonth
-import org.telegram.tgnet.TLRPC.TL_userStatusLastWeek
-import org.telegram.tgnet.TLRPC.TL_userStatusRecently
+import org.telegram.tgnet.TLRPC.TLAccountDaysTTL
+import org.telegram.tgnet.TLRPC.TLAccountGetAccountTTL
+import org.telegram.tgnet.TLRPC.TLAccountGetGlobalPrivacySettings
+import org.telegram.tgnet.TLRPC.TLAccountGetPrivacy
+import org.telegram.tgnet.TLRPC.TLAccountPrivacyRules
+import org.telegram.tgnet.TLRPC.TLContact
+import org.telegram.tgnet.TLRPC.TLContactStatus
+import org.telegram.tgnet.TLRPC.TLContactsAddContact
+import org.telegram.tgnet.TLRPC.TLContactsContacts
+import org.telegram.tgnet.TLRPC.TLContactsContactsNotModified
+import org.telegram.tgnet.TLRPC.TLContactsDeleteContacts
+import org.telegram.tgnet.TLRPC.TLContactsGetContacts
+import org.telegram.tgnet.TLRPC.TLContactsGetStatuses
+import org.telegram.tgnet.TLRPC.TLContactsResetSaved
+import org.telegram.tgnet.TLRPC.TLGlobalPrivacySettings
+import org.telegram.tgnet.TLRPC.TLHelpGetInviteText
+import org.telegram.tgnet.TLRPC.TLHelpInviteText
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyAddedByPhone
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyChatInvite
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyForwards
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyPhoneCall
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyPhoneNumber
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyPhoneP2P
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyProfilePhoto
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyStatusTimestamp
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyVoiceMessages
+import org.telegram.tgnet.TLRPC.TLUser
 import org.telegram.tgnet.TLRPC.Updates
-import org.telegram.tgnet.TLRPC.contacts_Contacts
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_contacts_getContacts
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.Vector
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.Vector
 import org.telegram.ui.Components.Bulletin
 import java.util.Arrays
 import java.util.concurrent.ConcurrentHashMap
@@ -63,22 +62,22 @@ class ContactsController(instance: Int) : BaseController(instance) {
 	private var contactsBookLoaded = false
 	private var migratingContacts = false
 	private var lastContactsVersions = ""
-	private val delayedContactsUpdate = ArrayList<Long>()
+	private val delayedContactsUpdate = mutableListOf<Long>()
 	private var inviteLink: String? = null
 	private var updatingInviteLink = false
-	private val sectionsToReplace = HashMap<String, String>()
+	private val sectionsToReplace = mutableMapOf<String, String>()
 	private var loadingGlobalSettings = 0
 	private var loadingDeleteInfo = 0
 	private val loadingPrivacyInfo = IntArray(PRIVACY_RULES_TYPE_COUNT)
-	private var lastSeenPrivacyRules: ArrayList<PrivacyRule>? = null
-	private var groupPrivacyRules: ArrayList<PrivacyRule>? = null
-	private var callPrivacyRules: ArrayList<PrivacyRule>? = null
-	private var p2pPrivacyRules: ArrayList<PrivacyRule>? = null
-	private var profilePhotoPrivacyRules: ArrayList<PrivacyRule>? = null
-	private var forwardsPrivacyRules: ArrayList<PrivacyRule>? = null
-	private var phonePrivacyRules: ArrayList<PrivacyRule>? = null
-	private var addedByPhonePrivacyRules: ArrayList<PrivacyRule>? = null
-	private var voiceMessagesRules: ArrayList<PrivacyRule>? = null
+	private var lastSeenPrivacyRules: MutableList<PrivacyRule>? = null
+	private var groupPrivacyRules: MutableList<PrivacyRule>? = null
+	private var callPrivacyRules: MutableList<PrivacyRule>? = null
+	private var p2pPrivacyRules: MutableList<PrivacyRule>? = null
+	private var profilePhotoPrivacyRules: MutableList<PrivacyRule>? = null
+	private var forwardsPrivacyRules: MutableList<PrivacyRule>? = null
+	private var phonePrivacyRules: MutableList<PrivacyRule>? = null
+	private var addedByPhonePrivacyRules: MutableList<PrivacyRule>? = null
+	private var voiceMessagesRules: MutableList<PrivacyRule>? = null
 	var deleteAccountTTL = 0
 
 	@JvmField
@@ -87,7 +86,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 	@JvmField
 	var doneLoadingContacts = false
 
-	var globalPrivacySettings: TL_globalPrivacySettings? = null
+	var globalPrivacySettings: TLGlobalPrivacySettings? = null
 		private set
 
 	class Contact {
@@ -124,14 +123,14 @@ class ContactsController(instance: Int) : BaseController(instance) {
 	}
 
 	@JvmField
-	var contacts = ArrayList<TL_contact>()
+	var contacts = mutableListOf<TLContact>()
 
 	@JvmField
-	var contactsDict = ConcurrentHashMap<Long, TL_contact>(20, 1.0f, 2)
+	var contactsDict = ConcurrentHashMap<Long, TLContact>(20, 1.0f, 2)
 
-	var usersSectionsDict = HashMap<String, ArrayList<TL_contact>>()
+	var usersSectionsDict = HashMap<String, ArrayList<TLContact>>()
 	var sortedUsersSectionsArray = ArrayList<String>()
-	var usersMutualSectionsDict = HashMap<String, ArrayList<TL_contact>>()
+	var usersMutualSectionsDict = HashMap<String, ArrayList<TLContact>>()
 	var sortedUsersMutualSectionsArray = ArrayList<String>()
 	private var completedRequestsCount = 0
 
@@ -207,20 +206,20 @@ class ContactsController(instance: Int) : BaseController(instance) {
 		if (!updatingInviteLink && (inviteLink == null || abs(System.currentTimeMillis() / 1000 - time) >= 86400)) {
 			updatingInviteLink = true
 
-			val req = TL_help_getInviteText()
+			val req = TLHelpGetInviteText()
 
 			connectionsManager.sendRequest(req, { response, _ ->
 				if (response != null) {
-					val res = response as TL_help_inviteText
+					val res = response as TLHelpInviteText
 
-					if (res.message.isNotEmpty()) {
+					if (!res.message.isNullOrEmpty()) {
 						AndroidUtilities.runOnUIThread {
 							updatingInviteLink = false
-							val preferences1 = MessagesController.getMainSettings(currentAccount)
-							val editor = preferences1.edit()
-							editor.putString("invitelink", res.message.also { inviteLink = it })
-							editor.putInt("invitelinktime", (System.currentTimeMillis() / 1000).toInt())
-							editor.commit()
+
+							MessagesController.getMainSettings(currentAccount).edit(commit = true) {
+								putString("invitelink", res.message.also { inviteLink = it })
+								putInt("invitelinktime", (System.currentTimeMillis() / 1000).toInt())
+							}
 						}
 					}
 				}
@@ -323,13 +322,13 @@ class ContactsController(instance: Int) : BaseController(instance) {
 
 	fun deleteAllContacts(runnable: Runnable) {
 		resetImportedContacts()
-		val req = TL_contacts_deleteContacts()
+		val req = TLContactsDeleteContacts()
 		var a = 0
 		val size = contacts.size
 
 		while (a < size) {
 			val contact = contacts[a]
-			req.id.add(messagesController.getInputUser(contact.user_id))
+			req.id.add(messagesController.getInputUser(contact.userId))
 			a++
 		}
 
@@ -398,7 +397,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 	}
 
 	fun resetImportedContacts() {
-		val req = TL_contacts_resetSaved()
+		val req = TLContactsResetSaved()
 		connectionsManager.sendRequest(req)
 	}
 
@@ -425,9 +424,9 @@ class ContactsController(instance: Int) : BaseController(instance) {
 		return loadingContacts.get()
 	}
 
-	private fun getContactsHash(contacts: ArrayList<TL_contact>): Long {
-		return contacts.sortedBy { it.user_id }.fold(MediaDataController.calcHash(0L, userConfig.contactsSavedCount.toLong())) { acc, contact ->
-			MediaDataController.calcHash(acc, contact.user_id)
+	private fun getContactsHash(contacts: List<TLContact>): Long {
+		return contacts.sortedBy { it.userId }.fold(MediaDataController.calcHash(0L, userConfig.contactsSavedCount.toLong())) { acc, contact ->
+			MediaDataController.calcHash(acc, contact.userId)
 		}
 	}
 
@@ -438,14 +437,14 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			messagesStorage.getContacts()
 		}
 		else {
-			val req = TL_contacts_getContacts()
+			val req = TLContactsGetContacts()
 			req.hash = hash
 
 			connectionsManager.sendRequest(req) { response, error ->
 				if (error == null) {
-					val res = response as contacts_Contacts
+					val res = response as ContactsContacts
 
-					if (hash != 0L && res is TL_contacts_contactsNotModified) {
+					if (hash != 0L && res is TLContactsContactsNotModified) {
 						contactsLoaded = true
 
 						if (delayedContactsUpdate.isNotEmpty() && contactsBookLoaded) {
@@ -460,21 +459,19 @@ class ContactsController(instance: Int) : BaseController(instance) {
 							loadingContacts.set(false)
 							notificationCenter.postNotificationName(NotificationCenter.contactsDidLoad)
 						}
-
-						return@sendRequest
 					}
-					else {
-						userConfig.contactsSavedCount = res.saved_count
+					else if (res is TLContactsContacts) {
+						userConfig.contactsSavedCount = res.savedCount
 						userConfig.saveConfig(false)
-					}
 
-					processLoadedContacts(res.contacts, res.users, 0)
+						processLoadedContacts(res.contacts, res.users, 0)
+					}
 				}
 			}
 		}
 	}
 
-	fun processLoadedContacts(contactsArr: ArrayList<TL_contact>, usersArr: ArrayList<User>?, from: Int) {
+	fun processLoadedContacts(contactsArr: MutableList<TLContact>, usersArr: List<User>?, from: Int) {
 		//from: 0 - from server, 1 - from db, 2 - from imported contacts
 		AndroidUtilities.runOnUIThread {
 			messagesController.putUsers(usersArr, from == 1)
@@ -487,7 +484,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 				while (a < contactsArr.size) {
 					val contact = contactsArr[a]
 
-					if (contactsDict[contact.user_id] != null) {
+					if (contactsDict[contact.userId] != null) {
 						contactsArr.removeAt(a)
 						a--
 					}
@@ -499,7 +496,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			}
 
 			for (a in contactsArr.indices) {
-				val user = messagesController.getUser(contactsArr[a].user_id)
+				val user = messagesController.getUser(contactsArr[a].userId)
 
 				if (user != null) {
 					usersDict.put(user.id, user)
@@ -530,7 +527,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 				for (a in contactsArr.indices) {
 					val contact = contactsArr[a]
 
-					if (usersDict[contact.user_id] == null && contact.user_id != userConfig.getClientUserId()) {
+					if (usersDict[contact.userId] == null && contact.userId != userConfig.getClientUserId()) {
 						loadContacts(false, 0)
 
 						FileLog.d("contacts are broken, load from server")
@@ -549,19 +546,19 @@ class ContactsController(instance: Int) : BaseController(instance) {
 					messagesStorage.putContacts(contactsArr, from != 2)
 				}
 
-				contactsArr.sortBy { getFirstName(usersDict[it.user_id]) }
+				contactsArr.sortBy { getFirstName(usersDict[it.userId]) }
 
-				val contactsDictionary = ConcurrentHashMap<Long, TL_contact>(20, 1.0f, 2)
-				val sectionsDict = HashMap<String, ArrayList<TL_contact>>()
-				val sectionsDictMutual = HashMap<String, ArrayList<TL_contact>>()
+				val contactsDictionary = ConcurrentHashMap<Long, TLContact>(20, 1.0f, 2)
+				val sectionsDict = HashMap<String, ArrayList<TLContact>>()
+				val sectionsDictMutual = HashMap<String, ArrayList<TLContact>>()
 				val sortedSectionsArray = ArrayList<String>()
 				val sortedSectionsArrayMutual = ArrayList<String>()
 
 				for (a in contactsArr.indices) {
 					val value = contactsArr[a]
-					val user = usersDict[value.user_id] ?: continue
+					val user = usersDict[value.userId] ?: continue
 
-					contactsDictionary[value.user_id] = value
+					contactsDictionary[value.userId] = value
 
 					var key = getFirstName(user)
 
@@ -592,7 +589,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 
 					arr.add(value)
 
-					if (user.mutual_contact) {
+					if ((user as? TLUser)?.mutualContact == true) {
 						arr = sectionsDictMutual[key]
 
 						if (arr == null) {
@@ -683,16 +680,15 @@ class ContactsController(instance: Int) : BaseController(instance) {
 
 	private fun saveContactsLoadTime() {
 		runCatching {
-			val preferences = MessagesController.getMainSettings(currentAccount)
-			preferences.edit().putLong("lastReloadStatusTime", System.currentTimeMillis()).commit()
+			MessagesController.getMainSettings(currentAccount).edit(commit = true) { putLong("lastReloadStatusTime", System.currentTimeMillis()) }
 		}
 	}
 
 	private fun buildContactsSectionsArrays(sort: Boolean) {
 		if (sort) {
 			contacts.sortWith { contact1, contact2 ->
-				val user1 = messagesController.getUser(contact1.user_id)
-				val user2 = messagesController.getUser(contact2.user_id)
+				val user1 = messagesController.getUser(contact1.userId)
+				val user2 = messagesController.getUser(contact2.userId)
 				val name1 = getFirstName(user1)
 				val name2 = getFirstName(user2)
 
@@ -700,12 +696,12 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			}
 		}
 
-		val sectionsDict = HashMap<String, ArrayList<TL_contact>>()
+		val sectionsDict = HashMap<String, ArrayList<TLContact>>()
 		val sortedSectionsArray = ArrayList<String>()
 
 		for (a in contacts.indices) {
 			val value = contacts[a]
-			val user = messagesController.getUser(value.user_id) ?: continue
+			val user = messagesController.getUser(value.userId) ?: continue
 			var key = getFirstName(user)
 
 			if (key.length > 1) {
@@ -754,7 +750,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 		sortedUsersSectionsArray = sortedSectionsArray
 	}
 
-	private fun applyContactsUpdates(ids: List<Long>, userDict: ConcurrentHashMap<Long, User>?, newC: List<TL_contact>?, contactsTD: List<Long>?) {
+	private fun applyContactsUpdates(ids: List<Long>, userDict: ConcurrentHashMap<Long, User>?, newC: List<TLContact>?, contactsTD: List<Long>?) {
 		@Suppress("NAME_SHADOWING") var newC = newC
 		@Suppress("NAME_SHADOWING") var contactsTD = contactsTD
 
@@ -766,8 +762,8 @@ class ContactsController(instance: Int) : BaseController(instance) {
 				val uid = ids[a]
 
 				if (uid > 0) {
-					val contact = TL_contact()
-					contact.user_id = uid
+					val contact = TLContact()
+					contact.userId = uid
 					newC.add(contact)
 				}
 				else if (uid < 0) {
@@ -785,14 +781,16 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			var user: User? = null
 
 			if (userDict != null) {
-				user = userDict[newContact.user_id]
+				user = userDict[newContact.userId]
 			}
 
 			if (user == null) {
-				user = messagesController.getUser(newContact.user_id)
+				user = messagesController.getUser(newContact.userId)
 			}
 			else {
-				messagesController.putUser(user, true)
+				if (user is TLUser) {
+					messagesController.putUser(user, true)
+				}
 			}
 
 			if (user == null) {
@@ -813,7 +811,9 @@ class ContactsController(instance: Int) : BaseController(instance) {
 				user = messagesController.getUser(uid)
 			}
 			else {
-				messagesController.putUser(user, true)
+				if (user is TLUser) {
+					messagesController.putUser(user, true)
+				}
 			}
 
 			if (user == null) {
@@ -828,20 +828,20 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			}
 		}
 		else {
-			val newContacts: List<TL_contact> = newC
+			val newContacts: List<TLContact> = newC
 			val contactsToDelete: List<Long> = contactsTD
 
 			AndroidUtilities.runOnUIThread {
 				for (a in newContacts.indices) {
 					val contact = newContacts[a]
 
-					if (contactsDict[contact.user_id] == null) {
-						if (contact.user_id == userConfig.getClientUserId()) {
+					if (contactsDict[contact.userId] == null) {
+						if (contact.userId == userConfig.getClientUserId()) {
 							continue
 						}
 
 						contacts.add(contact)
-						contactsDict[contact.user_id] = contact
+						contactsDict[contact.userId] = contact
 					}
 				}
 
@@ -863,7 +863,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 	}
 
 	fun processContactsUpdates(ids: List<Long>, userDict: ConcurrentHashMap<Long, User>?) {
-		val newContacts = mutableListOf<TL_contact>()
+		val newContacts = mutableListOf<TLContact>()
 		val contactsToDelete = mutableListOf<Long>()
 
 		for (uid in ids) {
@@ -872,8 +872,8 @@ class ContactsController(instance: Int) : BaseController(instance) {
 					continue
 				}
 
-				val contact = TL_contact()
-				contact.user_id = uid
+				val contact = TLContact()
+				contact.userId = uid
 
 				newContacts.add(contact)
 
@@ -920,12 +920,12 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			return
 		}
 
-		val req = TL_contacts_addContact()
+		val req = TLContactsAddContact()
 		req.id = messagesController.getInputUser(user)
-		req.first_name = user.first_name
-		req.last_name = user.last_name
+		req.firstName = user.firstName
+		req.lastName = user.lastName
 		req.phone = "" // user.phone
-		req.add_phone_privacy_exception = exception
+		req.addPhonePrivacyException = exception
 
 		connectionsManager.sendRequest(req, { response, error ->
 			if (error != null) {
@@ -942,10 +942,10 @@ class ContactsController(instance: Int) : BaseController(instance) {
 					continue
 				}
 
-				val newContact = TL_contact()
-				newContact.user_id = u.id
+				val newContact = TLContact()
+				newContact.userId = u.id
 
-				val arrayList = ArrayList<TL_contact>()
+				val arrayList = ArrayList<TLContact>()
 				arrayList.add(newContact)
 
 				messagesStorage.putContacts(arrayList, false)
@@ -955,7 +955,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 				for (a in res.users.indices) {
 					val u = res.users[a]
 
-					if (!u.contact || contactsDict[u.id] != null) {
+					if ((u as? TLUser)?.contact != true || contactsDict[u.id] != null) {
 						continue
 					}
 
@@ -963,11 +963,11 @@ class ContactsController(instance: Int) : BaseController(instance) {
 						continue
 					}
 
-					val newContact = TL_contact()
-					newContact.user_id = u.id
+					val newContact = TLContact()
+					newContact.userId = u.id
 
 					contacts.add(newContact)
-					contactsDict[newContact.user_id] = newContact
+					contactsDict[newContact.userId] = newContact
 				}
 
 				buildContactsSectionsArrays(true)
@@ -982,7 +982,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			return
 		}
 
-		val req = TL_contacts_deleteContacts()
+		val req = TLContactsDeleteContacts()
 		val uids = mutableListOf<Long>()
 		var a = 0
 		val n = users.size
@@ -991,12 +991,12 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			val user = users[a]
 			val inputUser = messagesController.getInputUser(user)
 
-			if (inputUser is TLRPC.TL_inputUserEmpty) {
+			if (inputUser is TLRPC.TLInputUserEmpty) {
 				a++
 				continue
 			}
 
-			user.contact = false
+			(user as? TLUser)?.contact = false
 			uids.add(user.id)
 
 			req.id.add(inputUser)
@@ -1004,7 +1004,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 			a++
 		}
 
-		val userName = users[0].first_name
+		val userName = users[0].firstName
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (error != null) {
@@ -1048,44 +1048,30 @@ class ContactsController(instance: Int) : BaseController(instance) {
 
 		val preferences = MessagesController.getMainSettings(currentAccount)
 		val editor = preferences.edit()
-		editor.putBoolean("needGetStatuses", true).commit()
+		editor.putBoolean("needGetStatuses", true).apply()
 
-		val req = TL_contacts_getStatuses()
+		val req = TLContactsGetStatuses()
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (error == null) {
 				AndroidUtilities.runOnUIThread {
-					editor.remove("needGetStatuses").commit()
+					editor.remove("needGetStatuses").apply()
 
 					val vector = response as Vector
 
 					if (vector.objects.isNotEmpty()) {
 						val dbUsersStatus = ArrayList<User>()
 						for (`object` in vector.objects) {
-							val toDbUser: User = TL_user()
-							val status = `object` as? TL_contactStatus ?: continue
-
-							when (status.status) {
-								is TL_userStatusRecently -> {
-									status.status.expires = -100
-								}
-
-								is TL_userStatusLastWeek -> {
-									status.status.expires = -101
-								}
-
-								is TL_userStatusLastMonth -> {
-									status.status.expires = -102
-								}
-							}
-
-							val user = messagesController.getUser(status.user_id)
+							val toDbUser = TLUser()
+							val status = `object` as? TLContactStatus ?: continue
+							val user = messagesController.getUser(status.userId) as? TLUser
 
 							if (user != null) {
 								user.status = status.status
 							}
 
 							toDbUser.status = status.status
+
 							dbUsersStatus.add(toDbUser)
 						}
 
@@ -1102,12 +1088,12 @@ class ContactsController(instance: Int) : BaseController(instance) {
 		if (loadingDeleteInfo == 0) {
 			loadingDeleteInfo = 1
 
-			val req = TL_account_getAccountTTL()
+			val req = TLAccountGetAccountTTL()
 
 			connectionsManager.sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
-						val ttl = response as TL_accountDaysTTL
+						val ttl = response as TLAccountDaysTTL
 						deleteAccountTTL = ttl.days
 						loadingDeleteInfo = 2
 					}
@@ -1123,12 +1109,12 @@ class ContactsController(instance: Int) : BaseController(instance) {
 		if (loadingGlobalSettings == 0) {
 			loadingGlobalSettings = 1
 
-			val req = TL_account_getGlobalPrivacySettings()
+			val req = TLAccountGetGlobalPrivacySettings()
 
 			connectionsManager.sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
-						globalPrivacySettings = response as? TL_globalPrivacySettings
+						globalPrivacySettings = response as? TLGlobalPrivacySettings
 						loadingGlobalSettings = 2
 					}
 					else {
@@ -1147,25 +1133,25 @@ class ContactsController(instance: Int) : BaseController(instance) {
 
 			loadingPrivacyInfo[a] = 1
 
-			val req = TL_account_getPrivacy()
+			val req = TLAccountGetPrivacy()
 
 			when (a) {
-				PRIVACY_RULES_TYPE_LAST_SEEN -> req.key = TL_inputPrivacyKeyStatusTimestamp()
-				PRIVACY_RULES_TYPE_INVITE -> req.key = TL_inputPrivacyKeyChatInvite()
-				PRIVACY_RULES_TYPE_CALLS -> req.key = TL_inputPrivacyKeyPhoneCall()
-				PRIVACY_RULES_TYPE_P2P -> req.key = TL_inputPrivacyKeyPhoneP2P()
-				PRIVACY_RULES_TYPE_PHOTO -> req.key = TL_inputPrivacyKeyProfilePhoto()
-				PRIVACY_RULES_TYPE_FORWARDS -> req.key = TL_inputPrivacyKeyForwards()
-				PRIVACY_RULES_TYPE_PHONE -> req.key = TL_inputPrivacyKeyPhoneNumber()
-				PRIVACY_RULES_TYPE_VOICE_MESSAGES -> req.key = TL_inputPrivacyKeyVoiceMessages()
-				PRIVACY_RULES_TYPE_ADDED_BY_PHONE -> req.key = TL_inputPrivacyKeyAddedByPhone()
-				else -> req.key = TL_inputPrivacyKeyAddedByPhone()
+				PRIVACY_RULES_TYPE_LAST_SEEN -> req.key = TLInputPrivacyKeyStatusTimestamp()
+				PRIVACY_RULES_TYPE_INVITE -> req.key = TLInputPrivacyKeyChatInvite()
+				PRIVACY_RULES_TYPE_CALLS -> req.key = TLInputPrivacyKeyPhoneCall()
+				PRIVACY_RULES_TYPE_P2P -> req.key = TLInputPrivacyKeyPhoneP2P()
+				PRIVACY_RULES_TYPE_PHOTO -> req.key = TLInputPrivacyKeyProfilePhoto()
+				PRIVACY_RULES_TYPE_FORWARDS -> req.key = TLInputPrivacyKeyForwards()
+				PRIVACY_RULES_TYPE_PHONE -> req.key = TLInputPrivacyKeyPhoneNumber()
+				PRIVACY_RULES_TYPE_VOICE_MESSAGES -> req.key = TLInputPrivacyKeyVoiceMessages()
+				PRIVACY_RULES_TYPE_ADDED_BY_PHONE -> req.key = TLInputPrivacyKeyAddedByPhone()
+				else -> req.key = TLInputPrivacyKeyAddedByPhone()
 			}
 
 			connectionsManager.sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
-						val rules = response as TL_account_privacyRules
+						val rules = response as TLAccountPrivacyRules
 
 						messagesController.putUsers(rules.users, false)
 						messagesController.putChats(rules.chats, false)
@@ -1209,7 +1195,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 		return loadingPrivacyInfo[type] != 2
 	}
 
-	fun getPrivacyRules(type: Int): ArrayList<PrivacyRule>? {
+	fun getPrivacyRules(type: Int): List<PrivacyRule>? {
 		return when (type) {
 			PRIVACY_RULES_TYPE_LAST_SEEN -> lastSeenPrivacyRules
 			PRIVACY_RULES_TYPE_INVITE -> groupPrivacyRules
@@ -1224,7 +1210,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	fun setPrivacyRules(rules: ArrayList<PrivacyRule>?, type: Int) {
+	fun setPrivacyRules(rules: MutableList<PrivacyRule>?, type: Int) {
 		when (type) {
 			PRIVACY_RULES_TYPE_LAST_SEEN -> lastSeenPrivacyRules = rules
 			PRIVACY_RULES_TYPE_INVITE -> groupPrivacyRules = rules
@@ -1287,7 +1273,7 @@ class ContactsController(instance: Int) : BaseController(instance) {
 				return ""
 			}
 
-			return formatName(user.first_name, user.last_name, 0)
+			return formatName(user.firstName, user.lastName, 0)
 		}
 
 		@JvmStatic

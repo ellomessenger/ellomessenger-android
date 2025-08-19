@@ -14,7 +14,7 @@
 
 		<LinearLayout
 			android:id="@+id/linearLayout"
-			android:layout_width="wrap_content"
+			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
 			android:layout_gravity="center"
 			android:gravity="center"
@@ -24,114 +24,111 @@
 			app:layout_constraintTop_toTopOf="parent"
 			app:layout_constraintBottom_toTopOf="@id/bot_list">
 
-			<ImageView
-				android:layout_width="wrap_content"
+			<com.google.android.material.textfield.TextInputLayout
+				android:id="@+id/search_input_layout"
+				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
-				android:src="@drawable/ic_ai_logo" />
+				app:boxBackgroundMode="outline"
+				app:boxCornerRadiusTopStart="16dp"
+				app:boxCornerRadiusTopEnd="16dp"
+				app:boxCornerRadiusBottomStart="16dp"
+				app:boxCornerRadiusBottomEnd="16dp"
+				app:boxStrokeColor="@android:color/transparent"
+				app:endIconMode="none"
+				app:hintEnabled="false">
+
+				<com.google.android.material.textfield.TextInputEditText
+					android:id="@+id/search"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:drawableTint="@color/disabled_text"
+					android:drawableStart="@drawable/ic_search_menu"
+					android:drawablePadding="8dp"
+					android:hint="@string/search"
+					android:inputType="text"
+					android:paddingStart="8dp"
+					android:paddingVertical="12dp"
+					android:textColor="@color/disabled_text"
+					android:textSize="16sp" />
+			</com.google.android.material.textfield.TextInputLayout>
+
+
+			<androidx.recyclerview.widget.RecyclerView
+				android:id="@+id/categories_list"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toBottomOf="@+id/linearLayout"
+				tools:itemCount="1"
+				tools:listitem="@layout/ai_space_categories_item" />
+
+			<com.google.android.material.card.MaterialCardView
+				android:id="@+id/my_ai_pack_button"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:orientation="vertical"
+				android:layout_marginTop="10dp"
+				app:cardCornerRadius="16dp"
+				app:strokeWidth="0dp">
+
+				<androidx.constraintlayout.widget.ConstraintLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:background="@drawable/my_packs_gradient">
+
+					<ImageView
+						android:id="@+id/imageView"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:layout_marginStart="12dp"
+						android:src="@drawable/my_packs_ai_icon"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toStartOf="parent"
+						app:layout_constraintTop_toTopOf="parent" />
+
+					<TextView
+						android:id="@+id/textView"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:text="@string/my_ai_packs"
+						android:layout_marginStart="12dp"
+						android:layout_marginTop="@dimen/common_size_20dp"
+						android:layout_marginBottom="@dimen/common_size_20dp"
+						android:textColor="@color/white"
+						android:textSize="20sp"
+						android:textStyle="bold"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toEndOf="@+id/imageView"
+						app:layout_constraintTop_toTopOf="parent" />
+
+					<LinearLayout
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:background="@drawable/my_ai_packs_button"
+						android:gravity="center"
+						android:orientation="vertical"
+						android:layout_marginEnd="6dp"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintEnd_toEndOf="parent"
+						app:layout_constraintTop_toTopOf="parent" />
+
+				</androidx.constraintlayout.widget.ConstraintLayout>
+
+			</com.google.android.material.card.MaterialCardView>
 
 			<TextView
+				android:id="@+id/ai_bots_txt"
 				android:layout_width="wrap_content"
 				android:layout_height="wrap_content"
-				android:layout_marginTop="16dp"
-				android:gravity="center"
-				android:text="@string/take_prompting_to_the_next_level"
+				android:text="AI Bots"
 				android:textColor="@color/dark"
 				android:textSize="20sp"
-				android:textStyle="bold" />
-
-			<TextView
-				android:layout_width="wrap_content"
-				android:layout_height="wrap_content"
-				android:layout_marginTop="8dp"
-				android:gravity="center"
-				android:text="@string/ai_empowerment"
-				android:textColor="@color/dark"
-				android:textSize="14sp" />
-
-			<LinearLayout
-				android:layout_width="match_parent"
-				android:layout_height="wrap_content"
-				android:layout_marginTop="16dp"
-				android:background="@drawable/bg_ai_space_prompts"
-				android:orientation="horizontal"
-				android:padding="14dp">
-
-				<ImageView
-					android:layout_width="wrap_content"
-					android:layout_height="wrap_content"
-					android:layout_gravity="center"
-					android:src="@drawable/ic_ai_chat" />
-
-				<TextView
-					android:layout_width="wrap_content"
-					android:layout_height="wrap_content"
-					android:layout_gravity="center"
-					android:layout_marginStart="12dp"
-					android:text="@string/ai_chat_prompts_remaining"
-					android:textColor="@color/dark"
-					android:textSize="16sp" />
-
-				<TextView
-					android:id="@+id/total_ai_chat"
-					android:layout_width="0dp"
-					android:layout_height="wrap_content"
-					android:layout_gravity="center"
-					android:layout_marginStart="16dp"
-					android:layout_weight="1"
-					android:gravity="end"
-					android:text="0"
-					android:textColor="@color/dark"
-					android:textSize="16sp"
-					android:textStyle="bold" />
-			</LinearLayout>
-
-			<LinearLayout
-				android:layout_width="match_parent"
-				android:layout_height="wrap_content"
-				android:layout_marginTop="8dp"
-				android:background="@drawable/bg_ai_space_prompts"
-				android:orientation="horizontal"
-				android:padding="14dp">
-
-				<ImageView
-					android:layout_width="wrap_content"
-					android:layout_height="wrap_content"
-					android:layout_gravity="center"
-					android:src="@drawable/ic_ai_photo" />
-
-				<TextView
-					android:layout_width="wrap_content"
-					android:layout_height="wrap_content"
-					android:layout_gravity="center"
-					android:layout_marginStart="12dp"
-					android:text="@string/ai_image_prompts_remaining"
-					android:textColor="@color/dark"
-					android:textSize="16sp" />
-
-				<TextView
-					android:id="@+id/total_ai_photo"
-					android:layout_width="0dp"
-					android:layout_height="wrap_content"
-					android:layout_gravity="center"
-					android:layout_marginStart="4dp"
-					android:layout_weight="1"
-					android:gravity="end"
-					android:text="0"
-					android:textColor="@color/dark"
-					android:textSize="16sp"
-					android:textStyle="bold" />
-			</LinearLayout>
-
-			<com.google.android.material.button.MaterialButton
-				android:id="@+id/buy_ai_pack"
-				style="@style/Widget.App.BrandedButton"
-				android:layout_width="match_parent"
-				android:layout_height="wrap_content"
-				android:layout_marginTop="16dp"
-				android:padding="13dp"
-				android:text="@string/buy_ai_pack"
-				android:textSize="16sp"
-				app:cornerRadius="6dp" />
+				android:textStyle="bold"
+				android:layout_marginTop="20dp"
+				android:layout_gravity="start"/>
 		</LinearLayout>
 
 		<LinearLayout
@@ -148,12 +145,12 @@
 		<androidx.recyclerview.widget.RecyclerView
 			android:id="@+id/bot_list"
 			android:layout_width="match_parent"
-			android:layout_height="match_parent"
+			android:layout_height="0dp"
 			app:layout_constraintBottom_toBottomOf="parent"
 			app:layout_constraintEnd_toEndOf="parent"
 			app:layout_constraintStart_toStartOf="parent"
 			app:layout_constraintTop_toBottomOf="@+id/linearLayout"
-			tools:itemCount="5"
+			tools:itemCount="10"
 			tools:listitem="@layout/item_bot_layout" />
 
 	</androidx.constraintlayout.widget.ConstraintLayout>

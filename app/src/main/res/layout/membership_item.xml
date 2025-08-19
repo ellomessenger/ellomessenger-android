@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="wrap_content"
+	android:layout_height="wrap_content"
+	android:backgroundTint="@color/white"
+	app:strokeColor="@color/dark_fixed"
+	android:layout_margin="10dp"
+	android:orientation="vertical">
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:id="@+id/container"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:background="@drawable/bg_membership_plan">
+
+		<ImageView
+			android:id="@+id/select"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:layout_marginStart="8dp"
+			android:visibility="gone"
+			android:src="@drawable/ic_check_membership"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent" />
+
+		<TextView
+			android:id="@+id/subscription_plan_months"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="40dp"
+			android:layout_marginStart="22dp"
+			android:layout_marginEnd="22dp"
+			android:textColor="@color/dark_fixed"
+			android:textSize="28sp"
+			android:textStyle="bold"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			android:gravity="center"
+			tools:text="1\nMonth" />
+
+		<TextView
+			android:id="@+id/subscription_plan_price"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="10dp"
+			android:textColor="@color/dark_fixed"
+			android:textSize="14sp"
+			android:layout_marginBottom="40dp"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@+id/subscription_plan_months"
+			tools:text="10 / month" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+
+</com.google.android.material.card.MaterialCardView>

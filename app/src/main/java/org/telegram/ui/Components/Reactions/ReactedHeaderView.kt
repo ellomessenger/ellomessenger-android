@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Reactions
 
@@ -19,6 +19,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.util.Consumer
+import androidx.core.view.isVisible
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject
 import org.telegram.messenger.LocaleController
@@ -28,17 +29,11 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsRecent
-import org.telegram.tgnet.TLRPC.TL_channels_getParticipants
-import org.telegram.tgnet.TLRPC.TL_messageActionChatJoinedByRequest
-import org.telegram.tgnet.TLRPC.TL_messages_getFullChat
-import org.telegram.tgnet.TLRPC.TL_messages_getMessageReactionsList
-import org.telegram.tgnet.TLRPC.TL_messages_getMessageReadParticipants
-import org.telegram.tgnet.TLRPC.TL_messages_messageReactionsList
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
-import org.telegram.tgnet.tlrpc.TL_messages_chatFull
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.Vector
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.Vector
+import org.telegram.tgnet.action
+import org.telegram.tgnet.isSelf
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarsDrawable
 import org.telegram.ui.Components.AvatarsImageView
@@ -54,11 +49,11 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 	private val iconView = ImageView(context)
 	private val reactView = BackupImageView(context)
 	private var ignoreLayout = false
-	private val seenUsers = mutableListOf<User>()
-	private val users = mutableListOf<User>()
+	private val seenUsers = mutableListOf<TLRPC.User>()
+	private val users = mutableListOf<TLRPC.User>()
 	private var fixedWidth = 0
 	private val isLoaded = false
-	private var seenCallback: Consumer<List<User>>? = null
+	private var seenCallback: Consumer<List<TLRPC.User>>? = null
 
 	init {
 		flickerLoadingView.setColors(context.getColor(R.color.background), context.getColor(R.color.light_background), 0)
@@ -94,7 +89,7 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 		background = Theme.getSelectorDrawable(false)
 	}
 
-	fun setSeenCallback(seenCallback: Consumer<List<User>>?) {
+	fun setSeenCallback(seenCallback: Consumer<List<TLRPC.User>>?) {
 		this.seenCallback = seenCallback
 	}
 
@@ -105,14 +100,14 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 			val ctrl = MessagesController.getInstance(currentAccount)
 			val chat = ctrl.getChat(message.chatId)
 			val chatInfo = ctrl.getChatFull(message.chatId)
-			val showSeen = chat != null && message.isOutOwner && message.isSent && !message.isEditing && !message.isSending && !message.isSendError && !message.isContentUnread && !message.isUnread && ConnectionsManager.getInstance(currentAccount).currentTime - message.messageOwner!!.date < 7 * 86400 && (ChatObject.isMegagroup(chat) || !ChatObject.isChannel(chat)) && chatInfo != null && chatInfo.participants_count <= MessagesController.getInstance(currentAccount).chatReadMarkSizeThreshold && message.messageOwner?.action !is TL_messageActionChatJoinedByRequest
+			val showSeen = chat != null && message.isOutOwner && message.isSent && !message.isEditing && !message.isSending && !message.isSendError && !message.isContentUnread && !message.isUnread && ConnectionsManager.getInstance(currentAccount).currentTime - message.messageOwner!!.date < 7 * 86400 && (ChatObject.isMegagroup(chat) || !ChatObject.isChannel(chat)) && chatInfo != null && chatInfo.participantsCount <= MessagesController.getInstance(currentAccount).chatReadMarkSizeThreshold && message.messageOwner?.action !is TLRPC.TLMessageActionChatJoinedByRequest
 
 			if (showSeen) {
-				val req = TL_messages_getMessageReadParticipants()
-				req.msg_id = message.id
+				val req = TLRPC.TLMessagesGetMessageReadParticipants()
+				req.msgId = message.id
 				req.peer = MessagesController.getInstance(currentAccount).getInputPeer(message.dialogId)
 
-				val fromId = message.messageOwner?.from_id?.user_id ?: 0
+				val fromId = message.messageOwner?.fromId?.userId ?: 0
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, _ ->
 					if (response is Vector) {
@@ -128,7 +123,7 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 
 						usersToRequest.add(fromId)
 
-						val usersRes = mutableListOf<User>()
+						val usersRes = mutableListOf<TLRPC.User>()
 
 						val callback = Runnable {
 							seenUsers.addAll(usersRes)
@@ -154,23 +149,23 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 						}
 
 						if (ChatObject.isChannel(chat)) {
-							val usersReq = TL_channels_getParticipants()
+							val usersReq = TLRPC.TLChannelsGetParticipants()
 							usersReq.limit = MessagesController.getInstance(currentAccount).chatReadMarkSizeThreshold
 							usersReq.offset = 0
-							usersReq.filter = TL_channelParticipantsRecent()
+							usersReq.filter = TLRPC.TLChannelParticipantsRecent()
 							usersReq.channel = MessagesController.getInstance(currentAccount).getInputChannel(chat.id)
 
 							ConnectionsManager.getInstance(currentAccount).sendRequest(usersReq) { response1, _ ->
 								AndroidUtilities.runOnUIThread {
 									if (response1 != null) {
-										val users = response1 as TL_channels_channelParticipants
+										val users = response1 as TLRPC.TLChannelsChannelParticipants
 
 										for (i in users.users.indices) {
 											val user = users.users[i]
 
 											MessagesController.getInstance(currentAccount).putUser(user, false)
 
-											if (!user.self && usersToRequest.contains(user.id)) {
+											if (!user.isSelf && usersToRequest.contains(user.id)) {
 												usersRes.add(user)
 											}
 										}
@@ -181,20 +176,20 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 							}
 						}
 						else {
-							val usersReq = TL_messages_getFullChat()
-							usersReq.chat_id = chat!!.id
+							val usersReq = TLRPC.TLMessagesGetFullChat()
+							usersReq.chatId = chat!!.id
 
 							ConnectionsManager.getInstance(currentAccount).sendRequest(usersReq) { response1, _ ->
 								AndroidUtilities.runOnUIThread {
 									if (response1 != null) {
-										val chatFull = response1 as TL_messages_chatFull
+										val chatFull = response1 as TLRPC.TLMessagesChatFull
 
 										for (i in chatFull.users.indices) {
 											val user = chatFull.users[i]
 
 											MessagesController.getInstance(currentAccount).putUser(user, false)
 
-											if (!user.self && usersToRequest.contains(user.id)) {
+											if (!user.isSelf && usersToRequest.contains(user.id)) {
 												usersRes.add(user)
 											}
 										}
@@ -216,7 +211,7 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 	private fun loadReactions() {
 		val ctrl = MessagesController.getInstance(currentAccount)
 
-		val getList = TL_messages_getMessageReactionsList()
+		val getList = TLRPC.TLMessagesGetMessageReactionsList()
 		getList.peer = ctrl.getInputPeer(message.dialogId)
 		getList.id = message.id
 		getList.limit = 3
@@ -224,7 +219,7 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 		getList.offset = null
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(getList, { response, _ ->
-			if (response is TL_messages_messageReactionsList) {
+			if (response is TLRPC.TLMessagesMessageReactionsList) {
 				val c = response.count
 
 				post {
@@ -271,7 +266,7 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 					}
 
 					for (u in response.users) {
-						if (message.messageOwner?.from_id != null && u.id != message.messageOwner?.from_id?.user_id) {
+						if (message.messageOwner?.fromId != null && u.id != message.messageOwner?.fromId?.userId) {
 							var hasSame = false
 
 							for (i in users.indices) {
@@ -293,7 +288,7 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 		}, ConnectionsManager.RequestFlagInvokeAfter)
 	}
 
-	fun getSeenUsers(): List<User> {
+	fun getSeenUsers(): List<TLRPC.User> {
 		return seenUsers
 	}
 
@@ -339,7 +334,7 @@ class ReactedHeaderView(context: Context, private val currentAccount: Int, priva
 			widthMeasureSpec = MeasureSpec.makeMeasureSpec(fixedWidth, MeasureSpec.EXACTLY)
 		}
 
-		if (flickerLoadingView.visibility == VISIBLE) {
+		if (flickerLoadingView.isVisible) {
 			// Idk what is happening here, but this class is a clone of MessageSeenView, so this might help with something?
 			ignoreLayout = true
 			flickerLoadingView.gone()

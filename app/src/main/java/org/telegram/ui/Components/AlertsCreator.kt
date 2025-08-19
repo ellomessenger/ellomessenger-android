@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
@@ -29,7 +29,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
-import android.text.Html
 import android.text.InputFilter
 import android.text.InputType
 import android.text.Spannable
@@ -60,8 +59,13 @@ import android.widget.TextView.OnEditorActionListener
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.annotation.RawRes
+import androidx.annotation.StringRes
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.net.toUri
+import androidx.core.text.HtmlCompat
 import androidx.core.util.Consumer
+import androidx.core.util.size
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import kotlinx.coroutines.Dispatchers
@@ -84,7 +88,6 @@ import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationsController
 import org.telegram.messenger.OneUIUtilities
 import org.telegram.messenger.R
-import org.telegram.messenger.SecretChatHelper
 import org.telegram.messenger.SharedConfig
 import org.telegram.messenger.SvgHelper
 import org.telegram.messenger.UserConfig
@@ -100,88 +103,94 @@ import org.telegram.tgnet.ConnectionsManager.Companion.generateClassGuid
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.SerializedData
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.EncryptedChat
 import org.telegram.tgnet.TLRPC.InputPeer
-import org.telegram.tgnet.TLRPC.TL_account_changePhone
-import org.telegram.tgnet.TLRPC.TL_account_confirmPhone
-import org.telegram.tgnet.TLRPC.TL_account_getAuthorizationForm
-import org.telegram.tgnet.TLRPC.TL_account_getPassword
-import org.telegram.tgnet.TLRPC.TL_account_getTmpPassword
-import org.telegram.tgnet.TLRPC.TL_account_reportPeer
-import org.telegram.tgnet.TLRPC.TL_account_saveSecureValue
-import org.telegram.tgnet.TLRPC.TL_account_sendChangePhoneCode
-import org.telegram.tgnet.TLRPC.TL_account_sendConfirmPhoneCode
-import org.telegram.tgnet.TLRPC.TL_account_updateProfile
-import org.telegram.tgnet.TLRPC.TL_account_verifyEmail
-import org.telegram.tgnet.TLRPC.TL_account_verifyPhone
-import org.telegram.tgnet.TLRPC.TL_auth_resendCode
-import org.telegram.tgnet.TLRPC.TL_channelLocation
-import org.telegram.tgnet.TLRPC.TL_channelParticipantAdmin
-import org.telegram.tgnet.TLRPC.TL_channelParticipantCreator
-import org.telegram.tgnet.TLRPC.TL_channels_channelParticipant
-import org.telegram.tgnet.TLRPC.TL_channels_createChannel
-import org.telegram.tgnet.TLRPC.TL_channels_editAdmin
-import org.telegram.tgnet.TLRPC.TL_channels_getParticipant
-import org.telegram.tgnet.TLRPC.TL_channels_inviteToChannel
-import org.telegram.tgnet.TLRPC.TL_channels_joinChannel
-import org.telegram.tgnet.TLRPC.TL_channels_reportSpam
-import org.telegram.tgnet.TLRPC.TL_contacts_blockFromReplies
-import org.telegram.tgnet.TLRPC.TL_contacts_importContacts
-import org.telegram.tgnet.TLRPC.TL_help_getSupport
-import org.telegram.tgnet.TLRPC.TL_help_support
-import org.telegram.tgnet.TLRPC.TL_inputPeerUser
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonChildAbuse
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonFake
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonIllegalDrugs
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonOther
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonPersonalDetails
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonPornography
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonSpam
-import org.telegram.tgnet.TLRPC.TL_inputReportReasonViolence
-import org.telegram.tgnet.TLRPC.TL_langPackLanguage
-import org.telegram.tgnet.TLRPC.TL_messageActionChatAddUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatDeleteUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatJoinedByLink
-import org.telegram.tgnet.TLRPC.TL_messageActionContactSignUp
-import org.telegram.tgnet.TLRPC.TL_messageActionEmpty
-import org.telegram.tgnet.TLRPC.TL_messageActionGeoProximityReached
-import org.telegram.tgnet.TLRPC.TL_messageActionPhoneCall
-import org.telegram.tgnet.TLRPC.TL_messageActionPinMessage
-import org.telegram.tgnet.TLRPC.TL_messageActionSetChatTheme
-import org.telegram.tgnet.TLRPC.TL_messageActionUserJoined
-import org.telegram.tgnet.TLRPC.TL_messages_addChatUser
-import org.telegram.tgnet.TLRPC.TL_messages_checkHistoryImport
-import org.telegram.tgnet.TLRPC.TL_messages_checkHistoryImportPeer
-import org.telegram.tgnet.TLRPC.TL_messages_createChat
-import org.telegram.tgnet.TLRPC.TL_messages_editChatAdmin
-import org.telegram.tgnet.TLRPC.TL_messages_editChatDefaultBannedRights
-import org.telegram.tgnet.TLRPC.TL_messages_forwardMessages
-import org.telegram.tgnet.TLRPC.TL_messages_getAttachedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_importChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_initHistoryImport
-import org.telegram.tgnet.TLRPC.TL_messages_migrateChat
-import org.telegram.tgnet.TLRPC.TL_messages_report
-import org.telegram.tgnet.TLRPC.TL_messages_sendInlineBotResult
-import org.telegram.tgnet.TLRPC.TL_messages_sendMedia
-import org.telegram.tgnet.TLRPC.TL_messages_sendMessage
-import org.telegram.tgnet.TLRPC.TL_messages_sendMultiMedia
-import org.telegram.tgnet.TLRPC.TL_messages_sendScheduledMessages
-import org.telegram.tgnet.TLRPC.TL_messages_startBot
-import org.telegram.tgnet.TLRPC.TL_messages_startHistoryImport
-import org.telegram.tgnet.TLRPC.TL_payments_sendPaymentForm
-import org.telegram.tgnet.TLRPC.TL_payments_validateRequestedInfo
-import org.telegram.tgnet.TLRPC.TL_peerNotifySettings
-import org.telegram.tgnet.TLRPC.TL_phone_inviteToGroupCall
-import org.telegram.tgnet.TLRPC.TL_updateUserName
+import org.telegram.tgnet.TLRPC.TLAccountChangePhone
+import org.telegram.tgnet.TLRPC.TLAccountConfirmPhone
+import org.telegram.tgnet.TLRPC.TLAccountGetAuthorizationForm
+import org.telegram.tgnet.TLRPC.TLAccountGetPassword
+import org.telegram.tgnet.TLRPC.TLAccountGetTmpPassword
+import org.telegram.tgnet.TLRPC.TLAccountReportPeer
+import org.telegram.tgnet.TLRPC.TLAccountSaveSecureValue
+import org.telegram.tgnet.TLRPC.TLAccountSendChangePhoneCode
+import org.telegram.tgnet.TLRPC.TLAccountSendConfirmPhoneCode
+import org.telegram.tgnet.TLRPC.TLAccountUpdateProfile
+import org.telegram.tgnet.TLRPC.TLAccountVerifyEmail
+import org.telegram.tgnet.TLRPC.TLAccountVerifyPhone
+import org.telegram.tgnet.TLRPC.TLAuthResendCode
+import org.telegram.tgnet.TLRPC.TLChannelLocation
+import org.telegram.tgnet.TLRPC.TLChannelParticipantAdmin
+import org.telegram.tgnet.TLRPC.TLChannelParticipantCreator
+import org.telegram.tgnet.TLRPC.TLChannelsChannelParticipant
+import org.telegram.tgnet.TLRPC.TLChannelsCreateChannel
+import org.telegram.tgnet.TLRPC.TLChannelsEditAdmin
+import org.telegram.tgnet.TLRPC.TLChannelsEditBanned
+import org.telegram.tgnet.TLRPC.TLChannelsGetParticipant
+import org.telegram.tgnet.TLRPC.TLChannelsInviteToChannel
+import org.telegram.tgnet.TLRPC.TLChannelsJoinChannel
+import org.telegram.tgnet.TLRPC.TLChannelsReportSpam
+import org.telegram.tgnet.TLRPC.TLContactsBlockFromReplies
+import org.telegram.tgnet.TLRPC.TLContactsImportContacts
+import org.telegram.tgnet.TLRPC.TLError
+import org.telegram.tgnet.TLRPC.TLHelpGetSupport
+import org.telegram.tgnet.TLRPC.TLHelpSupport
+import org.telegram.tgnet.TLRPC.TLInputPeerUser
+import org.telegram.tgnet.TLRPC.TLInputReportReasonChildAbuse
+import org.telegram.tgnet.TLRPC.TLInputReportReasonFake
+import org.telegram.tgnet.TLRPC.TLInputReportReasonIllegalDrugs
+import org.telegram.tgnet.TLRPC.TLInputReportReasonOther
+import org.telegram.tgnet.TLRPC.TLInputReportReasonPersonalDetails
+import org.telegram.tgnet.TLRPC.TLInputReportReasonPornography
+import org.telegram.tgnet.TLRPC.TLInputReportReasonSpam
+import org.telegram.tgnet.TLRPC.TLInputReportReasonViolence
+import org.telegram.tgnet.TLRPC.TLLangPackLanguage
+import org.telegram.tgnet.TLRPC.TLMessageActionChatAddUser
+import org.telegram.tgnet.TLRPC.TLMessageActionChatDeleteUser
+import org.telegram.tgnet.TLRPC.TLMessageActionChatJoinedByLink
+import org.telegram.tgnet.TLRPC.TLMessageActionContactSignUp
+import org.telegram.tgnet.TLRPC.TLMessageActionEmpty
+import org.telegram.tgnet.TLRPC.TLMessageActionGeoProximityReached
+import org.telegram.tgnet.TLRPC.TLMessageActionPhoneCall
+import org.telegram.tgnet.TLRPC.TLMessageActionPinMessage
+import org.telegram.tgnet.TLRPC.TLMessageActionSetChatTheme
+import org.telegram.tgnet.TLRPC.TLMessagesAddChatUser
+import org.telegram.tgnet.TLRPC.TLMessagesCheckHistoryImport
+import org.telegram.tgnet.TLRPC.TLMessagesCheckHistoryImportPeer
+import org.telegram.tgnet.TLRPC.TLMessagesCreateChat
+import org.telegram.tgnet.TLRPC.TLMessagesEditChatAdmin
+import org.telegram.tgnet.TLRPC.TLMessagesEditChatDefaultBannedRights
+import org.telegram.tgnet.TLRPC.TLMessagesEditMessage
+import org.telegram.tgnet.TLRPC.TLMessagesForwardMessages
+import org.telegram.tgnet.TLRPC.TLMessagesGetAttachedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesImportChatInvite
+import org.telegram.tgnet.TLRPC.TLMessagesInitHistoryImport
+import org.telegram.tgnet.TLRPC.TLMessagesMigrateChat
+import org.telegram.tgnet.TLRPC.TLMessagesReport
+import org.telegram.tgnet.TLRPC.TLMessagesSendInlineBotResult
+import org.telegram.tgnet.TLRPC.TLMessagesSendMedia
+import org.telegram.tgnet.TLRPC.TLMessagesSendMessage
+import org.telegram.tgnet.TLRPC.TLMessagesSendMultiMedia
+import org.telegram.tgnet.TLRPC.TLMessagesSendScheduledMessages
+import org.telegram.tgnet.TLRPC.TLMessagesStartBot
+import org.telegram.tgnet.TLRPC.TLMessagesStartHistoryImport
+import org.telegram.tgnet.TLRPC.TLPeerNotifySettings
+import org.telegram.tgnet.TLRPC.TLPhoneInviteToGroupCall
+import org.telegram.tgnet.TLRPC.TLUpdateUserName
 import org.telegram.tgnet.TLRPC.Updates
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_channels_editBanned
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.tlrpc.TL_messages_editMessage
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.action
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.notifySettings
+import org.telegram.tgnet.status
+import org.telegram.tgnet.support
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
 import org.telegram.ui.ActionBar.ActionBarPopupWindow.ActionBarPopupWindowLayout
@@ -216,11 +225,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.ceil
+import androidx.core.view.isVisible
 
 @SuppressLint("AppCompatCustomView")
 object AlertsCreator {
 	const val PERMISSIONS_REQUEST_TOP_ICON_SIZE = 72
-	const val NEW_DENY_DIALOG_TOP_ICON_SIZE = 52
 	const val REPORT_TYPE_SPAM = 0
 	const val REPORT_TYPE_VIOLENCE = 1
 	const val REPORT_TYPE_CHILD_ABUSE = 2
@@ -236,30 +245,62 @@ object AlertsCreator {
 	}
 
 	@JvmStatic
-	fun createLocationRequiredDialog(context: Context, friends: Boolean): Dialog {
-		return AlertDialog.Builder(context).setMessage(AndroidUtilities.replaceTags(if (friends) context.getString(R.string.PermissionNoLocationFriends) else context.getString(R.string.PermissionNoLocationPeopleNearby))).setTopAnimation(R.raw.permission_request_location, PERMISSIONS_REQUEST_TOP_ICON_SIZE, false, ResourcesCompat.getColor(context.resources, R.color.brand, null)).setPositiveButton(context.getString(R.string.PermissionOpenSettings)) { _, _ ->
-			try {
-				val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-				intent.setData(Uri.parse("package:" + ApplicationLoader.applicationContext.packageName))
-				context.startActivity(intent)
+	@JvmOverloads
+	fun createLocationRequiredDialog(context: Context, friends: Boolean, callback: Runnable? = null): Dialog {
+		val builder = AlertDialog.Builder(context)
+		builder.setMessage(AndroidUtilities.replaceTags(if (friends) context.getString(R.string.PermissionNoLocationFriends) else context.getString(R.string.PermissionNoLocationPeopleNearby)))
+		builder.setTopAnimation(R.raw.permission_request_location, PERMISSIONS_REQUEST_TOP_ICON_SIZE, false, ResourcesCompat.getColor(context.resources, R.color.brand, null))
+
+		@StringRes val buttonTitle = if (callback != null) R.string.Continue else R.string.PermissionOpenSettings
+
+		builder.setPositiveButton(context.getString(buttonTitle).uppercase()) { _, _ ->
+			if (callback != null) {
+				callback.run()
 			}
-			catch (e: Exception) {
-				FileLog.e(e)
+			else {
+				try {
+					val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+					intent.setData(("package:" + ApplicationLoader.applicationContext.packageName).toUri())
+					context.startActivity(intent)
+				}
+				catch (e: Exception) {
+					FileLog.e(e)
+				}
 			}
-		}.setNegativeButton(context.getString(R.string.ContactsPermissionAlertNotNow), null).create()
+		}
+
+		// builder.setNegativeButton(context.getString(R.string.ContactsPermissionAlertNotNow), null)
+
+		return builder.create()
 	}
 
-	fun createBackgroundActivityDialog(context: Context): Dialog {
-		return AlertDialog.Builder(context).setTitle(context.getString(R.string.AllowBackgroundActivity)).setMessage(AndroidUtilities.replaceTags(context.getString(if (OneUIUtilities.isOneUI()) if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) R.string.AllowBackgroundActivityInfoOneUIAboveS else R.string.AllowBackgroundActivityInfoOneUIBelowS else R.string.AllowBackgroundActivityInfo))).setTopAnimation(R.raw.permission_request_apk, PERMISSIONS_REQUEST_TOP_ICON_SIZE, false, ResourcesCompat.getColor(context.resources, R.color.brand, null)).setPositiveButton(context.getString(R.string.PermissionOpenSettings)) { _, _ ->
-			try {
-				val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-				intent.setData(Uri.parse("package:" + ApplicationLoader.applicationContext.packageName))
-				context.startActivity(intent)
+	fun createBackgroundActivityDialog(context: Context, callback: Runnable? = null): Dialog {
+		val builder = AlertDialog.Builder(context)
+		builder.setTitle(context.getString(R.string.AllowBackgroundActivity))
+		builder.setMessage(AndroidUtilities.replaceTags(context.getString(if (OneUIUtilities.isOneUI()) if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) R.string.AllowBackgroundActivityInfoOneUIAboveS else R.string.AllowBackgroundActivityInfoOneUIBelowS else R.string.AllowBackgroundActivityInfo)))
+		builder.setTopAnimation(R.raw.permission_request_apk, PERMISSIONS_REQUEST_TOP_ICON_SIZE, false, ResourcesCompat.getColor(context.resources, R.color.brand, null))
+
+		@StringRes val buttonTitle = if (callback != null) R.string.Continue else R.string.PermissionOpenSettings
+
+		builder.setPositiveButton(context.getString(buttonTitle).uppercase()) { _, _ ->
+			if (callback != null) {
+				callback.run()
 			}
-			catch (e: Exception) {
-				FileLog.e(e)
+			else {
+				try {
+					val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+					intent.setData(("package:" + ApplicationLoader.applicationContext.packageName).toUri())
+					context.startActivity(intent)
+				}
+				catch (e: Exception) {
+					FileLog.e(e)
+				}
 			}
-		}.setNegativeButton(context.getString(R.string.ContactsPermissionAlertNotNow), null).create()
+		}
+
+		builder.setNegativeButton(context.getString(R.string.ContactsPermissionAlertNotNow), null)
+
+		return builder.create()
 	}
 
 	@JvmStatic
@@ -282,7 +323,7 @@ object AlertsCreator {
 			if (finalShowSettings) {
 				try {
 					val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-					intent.setData(Uri.parse("package:" + ApplicationLoader.applicationContext.packageName))
+					intent.setData(("package:" + ApplicationLoader.applicationContext.packageName).toUri())
 					context.startActivity(intent)
 				}
 				catch (e: Exception) {
@@ -304,17 +345,27 @@ object AlertsCreator {
 	}
 
 	@JvmStatic
-	fun processError(currentAccount: Int, error: TL_error?, fragment: BaseFragment?, request: TLObject?, vararg args: Any?): Dialog? {
+	fun processError(currentAccount: Int, error: TLError?, fragment: BaseFragment?, request: TLObject?, vararg args: Any?): Dialog? {
 		if (error == null || error.code == 406 || error.text == null || fragment == null) {
+			return null
+		}
+
+		@Suppress("NAME_SHADOWING") var fragment = fragment
+
+		if (!fragment.isLastFragment) {
+			fragment = fragment.parentLayout?.lastFragment
+		}
+
+		if (fragment == null) {
 			return null
 		}
 
 		val context = ApplicationLoader.applicationContext
 
-		if (request is TL_messages_initHistoryImport || request is TL_messages_checkHistoryImportPeer || request is TL_messages_checkHistoryImport || request is TL_messages_startHistoryImport) {
+		if (request is TLMessagesInitHistoryImport || request is TLMessagesCheckHistoryImportPeer || request is TLMessagesCheckHistoryImport || request is TLMessagesStartHistoryImport) {
 			val peer = when (request) {
-				is TL_messages_initHistoryImport -> request.peer
-				is TL_messages_startHistoryImport -> request.peer
+				is TLMessagesInitHistoryImport -> request.peer
+				is TLMessagesStartHistoryImport -> request.peer
 				else -> null
 			}
 
@@ -325,7 +376,7 @@ object AlertsCreator {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportMutualError))
 			}
 			else if (error.text?.contains("IMPORT_PEER_TYPE_INVALID") == true) {
-				if (peer is TL_inputPeerUser) {
+				if (peer is TLInputPeerUser) {
 					showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), context.getString(R.string.ImportErrorChatInvalidUser))
 				}
 				else {
@@ -354,7 +405,7 @@ object AlertsCreator {
 				showSimpleAlert(fragment, context.getString(R.string.ImportErrorTitle), "${context.getString(R.string.ErrorOccurred)}\n${error.text}")
 			}
 		}
-		else if (request is TL_account_saveSecureValue || request is TL_account_getAuthorizationForm) {
+		else if (request is TLAccountSaveSecureValue || request is TLAccountGetAuthorizationForm) {
 			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidPhoneNumber))
 			}
@@ -368,13 +419,13 @@ object AlertsCreator {
 				showSimpleAlert(fragment, "${context.getString(R.string.ErrorOccurred)}\n${error.text}")
 			}
 		}
-		else if (request is TL_channels_joinChannel || request is TL_channels_editAdmin || request is TL_channels_inviteToChannel || request is TL_messages_addChatUser || request is TL_messages_startBot || request is TL_channels_editBanned || request is TL_messages_editChatDefaultBannedRights || request is TL_messages_editChatAdmin || request is TL_messages_migrateChat || request is TL_phone_inviteToGroupCall) {
+		else if (request is TLChannelsJoinChannel || request is TLChannelsEditAdmin || request is TLChannelsInviteToChannel || request is TLMessagesAddChatUser || request is TLMessagesStartBot || request is TLChannelsEditBanned || request is TLMessagesEditChatDefaultBannedRights || request is TLMessagesEditChatAdmin || request is TLMessagesMigrateChat || request is TLPhoneInviteToGroupCall) {
 			if (error.text == "CHANNELS_TOO_MUCH") {
 				if (fragment.getParentActivity() != null) {
 					fragment.showDialog(ChannelsSubscriptionsLimitBottomSheet(fragment, true, currentAccount))
 				}
 				else {
-					if (request is TL_channels_joinChannel || request is TL_channels_inviteToChannel) {
+					if (request is TLChannelsJoinChannel || request is TLChannelsInviteToChannel) {
 						fragment.presentFragment(TooManyCommunitiesActivity(TooManyCommunitiesActivity.TYPE_JOIN))
 					}
 					else {
@@ -388,7 +439,7 @@ object AlertsCreator {
 				showAddUserAlert(error.text, fragment, (args.firstOrNull() as? Boolean) ?: false, request)
 			}
 		}
-		else if (request is TL_messages_createChat) {
+		else if (request is TLMessagesCreateChat) {
 			if (error.text == "CHANNELS_TOO_MUCH") {
 				if (fragment.getParentActivity() != null) {
 					fragment.showDialog(LimitReachedBottomSheet(fragment, LimitReachedBottomSheet.TYPE_TO_MANY_COMMUNITIES, currentAccount))
@@ -406,7 +457,7 @@ object AlertsCreator {
 				showAddUserAlert(error.text, fragment, false, request)
 			}
 		}
-		else if (request is TL_channels_createChannel) {
+		else if (request is TLChannelsCreateChannel) {
 			if (error.text == "CHANNELS_TOO_MUCH") {
 				if (fragment.getParentActivity() != null) {
 					fragment.showDialog(ChannelsLimitReachedBottomSheet(fragment, true, currentAccount))
@@ -423,19 +474,19 @@ object AlertsCreator {
 				showAddUserAlert(error.text, fragment, false, request)
 			}
 		}
-		else if (request is TL_messages_editMessage) {
+		else if (request is TLMessagesEditMessage) {
 			if (error.text != "MESSAGE_NOT_MODIFIED") {
 				showSimpleAlert(fragment, context.getString(R.string.EditMessageError))
 			}
 		}
-		else if (request is TL_messages_sendMessage || request is TL_messages_sendMedia || request is TL_messages_sendInlineBotResult || request is TL_messages_forwardMessages || request is TL_messages_sendMultiMedia || request is TL_messages_sendScheduledMessages) {
+		else if (request is TLMessagesSendMessage || request is TLMessagesSendMedia || request is TLMessagesSendInlineBotResult || request is TLMessagesForwardMessages || request is TLMessagesSendMultiMedia || request is TLMessagesSendScheduledMessages) {
 			when (error.text) {
 				"PEER_FLOOD" -> NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.PEER_FLOOD)
 				"USER_BANNED_IN_CHANNEL" -> NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.USER_BANNED_IN_CHANNEL)
 				"SCHEDULE_TOO_MUCH" -> showSimpleToast(fragment, context.getString(R.string.MessageScheduledLimitReached))
 			}
 		}
-		else if (request is TL_messages_importChatInvite) {
+		else if (request is TLMessagesImportChatInvite) {
 			if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
@@ -457,12 +508,12 @@ object AlertsCreator {
 				showSimpleAlert(fragment, context.getString(R.string.JoinToGroupErrorNotExist))
 			}
 		}
-		else if (request is TL_messages_getAttachedStickers) {
+		else if (request is TLMessagesGetAttachedStickers) {
 			if (fragment.getParentActivity() != null) {
 				Toast.makeText(fragment.getParentActivity(), "${context.getString(R.string.ErrorOccurred)}\n${error.text}", Toast.LENGTH_SHORT).show()
 			}
 		}
-		else if (request is TL_account_confirmPhone || request is TL_account_verifyPhone || request is TL_account_verifyEmail) {
+		else if (request is TLAccountConfirmPhone || request is TLAccountVerifyPhone || request is TLAccountVerifyEmail) {
 			return if (error.text?.contains("PHONE_CODE_EMPTY") == true || error.text?.contains("PHONE_CODE_INVALID") == true || error.text?.contains("CODE_INVALID") == true || error.text?.contains("CODE_EMPTY") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidCode))
 			}
@@ -476,7 +527,7 @@ object AlertsCreator {
 				showSimpleAlert(fragment, error.text)
 			}
 		}
-		else if (request is TL_auth_resendCode) {
+		else if (request is TLAuthResendCode) {
 			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				return showSimpleAlert(fragment, context.getString(R.string.InvalidPhoneNumber))
 			}
@@ -493,7 +544,7 @@ object AlertsCreator {
 				return showSimpleAlert(fragment, "${context.getString(R.string.ErrorOccurred)}\n${error.text}")
 			}
 		}
-		else if (request is TL_account_sendConfirmPhoneCode) {
+		else if (request is TLAccountSendConfirmPhoneCode) {
 			return if (error.code == 400) {
 				showSimpleAlert(fragment, context.getString(R.string.CancelLinkExpired))
 			}
@@ -506,7 +557,7 @@ object AlertsCreator {
 				}
 			}
 		}
-		else if (request is TL_account_changePhone) {
+		else if (request is TLAccountChangePhone) {
 			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.InvalidPhoneNumber))
 			}
@@ -526,7 +577,7 @@ object AlertsCreator {
 				showSimpleAlert(fragment, error.text)
 			}
 		}
-		else if (request is TL_account_sendChangePhoneCode) {
+		else if (request is TLAccountSendChangePhoneCode) {
 			if (error.text?.contains("PHONE_NUMBER_INVALID") == true) {
 				LoginActivity.needShowInvalidAlert(fragment, (args[0] as String), false)
 			}
@@ -549,14 +600,14 @@ object AlertsCreator {
 				showSimpleAlert(fragment, context.getString(R.string.ErrorOccurred))
 			}
 		}
-		else if (request is TL_updateUserName) {
+		else if (request is TLUpdateUserName) {
 			when (error.text) {
 				"USERNAME_INVALID" -> showSimpleAlert(fragment, context.getString(R.string.UsernameInvalid))
 				"USERNAME_OCCUPIED" -> showSimpleAlert(fragment, context.getString(R.string.UsernameInUse))
 				else -> showSimpleAlert(fragment, context.getString(R.string.ErrorOccurred))
 			}
 		}
-		else if (request is TL_contacts_importContacts) {
+		else if (request is TLContactsImportContacts) {
 			if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleAlert(fragment, context.getString(R.string.FloodWait))
 			}
@@ -564,7 +615,7 @@ object AlertsCreator {
 				showSimpleAlert(fragment, "${context.getString(R.string.ErrorOccurred)}\n${error.text}")
 			}
 		}
-		else if (request is TL_account_getPassword || request is TL_account_getTmpPassword) {
+		else if (request is TLAccountGetPassword || request is TLAccountGetTmpPassword) {
 			if (error.text?.startsWith("FLOOD_WAIT") == true) {
 				showSimpleToast(fragment, getFloodWaitString(error.text!!))
 			}
@@ -572,21 +623,21 @@ object AlertsCreator {
 				showSimpleToast(fragment, error.text)
 			}
 		}
-		else if (request is TL_payments_sendPaymentForm) {
-			when (error.text) {
-				"BOT_PRECHECKOUT_FAILED" -> showSimpleToast(fragment, context.getString(R.string.PaymentPrecheckoutFailed))
-				"PAYMENT_FAILED" -> showSimpleToast(fragment, context.getString(R.string.PaymentFailed))
-				else -> showSimpleToast(fragment, error.text)
-			}
-		}
-		else if (request is TL_payments_validateRequestedInfo) {
-			if (error.text == "SHIPPING_NOT_AVAILABLE") {
-				showSimpleToast(fragment, context.getString(R.string.PaymentNoShippingMethod))
-			}
-			else {
-				showSimpleToast(fragment, error.text)
-			}
-		}
+//		else if (request is TLPaymentsSendPaymentForm) {
+//			when (error.text) {
+//				"BOT_PRECHECKOUT_FAILED" -> showSimpleToast(fragment, context.getString(R.string.PaymentPrecheckoutFailed))
+//				"PAYMENT_FAILED" -> showSimpleToast(fragment, context.getString(R.string.PaymentFailed))
+//				else -> showSimpleToast(fragment, error.text)
+//			}
+//		}
+//		else if (request is TLPaymentsValidateRequestedInfo) {
+//			if (error.text == "SHIPPING_NOT_AVAILABLE") {
+//				showSimpleToast(fragment, context.getString(R.string.PaymentNoShippingMethod))
+//			}
+//			else {
+//				showSimpleToast(fragment, error.text)
+//			}
+//		}
 
 		return null
 	}
@@ -630,16 +681,16 @@ object AlertsCreator {
 		return builder.show()
 	}
 
-	fun createLanguageAlert(activity: LaunchActivity, language: TL_langPackLanguage?): AlertDialog.Builder? {
+	fun createLanguageAlert(activity: LaunchActivity, language: TLLangPackLanguage?): AlertDialog.Builder? {
 		if (language == null) {
 			return null
 		}
 
-		language.lang_code = language.lang_code.replace('-', '_').lowercase(Locale.getDefault())
-		language.plural_code = language.plural_code.replace('-', '_').lowercase(Locale.getDefault())
+		language.langCode = language.langCode?.replace('-', '_')?.lowercase()
+		language.pluralCode = language.pluralCode?.replace('-', '_')?.lowercase()
 
-		if (language.base_lang_code != null) {
-			language.base_lang_code = language.base_lang_code.replace('-', '_').lowercase(Locale.getDefault())
+		if (language.baseLangCode != null) {
+			language.baseLangCode = language.baseLangCode?.replace('-', '_')?.lowercase()
 		}
 
 		val spanned: SpannableStringBuilder
@@ -647,7 +698,7 @@ object AlertsCreator {
 		val currentInfo = LocaleController.getInstance().currentLocaleInfo
 		val str: String
 
-		if (currentInfo.shortName == language.lang_code) {
+		if (currentInfo.shortName == language.langCode) {
 			builder.setTitle(activity.getString(R.string.Language))
 			str = LocaleController.formatString("LanguageSame", R.string.LanguageSame, language.name)
 			builder.setNegativeButton(activity.getString(R.string.OK), null)
@@ -657,7 +708,7 @@ object AlertsCreator {
 			}
 		}
 		else {
-			if (language.strings_count == 0) {
+			if (language.stringsCount == 0) {
 				builder.setTitle(activity.getString(R.string.LanguageUnknownTitle))
 				str = LocaleController.formatString("LanguageUnknownCustomAlert", R.string.LanguageUnknownCustomAlert, language.name)
 				builder.setNegativeButton(activity.getString(R.string.OK), null)
@@ -666,29 +717,29 @@ object AlertsCreator {
 				builder.setTitle(activity.getString(R.string.LanguageTitle))
 
 				str = if (language.official) {
-					LocaleController.formatString("LanguageAlert", R.string.LanguageAlert, language.name, ceil((language.translated_count / language.strings_count.toFloat() * 100).toDouble()).toInt())
+					LocaleController.formatString("LanguageAlert", R.string.LanguageAlert, language.name, ceil((language.translatedCount / language.stringsCount.toFloat() * 100).toDouble()).toInt())
 				}
 				else {
-					LocaleController.formatString("LanguageCustomAlert", R.string.LanguageCustomAlert, language.name, ceil((language.translated_count / language.strings_count.toFloat() * 100).toDouble()).toInt())
+					LocaleController.formatString("LanguageCustomAlert", R.string.LanguageCustomAlert, language.name, ceil((language.translatedCount / language.stringsCount.toFloat() * 100).toDouble()).toInt())
 				}
 
 				builder.setPositiveButton(activity.getString(R.string.Change)) { _, _ ->
 					val key = if (language.official) {
-						"remote_" + language.lang_code
+						"remote_" + language.langCode
 					}
 					else {
-						"unofficial_" + language.lang_code
+						"unofficial_" + language.langCode
 					}
 
 					var localeInfo = LocaleController.getInstance().getLanguageFromDict(key)
 
 					if (localeInfo == null) {
 						localeInfo = LocaleInfo()
-						localeInfo.name = language.native_name
+						localeInfo.name = language.nativeName
 						localeInfo.nameEnglish = language.name
-						localeInfo.shortName = language.lang_code
-						localeInfo.baseLangCode = language.base_lang_code
-						localeInfo.pluralLangCode = language.plural_code
+						localeInfo.shortName = language.langCode
+						localeInfo.baseLangCode = language.baseLangCode
+						localeInfo.pluralLangCode = language.pluralCode
 						localeInfo.isRtl = language.rtl
 
 						if (language.official) {
@@ -726,7 +777,7 @@ object AlertsCreator {
 		}
 
 		if (start != -1 && end != -1) {
-			spanned.setSpan(object : URLSpanNoUnderline(language.translations_url) {
+			spanned.setSpan(object : URLSpanNoUnderline(language.translationsUrl) {
 				override fun onClick(widget: View) {
 					builder.getDismissRunnable().run()
 					super.onClick(widget)
@@ -754,14 +805,14 @@ object AlertsCreator {
 		if (DialogObject.isChatDialog(did)) {
 			val chat = MessagesController.getInstance(currentAccount).getChat(-did)
 
-			if (chat != null && chat.slowmode_enabled && !ChatObject.hasAdminRights(chat)) {
+			if (chat != null && chat.slowmodeEnabled && !ChatObject.hasAdminRights(chat)) {
 				if (!few) {
 					var chatFull = MessagesController.getInstance(currentAccount).getChatFull(chat.id)
 
 					if (chatFull == null) {
 						chatFull = MessagesStorage.getInstance(currentAccount).loadChatInfo(chat.id, ChatObject.isChannel(chat), CountDownLatch(1), false, false)
 					}
-					if (chatFull != null && chatFull.slowmode_next_send_date >= ConnectionsManager.getInstance(currentAccount).currentTime) {
+					if (chatFull != null && chatFull.slowmodeNextSendDate >= ConnectionsManager.getInstance(currentAccount).currentTime) {
 						few = true
 					}
 				}
@@ -893,13 +944,13 @@ object AlertsCreator {
 				}
 			}
 
-			val request = TL_contacts_blockFromReplies()
-			request.msg_id = messageObject.id
-			request.delete_message = true
-			request.delete_history = true
+			val request = TLContactsBlockFromReplies()
+			request.msgId = messageObject.id
+			request.deleteMessage = true
+			request.deleteHistory = true
 
 			if (cells[0]!!.isChecked) {
-				request.report_spam = true
+				request.reportSpam = true
 
 				if (fragment.getParentActivity() != null) {
 					if (fragment is ChatActivity) {
@@ -983,8 +1034,8 @@ object AlertsCreator {
 			if (currentChat != null && isLocation) {
 				builder.setTitle(context.getString(R.string.ReportUnrelatedGroup))
 
-				if (chatInfo != null && chatInfo.location is TL_channelLocation) {
-					val location = chatInfo.location as TL_channelLocation
+				if (chatInfo != null && chatInfo.location is TLChannelLocation) {
+					val location = chatInfo.location as TLChannelLocation
 					builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("ReportUnrelatedGroupText", R.string.ReportUnrelatedGroupText, location.address)))
 				}
 				else {
@@ -1047,7 +1098,7 @@ object AlertsCreator {
 
 	@JvmOverloads
 	@JvmStatic
-	fun showCustomNotificationsDialog(parentFragment: BaseFragment?, did: Long, globalType: Int, exceptions: ArrayList<NotificationException>?, currentAccount: Int, callback: MessagesStorage.IntCallback?, resultCallback: MessagesStorage.IntCallback? = null) {
+	fun showCustomNotificationsDialog(parentFragment: BaseFragment?, did: Long, globalType: Int, exceptions: List<NotificationException>?, currentAccount: Int, callback: MessagesStorage.IntCallback?, resultCallback: MessagesStorage.IntCallback? = null) {
 		val context = parentFragment?.getParentActivity() ?: return
 		val defaultEnabled = NotificationsController.getInstance(currentAccount).isGlobalNotificationsEnabled(did)
 		val descriptions = arrayOf(context.getString(R.string.NotificationsTurnOn), LocaleController.formatString("MuteFor", R.string.MuteFor, LocaleController.formatPluralString("Hours", 1)), LocaleController.formatString("MuteFor", R.string.MuteFor, LocaleController.formatPluralString("Days", 2)), if (did == 0L && parentFragment is NotificationsCustomSettingsActivity) null else context.getString(R.string.NotificationsCustomize), context.getString(R.string.NotificationsTurnOff))
@@ -1093,24 +1144,21 @@ object AlertsCreator {
 
 				if (i == 0) {
 					if (did != 0L) {
-						val preferences = MessagesController.getNotificationsSettings(currentAccount)
-						val editor = preferences.edit()
-
-						if (defaultEnabled) {
-							editor.remove("notify2_$did")
-						}
-						else {
-							editor.putInt("notify2_$did", 0)
+						MessagesController.getNotificationsSettings(currentAccount).edit {
+							if (defaultEnabled) {
+								remove("notify2_$did")
+							}
+							else {
+								putInt("notify2_$did", 0)
+							}
 						}
 
 						MessagesStorage.getInstance(currentAccount).setDialogFlags(did, 0)
 
-						editor.commit()
-
 						val dialog = MessagesController.getInstance(currentAccount).dialogs_dict[did]
 
 						if (dialog != null) {
-							dialog.notify_settings = TL_peerNotifySettings()
+							dialog.notifySettings = TLPeerNotifySettings()
 						}
 
 						NotificationsController.getInstance(currentAccount).updateServerNotificationsSettings(did)
@@ -1136,7 +1184,7 @@ object AlertsCreator {
 						parentFragment.presentFragment(ProfileNotificationsActivity(args))
 					}
 					else {
-						parentFragment.presentFragment(NotificationsCustomSettingsActivity(globalType, exceptions))
+						parentFragment.presentFragment(NotificationsCustomSettingsActivity(globalType, ArrayList(exceptions ?: emptyList())))
 					}
 				}
 				else {
@@ -1309,7 +1357,7 @@ object AlertsCreator {
 		else {
 			val urlFinal = if (punycode) {
 				try {
-					val uri = Uri.parse(url)
+					val uri = url.toUri()
 					val host = IDN.toASCII(uri.host, IDN.ALLOW_UNASSIGNED)
 					uri.scheme + "://" + host + uri.path
 				}
@@ -1349,7 +1397,7 @@ object AlertsCreator {
 	fun createSupportAlert(fragment: BaseFragment?): AlertDialog? {
 		val context = fragment?.getParentActivity() ?: return null
 		val message = TextView(context)
-		val spanned: Spannable = SpannableString(Html.fromHtml(context.getString(R.string.AskAQuestionInfo).replace("\n", "<br>")))
+		val spanned: Spannable = SpannableString(HtmlCompat.fromHtml(context.getString(R.string.AskAQuestionInfo).replace("\n", "<br>"), HtmlCompat.FROM_HTML_MODE_LEGACY))
 		val spans = spanned.getSpans(0, spanned.length, URLSpan::class.java)
 
 		for (urlSpan in spans) {
@@ -1408,9 +1456,9 @@ object AlertsCreator {
 						if (datacentersBytes != null) {
 							val data = SerializedData(datacentersBytes)
 
-							supportUser = User.TLdeserialize(data, data.readInt32(false), false)
+							supportUser = User.deserialize(data, data.readInt32(false), false)
 
-							if (supportUser != null && supportUser.id == 333000L) {
+							if (supportUser?.id == 333000L) {
 								supportUser = null
 							}
 
@@ -1430,20 +1478,20 @@ object AlertsCreator {
 			progressDialog.setCanCancel(false)
 			progressDialog.show()
 
-			val req = TL_help_getSupport()
+			val req = TLHelpGetSupport()
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
-				if (response is TL_help_support) {
+				if (response is TLHelpSupport) {
 					AndroidUtilities.runOnUIThread {
 						val editor = preferences.edit()
-						editor.putLong("support_id2", response.user.id)
+						editor.putLong("support_id2", response.user?.id ?: 0)
 
 						val data = SerializedData()
 
-						response.user.serializeToStream(data)
+						response.user?.serializeToStream(data)
 
 						editor.putString("support_user", Base64.encodeToString(data.toByteArray(), Base64.DEFAULT))
-						editor.commit()
+						editor.apply()
 
 						data.cleanup()
 
@@ -1458,7 +1506,7 @@ object AlertsCreator {
 						MessagesController.getInstance(currentAccount).putUser(response.user, false)
 
 						val args = Bundle()
-						args.putLong("user_id", response.user.id)
+						args.putLong("user_id", response.user?.id ?: 0)
 
 						fragment.presentFragment(ChatActivity(args))
 					}
@@ -1562,9 +1610,9 @@ object AlertsCreator {
             }
         } else {
             if (TextUtils.isEmpty(title)) {
-                messageTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ImportToUserNoTitle", R.string.ImportToUserNoTitle, ContactsController.formatName(user.first_name, user.last_name))));
+                messageTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ImportToUserNoTitle", R.string.ImportToUserNoTitle, ContactsController.formatName(user.firstName, user.lastName))));
             } else {
-                messageTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ImportToUser", R.string.ImportToUser, title, ContactsController.formatName(user.first_name, user.last_name))));
+                messageTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ImportToUser", R.string.ImportToUser, title, ContactsController.formatName(user.firstName, user.lastName))));
             }
         }*/
 
@@ -1651,7 +1699,7 @@ object AlertsCreator {
 						textView.text = context.getString(R.string.DeleteMegaMenu)
 					}
 					else {
-						if (ChatObject.isOnlineCourse(chat)) {
+						if (ChatObject.isMasterclass(chat)) {
 							textView.text = context.getString(R.string.Warning)
 						}
 						else if (ChatObject.isSubscriptionChannel(chat)) {
@@ -1709,7 +1757,7 @@ object AlertsCreator {
 		var lastMessageIsJoined = false
 		val dialogMessage = if (user != null) MessagesController.getInstance(account).dialogMessage[user.id] else null
 
-		if (dialogMessage?.messageOwner != null && (dialogMessage.messageOwner?.action is TL_messageActionUserJoined || dialogMessage.messageOwner?.action is TL_messageActionContactSignUp)) {
+		if (dialogMessage?.messageOwner != null && (/*dialogMessage.messageOwner?.action is TLMessageActionUserJoined || */ dialogMessage.messageOwner?.action is TLMessageActionContactSignUp)) {
 			lastMessageIsJoined = true
 		}
 
@@ -1822,7 +1870,7 @@ object AlertsCreator {
 							messageTextView.text = context.getString(R.string.AreYouSureDeleteAndExit)
 						}
 						else {
-							if (ChatObject.isOnlineCourse(chat)) {
+							if (ChatObject.isMasterclass(chat)) {
 								messageTextView.text = context.getString(R.string.delete_paid_channel_warning_message)
 							}
 							else if (ChatObject.isSubscriptionChannel(chat)) {
@@ -1876,7 +1924,7 @@ object AlertsCreator {
 										ConnectionsManager.getInstance(fragment.currentAccount).performRequest(request)
 									}
 
-									if (response is TLRPC.TL_biz_dataRaw) {
+									if (response is TLRPC.TLBizDataRaw) {
 										val subscriptions = response.readData<ElloRpc.Subscriptions>()
 										val currentSubscription = subscriptions?.items?.find { it.channelId == chat.id }
 
@@ -1887,7 +1935,7 @@ object AlertsCreator {
 									}
 								}
 								else {
-									chat.end_date
+									chat.endDate
 								}
 
 								messageTextView.text = context.getString(R.string.confirm_unsubscribe_paid_channel_date, LocaleController.getInstance().chatFullDate.format(endDate))
@@ -1986,6 +2034,63 @@ object AlertsCreator {
 		val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
 
 		button?.setTextColor(context.getColor(R.color.purple))
+	}
+
+	fun createClearOrDeleteDialogAlert(fragment: BaseFragment?, user: User?, expireAt: Long, onProcessRunnable: BooleanCallback?) {
+		val context = fragment?.getParentActivity() ?: return
+		if (user == null) return
+
+		val builder = AlertDialog.Builder(context)
+		val endDate = (expireAt * 1000L)
+
+		val frameLayout = FrameLayout(context)
+
+//		val avatarDrawable = AvatarDrawable().apply {
+//			setTextSize(AndroidUtilities.dp(12f))
+//			setInfo(user)
+//		}
+//		val imageView = BackupImageView(context).apply {
+//			setRoundRadius(AndroidUtilities.dp(20f))
+//			setForUserOrChat(user, avatarDrawable)
+//		}
+//		frameLayout.addView(imageView, LayoutHelper.createFrame(40, 40f, Gravity.LEFT or Gravity.TOP, 22f, 5f, 0f, 0f))
+
+		val textView = TextView(context).apply {
+			setTextColor(context.getColor(R.color.text))
+			setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20f)
+			typeface = Theme.TYPEFACE_BOLD
+			maxLines = 1
+			ellipsize = TextUtils.TruncateAt.END
+			gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
+			text = context.getString(R.string.LeavePaidChannelMenu)
+		}
+		frameLayout.addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.LEFT or Gravity.TOP, 21f, 11f, 21f, 0f))
+
+		val messageTextView = TextView(context).apply {
+			setTextColor(context.getColor(R.color.text))
+			setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f)
+			gravity = Gravity.LEFT or Gravity.TOP
+			text = context.getString(R.string.confirm_unsubscribe_paid_channel_date, LocaleController.getInstance().chatFullDate.format(endDate))
+		}
+		frameLayout.addView(messageTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.LEFT or Gravity.TOP, 24f, 57f, 24f, 9f))
+
+		val alertDialog = builder.create()
+
+		builder.setView(frameLayout).setPositiveButton(context.getString(R.string.confirm)) { _, _ ->
+			onProcessRunnable?.run(true)
+		}.setNegativeButton(context.getString(R.string.cancel)) { _, _ ->
+			alertDialog.dismiss()
+		}
+
+		fragment.showDialog(alertDialog)
+
+		val buttonPositive = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
+
+		buttonPositive?.setTextColor(context.getColor(R.color.purple))
+
+		val buttonNegative = alertDialog.getButton(DialogInterface.BUTTON_NEGATIVE) as? TextView
+
+		buttonNegative?.setTextColor(context.getColor(R.color.brand))
 	}
 
 	@JvmStatic
@@ -2166,7 +2271,7 @@ object AlertsCreator {
 
 		val dialog = AlertDialog.Builder(activity).setView(frameLayout).setPositiveButton(activity.getString(R.string.Call)) { _, _ ->
 			val userFull = fragment.messagesController.getUserFull(user.id)
-			VoIPHelper.startCall(user, videoCall, userFull?.video_calls_available == true, activity, userFull, fragment.accountInstance)
+			VoIPHelper.startCall(user, videoCall, userFull?.videoCallsAvailable == true, activity, userFull, fragment.accountInstance)
 		}.setNegativeButton(activity.getString(R.string.Cancel), null).create()
 
 		fragment.showDialog(dialog)
@@ -2241,7 +2346,7 @@ object AlertsCreator {
 				val count = maxSymbolsCount - Character.codePointCount(s, 0, s.length)
 
 				if (count < 30) {
-					checkTextView.setNumber(count, checkTextView.visibility == View.VISIBLE)
+					checkTextView.setNumber(count, checkTextView.isVisible)
 
 					AndroidUtilities.updateViewVisibilityAnimated(checkTextView, true)
 				}
@@ -2280,7 +2385,7 @@ object AlertsCreator {
 					NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.userInfoDidLoad, peerId, userFull)
 				}
 
-				val req = TL_account_updateProfile()
+				val req = TLAccountUpdateProfile()
 				req.about = newName
 				req.flags = req.flags or 4
 
@@ -2354,8 +2459,8 @@ object AlertsCreator {
 
 		if (DialogObject.isUserDialog(peerId)) {
 			val user = MessagesController.getInstance(currentAccount).getUser(peerId)
-			currentName = user?.first_name
-			currentLastName = user?.last_name
+			currentName = user?.firstName
+			currentLastName = user?.lastName
 		}
 		else {
 			val chat = MessagesController.getInstance(currentAccount).getChat(-peerId)
@@ -2428,8 +2533,8 @@ object AlertsCreator {
 				val currentUser = MessagesController.getInstance(currentAccount).getUser(peerId)
 				val newFirst = firstNameEditTextView.getText().toString()
 				val newLast = finalLastNameEditTextView!!.getText().toString()
-				var oldFirst = currentUser?.first_name
-				var oldLast = currentUser?.last_name
+				var oldFirst = currentUser?.firstName
+				var oldLast = currentUser?.lastName
 
 				if (oldFirst == null) {
 					oldFirst = ""
@@ -2444,21 +2549,21 @@ object AlertsCreator {
 					return@OnClickListener
 				}
 
-				val req = TL_account_updateProfile()
+				val req = TLAccountUpdateProfile()
 				req.flags = 3
-				req.first_name = newFirst
+				req.firstName = newFirst
 
-				currentUser?.first_name = req.first_name
+				currentUser?.firstName = req.firstName
 
-				req.last_name = newLast
+				req.lastName = newLast
 
-				currentUser?.last_name = req.last_name
+				currentUser?.lastName = req.lastName
 
 				val user = MessagesController.getInstance(currentAccount).getUser(UserConfig.getInstance(currentAccount).getClientUserId())
 
 				if (user != null) {
-					user.first_name = req.first_name
-					user.last_name = req.last_name
+					user.firstName = req.firstName
+					user.lastName = req.lastName
 				}
 
 				UserConfig.getInstance(currentAccount).saveConfig(true)
@@ -2576,7 +2681,7 @@ object AlertsCreator {
 		val actionText: String
 
 		if (count == 1) {
-			val name = ContactsController.formatName(user?.first_name, user?.last_name)
+			val name = ContactsController.formatName(user?.firstName, user?.lastName)
 			builder.setTitle(LocaleController.formatString("BlockUserTitle", R.string.BlockUserTitle, name))
 			actionText = context.getString(R.string.BlockUser)
 			builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("BlockUserMessage", R.string.BlockUserMessage, name)))
@@ -3051,13 +3156,13 @@ object AlertsCreator {
 
 		linearLayout.addView(hourPicker, LayoutHelper.createLinear(0, 54 * 5, 0.2f))
 
-		hourPicker.setFormatter { String.format("%02d", it) }
+		hourPicker.setFormatter { String.format(Locale.getDefault(), "%02d", it) }
 		hourPicker.setOnValueChangedListener(onValueChangeListener)
 
 		minutePicker.setMinValue(0)
 		minutePicker.setMaxValue(59)
 		minutePicker.value = 0
-		minutePicker.setFormatter { String.format("%02d", it) }
+		minutePicker.setFormatter { String.format(Locale.getDefault(), "%02d", it) }
 
 		linearLayout.addView(minutePicker, LayoutHelper.createLinear(0, 54 * 5, 0.3f))
 
@@ -4378,20 +4483,20 @@ object AlertsCreator {
 	}
 
 	fun sendReport(peer: InputPeer?, type: Int, message: String?, messages: List<Int>) {
-		val request = TL_messages_report()
+		val request = TLMessagesReport()
 		request.peer = peer
 		request.id.addAll(messages)
 		request.message = message
 
 		when (type) {
-			REPORT_TYPE_SPAM -> request.reason = TL_inputReportReasonSpam()
-			REPORT_TYPE_FAKE_ACCOUNT -> request.reason = TL_inputReportReasonFake()
-			REPORT_TYPE_VIOLENCE -> request.reason = TL_inputReportReasonViolence()
-			REPORT_TYPE_CHILD_ABUSE -> request.reason = TL_inputReportReasonChildAbuse()
-			REPORT_TYPE_PORNOGRAPHY -> request.reason = TL_inputReportReasonPornography()
-			REPORT_TYPE_ILLEGAL_DRUGS -> request.reason = TL_inputReportReasonIllegalDrugs()
-			REPORT_TYPE_PERSONAL_DETAILS -> request.reason = TL_inputReportReasonPersonalDetails()
-			REPORT_TYPE_OTHER -> request.reason = TL_inputReportReasonOther()
+			REPORT_TYPE_SPAM -> request.reason = TLInputReportReasonSpam()
+			REPORT_TYPE_FAKE_ACCOUNT -> request.reason = TLInputReportReasonFake()
+			REPORT_TYPE_VIOLENCE -> request.reason = TLInputReportReasonViolence()
+			REPORT_TYPE_CHILD_ABUSE -> request.reason = TLInputReportReasonChildAbuse()
+			REPORT_TYPE_PORNOGRAPHY -> request.reason = TLInputReportReasonPornography()
+			REPORT_TYPE_ILLEGAL_DRUGS -> request.reason = TLInputReportReasonIllegalDrugs()
+			REPORT_TYPE_PERSONAL_DETAILS -> request.reason = TLInputReportReasonPersonalDetails()
+			REPORT_TYPE_OTHER -> request.reason = TLInputReportReasonOther()
 		}
 
 		ConnectionsManager.getInstance(UserConfig.selectedAccount).sendRequest(request)
@@ -4476,35 +4581,35 @@ object AlertsCreator {
 			val peer = MessagesController.getInstance(UserConfig.selectedAccount).getInputPeer(dialogId)
 
 			if (messageId != 0) {
-				val request = TL_messages_report()
+				val request = TLMessagesReport()
 				request.peer = peer
 				request.id.add(messageId)
 				request.message = ""
 
 				when (type) {
-					REPORT_TYPE_SPAM -> request.reason = TL_inputReportReasonSpam()
-					REPORT_TYPE_VIOLENCE -> request.reason = TL_inputReportReasonViolence()
-					REPORT_TYPE_CHILD_ABUSE -> request.reason = TL_inputReportReasonChildAbuse()
-					REPORT_TYPE_PORNOGRAPHY -> request.reason = TL_inputReportReasonPornography()
-					REPORT_TYPE_ILLEGAL_DRUGS -> request.reason = TL_inputReportReasonIllegalDrugs()
-					REPORT_TYPE_PERSONAL_DETAILS -> request.reason = TL_inputReportReasonPersonalDetails()
+					REPORT_TYPE_SPAM -> request.reason = TLInputReportReasonSpam()
+					REPORT_TYPE_VIOLENCE -> request.reason = TLInputReportReasonViolence()
+					REPORT_TYPE_CHILD_ABUSE -> request.reason = TLInputReportReasonChildAbuse()
+					REPORT_TYPE_PORNOGRAPHY -> request.reason = TLInputReportReasonPornography()
+					REPORT_TYPE_ILLEGAL_DRUGS -> request.reason = TLInputReportReasonIllegalDrugs()
+					REPORT_TYPE_PERSONAL_DETAILS -> request.reason = TLInputReportReasonPersonalDetails()
 				}
 
 				req = request
 			}
 			else {
-				val request = TL_account_reportPeer()
+				val request = TLAccountReportPeer()
 				request.peer = peer
 				request.message = ""
 
 				when (type) {
-					REPORT_TYPE_SPAM -> request.reason = TL_inputReportReasonSpam()
-					REPORT_TYPE_FAKE_ACCOUNT -> request.reason = TL_inputReportReasonFake()
-					REPORT_TYPE_VIOLENCE -> request.reason = TL_inputReportReasonViolence()
-					REPORT_TYPE_CHILD_ABUSE -> request.reason = TL_inputReportReasonChildAbuse()
-					REPORT_TYPE_PORNOGRAPHY -> request.reason = TL_inputReportReasonPornography()
-					REPORT_TYPE_ILLEGAL_DRUGS -> request.reason = TL_inputReportReasonIllegalDrugs()
-					REPORT_TYPE_PERSONAL_DETAILS -> request.reason = TL_inputReportReasonPersonalDetails()
+					REPORT_TYPE_SPAM -> request.reason = TLInputReportReasonSpam()
+					REPORT_TYPE_FAKE_ACCOUNT -> request.reason = TLInputReportReasonFake()
+					REPORT_TYPE_VIOLENCE -> request.reason = TLInputReportReasonViolence()
+					REPORT_TYPE_CHILD_ABUSE -> request.reason = TLInputReportReasonChildAbuse()
+					REPORT_TYPE_PORNOGRAPHY -> request.reason = TLInputReportReasonPornography()
+					REPORT_TYPE_ILLEGAL_DRUGS -> request.reason = TLInputReportReasonIllegalDrugs()
+					REPORT_TYPE_PERSONAL_DETAILS -> request.reason = TLInputReportReasonPersonalDetails()
 				}
 
 				req = request
@@ -4674,7 +4779,7 @@ object AlertsCreator {
 			}
 
 			"CHAT_ADMIN_BAN_REQUIRED", "USER_KICKED" -> {
-				if (request is TL_channels_inviteToChannel) {
+				if (request is TLChannelsInviteToChannel) {
 					builder.setMessage(context.getString(R.string.AddUserErrorBlacklisted))
 				}
 				else {
@@ -4701,7 +4806,7 @@ object AlertsCreator {
 			"CHANNELS_TOO_MUCH" -> {
 				builder.setTitle(context.getString(R.string.ChannelTooMuchTitle))
 
-				if (request is TL_channels_createChannel) {
+				if (request is TLChannelsCreateChannel) {
 					builder.setMessage(context.getString(R.string.ChannelTooMuch))
 				}
 				else {
@@ -5051,9 +5156,13 @@ object AlertsCreator {
 		return builder.create()
 	}
 
-	@JvmStatic
-	fun createBackgroundLocationPermissionDialog(activity: Activity?, selfUser: User?, cancelRunnable: Runnable): AlertDialog.Builder? {
-		if (activity == null || Build.VERSION.SDK_INT < 29) {
+	fun createBackgroundLocationPermissionDialog(activity: Activity?, selfUser: User?, onContinue: Runnable?): AlertDialog.Builder? {
+		if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+			return null
+		}
+
+		if (activity.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+			onContinue?.run()
 			return null
 		}
 
@@ -5073,7 +5182,7 @@ object AlertsCreator {
 		val background = View(activity)
 		background.background = SvgHelper.getDrawable(svg)
 
-		frameLayout.addView(background, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat(), Gravity.LEFT or Gravity.TOP, 0f, 0f, 0f, 0f))
+		frameLayout.addView(background, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat(), Gravity.CENTER_HORIZONTAL or Gravity.TOP, 0f, 0f, 0f, 0f))
 
 		val pin = View(activity)
 		pin.background = SvgHelper.getDrawable(pinSvg)
@@ -5094,13 +5203,18 @@ object AlertsCreator {
 		builder.setMessage(AndroidUtilities.replaceTags(activity.getString(R.string.PermissionBackgroundLocation)))
 
 		builder.setPositiveButton(activity.getString(R.string.Continue)) { _, _ ->
-			if (activity.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-				activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 30)
-			}
+			onContinue?.run()
 		}
 
-		builder.setNegativeButton(activity.getString(R.string.Cancel)) { _, _ ->
-			cancelRunnable.run()
+		builder.setNeutralButton(activity.getString(R.string.go_to_settings)) { _, _ ->
+			try {
+				val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+				intent.setData(Uri.parse("package:" + ApplicationLoader.applicationContext.packageName))
+				activity.startActivity(intent)
+			}
+			catch (e: Exception) {
+				FileLog.e(e)
+			}
 		}
 
 		return builder
@@ -5556,7 +5670,8 @@ object AlertsCreator {
 			}
 
 			if (oldValue != encryptedChat.ttl) {
-				SecretChatHelper.getInstance(UserConfig.selectedAccount).sendTTLMessage(encryptedChat, null)
+				// MARK: uncomment to enable secret chats
+				// SecretChatHelper.getInstance(UserConfig.selectedAccount).sendTTLMessage(encryptedChat, null)
 				MessagesStorage.getInstance(UserConfig.selectedAccount).updateEncryptedChatTTL(encryptedChat)
 			}
 		}
@@ -5714,19 +5829,19 @@ object AlertsCreator {
 			val canBan = ChatObject.canBlockUsers(chat)
 
 			if (selectedMessage != null) {
-				if (selectedMessage.messageOwner?.action == null || selectedMessage.messageOwner?.action is TL_messageActionEmpty || selectedMessage.messageOwner?.action is TL_messageActionChatDeleteUser || selectedMessage.messageOwner?.action is TL_messageActionChatJoinedByLink || selectedMessage.messageOwner?.action is TL_messageActionChatAddUser) {
-					if (selectedMessage.messageOwner!!.from_id!!.user_id != 0L) {
-						actionUser = MessagesController.getInstance(currentAccount).getUser(selectedMessage.messageOwner?.from_id?.user_id)
+				if (selectedMessage.messageOwner?.action == null || selectedMessage.messageOwner?.action is TLMessageActionEmpty || selectedMessage.messageOwner?.action is TLMessageActionChatDeleteUser || selectedMessage.messageOwner?.action is TLMessageActionChatJoinedByLink || selectedMessage.messageOwner?.action is TLMessageActionChatAddUser) {
+					if (selectedMessage.messageOwner!!.fromId!!.userId != 0L) {
+						actionUser = MessagesController.getInstance(currentAccount).getUser(selectedMessage.messageOwner?.fromId?.userId)
 					}
-					else if (selectedMessage.messageOwner!!.from_id!!.channel_id != 0L) {
-						actionChat = MessagesController.getInstance(currentAccount).getChat(selectedMessage.messageOwner?.from_id?.channel_id)
+					else if (selectedMessage.messageOwner!!.fromId!!.channelId != 0L) {
+						actionChat = MessagesController.getInstance(currentAccount).getChat(selectedMessage.messageOwner?.fromId?.channelId)
 					}
-					else if (selectedMessage.messageOwner!!.from_id!!.chat_id != 0L) {
-						actionChat = MessagesController.getInstance(currentAccount).getChat(selectedMessage.messageOwner?.from_id?.chat_id)
+					else if (selectedMessage.messageOwner!!.fromId!!.chatId != 0L) {
+						actionChat = MessagesController.getInstance(currentAccount).getChat(selectedMessage.messageOwner?.fromId?.chatId)
 					}
 				}
 
-				val hasOutgoing = !selectedMessage.isSendError && selectedMessage.dialogId == mergeDialogId && (selectedMessage.messageOwner?.action == null || selectedMessage.messageOwner?.action is TL_messageActionEmpty) && selectedMessage.isOut && currentDate - selectedMessage.messageOwner!!.date <= revokeTimeLimit
+				val hasOutgoing = !selectedMessage.isSendError && selectedMessage.dialogId == mergeDialogId && (selectedMessage.messageOwner?.action == null || selectedMessage.messageOwner?.action is TLMessageActionEmpty) && selectedMessage.isOut && currentDate - selectedMessage.messageOwner!!.date <= revokeTimeLimit
 
 				if (hasOutgoing) {
 					myMessagesCount++
@@ -5777,7 +5892,7 @@ object AlertsCreator {
 				if (loadParticipant == 1 && !chat.creator && actionUser != null) {
 					val progressDialog = arrayOf<AlertDialog?>(AlertDialog(activity, 3))
 
-					val req = TL_channels_getParticipant()
+					val req = TLChannelsGetParticipant()
 					req.channel = MessagesController.getInputChannel(chat)
 					req.participant = MessagesController.getInputPeer(actionUser)
 
@@ -5792,9 +5907,9 @@ object AlertsCreator {
 							var loadType = 2
 
 							if (response != null) {
-								val participant = response as TL_channels_channelParticipant
+								val participant = response as TLChannelsChannelParticipant
 
-								if (!(participant.participant is TL_channelParticipantAdmin || participant.participant is TL_channelParticipantCreator)) {
+								if (!(participant.participant is TLChannelParticipantAdmin || participant.participant is TLChannelParticipantCreator)) {
 									loadType = 0
 								}
 							}
@@ -5823,7 +5938,7 @@ object AlertsCreator {
 				val frameLayout = FrameLayout(activity)
 				var num = 0
 				//MARK: The text of the third checkbox is set here
-				// val name = if (actionUser != null) ContactsController.formatName(actionUser.first_name, actionUser.last_name) else actionChat?.title
+				// val name = if (actionUser != null) ContactsController.formatName(actionUser.firstName, actionUser.lastName) else actionChat?.title
 
 				//If you need three items then change (for (a in 0..1)) with (for (a in 0..2))
 				for (a in 0..1) {
@@ -5903,7 +6018,7 @@ object AlertsCreator {
 		else if (!scheduled && !ChatObject.isChannel(chat) && encryptedChat == null) {
 			if (user != null && user.id != UserConfig.getInstance(currentAccount).getClientUserId() && (!user.bot || user.support) || chat != null) {
 				if (selectedMessage != null) {
-					val hasOutgoing = !selectedMessage.isSendError && (selectedMessage.messageOwner?.action == null || selectedMessage.messageOwner?.action is TL_messageActionEmpty || selectedMessage.messageOwner?.action is TL_messageActionPhoneCall || selectedMessage.messageOwner?.action is TL_messageActionPinMessage || selectedMessage.messageOwner?.action is TL_messageActionGeoProximityReached || selectedMessage.messageOwner?.action is TL_messageActionSetChatTheme) && (selectedMessage.isOut || canRevokeInbox || ChatObject.hasAdminRights(chat)) && currentDate - selectedMessage.messageOwner!!.date <= revokeTimeLimit
+					val hasOutgoing = !selectedMessage.isSendError && (selectedMessage.messageOwner?.action == null || selectedMessage.messageOwner?.action is TLMessageActionEmpty || selectedMessage.messageOwner?.action is TLMessageActionPhoneCall || selectedMessage.messageOwner?.action is TLMessageActionPinMessage || selectedMessage.messageOwner?.action is TLMessageActionGeoProximityReached || selectedMessage.messageOwner?.action is TLMessageActionSetChatTheme) && (selectedMessage.isOut || canRevokeInbox || ChatObject.hasAdminRights(chat)) && currentDate - selectedMessage.messageOwner!!.date <= revokeTimeLimit
 
 					if (hasOutgoing) {
 						myMessagesCount++
@@ -5916,7 +6031,7 @@ object AlertsCreator {
 						for (b in 0 until selectedMessages[a].size()) {
 							val msg = selectedMessages[a].valueAt(b)
 
-							if (!(msg.messageOwner?.action == null || msg.messageOwner?.action is TL_messageActionEmpty || msg.messageOwner?.action is TL_messageActionPhoneCall || msg.messageOwner?.action is TL_messageActionPinMessage || msg.messageOwner?.action is TL_messageActionGeoProximityReached)) {
+							if (!(msg.messageOwner?.action == null || msg.messageOwner?.action is TLMessageActionEmpty || msg.messageOwner?.action is TLMessageActionPhoneCall || msg.messageOwner?.action is TLMessageActionPinMessage || msg.messageOwner?.action is TLMessageActionGeoProximityReached)) {
 								continue
 							}
 
@@ -5971,12 +6086,12 @@ object AlertsCreator {
 		val chatFinal = actionChat
 
 		builder.setPositiveButton(activity.getString(R.string.Delete)) { _, _ ->
-			var ids: ArrayList<Int>? = null
+			var ids: MutableList<Int>? = null
 
 			if (selectedMessage != null) {
-				ids = ArrayList()
+				ids = mutableListOf()
 
-				var randomIds: ArrayList<Long>? = null
+				var randomIds: MutableList<Long>? = null
 
 				if (selectedGroup != null) {
 					for (a in selectedGroup.messages.indices) {
@@ -5984,21 +6099,21 @@ object AlertsCreator {
 
 						ids.add(messageObject.id)
 
-						if (encryptedChat != null && messageObject.messageOwner!!.random_id != 0L && messageObject.type != 10) {
+						if (encryptedChat != null && messageObject.messageOwner!!.randomId != 0L && messageObject.type != 10) {
 							if (randomIds == null) {
-								randomIds = ArrayList()
+								randomIds = mutableListOf()
 							}
 
-							randomIds.add(messageObject.messageOwner!!.random_id)
+							randomIds.add(messageObject.messageOwner!!.randomId)
 						}
 					}
 				}
 				else {
 					ids.add(selectedMessage.id)
 
-					if (encryptedChat != null && selectedMessage.messageOwner!!.random_id != 0L && selectedMessage.type != 10) {
-						randomIds = ArrayList()
-						randomIds.add(selectedMessage.messageOwner!!.random_id)
+					if (encryptedChat != null && selectedMessage.messageOwner!!.randomId != 0L && selectedMessage.type != 10) {
+						randomIds = mutableListOf()
+						randomIds.add(selectedMessage.messageOwner!!.randomId)
 					}
 				}
 
@@ -6006,22 +6121,22 @@ object AlertsCreator {
 			}
 			else {
 				for (a in 1 downTo 0) {
-					ids = ArrayList()
+					ids = mutableListOf()
 
-					for (b in 0 until selectedMessages[a].size()) {
+					for (b in 0 until selectedMessages[a].size) {
 						ids.add(selectedMessages[a].keyAt(b))
 					}
 
-					var randomIds: ArrayList<Long>? = null
+					var randomIds: MutableList<Long>? = null
 
 					if (encryptedChat != null) {
-						randomIds = ArrayList()
+						randomIds = mutableListOf()
 
-						for (b in 0 until selectedMessages[a].size()) {
+						for (b in 0 until selectedMessages[a].size) {
 							val msg = selectedMessages[a].valueAt(b)
 
-							if (msg.messageOwner!!.random_id != 0L && msg.type != 10) {
-								randomIds.add(msg.messageOwner!!.random_id)
+							if (msg.messageOwner!!.randomId != 0L && msg.type != 10) {
+								randomIds.add(msg.messageOwner!!.randomId)
 							}
 						}
 					}
@@ -6038,7 +6153,7 @@ object AlertsCreator {
 				}
 
 				if (checks[1]) {
-					val req = TL_channels_reportSpam()
+					val req = TLChannelsReportSpam()
 					req.channel = MessagesController.getInputChannel(chat)
 
 					if (userFinal != null) {
@@ -6048,7 +6163,9 @@ object AlertsCreator {
 						req.participant = MessagesController.getInputPeer(chatFinal)
 					}
 
-					req.id = ids
+					ids?.let {
+						req.id.addAll(it)
+					}
 
 					ConnectionsManager.getInstance(currentAccount).sendRequest(req)
 				}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -35,10 +35,11 @@ import org.telegram.messenger.R
 import org.telegram.messenger.SharedConfig
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.ChatParticipant
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.isSelf
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.BaseFragment
@@ -47,8 +48,9 @@ import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.AvatarImageView
 import org.telegram.ui.Components.AudioPlayerAlert.ClippingTextViewSwitcher
 import org.telegram.ui.Components.LayoutHelper.createFrame
-import org.telegram.ui.Components.SharedMediaLayout.SharedMediaPreloader
-import org.telegram.ui.Components.SharedMediaLayout.SharedMediaPreloaderDelegate
+import org.telegram.ui.Components.sharedmedia.SharedMediaLayout
+import org.telegram.ui.Components.sharedmedia.SharedMediaLayout.SharedMediaPreloaderDelegate
+import org.telegram.ui.Components.sharedmedia.SharedMediaPreloader
 
 class MediaActivity(args: Bundle?, private var sharedMediaPreloader: SharedMediaPreloader?) : BaseFragment(args), SharedMediaPreloaderDelegate {
 	private var currentChatInfo: ChatFull? = null
@@ -228,7 +230,7 @@ class MediaActivity(args: Bundle?, private var sharedMediaPreloader: SharedMedia
 				AndroidUtilities.updateViewVisibilityAnimated(avatarContainer, !expanded, 0.95f, true)
 			}
 
-			override fun drawBackgroundWithBlur(canvas: Canvas, y: Float, rectTmp2: Rect?, backgroundPaint: Paint?) {
+			override fun drawBackgroundWithBlur(canvas: Canvas, y: Float, rectTmp2: Rect, backgroundPaint: Paint) {
 				fragmentView.drawBlurRect(canvas, getY() + y, rectTmp2, backgroundPaint, true)
 			}
 
@@ -252,10 +254,10 @@ class MediaActivity(args: Bundle?, private var sharedMediaPreloader: SharedMedia
 			val encryptedChat = messagesController.getEncryptedChat(DialogObject.getEncryptedChatId(dialogId))
 
 			if (encryptedChat != null) {
-				val user = messagesController.getUser(encryptedChat.user_id)
+				val user = messagesController.getUser(encryptedChat.userId)
 
 				if (user != null) {
-					nameTextView?.setText(ContactsController.formatName(user.first_name, user.last_name))
+					nameTextView?.setText(ContactsController.formatName(user.firstName, user.lastName))
 					avatarDrawable.setInfo(user)
 					avatarObject = user
 				}
@@ -265,13 +267,13 @@ class MediaActivity(args: Bundle?, private var sharedMediaPreloader: SharedMedia
 			val user = MessagesController.getInstance(currentAccount).getUser(dialogId)
 
 			if (user != null) {
-				if (user.self) {
+				if (user.isSelf) {
 					nameTextView?.setText(context.getString(R.string.SavedMessages))
 					avatarDrawable.avatarType = AvatarDrawable.AVATAR_TYPE_SAVED
 					avatarDrawable.setSmallSize(true)
 				}
 				else {
-					nameTextView?.setText(ContactsController.formatName(user.first_name, user.last_name))
+					nameTextView?.setText(ContactsController.formatName(user.firstName, user.lastName))
 					avatarDrawable.setInfo(user)
 					avatarObject = user
 				}

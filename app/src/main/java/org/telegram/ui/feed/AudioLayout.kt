@@ -4,13 +4,16 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Shamil Afandiyev, Ello 2024.
  */
 package org.telegram.ui.feed
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.widget.FrameLayout
 import android.widget.SeekBar
 import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.ImageReceiver
 import org.telegram.messenger.MediaController
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.AudioLayoutBinding
@@ -24,18 +27,54 @@ import kotlin.math.abs
 class AudioLayout(val binding: AudioLayoutBinding) : FrameLayout(binding.root.context) {
 	private var isSeeking = false
 
+	private val imageReceiver = ImageReceiver(binding.audioImage).apply {
+		setDelegate(object : ImageReceiver.ImageReceiverDelegate {
+			override fun didSetImage(imageReceiver: ImageReceiver, set: Boolean, thumb: Boolean, memCache: Boolean) {
+				updatePlayButton()
+			}
+		})
+	}
+
 	var messageObject: MessageObject? = null
 		private set
 
-	fun updateMediaStatus() {
+	private fun updatePlayButton() {
+		val artwork = imageReceiver.drawable
+
+		if (artwork != null) {
+			binding.audioImage.setImageDrawable(artwork)
+			binding.audioPlayButton.setBackgroundColor(Color.parseColor("#44000000"))
+		}
+
 		if (MediaController.getInstance().isPlayingMessage(messageObject)) {
 			if (MediaController.getInstance().isMessagePaused) {
+				if (artwork == null) {
+					binding.audioPlayButton.setBackgroundColor(context.getColor(R.color.brand))
+				}
+
 				binding.audioPlayButton.setImageResource(R.drawable.feed_play_button)
 			}
 			else {
+				if (artwork == null) {
+					binding.audioPlayButton.setBackgroundColor(Color.parseColor("#010101"))
+				}
+
 				binding.audioPlayButton.setImageResource(R.drawable.feed_pause_button)
 			}
+		}
+		else {
+			if (artwork == null) {
+				binding.audioPlayButton.setBackgroundColor(context.getColor(R.color.brand))
+			}
 
+			binding.audioPlayButton.setImageResource(R.drawable.feed_play_button)
+		}
+	}
+
+	fun updateMediaStatus() {
+		updatePlayButton()
+
+		if (MediaController.getInstance().isPlayingMessage(messageObject)) {
 			val (duration, progress) = MediaController.getInstance().playingMessageObject.let {
 				(it?.audioPlayerDuration ?: 0) to (it?.audioProgressSec ?: 0)
 			}
@@ -49,14 +88,11 @@ class AudioLayout(val binding: AudioLayoutBinding) : FrameLayout(binding.root.co
 			binding.elapsedTimeLabel.text = AndroidUtilities.formatShortDuration(progress)
 			binding.remainingTimeLabel.text = context.getString(R.string.neg_x, AndroidUtilities.formatShortDuration(abs(progress - duration)))
 
-			binding.trackLabel.gone()
-			binding.artistYearLabel.gone()
 			binding.elapsedTimeLabel.visible()
 			binding.remainingTimeLabel.visible()
 			binding.seekbar.visible()
 		}
 		else {
-			binding.audioPlayButton.setImageResource(R.drawable.feed_play_button)
 			binding.trackLabel.visible()
 			binding.artistYearLabel.visible()
 			binding.elapsedTimeLabel.gone()
@@ -73,6 +109,17 @@ class AudioLayout(val binding: AudioLayoutBinding) : FrameLayout(binding.root.co
 			binding.seekbar.setOnSeekBarChangeListener(null)
 			return
 		}
+
+		val artworkUrl = messageObject.getArtworkUrl(true)
+
+		if (!artworkUrl.isNullOrEmpty()) {
+			imageReceiver.setImage(artworkUrl, null, null, null, 0)
+		}
+		else {
+			imageReceiver.setImage(null, null, null, null, 0)
+		}
+
+		updatePlayButton()
 
 		binding.artistYearLabel.text = messageObject.musicAuthor?.trim()
 
@@ -110,6 +157,9 @@ class AudioLayout(val binding: AudioLayoutBinding) : FrameLayout(binding.root.co
 		clipToPadding = false
 
 		addView(binding.root, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT.toFloat()))
+
+		binding.audioImageContainer.clipToOutline = true
+		binding.audioImageContainer.outlineProvider = com.beint.elloapp.getOutlineProvider(AndroidUtilities.dp(35f / 2f).toFloat(), topCorners = true, bottomCorners = true)
 
 		binding.audioPlayButton.setOnClickListener {
 			messageObject?.let { messageObject ->

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
@@ -14,7 +14,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
-import android.net.Uri
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -28,6 +27,8 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.core.net.toUri
+import androidx.core.view.isVisible
 import com.google.android.exoplayer2.ExoPlayer
 import org.json.JSONObject
 import org.telegram.messenger.AndroidUtilities
@@ -40,6 +41,9 @@ import org.telegram.messenger.Utilities
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.utils.isYouTubeShortsLink
 import org.telegram.tgnet.TLRPC.WebPage
+import org.telegram.tgnet.embedHeight
+import org.telegram.tgnet.embedUrl
+import org.telegram.tgnet.embedWidth
 import org.telegram.ui.PhotoViewer
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
@@ -70,7 +74,7 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 	val webView: WebView
 
 	private val isYoutubeShorts: Boolean
-		get() = currentWebpage?.embed_url?.isYouTubeShortsLink() == true
+		get() = currentWebpage?.embedUrl?.isYouTubeShortsLink() == true
 
 	var isYouTube: Boolean = false
 		private set
@@ -203,7 +207,7 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 			override fun draw(canvas: Canvas) {
 				super.draw(canvas)
 
-				if (PipVideoOverlay.getInnerView() === this && progressBarBlackBackground.visibility == VISIBLE) {
+				if (PipVideoOverlay.getInnerView() === this && progressBarBlackBackground.isVisible) {
 					canvas.drawColor(Color.BLACK)
 					drawBlackBackground(canvas, width, height)
 				}
@@ -504,14 +508,14 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 			var w = 100
 			var h = 100
 
-			currentWebpage?.embed_url?.let { url ->
+			currentWebpage?.embedUrl?.let { url ->
 				if (url.contains("youtube.com") && url.contains("/shorts/")) {
 					w = viewWidth
 					h = viewHeight
 				}
 				else {
-					w = currentWebpage?.embed_width?.takeIf { it != 0 } ?: 100
-					h = currentWebpage?.embed_height?.takeIf { it != 0 } ?: 100
+					w = currentWebpage?.embedWidth?.takeIf { it != 0 } ?: 100
+					h = currentWebpage?.embedHeight?.takeIf { it != 0 } ?: 100
 				}
 			}
 
@@ -544,7 +548,7 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 			return false
 		}
 
-		if (progressBar.visibility == VISIBLE) {
+		if (progressBar.isVisible) {
 			return false
 		}
 
@@ -556,7 +560,7 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 
 		progressBarBlackBackground.visibility = VISIBLE
 
-		if (PipVideoOverlay.show(inAppOnly, context as Activity, this, webView, currentWebpage?.embed_width ?: 0, currentWebpage?.embed_height ?: 0, false)) {
+		if (PipVideoOverlay.show(inAppOnly, context as Activity, this, webView, currentWebpage?.embedWidth ?: 0, currentWebpage?.embedHeight ?: 0, false)) {
 			PipVideoOverlay.setPhotoViewer(PhotoViewer.getInstance())
 		}
 
@@ -615,7 +619,7 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 	fun init(seekTime: Int, webPage: WebPage) {
 		currentWebpage = webPage
 
-		currentYoutubeId = WebPlayerView.getYouTubeVideoId(webPage.embed_url)
+		currentYoutubeId = WebPlayerView.getYouTubeVideoId(webPage.embedUrl)
 
 		val originalUrl = webPage.url
 
@@ -632,7 +636,7 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 
 				if (originalUrl != null) {
 					try {
-						val uri = Uri.parse(originalUrl)
+						val uri = originalUrl.toUri()
 						var t = if (seekTime > 0) "" + seekTime else null
 
 						if (t == null) {
@@ -673,7 +677,9 @@ open class PhotoViewerWebView @SuppressLint("SetJavaScriptEnabled") constructor(
 				webView.loadDataWithBaseURL("https://messenger.ello.team/", String.format(Locale.US, bos.toString("UTF-8"), currentYoutubeId, seekToTime), "text/html", "UTF-8", "https://youtube.com")
 			}
 			else {
-				webView.loadUrl(webPage.embed_url, mapOf("Referer" to "messenger.ello.team"))
+				webPage.embedUrl?.let {
+					webView.loadUrl(it, mapOf("Referer" to "messenger.ello.team"))
+				}
 			}
 		}
 		catch (e: Exception) {

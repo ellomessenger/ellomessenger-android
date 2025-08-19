@@ -4,19 +4,19 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Adapters
 
 import android.content.Context
-import android.graphics.drawable.ColorDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.collection.LongSparseArray
+import androidx.core.graphics.drawable.toDrawable
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import org.telegram.messenger.AndroidUtilities
@@ -27,8 +27,9 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.utils.gone
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_contact
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.expires
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.DividerCell
@@ -45,7 +46,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 	private val isAdmin = flags != 0
 	private val isChannel = flags == 2
 	private var checkedMap: LongSparseArray<*>? = null
-	private var onlineContacts: MutableList<TL_contact>? = null
+	private var onlineContacts: MutableList<TLRPC.TLContact>? = null
 	private var scrolling = false
 	private var sortType = SORT_TYPE_DEFAULT
 	private var disableSections = false
@@ -66,7 +67,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 			if (onlineContacts.isNullOrEmpty() || force) {
 				onlineContacts = ContactsController.getInstance(currentAccount).contacts.also {
 					val selfId = UserConfig.getInstance(currentAccount).clientUserId
-					it.removeAll { user -> user.user_id == selfId }
+					it.removeAll { user -> user.userId == selfId }
 				}.toMutableList()
 			}
 
@@ -87,13 +88,13 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 			val messagesController = MessagesController.getInstance(currentAccount)
 
 			onlineContacts?.sortWith { o1, o2 ->
-				val user1 = messagesController.getUser(o2.user_id)
-				val user2 = messagesController.getUser(o1.user_id)
+				val user1 = messagesController.getUser(o2.userId) as? TLRPC.TLUser
+				val user2 = messagesController.getUser(o1.userId) as? TLRPC.TLUser
 				var status1 = 0
 				var status2 = 0
 
 				if (user1 != null) {
-					if (user1.self) {
+					if (user1.isSelf) {
 						status1 = currentTime + 50000
 					}
 					else if (user1.status != null) {
@@ -102,7 +103,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 				}
 
 				if (user2 != null) {
-					if (user2.self) {
+					if (user2.isSelf) {
 						status2 = currentTime + 50000
 					}
 					else if (user2.status != null) {
@@ -175,7 +176,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 				val arr = usersSectionsDict[sortedUsersSectionsArray[section]]!!
 
 				if (position < arr.size) {
-					return MessagesController.getInstance(currentAccount).getUser(arr[position].user_id)
+					return MessagesController.getInstance(currentAccount).getUser(arr[position].userId)
 				}
 			}
 
@@ -189,7 +190,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 				if (sortType == SORT_TYPE_LAST_SEEN) {
 					if (section == 1) {
 						return if (position < (onlineContacts?.size ?: 0)) {
-							MessagesController.getInstance(currentAccount).getUser(onlineContacts!![position].user_id)
+							MessagesController.getInstance(currentAccount).getUser(onlineContacts!![position].userId)
 						}
 						else {
 							null
@@ -201,7 +202,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 						val arr = usersSectionsDict[sortedUsersSectionsArray[section - 1]]!!
 
 						return if (position < arr.size) {
-							MessagesController.getInstance(currentAccount).getUser(arr[position].user_id)
+							MessagesController.getInstance(currentAccount).getUser(arr[position].userId)
 						}
 						else {
 							null
@@ -486,7 +487,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 				view = ShadowSectionCell(context)
 
 				val drawable = Theme.getThemedDrawable(context, R.drawable.greydivider, context.getColor(R.color.shadow))
-				val combinedDrawable = CombinedDrawable(ColorDrawable(context.getColor(R.color.light_background)), drawable)
+				val combinedDrawable = CombinedDrawable(context.getColor(R.color.light_background).toDrawable(), drawable)
 				combinedDrawable.setFullSize(true)
 				view.setBackground(combinedDrawable)
 			}
@@ -522,7 +523,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 					usersSectionsDict[sortedUsersSectionsArray[section - (if (onlyUsers != 0 && !isAdmin) 0 else 1)]]
 				}
 
-				val user = MessagesController.getInstance(currentAccount).getUser(arr?.getOrNull(position)?.user_id)
+				val user = MessagesController.getInstance(currentAccount).getUser(arr?.getOrNull(position)?.userId)
 				userCell.setData(user, null, null, 0, true)
 
 				if (checkedMap != null) {
@@ -572,7 +573,7 @@ open class ContactsAdapter(private val context: Context, private val onlyUsers: 
 							2 -> {
 								// textCell.setBold(true)
 								textCell.setTextSize(16)
-								textCell.setTextAndIcon(textCell.context.getString(R.string.online_course), R.drawable.ic_online_course, false)
+								textCell.setTextAndIcon(textCell.context.getString(R.string.masterclass), R.drawable.ic_online_course, false)
 
 								// textCell.setTextAndIcon(LocaleController.getString("NewChannel", R.string.NewChannel), R.drawable.msg_channel, false)
 							}

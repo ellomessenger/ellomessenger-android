@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Adapters
 
@@ -27,9 +27,10 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
 import org.telegram.messenger.Utilities
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.Adapters.SearchAdapterHelper.SearchAdapterHelperDelegate
 import org.telegram.ui.Cells.GraySectionCell
 import org.telegram.ui.Cells.ProfileSearchCell
@@ -37,13 +38,14 @@ import org.telegram.ui.Cells.TextCell
 import org.telegram.ui.Cells.UserCell
 import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
-import java.util.*
+import java.util.Locale
+import java.util.Timer
+import java.util.TimerTask
 
-open class SearchAdapter(private val context: Context, private val ignoreUsers: LongSparseArray<User>?, private val allowUsernameSearch: Boolean, private val onlyMutual: Boolean, private val allowChats: Boolean, private val allowBots: Boolean, self: Boolean, phones: Boolean, searchChannelId: Int) : SelectionAdapter() {
-	private val searchAdapterHelper: SearchAdapterHelper
-	private val allowSelf: Boolean
-	private val allowPhoneNumbers: Boolean
-	private val channelId: Long
+open class SearchAdapter(private val context: Context, private val ignoreUsers: LongSparseArray<User>?, private val allowUsernameSearch: Boolean, private val onlyMutual: Boolean, private val allowChats: Boolean, private val allowBots: Boolean, self: Boolean, searchChannelId: Int) : SelectionAdapter() {
+	private val searchAdapterHelper = SearchAdapterHelper(true)
+	private val allowSelf = self
+	private val channelId = searchChannelId.toLong()
 	private var searchResult = ArrayList<Any>()
 	private var searchResultNames = ArrayList<CharSequence>()
 	private var checkedMap: LongSparseArray<*>? = null
@@ -54,10 +56,6 @@ open class SearchAdapter(private val context: Context, private val ignoreUsers: 
 	private var searchPointer = 0
 
 	init {
-		channelId = searchChannelId.toLong()
-		allowSelf = self
-		allowPhoneNumbers = phones
-		searchAdapterHelper = SearchAdapterHelper(true)
 		searchAdapterHelper.setDelegate(object : SearchAdapterHelperDelegate {
 			override fun onDataSetChanged(searchId: Int) {
 				notifyDataSetChanged()
@@ -157,14 +155,14 @@ open class SearchAdapter(private val context: Context, private val ignoreUsers: 
 
 				for (a in contactsCopy.indices) {
 					val contact = contactsCopy[a]
-					val user = MessagesController.getInstance(currentAccount).getUser(contact.user_id) ?: continue
+					val user = MessagesController.getInstance(currentAccount).getUser(contact.userId) as? TLRPC.TLUser ?: continue
 
-					if (!allowSelf && user.self || onlyMutual && !user.mutual_contact || ignoreUsers != null && ignoreUsers.indexOfKey(contact.user_id) >= 0) {
+					if (!allowSelf && user.isSelf || onlyMutual && !user.mutualContact || ignoreUsers != null && ignoreUsers.indexOfKey(contact.userId) >= 0) {
 						continue
 					}
 
 					val names = arrayOfNulls<String>(3)
-					names[0] = ContactsController.formatName(user.first_name, user.last_name).lowercase(Locale.getDefault())
+					names[0] = ContactsController.formatName(user.firstName, user.lastName).lowercase(Locale.getDefault())
 					names[1] = LocaleController.getInstance().getTranslitString(names[0])
 
 					if (names[0] == names[1]) {
@@ -174,7 +172,7 @@ open class SearchAdapter(private val context: Context, private val ignoreUsers: 
 					if (UserObject.isReplyUser(user)) {
 						names[2] = context.getString(R.string.RepliesTitle).lowercase(Locale.getDefault())
 					}
-					else if (user.self) {
+					else if (user.isSelf) {
 						names[2] = context.getString(R.string.SavedMessages).lowercase(Locale.getDefault())
 					}
 
@@ -198,7 +196,7 @@ open class SearchAdapter(private val context: Context, private val ignoreUsers: 
 
 						if (found != 0) {
 							if (found == 1) {
-								resultArrayNames.add(AndroidUtilities.generateSearchName(user.first_name, user.last_name, q))
+								resultArrayNames.add(AndroidUtilities.generateSearchName(user.firstName, user.lastName, q))
 							}
 							else {
 								resultArrayNames.add(AndroidUtilities.generateSearchName("@" + user.username, null, "@$q"))
@@ -331,7 +329,7 @@ open class SearchAdapter(private val context: Context, private val ignoreUsers: 
 					if (`object` is User) {
 						un = `object`.username
 						id = `object`.id
-						self = `object`.self
+						self = (`object` as? TLRPC.TLUser)?.isSelf ?: false
 					}
 					else if (`object` is Chat) {
 						un = `object`.username

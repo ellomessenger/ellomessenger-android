@@ -44,7 +44,7 @@ class MP3Frame internal constructor(val header: Header, private val bytes: ByteA
 	}
 
 	class Header(b1: Int, b2: Int, b3: Int) {
-		val version: Int
+		val version: Int = b1 shr 3 and 0x3
 		val layer: Int
 		private val frequency: Int
 		private val bitrate: Int
@@ -53,7 +53,6 @@ class MP3Frame internal constructor(val header: Header, private val bytes: ByteA
 		val protection: Int
 
 		init {
-			version = b1 shr 3 and 0x3
 
 			if (version == MPEG_VERSION_RESERVED) {
 				throw MP3Exception("Reserved version")

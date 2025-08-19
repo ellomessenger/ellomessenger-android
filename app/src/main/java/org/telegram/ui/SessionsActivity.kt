@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -14,7 +14,6 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.provider.Settings
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -28,6 +27,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.net.toUri
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -48,23 +48,24 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.UserObject.getFirstName
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_account_authorizations
-import org.telegram.tgnet.TLRPC.TL_account_getAuthorizations
-import org.telegram.tgnet.TLRPC.TL_account_getWebAuthorizations
-import org.telegram.tgnet.TLRPC.TL_account_resetAuthorization
-import org.telegram.tgnet.TLRPC.TL_account_resetWebAuthorization
-import org.telegram.tgnet.TLRPC.TL_account_resetWebAuthorizations
-import org.telegram.tgnet.TLRPC.TL_account_setAuthorizationTTL
-import org.telegram.tgnet.TLRPC.TL_account_webAuthorizations
-import org.telegram.tgnet.TLRPC.TL_auth_acceptLoginToken
-import org.telegram.tgnet.TLRPC.TL_auth_resetAuthorizations
-import org.telegram.tgnet.TLRPC.TL_authorization
-import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
-import org.telegram.tgnet.TLRPC.TL_webAuthorization
+import org.telegram.tgnet.TLRPC.TLAccountAuthorizations
+import org.telegram.tgnet.TLRPC.TLAccountGetAuthorizations
+import org.telegram.tgnet.TLRPC.TLAccountGetWebAuthorizations
+import org.telegram.tgnet.TLRPC.TLAccountResetAuthorization
+import org.telegram.tgnet.TLRPC.TLAccountResetWebAuthorization
+import org.telegram.tgnet.TLRPC.TLAccountResetWebAuthorizations
+import org.telegram.tgnet.TLRPC.TLAccountSetAuthorizationTTL
+import org.telegram.tgnet.TLRPC.TLAccountWebAuthorizations
+import org.telegram.tgnet.TLRPC.TLAuthAcceptLoginToken
+import org.telegram.tgnet.TLRPC.TLAuthResetAuthorizations
+import org.telegram.tgnet.TLRPC.TLAuthorization
+import org.telegram.tgnet.TLRPC.TLBoolTrue
+import org.telegram.tgnet.TLRPC.TLError
+import org.telegram.tgnet.TLRPC.TLMessagesStickerSet
+import org.telegram.tgnet.TLRPC.TLWebAuthorization
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -101,7 +102,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 	private var globalFlickerLoadingView: FlickerLoadingView? = null
 	private val sessions = ArrayList<TLObject>()
 	private val passwordSessions = ArrayList<TLObject>()
-	private var currentSession: TL_authorization? = null
+	private var currentSession: TLAuthorization? = null
 	private var loading = false
 	private var undoView: UndoView? = null
 	private var ttlDays = 0
@@ -241,8 +242,8 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 							else -> 0
 						}
 
-						val req = TL_account_setAuthorizationTTL()
-						req.authorization_ttl_days = value
+						val req = TLAccountSetAuthorizationTTL()
+						req.authorizationTtlDays = value
 
 						ttlDays = value
 
@@ -274,11 +275,11 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 
 				builder.setPositiveButton(buttonText) { _, _ ->
 					if (currentType == 0) {
-						val req = TL_auth_resetAuthorizations()
+						val req = TLAuthResetAuthorizations()
 
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 							AndroidUtilities.runOnUIThread {
-								if (error == null && response is TL_boolTrue) {
+								if (error == null && response is TLBoolTrue) {
 									BulletinFactory.of(this@SessionsActivity).createSimpleBulletin(R.raw.contact_check, parentActivity.getString(R.string.AllSessionsTerminated)).show()
 									loadSessions(false)
 								}
@@ -301,11 +302,11 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 						}
 					}
 					else {
-						val req = TL_account_resetWebAuthorizations()
+						val req = TLAccountResetWebAuthorizations()
 
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 							AndroidUtilities.runOnUIThread {
-								if (error == null && response is TL_boolTrue) {
+								if (error == null && response is TLBoolTrue) {
 									BulletinFactory.of(this@SessionsActivity).createSimpleBulletin(R.raw.contact_check, parentActivity.getString(R.string.AllWebSessionsTerminated)).show()
 								}
 								else {
@@ -331,7 +332,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 				val parentActivity = parentActivity ?: return@setOnItemClickListener
 
 				if (currentType == 0) {
-					val authorization: TL_authorization?
+					val authorization: TLAuthorization?
 					var isCurrentSession = false
 
 					when (position) {
@@ -341,11 +342,11 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 						}
 
 						in otherSessionsStartRow until otherSessionsEndRow -> {
-							authorization = sessions[position - otherSessionsStartRow] as TL_authorization
+							authorization = sessions[position - otherSessionsStartRow] as TLAuthorization
 						}
 
 						else -> {
-							authorization = passwordSessions[position - passwordSessionsStartRow] as TL_authorization
+							authorization = passwordSessions[position - passwordSessionsStartRow] as TLAuthorization
 						}
 					}
 
@@ -357,13 +358,13 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 				val builder = AlertDialog.Builder(parentActivity)
 				val param = BooleanArray(1)
 
-				val authorization = sessions[position - otherSessionsStartRow] as TL_webAuthorization
+				val authorization = sessions[position - otherSessionsStartRow] as TLWebAuthorization
 
 				builder.setMessage(LocaleController.formatString("TerminateWebSessionText", R.string.TerminateWebSessionText, authorization.domain))
 				builder.setTitle(parentActivity.getString(R.string.TerminateWebSessionTitle))
 
 				val frameLayout1 = FrameLayout(parentActivity)
-				val user = MessagesController.getInstance(currentAccount).getUser(authorization.bot_id)
+				val user = MessagesController.getInstance(currentAccount).getUser(authorization.botId)
 
 				val name = if (user != null) {
 					getFirstName(user)
@@ -399,13 +400,13 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 
 					if (currentType == 0) {
 						@Suppress("NAME_SHADOWING") val authorization = if (position in otherSessionsStartRow until otherSessionsEndRow) {
-							sessions[position - otherSessionsStartRow] as TL_authorization
+							sessions[position - otherSessionsStartRow] as TLAuthorization
 						}
 						else {
-							passwordSessions[position - passwordSessionsStartRow] as TL_authorization
+							passwordSessions[position - passwordSessionsStartRow] as TLAuthorization
 						}
 
-						val req = TL_account_resetAuthorization()
+						val req = TLAccountResetAuthorization()
 						req.hash = authorization.hash
 
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req) { _, error ->
@@ -429,9 +430,9 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 						}
 					}
 					else {
-						@Suppress("NAME_SHADOWING") val authorization = sessions[position - otherSessionsStartRow] as TL_webAuthorization
+						@Suppress("NAME_SHADOWING") val authorization = sessions[position - otherSessionsStartRow] as TLWebAuthorization
 
-						val req = TL_account_resetWebAuthorization()
+						val req = TLAccountResetWebAuthorization()
 						req.hash = authorization.hash
 
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req) { _, error ->
@@ -453,7 +454,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 						}
 
 						if (param[0]) {
-							MessagesController.getInstance(currentAccount).blockPeer(authorization.bot_id)
+							MessagesController.getInstance(currentAccount).blockPeer(authorization.botId)
 						}
 					}
 				}
@@ -473,9 +474,9 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 			undoView = object : UndoView(context) {
 				override fun hide(apply: Boolean, animated: Int) {
 					if (!apply) {
-						val authorization = currentInfoObject as TL_authorization
+						val authorization = currentInfoObject as TLAuthorization
 
-						val req = TL_account_resetAuthorization()
+						val req = TLAccountResetAuthorization()
 						req.hash = authorization.hash
 
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req) { _, error ->
@@ -506,7 +507,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 		return fragmentView
 	}
 
-	private fun showSessionBottomSheet(authorization: TL_authorization?, isCurrentSession: Boolean) {
+	private fun showSessionBottomSheet(authorization: TLAuthorization?, isCurrentSession: Boolean) {
 		if (authorization == null) {
 			return
 		}
@@ -519,7 +520,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 
 			listAdapter?.notifyDataSetChanged()
 
-			val req = TL_account_resetAuthorization()
+			val req = TLAccountResetAuthorization()
 			req.hash = it.hash
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req) { _, _ -> }
@@ -558,13 +559,13 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 		}
 
 		if (currentType == 0) {
-			val req = TL_account_getAuthorizations()
+			val req = TLAccountGetAuthorizations()
 
 			val reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
 					loading = false
 
-					if (error == null && response is TL_account_authorizations) {
+					if (error == null && response is TLAccountAuthorizations) {
 						sessions.clear()
 						passwordSessions.clear()
 
@@ -572,7 +573,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 							if (authorization.flags and 1 != 0) {
 								currentSession = authorization
 							}
-							else if (authorization.password_pending) {
+							else if (authorization.passwordPending) {
 								passwordSessions.add(authorization)
 							}
 							else {
@@ -580,7 +581,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 							}
 						}
 
-						ttlDays = response.authorization_ttl_days
+						ttlDays = response.authorizationTtlDays
 
 						updateRows()
 					}
@@ -606,13 +607,13 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 			ConnectionsManager.getInstance(currentAccount).bindRequestToGuid(reqId, classGuid)
 		}
 		else {
-			val req = TL_account_getWebAuthorizations()
+			val req = TLAccountGetWebAuthorizations()
 
 			val reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
 					loading = false
 
-					if (error == null && response is TL_account_webAuthorizations) {
+					if (error == null && response is TLAccountWebAuthorizations) {
 						sessions.clear()
 
 						MessagesController.getInstance(currentAccount).putUsers(response.users, false)
@@ -967,20 +968,20 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 			else if (position in otherSessionsStartRow until otherSessionsEndRow) {
 				val session = sessions[position - otherSessionsStartRow]
 
-				if (session is TL_authorization) {
+				if (session is TLAuthorization) {
 					return Objects.hash(1, session.hash).toLong()
 				}
-				else if (session is TL_webAuthorization) {
+				else if (session is TLWebAuthorization) {
 					return Objects.hash(1, session.hash).toLong()
 				}
 			}
 			else if (position in passwordSessionsStartRow until passwordSessionsEndRow) {
 				val session = passwordSessions[position - passwordSessionsStartRow]
 
-				if (session is TL_authorization) {
+				if (session is TLAuthorization) {
 					return Objects.hash(2, session.hash).toLong()
 				}
-				else if (session is TL_webAuthorization) {
+				else if (session is TLWebAuthorization) {
 					return Objects.hash(2, session.hash).toLong()
 				}
 			}
@@ -1146,7 +1147,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 
 		private fun setSticker() {
 			var document: TLRPC.Document? = null
-			var set: TL_messages_stickerSet?
+			var set: TLMessagesStickerSet?
 
 			set = MediaDataController.getInstance(currentAccount).getStickerSetByName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME)
 
@@ -1182,13 +1183,13 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 	private fun openCameraScanActivity() {
 		CameraScanActivity.showAsSheet(this@SessionsActivity, false, CameraScanActivity.TYPE_QR_LOGIN, object : CameraScanActivityDelegate {
 			private var response: TLObject? = null
-			private var error: TL_error? = null
+			private var error: TLError? = null
 
 			override fun didFindQr(link: String) {
-				if (response is TL_authorization) {
-					val authorization = response as TL_authorization
+				if (response is TLAuthorization) {
+					val authorization = response as TLAuthorization
 
-					if ((response as TL_authorization).password_pending) {
+					if ((response as TLAuthorization).passwordPending) {
 						passwordSessions.add(0, authorization)
 						repeatLoad = 4
 						loadSessions(false)
@@ -1230,7 +1231,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 
 						val token = Base64.decode(code, Base64.URL_SAFE)
 
-						val req = TL_auth_acceptLoginToken()
+						val req = TLAuthAcceptLoginToken()
 						req.token = token
 
 						connectionsManager.sendRequest(req) { response, error ->
@@ -1269,7 +1270,7 @@ class SessionsActivity(private val currentType: Int) : BaseFragment(), Notificat
 				AlertDialog.Builder(parentActivity).setMessage(AndroidUtilities.replaceTags(parentActivity.getString(R.string.QRCodePermissionNoCameraWithHint))).setPositiveButton(parentActivity.getString(R.string.PermissionOpenSettings)) { _, _ ->
 					try {
 						val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-						intent.data = Uri.parse("package:" + ApplicationLoader.applicationContext.packageName)
+						intent.data = ("package:" + ApplicationLoader.applicationContext.packageName).toUri()
 						parentActivity.startActivity(intent)
 					}
 					catch (e: Exception) {

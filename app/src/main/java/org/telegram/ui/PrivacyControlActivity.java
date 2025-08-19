@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -40,9 +40,9 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.Message;
-import org.telegram.tgnet.tlrpc.TL_message;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.TLMessage;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -340,57 +340,57 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 	}
 
 	private void applyCurrentPrivacySettings() {
-		TLRPC.TL_account_setPrivacy req = new TLRPC.TL_account_setPrivacy();
+		TLRPC.TLAccountSetPrivacy req = new TLRPC.TLAccountSetPrivacy();
 		if (rulesType == PRIVACY_RULES_TYPE_PHONE) {
-			req.key = new TLRPC.TL_inputPrivacyKeyPhoneNumber();
+			req.key = new TLRPC.TLInputPrivacyKeyPhoneNumber();
 			if (currentType == TYPE_NOBODY) {
-				TLRPC.TL_account_setPrivacy req2 = new TLRPC.TL_account_setPrivacy();
-				req2.key = new TLRPC.TL_inputPrivacyKeyAddedByPhone();
+				TLRPC.TLAccountSetPrivacy req2 = new TLRPC.TLAccountSetPrivacy();
+				req2.key = new TLRPC.TLInputPrivacyKeyAddedByPhone();
 				if (currentSubType == 0) {
-					req2.rules.add(new TLRPC.TL_inputPrivacyValueAllowAll());
+					req2.rules.add(new TLRPC.TLInputPrivacyValueAllowAll());
 				}
 				else {
-					req2.rules.add(new TLRPC.TL_inputPrivacyValueAllowContacts());
+					req2.rules.add(new TLRPC.TLInputPrivacyValueAllowContacts());
 				}
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req2, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 					if (error == null) {
-						TLRPC.TL_account_privacyRules privacyRules = (TLRPC.TL_account_privacyRules)response;
+						TLRPC.TLAccountPrivacyRules privacyRules = (TLRPC.TLAccountPrivacyRules)response;
 						ContactsController.getInstance(currentAccount).setPrivacyRules(privacyRules.rules, PRIVACY_RULES_TYPE_ADDED_BY_PHONE);
 					}
 				}), ConnectionsManager.RequestFlagFailOnServerErrors);
 			}
 		}
 		else if (rulesType == PRIVACY_RULES_TYPE_FORWARDS) {
-			req.key = new TLRPC.TL_inputPrivacyKeyForwards();
+			req.key = new TLRPC.TLInputPrivacyKeyForwards();
 		}
 		else if (rulesType == PRIVACY_RULES_TYPE_PHOTO) {
-			req.key = new TLRPC.TL_inputPrivacyKeyProfilePhoto();
+			req.key = new TLRPC.TLInputPrivacyKeyProfilePhoto();
 		}
 		else if (rulesType == PRIVACY_RULES_TYPE_P2P) {
-			req.key = new TLRPC.TL_inputPrivacyKeyPhoneP2P();
+			req.key = new TLRPC.TLInputPrivacyKeyPhoneP2P();
 		}
 		else if (rulesType == PRIVACY_RULES_TYPE_CALLS) {
-			req.key = new TLRPC.TL_inputPrivacyKeyPhoneCall();
+			req.key = new TLRPC.TLInputPrivacyKeyPhoneCall();
 		}
 		else if (rulesType == PRIVACY_RULES_TYPE_INVITE) {
-			req.key = new TLRPC.TL_inputPrivacyKeyChatInvite();
+			req.key = new TLRPC.TLInputPrivacyKeyChatInvite();
 		}
 		else if (rulesType == PRIVACY_RULES_TYPE_VOICE_MESSAGES) {
-			req.key = new TLRPC.TL_inputPrivacyKeyVoiceMessages();
+			req.key = new TLRPC.TLInputPrivacyKeyVoiceMessages();
 		}
 		else {
-			req.key = new TLRPC.TL_inputPrivacyKeyStatusTimestamp();
+			req.key = new TLRPC.TLInputPrivacyKeyStatusTimestamp();
 		}
-		if (currentType != 0 && currentPlus.size() > 0) {
-			TLRPC.TL_inputPrivacyValueAllowUsers usersRule = new TLRPC.TL_inputPrivacyValueAllowUsers();
-			TLRPC.TL_inputPrivacyValueAllowChatParticipants chatsRule = new TLRPC.TL_inputPrivacyValueAllowChatParticipants();
+		if (currentType != 0 && !currentPlus.isEmpty()) {
+			TLRPC.TLInputPrivacyValueAllowUsers usersRule = new TLRPC.TLInputPrivacyValueAllowUsers();
+			TLRPC.TLInputPrivacyValueAllowChatParticipants chatsRule = new TLRPC.TLInputPrivacyValueAllowChatParticipants();
 			for (int a = 0; a < currentPlus.size(); a++) {
 				long id = currentPlus.get(a);
 				if (DialogObject.isUserDialog(id)) {
 					User user = MessagesController.getInstance(currentAccount).getUser(id);
 					if (user != null) {
 						TLRPC.InputUser inputUser = MessagesController.getInstance(currentAccount).getInputUser(user);
-						if (inputUser != null) {
+						if (!(inputUser instanceof TLRPC.TLInputUserEmpty)) {
 							usersRule.users.add(inputUser);
 						}
 					}
@@ -402,16 +402,16 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 			req.rules.add(usersRule);
 			req.rules.add(chatsRule);
 		}
-		if (currentType != 1 && currentMinus.size() > 0) {
-			TLRPC.TL_inputPrivacyValueDisallowUsers usersRule = new TLRPC.TL_inputPrivacyValueDisallowUsers();
-			TLRPC.TL_inputPrivacyValueDisallowChatParticipants chatsRule = new TLRPC.TL_inputPrivacyValueDisallowChatParticipants();
+		if (currentType != 1 && !currentMinus.isEmpty()) {
+			TLRPC.TLInputPrivacyValueDisallowUsers usersRule = new TLRPC.TLInputPrivacyValueDisallowUsers();
+			TLRPC.TLInputPrivacyValueDisallowChatParticipants chatsRule = new TLRPC.TLInputPrivacyValueDisallowChatParticipants();
 			for (int a = 0; a < currentMinus.size(); a++) {
 				long id = currentMinus.get(a);
 				if (DialogObject.isUserDialog(id)) {
 					User user = getMessagesController().getUser(id);
 					if (user != null) {
 						TLRPC.InputUser inputUser = getMessagesController().getInputUser(user);
-						if (inputUser != null) {
+						if (!(inputUser instanceof TLRPC.TLInputUserEmpty)) {
 							usersRule.users.add(inputUser);
 						}
 					}
@@ -424,13 +424,13 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 			req.rules.add(chatsRule);
 		}
 		if (currentType == TYPE_EVERYBODY) {
-			req.rules.add(new TLRPC.TL_inputPrivacyValueAllowAll());
+			req.rules.add(new TLRPC.TLInputPrivacyValueAllowAll());
 		}
 		else if (currentType == TYPE_NOBODY) {
-			req.rules.add(new TLRPC.TL_inputPrivacyValueDisallowAll());
+			req.rules.add(new TLRPC.TLInputPrivacyValueDisallowAll());
 		}
 		else if (currentType == TYPE_CONTACTS) {
-			req.rules.add(new TLRPC.TL_inputPrivacyValueAllowContacts());
+			req.rules.add(new TLRPC.TLInputPrivacyValueAllowContacts());
 		}
 		AlertDialog progressDialog = null;
 		if (getParentActivity() != null) {
@@ -449,7 +449,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 				FileLog.e(e);
 			}
 			if (error == null) {
-				TLRPC.TL_account_privacyRules privacyRules = (TLRPC.TL_account_privacyRules)response;
+				TLRPC.TLAccountPrivacyRules privacyRules = (TLRPC.TLAccountPrivacyRules)response;
 				MessagesController.getInstance(currentAccount).putUsers(privacyRules.users, false);
 				MessagesController.getInstance(currentAccount).putChats(privacyRules.chats, false);
 				ContactsController.getInstance(currentAccount).setPrivacyRules(privacyRules.rules, rulesType);
@@ -475,39 +475,35 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 	private void checkPrivacy() {
 		currentPlus = new ArrayList<>();
 		currentMinus = new ArrayList<>();
-		ArrayList<TLRPC.PrivacyRule> privacyRules = ContactsController.getInstance(currentAccount).getPrivacyRules(rulesType);
-		if (privacyRules == null || privacyRules.size() == 0) {
+		var privacyRules = ContactsController.getInstance(currentAccount).getPrivacyRules(rulesType);
+		if (privacyRules == null || privacyRules.isEmpty()) {
 			currentType = TYPE_NOBODY;
 		}
 		else {
 			int type = -1;
 			for (int a = 0; a < privacyRules.size(); a++) {
 				TLRPC.PrivacyRule rule = privacyRules.get(a);
-				if (rule instanceof TLRPC.TL_privacyValueAllowChatParticipants) {
-					TLRPC.TL_privacyValueAllowChatParticipants privacyValueAllowChatParticipants = (TLRPC.TL_privacyValueAllowChatParticipants)rule;
+				if (rule instanceof TLRPC.TLPrivacyValueAllowChatParticipants privacyValueAllowChatParticipants) {
 					for (int b = 0, N = privacyValueAllowChatParticipants.chats.size(); b < N; b++) {
 						currentPlus.add(-privacyValueAllowChatParticipants.chats.get(b));
 					}
 				}
-				else if (rule instanceof TLRPC.TL_privacyValueDisallowChatParticipants) {
-					TLRPC.TL_privacyValueDisallowChatParticipants privacyValueDisallowChatParticipants = (TLRPC.TL_privacyValueDisallowChatParticipants)rule;
+				else if (rule instanceof TLRPC.TLPrivacyValueDisallowChatParticipants privacyValueDisallowChatParticipants) {
 					for (int b = 0, N = privacyValueDisallowChatParticipants.chats.size(); b < N; b++) {
 						currentMinus.add(-privacyValueDisallowChatParticipants.chats.get(b));
 					}
 				}
-				else if (rule instanceof TLRPC.TL_privacyValueAllowUsers) {
-					TLRPC.TL_privacyValueAllowUsers privacyValueAllowUsers = (TLRPC.TL_privacyValueAllowUsers)rule;
+				else if (rule instanceof TLRPC.TLPrivacyValueAllowUsers privacyValueAllowUsers) {
 					currentPlus.addAll(privacyValueAllowUsers.users);
 				}
-				else if (rule instanceof TLRPC.TL_privacyValueDisallowUsers) {
-					TLRPC.TL_privacyValueDisallowUsers privacyValueDisallowUsers = (TLRPC.TL_privacyValueDisallowUsers)rule;
+				else if (rule instanceof TLRPC.TLPrivacyValueDisallowUsers privacyValueDisallowUsers) {
 					currentMinus.addAll(privacyValueDisallowUsers.users);
 				}
 				else if (type == -1) {
-					if (rule instanceof TLRPC.TL_privacyValueAllowAll) {
+					if (rule instanceof TLRPC.TLPrivacyValueAllowAll) {
 						type = 0;
 					}
-					else if (rule instanceof TLRPC.TL_privacyValueDisallowAll) {
+					else if (rule instanceof TLRPC.TLPrivacyValueDisallowAll) {
 						type = 1;
 					}
 					else {
@@ -515,13 +511,13 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 					}
 				}
 			}
-			if (type == TYPE_EVERYBODY || type == -1 && currentMinus.size() > 0) {
+			if (type == TYPE_EVERYBODY || type == -1 && !currentMinus.isEmpty()) {
 				currentType = TYPE_EVERYBODY;
 			}
-			else if (type == TYPE_CONTACTS || type == -1 && currentMinus.size() > 0 && currentPlus.size() > 0) {
+			else if (type == TYPE_CONTACTS || type == -1 && !currentMinus.isEmpty() && !currentPlus.isEmpty()) {
 				currentType = TYPE_CONTACTS;
 			}
-			else if (type == TYPE_NOBODY || type == -1 && currentPlus.size() > 0) {
+			else if (type == TYPE_NOBODY || type == -1 && !currentPlus.isEmpty()) {
 				currentType = TYPE_NOBODY;
 			}
 			if (doneButton != null) {
@@ -539,21 +535,21 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 
 		if (rulesType == PRIVACY_RULES_TYPE_PHONE) {
 			privacyRules = ContactsController.getInstance(currentAccount).getPrivacyRules(PRIVACY_RULES_TYPE_ADDED_BY_PHONE);
-			if (privacyRules == null || privacyRules.size() == 0) {
+			if (privacyRules == null || privacyRules.isEmpty()) {
 				currentSubType = 0;
 			}
 			else {
 				for (int a = 0; a < privacyRules.size(); a++) {
 					TLRPC.PrivacyRule rule = privacyRules.get(a);
-					if (rule instanceof TLRPC.TL_privacyValueAllowAll) {
+					if (rule instanceof TLRPC.TLPrivacyValueAllowAll) {
 						currentSubType = 0;
 						break;
 					}
-					else if (rule instanceof TLRPC.TL_privacyValueDisallowAll) {
+					else if (rule instanceof TLRPC.TLPrivacyValueDisallowAll) {
 						currentSubType = 2;
 						break;
 					}
-					else if (rule instanceof TLRPC.TL_privacyValueAllowContacts) {
+					else if (rule instanceof TLRPC.TLPrivacyValueAllowContacts) {
 						currentSubType = 1;
 						break;
 					}
@@ -585,10 +581,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 		}
 		Collections.sort(initialMinus);
 		Collections.sort(currentMinus);
-		if (!initialMinus.equals(currentMinus)) {
-			return true;
-		}
-		return false;
+		return !initialMinus.equals(currentMinus);
 	}
 
 	private void updateRows(boolean animated) {
@@ -659,7 +652,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 				int count = listView.getChildCount();
 				for (int a = 0; a < count; a++) {
 					View child = listView.getChildAt(a);
-					if (!(child instanceof RadioCell)) {
+					if (!(child instanceof RadioCell radioCell)) {
 						continue;
 					}
 					RecyclerView.ViewHolder holder = listView.findContainingViewHolder(child);
@@ -667,7 +660,6 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 						continue;
 					}
 					int position = holder.getAdapterPosition();
-					RadioCell radioCell = (RadioCell)child;
 					if (position == everybodyRow || position == myContactsRow || position == nobodyRow) {
 						int checkedType;
 						if (position == everybodyRow) {
@@ -739,19 +731,29 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 
 	private void setMessageText() {
 		if (messageCell != null) {
-			messageCell.messageObject.messageOwner.fwd_from.from_id = new TLRPC.TL_peerUser();
+			var fwdFrom = TLRPCExtensions.getFwdFrom(messageCell.messageObject.messageOwner);
+
+			if (fwdFrom == null) {
+				return;
+			}
+
+			var fromId = new TLRPC.TLPeerUser();
+
 			if (currentType == TYPE_EVERYBODY) {
 				messageCell.hintView.setOverrideText(LocaleController.getString("PrivacyForwardsEverybody", R.string.PrivacyForwardsEverybody));
-				messageCell.messageObject.messageOwner.fwd_from.from_id.user_id = 1;
+				fromId.userId = 1;
 			}
 			else if (currentType == TYPE_NOBODY) {
 				messageCell.hintView.setOverrideText(LocaleController.getString("PrivacyForwardsNobody", R.string.PrivacyForwardsNobody));
-				messageCell.messageObject.messageOwner.fwd_from.from_id.user_id = 0;
+				fromId.userId = 0;
 			}
 			else {
 				messageCell.hintView.setOverrideText(LocaleController.getString("PrivacyForwardsContacts", R.string.PrivacyForwardsContacts));
-				messageCell.messageObject.messageOwner.fwd_from.from_id.user_id = 1;
+				fromId.userId = 1;
 			}
+
+			fwdFrom.fromId = fromId;
+
 			messageCell.cell.forceResetMessageObject();
 		}
 	}
@@ -788,7 +790,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 				builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
 				builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), (dialogInterface, i) -> {
 					applyCurrentPrivacySettings();
-					preferences.edit().putBoolean("privacyAlertShowed", true).commit();
+					preferences.edit().putBoolean("privacyAlertShowed", true).apply();
 				});
 				builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
 				showDialog(builder.create());
@@ -906,19 +908,23 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 
 			User currentUser = MessagesController.getInstance(currentAccount).getUser(UserConfig.getInstance(currentAccount).getClientUserId());
 
-			Message message = new TL_message();
+			var message = new TLMessage();
 			message.message = LocaleController.getString("PrivacyForwardsMessageLine", R.string.PrivacyForwardsMessageLine);
 			message.date = date + 60;
-			message.dialog_id = 1;
+			message.dialogId = 1;
 			message.flags = 257 + TLRPC.MESSAGE_FLAG_FWD;
-			message.from_id = new TLRPC.TL_peerUser();
+			message.fromId = new TLRPC.TLPeerUser();
 			message.id = 1;
-			message.fwd_from = new TLRPC.TL_messageFwdHeader();
-			message.fwd_from.from_name = ContactsController.formatName(currentUser.getFirst_name(), currentUser.getLast_name());
-			message.media = new TLRPC.TL_messageMediaEmpty();
+			message.fwdFrom = new TLRPC.TLMessageFwdHeader();
+			message.fwdFrom.fromName = ContactsController.formatName(currentUser.firstName, currentUser.lastName);
+			message.media = new TLRPC.TLMessageMediaEmpty();
 			message.out = false;
-			message.peer_id = new TLRPC.TL_peerUser();
-			message.peer_id.user_id = UserConfig.getInstance(currentAccount).getClientUserId();
+
+			var peerId = new TLRPC.TLPeerUser();
+			peerId.userId = UserConfig.getInstance(currentAccount).getClientUserId();
+
+			message.peerId = peerId;
+
 			messageObject = new MessageObject(currentAccount, message, true, false);
 			messageObject.eventId = 1;
 			messageObject.resetLayout();
@@ -937,13 +943,13 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 		}
 
 		@Override
-		protected void dispatchDraw(Canvas canvas) {
+		protected void dispatchDraw(@NonNull Canvas canvas) {
 			super.dispatchDraw(canvas);
 			hintView.showForMessageCell(cell, false);
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			Drawable newDrawable = Theme.getCachedWallpaperNonBlocking();
 			if (newDrawable != null && backgroundDrawable != newDrawable) {
 				if (backgroundGradientDisposable != null) {
@@ -961,8 +967,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 					backgroundDrawable.draw(canvas);
 				}
 			}
-			else if (backgroundDrawable instanceof BitmapDrawable) {
-				BitmapDrawable bitmapDrawable = (BitmapDrawable)backgroundDrawable;
+			else if (backgroundDrawable instanceof BitmapDrawable bitmapDrawable) {
 				if (bitmapDrawable.getTileModeX() == Shader.TileMode.REPEAT) {
 					canvas.save();
 					float scale = 2.0f / AndroidUtilities.density;
@@ -1092,7 +1097,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 				else {
 					TLRPC.Chat chat = getMessagesController().getChat(-id);
 					if (chat != null) {
-						count += chat.participants_count;
+						count += chat.participantsCount;
 					}
 				}
 			}
@@ -1106,7 +1111,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 					TextSettingsCell textCell = (TextSettingsCell)holder.itemView;
 					if (position == alwaysShareRow) {
 						String value;
-						if (currentPlus.size() != 0) {
+						if (!currentPlus.isEmpty()) {
 							value = LocaleController.formatPluralString("Users", getUsersCount(currentPlus));
 						}
 						else {
@@ -1121,8 +1126,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 					}
 					else if (position == neverShareRow) {
 						String value;
-						int count = 0;
-						if (currentMinus.size() != 0) {
+						if (!currentMinus.isEmpty()) {
 							value = LocaleController.formatPluralString("Users", getUsersCount(currentMinus));
 						}
 						else {
@@ -1235,7 +1239,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
 						Drawable drawable = Theme.getThemedDrawable(mContext, backgroundResId, Theme.key_windowBackgroundGrayShadow);
 						CombinedDrawable combinedDrawable = new CombinedDrawable(new ColorDrawable(Theme.getColor(Theme.key_windowBackgroundGray)), drawable);
 						combinedDrawable.setFullSize(true);
-						privacyCell.setBackgroundDrawable(combinedDrawable);
+						privacyCell.setBackground(combinedDrawable);
 					}
 					break;
 				case 2:

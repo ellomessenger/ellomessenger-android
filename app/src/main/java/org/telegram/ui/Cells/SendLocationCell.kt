@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -24,6 +24,7 @@ import org.telegram.messenger.LocationController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.editDate
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.CombinedDrawable
@@ -35,7 +36,7 @@ class SendLocationCell(context: Context, private val live: Boolean) : FrameLayou
 	private val currentAccount = UserConfig.selectedAccount
 	private val accurateTextView: SimpleTextView
 	private val titleTextView: SimpleTextView
-	private val imageView: ImageView
+	private val imageView = ImageView(context)
 	private var dialogId: Long = 0
 	private var rect: RectF? = null
 
@@ -48,7 +49,6 @@ class SendLocationCell(context: Context, private val live: Boolean) : FrameLayou
 	}
 
 	init {
-		imageView = ImageView(context)
 		background = Theme.AdaptiveRipple.rect()
 
 		val circle = Theme.createSimpleSelectorCircleDrawable(AndroidUtilities.dp(42f), ResourcesCompat.getColor(context.resources, if (live) R.color.online else R.color.brand, null), ResourcesCompat.getColor(context.resources, if (live) R.color.online else R.color.brand, null))
@@ -145,7 +145,7 @@ class SendLocationCell(context: Context, private val live: Boolean) : FrameLayou
 		val info = LocationController.getInstance(currentAccount).getSharingLocationInfo(dialogId)
 
 		if (info != null) {
-			val updateDate = info.messageObject?.messageOwner?.edit_date?.takeIf { it != 0 } ?: info.messageObject?.messageOwner?.date ?: 0
+			val updateDate = info.messageObject?.messageOwner?.editDate?.takeIf { it != 0 } ?: info.messageObject?.messageOwner?.date ?: 0
 			setText(context.getString(R.string.StopLiveLocation), LocaleController.formatLocationUpdateDate((updateDate).toLong()))
 		}
 		else {

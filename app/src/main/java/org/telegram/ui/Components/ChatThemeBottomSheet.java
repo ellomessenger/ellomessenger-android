@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
@@ -42,13 +50,14 @@ import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TL_error;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.TLError;
+import org.telegram.tgnet.TLRPC.TLWallPaper;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.EmojiThemes;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Cells.DrawerProfileCell;
 import org.telegram.ui.Cells.ThemesHorizontalListCell;
 import org.telegram.ui.ChatActivity;
 
@@ -66,15 +75,12 @@ import androidx.recyclerview.widget.LinearSmoothScroller;
 import androidx.recyclerview.widget.RecyclerView;
 
 public class ChatThemeBottomSheet extends BottomSheet implements NotificationCenter.NotificationCenterDelegate {
-	private final FrameLayout rootLayout;
 	private final Adapter adapter;
 	private final EmojiThemes originalTheme = null;
-	private final boolean originalIsDark;
 	private final ChatActivity chatActivity;
 	private final RecyclerListView recyclerView;
 	private final LinearLayoutManager layoutManager;
 	private final FlickerLoadingView progressView;
-	private final TextView titleView;
 	private final RLottieDrawable darkThemeDrawable;
 	private final RLottieImageView darkThemeView;
 	private final LinearSmoothScroller scroller;
@@ -94,17 +100,17 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 	public ChatThemeBottomSheet(final ChatActivity chatActivity) {
 		super(chatActivity.getParentActivity(), true);
 		this.chatActivity = chatActivity;
-		this.originalIsDark = Theme.getActiveTheme().isDark();
+		boolean originalIsDark = Theme.getActiveTheme().isDark();
 		adapter = new Adapter(currentAccount, ThemeSmallPreviewView.TYPE_DEFAULT);
 		setDimBehind(false);
 		setCanDismissWithSwipe(false);
 		setApplyBottomPadding(false);
 		drawNavigationBar = true;
 
-		rootLayout = new FrameLayout(getContext());
+		FrameLayout rootLayout = new FrameLayout(getContext());
 		setCustomView(rootLayout);
 
-		titleView = new TextView(getContext());
+		TextView titleView = new TextView(getContext());
 		titleView.setEllipsize(TextUtils.TruncateAt.MIDDLE);
 		titleView.setLines(1);
 		titleView.setSingleLine(true);
@@ -266,7 +272,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 				}
 
 				@Override
-				public void onError(TL_error error) {
+				public void onError(TLError error) {
 					Toast.makeText(getContext(), error.text, Toast.LENGTH_SHORT).show();
 				}
 			}, true);
@@ -275,16 +281,16 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 			onDataLoaded(cachedThemes);
 		}
 
-		if (chatActivity.currentUser != null && SharedConfig.dayNightThemeSwitchHintCount > 0 && !chatActivity.currentUser.self) {
+		if (chatActivity.currentUser != null && SharedConfig.dayNightThemeSwitchHintCount > 0 && !TLRPCExtensions.isSelf(chatActivity.currentUser)) {
 			SharedConfig.updateDayNightThemeSwitchHintCount(SharedConfig.dayNightThemeSwitchHintCount - 1);
+
 			hintView = new HintView(getContext(), 9, chatActivity.getResourceProvider());
 			hintView.setVisibility(View.INVISIBLE);
 			hintView.setShowingDuration(5000);
 			hintView.setBottomOffset(-AndroidUtilities.dp(8));
-			hintView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ChatThemeDayNightSwitchTooltip", R.string.ChatThemeDayNightSwitchTooltip, chatActivity.currentUser.getFirst_name())));
-			AndroidUtilities.runOnUIThread(() -> {
-				hintView.showForView(darkThemeView, true);
-			}, 1500);
+			hintView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ChatThemeDayNightSwitchTooltip", R.string.ChatThemeDayNightSwitchTooltip, chatActivity.currentUser.firstName)));
+
+			AndroidUtilities.runOnUIThread(() -> hintView.showForView(darkThemeView, true), 1500);
 
 			container.addView(hintView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, 10, 0, 10, 0));
 		}
@@ -584,7 +590,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 			isApplyClicked = true;
 
 			User user = chatActivity.currentUser;
-			if (user != null && !user.self) {
+			if (user != null && !TLRPCExtensions.isSelf(user)) {
 				boolean themeDisabled = false;
 				if (TextUtils.isEmpty(emoticon)) {
 					themeDisabled = true;
@@ -594,10 +600,10 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 				StickerSetBulletinLayout layout = new StickerSetBulletinLayout(getContext(), null, StickerSetBulletinLayout.TYPE_EMPTY, document);
 				layout.subtitleTextView.setVisibility(View.GONE);
 				if (themeDisabled) {
-					layout.titleTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ThemeAlsoDisabledForHint", R.string.ThemeAlsoDisabledForHint, user.getFirst_name())));
+					layout.titleTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ThemeAlsoDisabledForHint", R.string.ThemeAlsoDisabledForHint, user.firstName)));
 				}
 				else {
-					layout.titleTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ThemeAlsoAppliedForHint", R.string.ThemeAlsoAppliedForHint, user.getFirst_name())));
+					layout.titleTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ThemeAlsoAppliedForHint", R.string.ThemeAlsoAppliedForHint, user.firstName)));
 				}
 				layout.titleTextView.setTypeface(null);
 				bulletin = Bulletin.make(chatActivity, layout, Bulletin.DURATION_LONG);
@@ -661,7 +667,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 			}
 			boolean animated = true;
 			ChatThemeItem newItem = items.get(position);
-			if (view.chatThemeItem == null || !view.chatThemeItem.chatTheme.getEmoticon().equals(newItem.chatTheme.getEmoticon()) || DrawerProfileCell.switchingTheme || view.lastThemeIndex != newItem.themeIndex) {
+			if (view.chatThemeItem == null || !view.chatThemeItem.chatTheme.getEmoticon().equals(newItem.chatTheme.getEmoticon()) || view.lastThemeIndex != newItem.themeIndex) {
 				animated = false;
 			}
 
@@ -816,13 +822,12 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
 				if (!file.exists()) {
 					if (!loadingWallpapers.containsKey(themeInfo)) {
 						loadingWallpapers.put(themeInfo, themeInfo.slug);
-						TLRPC.TL_account_getWallPaper req = new TLRPC.TL_account_getWallPaper();
-						TLRPC.TL_inputWallPaperSlug inputWallPaperSlug = new TLRPC.TL_inputWallPaperSlug();
+						var req = new TLRPC.TLAccountGetWallPaper();
+						var inputWallPaperSlug = new TLRPC.TLInputWallPaperSlug();
 						inputWallPaperSlug.slug = themeInfo.slug;
 						req.wallpaper = inputWallPaperSlug;
 						ConnectionsManager.getInstance(themeInfo.account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-							if (response instanceof TLRPC.TL_wallPaper) {
-								TLRPC.WallPaper wallPaper = (TLRPC.WallPaper)response;
+							if (response instanceof TLWallPaper wallPaper) {
 								String name = FileLoader.getAttachFileName(wallPaper.document);
 								if (!loadingThemes.containsKey(name)) {
 									loadingThemes.put(name, themeInfo);

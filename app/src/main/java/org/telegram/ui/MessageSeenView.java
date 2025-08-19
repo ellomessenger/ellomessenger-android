@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -34,10 +34,9 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants;
-import org.telegram.tgnet.tlrpc.TL_messages_chatFull;
-import org.telegram.tgnet.tlrpc.User;
-import org.telegram.tgnet.tlrpc.Vector;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
+import org.telegram.tgnet.Vector;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.AvatarsDrawable;
@@ -65,7 +64,6 @@ public class MessageSeenView extends FrameLayout {
 	ImageView iconView;
 	int currentAccount;
 	boolean isVoice;
-
 	FlickerLoadingView flickerLoadingView;
 
 	@SuppressLint("AppCompatCustomView")
@@ -97,8 +95,8 @@ public class MessageSeenView extends FrameLayout {
 
 		titleView.setTextColor(Theme.getColor(Theme.key_actionBarDefaultSubmenuItem));
 
-		TLRPC.TL_messages_getMessageReadParticipants req = new TLRPC.TL_messages_getMessageReadParticipants();
-		req.msg_id = messageObject.getId();
+		var req = new TLRPC.TLMessagesGetMessageReadParticipants();
+		req.msgId = messageObject.getId();
 		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(messageObject.getDialogId());
 
 		iconView = new ImageView(context);
@@ -110,8 +108,8 @@ public class MessageSeenView extends FrameLayout {
 		avatarsImageView.setAlpha(0);
 		titleView.setAlpha(0);
 		long fromId = 0;
-		if (messageObject.messageOwner.from_id != null) {
-			fromId = messageObject.messageOwner.from_id.user_id;
+		if (messageObject.messageOwner.fromId != null) {
+			fromId = TLRPCExtensions.getUserId(messageObject.messageOwner.fromId);
 		}
 		long finalFromId = fromId;
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
@@ -122,14 +120,16 @@ public class MessageSeenView extends FrameLayout {
 				ArrayList<Long> allPeers = new ArrayList<>();
 				for (int i = 0, n = vector.objects.size(); i < n; i++) {
 					Object object = vector.objects.get(i);
-					if (object instanceof Long) {
-						Long peerId = (Long)object;
+					if (object instanceof Long peerId) {
 						if (finalFromId == peerId) {
 							continue;
 						}
+
 						User user = MessagesController.getInstance(currentAccount).getUser(peerId);
+
 						allPeers.add(peerId);
-						if (true || user == null) {
+
+						if (user == null) {
 							unknownUsers.add(peerId);
 						}
 						else {
@@ -147,14 +147,14 @@ public class MessageSeenView extends FrameLayout {
 				}
 				else {
 					if (ChatObject.isChannel(chat)) {
-						TLRPC.TL_channels_getParticipants usersReq = new TLRPC.TL_channels_getParticipants();
+						var usersReq = new TLRPC.TLChannelsGetParticipants();
 						usersReq.limit = MessagesController.getInstance(currentAccount).chatReadMarkSizeThreshold;
 						usersReq.offset = 0;
-						usersReq.filter = new TLRPC.TL_channelParticipantsRecent();
+						usersReq.filter = new TLRPC.TLChannelParticipantsRecent();
 						usersReq.channel = MessagesController.getInstance(currentAccount).getInputChannel(chat.id);
 						ConnectionsManager.getInstance(currentAccount).sendRequest(usersReq, (response1, error1) -> AndroidUtilities.runOnUIThread(() -> {
 							if (response1 != null) {
-								TL_channels_channelParticipants users = (TL_channels_channelParticipants)response1;
+								var users = (TLRPC.TLChannelsChannelParticipants)response1;
 								for (int i = 0; i < users.users.size(); i++) {
 									User user = users.users.get(i);
 									MessagesController.getInstance(currentAccount).putUser(user, false);
@@ -169,11 +169,11 @@ public class MessageSeenView extends FrameLayout {
 						}));
 					}
 					else {
-						TLRPC.TL_messages_getFullChat usersReq = new TLRPC.TL_messages_getFullChat();
-						usersReq.chat_id = chat.id;
+						var usersReq = new TLRPC.TLMessagesGetFullChat();
+						usersReq.chatId = chat.id;
 						ConnectionsManager.getInstance(currentAccount).sendRequest(usersReq, (response1, error1) -> AndroidUtilities.runOnUIThread(() -> {
 							if (response1 != null) {
-								TL_messages_chatFull chatFull = (TL_messages_chatFull)response1;
+								var chatFull = (TLRPC.TLMessagesChatFull)response1;
 								for (int i = 0; i < chatFull.users.size(); i++) {
 									User user = chatFull.users.get(i);
 									MessagesController.getInstance(currentAccount).putUser(user, false);
@@ -256,7 +256,7 @@ public class MessageSeenView extends FrameLayout {
 
 		avatarsImageView.commitTransition(false);
 		if (peerIds.size() == 1 && users.get(0) != null) {
-			titleView.setText(ContactsController.formatName(users.get(0).getFirst_name(), users.get(0).getLast_name()));
+			titleView.setText(ContactsController.formatName(users.get(0).firstName, users.get(0).lastName));
 		}
 		else {
 			if (peerIds.size() == 0) {
@@ -358,7 +358,7 @@ public class MessageSeenView extends FrameLayout {
 				avatarDrawable.setInfo(user);
 				ImageLocation imageLocation = ImageLocation.getForUser(user, ImageLocation.TYPE_SMALL);
 				avatarImageView.setImage(imageLocation, "50_50", avatarDrawable, user);
-				nameView.setText(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+				nameView.setText(ContactsController.formatName(user.firstName, user.lastName));
 			}
 		}
 

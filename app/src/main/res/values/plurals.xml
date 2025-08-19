@@ -154,12 +154,37 @@
 	</plurals>
 
 	<plurals name="prompts">
-		<item quantity="zero">prompts</item>
-		<item quantity="one">prompt</item>
-		<item quantity="two">prompts</item>
-		<item quantity="few">prompts</item>
-		<item quantity="many">prompts</item>
-		<item quantity="other">prompts</item>
+		<item quantity="zero">Prompts Remaining</item>
+		<item quantity="one">Prompt Remaining</item>
+		<item quantity="two">Prompts Remaining</item>
+		<item quantity="few">Prompts Remaining</item>
+		<item quantity="many">Prompts Remaining</item>
+		<item quantity="other">Prompts Remaining</item>
+	</plurals>
+
+	<plurals name="subscription_plan_price">
+		<item quantity="one">$%d / month</item>
+		<item quantity="other">$%d / %d months</item>
+	</plurals>
+
+	<plurals name="subscription_plan_months">
+		<item quantity="one">%1$d\nMonth</item>
+		<item quantity="other">%1$d\nMonths</item>
+	</plurals>
+
+	<plurals name="subscription_days_left">
+		<item quantity="one">%d Day left</item>
+		<item quantity="other">%d Days left</item>
+	</plurals>
+
+	<plurals name="subscription_hours_left">
+		<item quantity="one">%d Hour left</item>
+		<item quantity="other">%d Hours left</item>
+	</plurals>
+
+	<plurals name="subscription_minutes_left">
+		<item quantity="one">%d Minute left</item>
+		<item quantity="other">%d Minutes left</item>
 	</plurals>
 
 </resources>

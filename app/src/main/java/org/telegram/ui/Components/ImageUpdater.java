@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components;
 
@@ -43,8 +43,8 @@ import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TL_message;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.TLMessage;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
@@ -60,6 +60,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.FileProvider;
 import androidx.exifinterface.media.ExifInterface;
@@ -267,8 +268,7 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 					Object object = photos.get(order.get(a));
 					SendMessagesHelper.SendingMediaInfo info = new SendMessagesHelper.SendingMediaInfo();
 					media.add(info);
-					if (object instanceof MediaController.SearchImage) {
-						MediaController.SearchImage searchImage = (MediaController.SearchImage)object;
+					if (object instanceof MediaController.SearchImage searchImage) {
 						if (searchImage.imagePath != null) {
 							info.path = searchImage.imagePath;
 						}
@@ -337,8 +337,7 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 							Object object = photos.get(order.get(a));
 							SendMessagesHelper.SendingMediaInfo info = new SendMessagesHelper.SendingMediaInfo();
 							media.add(info);
-							if (object instanceof MediaController.PhotoEntry) {
-								MediaController.PhotoEntry photoEntry = (MediaController.PhotoEntry)object;
+							if (object instanceof MediaController.PhotoEntry photoEntry) {
 								if (photoEntry.imagePath != null) {
 									info.path = photoEntry.imagePath;
 								}
@@ -353,8 +352,7 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 								info.masks = photoEntry.stickers;
 								info.ttl = photoEntry.ttl;
 							}
-							else if (object instanceof MediaController.SearchImage) {
-								MediaController.SearchImage searchImage = (MediaController.SearchImage)object;
+							else if (object instanceof MediaController.SearchImage searchImage) {
 								if (searchImage.imagePath != null) {
 									info.path = searchImage.imagePath;
 								}
@@ -409,7 +407,7 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 				}
 
 				@Override
-				public void doOnIdle(Runnable runnable) {
+				public void doOnIdle(@NonNull Runnable runnable) {
 					runnable.run();
 				}
 
@@ -433,12 +431,12 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 			Bitmap bitmap = null;
 			MessageObject avatarObject = null;
 			if (info.isVideo || info.videoEditedInfo != null) {
-				TL_message message = new TL_message();
+				var message = new TLMessage();
 				message.id = 0;
 				message.message = "";
-				message.media = new TLRPC.TL_messageMediaEmpty();
-				message.action = new TLRPC.TL_messageActionEmpty();
-				message.dialog_id = 0;
+				message.media = new TLRPC.TLMessageMediaEmpty();
+				// message.action = new TLRPC.TLMessageActionEmpty();
+				message.dialogId = 0;
 				avatarObject = new MessageObject(UserConfig.selectedAccount, message, false, false);
 				avatarObject.messageOwner.attachPath = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), SharedConfig.getLastLocalId() + "_avatar.mp4").getAbsolutePath();
 				avatarObject.videoEditedInfo = info.videoEditedInfo;
@@ -448,8 +446,8 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 				bitmap = ImageLoader.loadBitmap(info.path, null, 800, 800, true);
 			}
 			else if (info.searchImage != null) {
-				if (info.searchImage.photo != null) {
-					TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(info.searchImage.photo.sizes, AndroidUtilities.getPhotoSize());
+				if (info.searchImage.photo instanceof TLRPC.TLPhoto tlPhoto) {
+					TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(tlPhoto.sizes, AndroidUtilities.getPhotoSize());
 					if (photoSize != null) {
 						File path = FileLoader.getInstance(currentAccount).getPathToAttach(photoSize, true);
 						finalPath = path.getAbsolutePath();
@@ -465,7 +463,9 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 						else {
 							NotificationCenter.getInstance(currentAccount).addObserver(ImageUpdater.this, NotificationCenter.fileLoaded);
 							NotificationCenter.getInstance(currentAccount).addObserver(ImageUpdater.this, NotificationCenter.fileLoadFailed);
+
 							uploadingImage = FileLoader.getAttachFileName(photoSize.location);
+
 							imageReceiver.setImage(ImageLocation.getForPhoto(photoSize, info.searchImage.photo), null, null, "jpg", null, 1);
 						}
 					}
@@ -653,12 +653,12 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 				MessageObject avatarObject = null;
 				Bitmap bitmap;
 				if (photoEntry.isVideo || photoEntry.editedInfo != null) {
-					TL_message message = new TL_message();
+					var message = new TLMessage();
 					message.id = 0;
 					message.message = "";
-					message.media = new TLRPC.TL_messageMediaEmpty();
-					message.action = new TLRPC.TL_messageActionEmpty();
-					message.dialog_id = 0;
+					message.media = new TLRPC.TLMessageMediaEmpty();
+					// message.action = new TLRPC.TLMessageActionEmpty();
+					message.dialogId = 0;
 					avatarObject = new MessageObject(UserConfig.selectedAccount, message, false, false);
 					avatarObject.messageOwner.attachPath = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), SharedConfig.getLastLocalId() + "_avatar.mp4").getAbsolutePath();
 					avatarObject.videoEditedInfo = photoEntry.editedInfo;
@@ -698,17 +698,12 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 				try {
 					ExifInterface ei = new ExifInterface(currentPicturePath);
 					int exif = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-					switch (exif) {
-						case ExifInterface.ORIENTATION_ROTATE_90:
-							orientation = 90;
-							break;
-						case ExifInterface.ORIENTATION_ROTATE_180:
-							orientation = 180;
-							break;
-						case ExifInterface.ORIENTATION_ROTATE_270:
-							orientation = 270;
-							break;
-					}
+					orientation = switch (exif) {
+						case ExifInterface.ORIENTATION_ROTATE_90 -> 90;
+						case ExifInterface.ORIENTATION_ROTATE_180 -> 180;
+						case ExifInterface.ORIENTATION_ROTATE_270 -> 270;
+						default -> orientation;
+					};
 				}
 				catch (Exception e) {
 					FileLog.e(e);
@@ -742,19 +737,29 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 		bigPhoto = ImageLoader.scaleAndSaveImage(bitmap, 800, 800, 80, false, 320, 320);
 		smallPhoto = ImageLoader.scaleAndSaveImage(bitmap, 150, 150, 80, false, 150, 150);
 		if (smallPhoto != null) {
-			try {
-				Bitmap b = BitmapFactory.decodeFile(FileLoader.getInstance(currentAccount).getPathToAttach(smallPhoto, true).getAbsolutePath());
-				String key = smallPhoto.location.volume_id + "_" + smallPhoto.location.local_id + "@50_50";
-				ImageLoader.getInstance().putImageToCache(new BitmapDrawable(b), key, true);
-			}
-			catch (Throwable ignore) {
+			final var location = smallPhoto.location;
 
+			if (location != null) {
+				try {
+					Bitmap b = BitmapFactory.decodeFile(FileLoader.getInstance(currentAccount).getPathToAttach(smallPhoto, true).getAbsolutePath());
+					String key = location.volumeId + "_" + location.localId + "@50_50";
+					ImageLoader.getInstance().putImageToCache(new BitmapDrawable(ApplicationLoader.applicationContext.getResources(), b), key, true);
+				}
+				catch (Throwable ignore) {
+
+				}
 			}
 		}
 		bitmap.recycle();
 		if (bigPhoto != null) {
 			UserConfig.getInstance(currentAccount).saveConfig(false);
-			uploadingImage = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE) + "/" + bigPhoto.location.volume_id + "_" + bigPhoto.location.local_id + ".jpg";
+
+			var location = bigPhoto.location;
+
+			if (location != null) {
+				uploadingImage = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE) + "/" + location.volumeId + "_" + location.localId + ".jpg";
+			}
+
 			if (uploadAfterSelect) {
 				if (avatarObject != null && avatarObject.videoEditedInfo != null) {
 					convertingVideo = avatarObject;
@@ -894,23 +899,23 @@ public class ImageUpdater implements NotificationCenter.NotificationCenterDelega
 				Bitmap bitmap = SendMessagesHelper.createVideoThumbnailAtTime(finalPath, (long)(videoTimestamp * 1000), null, true);
 				if (bitmap != null) {
 					File path = FileLoader.getInstance(currentAccount).getPathToAttach(smallPhoto, true);
-					if (path != null) {
-						path.delete();
-					}
+					path.delete();
 					path = FileLoader.getInstance(currentAccount).getPathToAttach(bigPhoto, true);
-					if (path != null) {
-						path.delete();
-					}
+					path.delete();
 					bigPhoto = ImageLoader.scaleAndSaveImage(bitmap, 800, 800, 80, false, 320, 320);
 					smallPhoto = ImageLoader.scaleAndSaveImage(bitmap, 150, 150, 80, false, 150, 150);
 					if (smallPhoto != null) {
-						try {
-							Bitmap b = BitmapFactory.decodeFile(FileLoader.getInstance(currentAccount).getPathToAttach(smallPhoto, true).getAbsolutePath());
-							String key = smallPhoto.location.volume_id + "_" + smallPhoto.location.local_id + "@50_50";
-							ImageLoader.getInstance().putImageToCache(new BitmapDrawable(b), key, true);
-						}
-						catch (Throwable ignore) {
+						final var location = smallPhoto.location;
 
+						if (location != null) {
+							try {
+								Bitmap b = BitmapFactory.decodeFile(FileLoader.getInstance(currentAccount).getPathToAttach(smallPhoto, true).getAbsolutePath());
+								String key = location.volumeId + "_" + location.localId + "@50_50";
+								ImageLoader.getInstance().putImageToCache(new BitmapDrawable(b), key, true);
+							}
+							catch (Throwable ignore) {
+
+							}
 						}
 					}
 				}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -67,6 +67,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.beint.elloapp.DeviceInfo;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.PhoneFormat.PhoneFormat;
@@ -94,18 +96,35 @@ import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.TL_error;
-import org.telegram.tgnet.tlrpc.User;
-import org.telegram.tgnet.tlrpc.Vector;
+import org.telegram.tgnet.TLRPC.TLError;
+import org.telegram.tgnet.TLRPC.TLHelpPassportConfig;
+import org.telegram.tgnet.TLRPC.TLPasswordKdfAlgoModPow;
+import org.telegram.tgnet.TLRPC.TLSecureFile;
+import org.telegram.tgnet.TLRPC.TLSecurePasswordKdfAlgoPBKDF2;
+import org.telegram.tgnet.TLRPC.TLSecurePasswordKdfAlgoSHA512;
+import org.telegram.tgnet.TLRPC.TLSecurePlainEmail;
+import org.telegram.tgnet.TLRPC.TLSecurePlainPhone;
+import org.telegram.tgnet.TLRPC.TLSecureRequiredType;
+import org.telegram.tgnet.TLRPC.TLSecureRequiredTypeOneOf;
+import org.telegram.tgnet.TLRPC.TLSecureValueError;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorData;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorFile;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorFiles;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorFrontSide;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorReverseSide;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorSelfie;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorTranslationFile;
+import org.telegram.tgnet.TLRPC.TLSecureValueErrorTranslationFiles;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.Vector;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Cells.CheckBoxCell;
 import org.telegram.ui.Cells.HeaderCell;
 import org.telegram.ui.Cells.ShadowSectionCell;
@@ -150,10 +169,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.FileProvider;
 
-import com.beint.elloapp.DeviceInfo;
-
+@SuppressLint("AppCompatCustomView")
 public class PassportActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
-
 	public final static int TYPE_REQUEST = 0;
 	public final static int TYPE_IDENTITY = 1;
 	public final static int TYPE_ADDRESS = 2;
@@ -216,15 +233,15 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	private String currentResidence = "";
 	private String currentGender;
 	private final int[] currentExpireDate = new int[3];
-	private TLRPC.TL_account_authorizationForm currentForm;
+	private TLRPC.TLAccountAuthorizationForm currentForm;
 
-	private final TLRPC.TL_secureRequiredType currentType;
-	private TLRPC.TL_secureRequiredType currentDocumentsType;
-	private ArrayList<TLRPC.TL_secureRequiredType> availableDocumentTypes;
-	private final TLRPC.TL_secureValue currentTypeValue;
-	private final TLRPC.TL_secureValue currentDocumentsTypeValue;
-	private TLRPC.account_Password currentPassword;
-	private TLRPC.TL_auth_sentCode currentPhoneVerification;
+	private final TLRPC.TLSecureRequiredType currentType;
+	private TLRPC.TLSecureRequiredType currentDocumentsType;
+	private ArrayList<TLRPC.TLSecureRequiredType> availableDocumentTypes;
+	private final TLRPC.TLSecureValue currentTypeValue;
+	private final TLRPC.TLSecureValue currentDocumentsTypeValue;
+	private TLRPC.TLAccountPassword currentPassword;
+	private TLRPC.TLAuthSentCode currentPhoneVerification;
 
 	private ActionBarMenuItem doneItem;
 	private AnimatorSet doneItemAnimation;
@@ -269,16 +286,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 	private boolean documentOnly;
 
-	private TextView plusTextView;
-
 	private TextSettingsCell addDocumentCell;
 	private TextSettingsCell deletePassportCell;
 	private ShadowSectionCell addDocumentSectionCell;
 	private LinearLayout emptyLayout;
-	private ImageView emptyImageView;
-	private TextView emptyTextView1;
-	private TextView emptyTextView2;
-	private TextView emptyTextView3;
 
 	private EmptyTextProgressView emptyView;
 	private TextInfoPrivacyCell passwordRequestTextView;
@@ -329,9 +340,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	private SecureDocument reverseDocument;
 	private final HashMap<SecureDocument, SecureDocumentCell> documentsCells = new HashMap<>();
 	private final HashMap<String, SecureDocument> uploadingDocuments = new HashMap<>();
-	private final HashMap<TLRPC.TL_secureRequiredType, HashMap<String, String>> typesValues = new HashMap<>();
-	private final HashMap<TLRPC.TL_secureRequiredType, TextDetailSecureCell> typesViews = new HashMap<>();
-	private final HashMap<TLRPC.TL_secureRequiredType, TLRPC.TL_secureRequiredType> documentsToTypesLink = new HashMap<>();
+	private final HashMap<TLRPC.TLSecureRequiredType, HashMap<String, String>> typesValues = new HashMap<>();
+	private final HashMap<TLRPC.TLSecureRequiredType, TextDetailSecureCell> typesViews = new HashMap<>();
+	private final HashMap<TLRPC.TLSecureRequiredType, TLRPC.TLSecureRequiredType> documentsToTypesLink = new HashMap<>();
 	private HashMap<String, String> currentValues;
 	private HashMap<String, String> currentDocumentValues;
 	private final HashMap<String, HashMap<String, String>> errorsMap = new HashMap<>();
@@ -347,11 +358,11 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	private boolean needActivityResult;
 
 	private interface PassportActivityDelegate {
-		void saveValue(TLRPC.TL_secureRequiredType type, String text, String json, TLRPC.TL_secureRequiredType documentType, String documentsJson, ArrayList<SecureDocument> documents, SecureDocument selfie, ArrayList<SecureDocument> translationDocuments, SecureDocument front, SecureDocument reverse, Runnable finishRunnable, ErrorRunnable errorRunnable);
+		void saveValue(TLRPC.TLSecureRequiredType type, String text, String json, TLRPC.TLSecureRequiredType documentType, String documentsJson, ArrayList<SecureDocument> documents, SecureDocument selfie, ArrayList<SecureDocument> translationDocuments, SecureDocument front, SecureDocument reverse, Runnable finishRunnable, ErrorRunnable errorRunnable);
 
-		void deleteValue(TLRPC.TL_secureRequiredType type, TLRPC.TL_secureRequiredType documentType, ArrayList<TLRPC.TL_secureRequiredType> documentRequiredTypes, boolean deleteType, Runnable finishRunnable, ErrorRunnable errorRunnable);
+		void deleteValue(TLRPC.TLSecureRequiredType type, TLRPC.TLSecureRequiredType documentType, ArrayList<TLRPC.TLSecureRequiredType> documentRequiredTypes, boolean deleteType, Runnable finishRunnable, ErrorRunnable errorRunnable);
 
-		SecureDocument saveFile(TLRPC.TL_secureFile secureFile);
+		SecureDocument saveFile(TLRPC.TLSecureFile secureFile);
 	}
 
 	private interface ErrorRunnable {
@@ -446,15 +457,15 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 	public class LinkSpan extends ClickableSpan {
 		@Override
-		public void updateDrawState(TextPaint ds) {
+		public void updateDrawState(@NonNull TextPaint ds) {
 			super.updateDrawState(ds);
 			ds.setUnderlineText(true);
 			ds.setTypeface(Theme.TYPEFACE_BOLD);
 		}
 
 		@Override
-		public void onClick(View widget) {
-			Browser.openUrl(getParentActivity(), currentForm.privacy_policy_url);
+		public void onClick(@NonNull View widget) {
+			Browser.openUrl(getParentActivity(), currentForm.privacyPolicyUrl);
 		}
 	}
 
@@ -524,7 +535,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			if (needDivider) {
 				canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(20), getMeasuredHeight() - 1, getMeasuredWidth() - (LocaleController.isRTL ? AndroidUtilities.dp(20) : 0), getMeasuredHeight() - 1, Theme.dividerPaint);
 			}
@@ -589,7 +600,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 
 		@Override
-		protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+		protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 			boolean result = super.drawChild(canvas, child, drawingTime);
 			if (child == imageView) {
 				radialProgress.draw(canvas);
@@ -693,7 +704,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	public PassportActivity(int type, long botId, String scope, String publicKey, String payload, String nonce, String callbackUrl, TLRPC.TL_account_authorizationForm form, TLRPC.account_Password accountPassword) {
+	public PassportActivity(int type, long botId, String scope, String publicKey, String payload, String nonce, String callbackUrl, TLRPC.TLAccountAuthorizationForm form, TLRPC.TLAccountPassword accountPassword) {
 		this(type, form, accountPassword, null, null, null, null, null, null);
 		currentBotId = botId;
 		currentPayload = payload;
@@ -707,32 +718,31 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					Collections.sort(form.errors, new Comparator<TLRPC.SecureValueError>() {
 
 						int getErrorValue(TLRPC.SecureValueError error) {
-							if (error instanceof TLRPC.TL_secureValueError) {
+							if (error instanceof TLRPC.TLSecureValueError) {
 								return 0;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorFrontSide) {
+							else if (error instanceof TLRPC.TLSecureValueErrorFrontSide) {
 								return 1;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorReverseSide) {
+							else if (error instanceof TLRPC.TLSecureValueErrorReverseSide) {
 								return 2;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorSelfie) {
+							else if (error instanceof TLRPC.TLSecureValueErrorSelfie) {
 								return 3;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorTranslationFile) {
+							else if (error instanceof TLRPC.TLSecureValueErrorTranslationFile) {
 								return 4;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorTranslationFiles) {
+							else if (error instanceof TLRPC.TLSecureValueErrorTranslationFiles) {
 								return 5;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorFile) {
+							else if (error instanceof TLRPC.TLSecureValueErrorFile) {
 								return 6;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorFiles) {
+							else if (error instanceof TLRPC.TLSecureValueErrorFiles) {
 								return 7;
 							}
-							else if (error instanceof TLRPC.TL_secureValueErrorData) {
-								TLRPC.TL_secureValueErrorData errorData = (TLRPC.TL_secureValueErrorData)error;
+							else if (error instanceof TLSecureValueErrorData errorData) {
 								return getFieldCost(errorData.field);
 							}
 							return 100;
@@ -760,66 +770,57 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						String field = null;
 						byte[] file_hash = null;
 
-						if (secureValueError instanceof TLRPC.TL_secureValueErrorFrontSide) {
-							TLRPC.TL_secureValueErrorFrontSide secureValueErrorFrontSide = (TLRPC.TL_secureValueErrorFrontSide)secureValueError;
+						if (secureValueError instanceof TLSecureValueErrorFrontSide secureValueErrorFrontSide) {
 							key = getNameForType(secureValueErrorFrontSide.type);
 							description = secureValueErrorFrontSide.text;
-							file_hash = secureValueErrorFrontSide.file_hash;
+							file_hash = secureValueErrorFrontSide.fileHash;
 							target = "front";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueErrorReverseSide) {
-							TLRPC.TL_secureValueErrorReverseSide secureValueErrorReverseSide = (TLRPC.TL_secureValueErrorReverseSide)secureValueError;
+						else if (secureValueError instanceof TLSecureValueErrorReverseSide secureValueErrorReverseSide) {
 							key = getNameForType(secureValueErrorReverseSide.type);
 							description = secureValueErrorReverseSide.text;
-							file_hash = secureValueErrorReverseSide.file_hash;
+							file_hash = secureValueErrorReverseSide.fileHash;
 							target = "reverse";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueErrorSelfie) {
-							TLRPC.TL_secureValueErrorSelfie secureValueErrorSelfie = (TLRPC.TL_secureValueErrorSelfie)secureValueError;
+						else if (secureValueError instanceof TLSecureValueErrorSelfie secureValueErrorSelfie) {
 							key = getNameForType(secureValueErrorSelfie.type);
 							description = secureValueErrorSelfie.text;
-							file_hash = secureValueErrorSelfie.file_hash;
+							file_hash = secureValueErrorSelfie.fileHash;
 							target = "selfie";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueErrorTranslationFile) {
-							TLRPC.TL_secureValueErrorTranslationFile secureValueErrorTranslationFile = (TLRPC.TL_secureValueErrorTranslationFile)secureValueError;
+						else if (secureValueError instanceof TLSecureValueErrorTranslationFile secureValueErrorTranslationFile) {
 							key = getNameForType(secureValueErrorTranslationFile.type);
 							description = secureValueErrorTranslationFile.text;
-							file_hash = secureValueErrorTranslationFile.file_hash;
+							file_hash = secureValueErrorTranslationFile.fileHash;
 							target = "translation";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueErrorTranslationFiles) {
-							TLRPC.TL_secureValueErrorTranslationFiles secureValueErrorTranslationFiles = (TLRPC.TL_secureValueErrorTranslationFiles)secureValueError;
+						else if (secureValueError instanceof TLSecureValueErrorTranslationFiles secureValueErrorTranslationFiles) {
 							key = getNameForType(secureValueErrorTranslationFiles.type);
 							description = secureValueErrorTranslationFiles.text;
 							target = "translation";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueErrorFile) {
-							TLRPC.TL_secureValueErrorFile secureValueErrorFile = (TLRPC.TL_secureValueErrorFile)secureValueError;
+						else if (secureValueError instanceof TLSecureValueErrorFile secureValueErrorFile) {
 							key = getNameForType(secureValueErrorFile.type);
 							description = secureValueErrorFile.text;
-							file_hash = secureValueErrorFile.file_hash;
+							file_hash = secureValueErrorFile.fileHash;
 							target = "files";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueErrorFiles) {
-							TLRPC.TL_secureValueErrorFiles secureValueErrorFiles = (TLRPC.TL_secureValueErrorFiles)secureValueError;
+						else if (secureValueError instanceof TLSecureValueErrorFiles secureValueErrorFiles) {
 							key = getNameForType(secureValueErrorFiles.type);
 							description = secureValueErrorFiles.text;
 							target = "files";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueError) {
-							TLRPC.TL_secureValueError secureValueErrorAll = (TLRPC.TL_secureValueError)secureValueError;
+						else if (secureValueError instanceof TLSecureValueError secureValueErrorAll) {
 							key = getNameForType(secureValueErrorAll.type);
 							description = secureValueErrorAll.text;
 							file_hash = secureValueErrorAll.hash;
 							target = "error_all";
 						}
-						else if (secureValueError instanceof TLRPC.TL_secureValueErrorData) {
-							TLRPC.TL_secureValueErrorData secureValueErrorData = (TLRPC.TL_secureValueErrorData)secureValueError;
+						else if (secureValueError instanceof TLSecureValueErrorData secureValueErrorData) {
 							boolean found = false;
 							for (int b = 0; b < form.values.size(); b++) {
-								TLRPC.TL_secureValue value = form.values.get(b);
-								if (value.data != null && Arrays.equals(value.data.data_hash, secureValueErrorData.data_hash)) {
+								TLRPC.TLSecureValue value = form.values.get(b);
+								if (value.data != null && Arrays.equals(value.data.dataHash, secureValueErrorData.dataHash)) {
 									found = true;
 									break;
 								}
@@ -830,7 +831,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 							key = getNameForType(secureValueErrorData.type);
 							description = secureValueErrorData.text;
 							field = secureValueErrorData.field;
-							file_hash = secureValueErrorData.data_hash;
+							file_hash = secureValueErrorData.dataHash;
 							target = "data";
 						}
 						else {
@@ -893,13 +894,13 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	public PassportActivity(int type, TLRPC.TL_account_authorizationForm form, TLRPC.account_Password accountPassword, TLRPC.TL_secureRequiredType secureType, TLRPC.TL_secureValue secureValue, TLRPC.TL_secureRequiredType secureDocumentsType, TLRPC.TL_secureValue secureDocumentsValue, HashMap<String, String> values, HashMap<String, String> documentValues) {
+	public PassportActivity(int type, TLRPC.TLAccountAuthorizationForm form, TLRPC.TLAccountPassword accountPassword, TLRPC.TLSecureRequiredType secureType, TLRPC.TLSecureValue secureValue, TLRPC.TLSecureRequiredType secureDocumentsType, TLRPC.TLSecureValue secureDocumentsValue, HashMap<String, String> values, HashMap<String, String> documentValues) {
 		super();
 		currentActivityType = type;
 		currentForm = form;
 		currentType = secureType;
 		if (currentType != null) {
-			allowNonLatinName = currentType.native_names;
+			allowNonLatinName = currentType.nativeNames;
 		}
 		currentTypeValue = secureValue;
 		currentDocumentsType = secureDocumentsType;
@@ -935,12 +936,11 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 			}
 			if (!SharedConfig.isPassportConfigLoaded()) {
-				TLRPC.TL_help_getPassportConfig req = new TLRPC.TL_help_getPassportConfig();
+				TLRPC.TLHelpGetPassportConfig req = new TLRPC.TLHelpGetPassportConfig();
 				req.hash = SharedConfig.passportConfigHash;
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-					if (response instanceof TLRPC.TL_help_passportConfig) {
-						TLRPC.TL_help_passportConfig res = (TLRPC.TL_help_passportConfig)response;
-						SharedConfig.setPassportConfig(res.countries_langs.data, res.hash);
+					if (response instanceof TLHelpPassportConfig res) {
+						SharedConfig.setPassportConfig(res.countriesLangs.data, res.hash);
 					}
 					else {
 						SharedConfig.getCountryLangs();
@@ -999,9 +999,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			chatAttachAlert.onDestroy();
 		}
 		if (currentActivityType == TYPE_PHONE_VERIFICATION) {
-			for (int a = 0; a < views.length; a++) {
-				if (views[a] != null) {
-					views[a].onDestroyActivity();
+			for (SlideView view : views) {
+				if (view != null) {
+					view.onDestroyActivity();
 				}
 			}
 			if (progressDialog != null) {
@@ -1074,7 +1074,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				try {
 					if (!documentOnly) {
 						HashMap<String, String> valuesToSave = new HashMap<>(currentValues);
-						if (currentType.native_names) {
+						if (currentType.nativeNames) {
 							if (nativeInfoCell.getVisibility() == View.VISIBLE) {
 								valuesToSave.put("first_name_native", inputExtraFields[FIELD_NATIVE_NAME].getText().toString());
 								valuesToSave.put("middle_name_native", inputExtraFields[FIELD_NATIVE_MIDNAME].getText().toString());
@@ -1286,9 +1286,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 							}
 						}
 						else if (currentActivityType == TYPE_EMAIL_VERIFICATION) {
-							TLRPC.TL_account_verifyEmail req = new TLRPC.TL_account_verifyEmail();
-							req.purpose = new TLRPC.TL_emailVerifyPurposePassport();
-							TLRPC.TL_emailVerificationCode code = new TLRPC.TL_emailVerificationCode();
+							TLRPC.TLAccountVerifyEmail req = new TLRPC.TLAccountVerifyEmail();
+							req.purpose = new TLRPC.TLEmailVerifyPurposePassport();
+							TLRPC.TLEmailVerificationCode code = new TLRPC.TLEmailVerificationCode();
 							code.code = inputFields[FIELD_EMAIL].getText().toString();
 							req.verification = code;
 							int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
@@ -1439,40 +1439,23 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	}
 
 	private int getFieldCost(String key) {
-		switch (key) {
-			case "first_name":
-			case "first_name_native":
-				return 20;
-			case "middle_name":
-			case "middle_name_native":
-				return 21;
-			case "last_name":
-			case "last_name_native":
-				return 22;
-			case "birth_date":
-				return 23;
-			case "gender":
-				return 24;
-			case "country_code":
-				return 25;
-			case "residence_country_code":
-				return 26;
-			case "document_no":
-				return 27;
-			case "expiry_date":
-				return 28;
-			case "street_line1":
-				return 29;
-			case "street_line2":
-				return 30;
-			case "post_code":
-				return 31;
-			case "city":
-				return 32;
-			case "state":
-				return 33;
-		}
-		return 100;
+		return switch (key) {
+			case "first_name", "first_name_native" -> 20;
+			case "middle_name", "middle_name_native" -> 21;
+			case "last_name", "last_name_native" -> 22;
+			case "birth_date" -> 23;
+			case "gender" -> 24;
+			case "country_code" -> 25;
+			case "residence_country_code" -> 26;
+			case "document_no" -> 27;
+			case "expiry_date" -> 28;
+			case "street_line1" -> 29;
+			case "street_line2" -> 30;
+			case "post_code" -> 31;
+			case "city" -> 32;
+			case "state" -> 33;
+			default -> 100;
+		};
 	}
 
 	private void createPhoneVerificationInterface(Context context) {
@@ -1492,10 +1475,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	}
 
 	private void loadPasswordInfo() {
-		TLRPC.TL_account_getPassword req = new TLRPC.TL_account_getPassword();
+		TLRPC.TLAccountGetPassword req = new TLRPC.TLAccountGetPassword();
 		int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 			if (response != null) {
-				currentPassword = (TLRPC.account_Password)response;
+				currentPassword = (TLRPC.TLAccountPassword)response;
 				if (!TwoStepVerificationActivity.canHandleCurrentPassword(currentPassword, false)) {
 					AlertsCreator.showUpdateAppAlert(getParentActivity(), LocaleController.getString("UpdateAppAlert", R.string.UpdateAppAlert), true);
 					return;
@@ -1713,18 +1696,18 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		passwordForgotButton.setPadding(0, 0, 0, 0);
 		linearLayout2.addView(passwordForgotButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 30, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 21, 0, 21, 0));
 		passwordForgotButton.setOnClickListener(v -> {
-			if (currentPassword.has_recovery) {
+			if (currentPassword.hasRecovery) {
 				needShowProgress();
-				TLRPC.TL_auth_requestPasswordRecovery req = new TLRPC.TL_auth_requestPasswordRecovery();
+				TLRPC.TLAuthRequestPasswordRecovery req = new TLRPC.TLAuthRequestPasswordRecovery();
 				int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 					needHideProgress();
 					if (error == null) {
-						final TLRPC.TL_auth_passwordRecovery res = (TLRPC.TL_auth_passwordRecovery)response;
+						final TLRPC.TLAuthPasswordRecovery res = (TLRPC.TLAuthPasswordRecovery)response;
 						AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-						builder.setMessage(LocaleController.formatString("RestoreEmailSent", R.string.RestoreEmailSent, res.email_pattern));
+						builder.setMessage(LocaleController.formatString("RestoreEmailSent", R.string.RestoreEmailSent, res.emailPattern));
 						builder.setTitle(LocaleController.getString("RestoreEmailSentTitle", R.string.RestoreEmailSentTitle));
 						builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), (dialogInterface, i) -> {
-							currentPassword.email_unconfirmed_pattern = res.email_pattern;
+							currentPassword.emailUnconfirmedPattern = res.emailPattern;
 							TwoStepVerificationSetupActivity fragment = new TwoStepVerificationSetupActivity(currentAccount, TwoStepVerificationSetupActivity.TYPE_EMAIL_RECOVERY, currentPassword);
 							presentFragment(fragment);
 						});
@@ -1784,15 +1767,14 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 
 		Utilities.globalQueue.postRunnable(() -> {
-			TLRPC.TL_account_getPasswordSettings req = new TLRPC.TL_account_getPasswordSettings();
+			TLRPC.TLAccountGetPasswordSettings req = new TLRPC.TLAccountGetPasswordSettings();
 
 			final byte[] x_bytes;
 			if (saved) {
 				x_bytes = savedPasswordHash;
 			}
-			else if (currentPassword.current_algo instanceof TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) {
+			else if (currentPassword.currentAlgo instanceof TLPasswordKdfAlgoModPow algo) {
 				byte[] passwordBytes = AndroidUtilities.getStringBytes(textPassword);
-				TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)currentPassword.current_algo;
 				x_bytes = SRPHelper.getX(passwordBytes, algo);
 			}
 			else {
@@ -1834,23 +1816,22 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 
 				private void resetSecret() {
-					TLRPC.TL_account_updatePasswordSettings req2 = new TLRPC.TL_account_updatePasswordSettings();
-					if (currentPassword.current_algo instanceof TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) {
-						TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)currentPassword.current_algo;
-						req2.password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, algo);
+					TLRPC.TLAccountUpdatePasswordSettings req2 = new TLRPC.TLAccountUpdatePasswordSettings();
+					if (currentPassword.currentAlgo instanceof TLPasswordKdfAlgoModPow algo) {
+						req2.password = SRPHelper.startCheck(x_bytes, currentPassword.srpId, currentPassword.srpB, algo);
 					}
-					req2.new_settings = new TLRPC.TL_account_passwordInputSettings();
-					req2.new_settings.new_secure_settings = new TLRPC.TL_secureSecretSettings();
-					req2.new_settings.new_secure_settings.secure_secret = new byte[0];
-					req2.new_settings.new_secure_settings.secure_algo = new TLRPC.TL_securePasswordKdfAlgoUnknown();
-					req2.new_settings.new_secure_settings.secure_secret_id = 0;
-					req2.new_settings.flags |= 4;
+					req2.newSettings = new TLRPC.TLAccountPasswordInputSettings();
+					req2.newSettings.newSecureSettings = new TLRPC.TLSecureSecretSettings();
+					req2.newSettings.newSecureSettings.secureSecret = new byte[0];
+					req2.newSettings.newSecureSettings.secureAlgo = new TLRPC.TLSecurePasswordKdfAlgoUnknown();
+					req2.newSettings.newSecureSettings.secureSecretId = 0;
+					req2.newSettings.flags |= 4;
 					ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 						if (error != null && "SRP_ID_INVALID".equals(error.text)) {
-							TLRPC.TL_account_getPassword getPasswordReq = new TLRPC.TL_account_getPassword();
+							TLRPC.TLAccountGetPassword getPasswordReq = new TLRPC.TLAccountGetPassword();
 							ConnectionsManager.getInstance(currentAccount).sendRequest(getPasswordReq, (response2, error2) -> AndroidUtilities.runOnUIThread(() -> {
 								if (error2 == null) {
-									currentPassword = (TLRPC.account_Password)response2;
+									currentPassword = (TLRPC.TLAccountPassword)response2;
 									TwoStepVerificationActivity.initPasswordNewAlgo(currentPassword);
 									resetSecret();
 								}
@@ -1863,19 +1844,17 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 				private void generateNewSecret() {
 					Utilities.globalQueue.postRunnable(() -> {
-						Utilities.random.setSeed(currentPassword.secure_random);
+						Utilities.random.setSeed(currentPassword.secureRandom);
 
-						TLRPC.TL_account_updatePasswordSettings req1 = new TLRPC.TL_account_updatePasswordSettings();
-						if (currentPassword.current_algo instanceof TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) {
-							TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)currentPassword.current_algo;
-							req1.password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, algo);
+						TLRPC.TLAccountUpdatePasswordSettings req1 = new TLRPC.TLAccountUpdatePasswordSettings();
+						if (currentPassword.currentAlgo instanceof TLPasswordKdfAlgoModPow algo) {
+							req1.password = SRPHelper.startCheck(x_bytes, currentPassword.srpId, currentPassword.srpB, algo);
 						}
-						req1.new_settings = new TLRPC.TL_account_passwordInputSettings();
+						req1.newSettings = new TLRPC.TLAccountPasswordInputSettings();
 
 						secureSecret = getRandomSecret();
 						secureSecretId = Utilities.bytesToLong(Utilities.computeSHA256(secureSecret));
-						if (currentPassword.new_secure_algo instanceof TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000) {
-							TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000 newAlgo = (TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000)currentPassword.new_secure_algo;
+						if (currentPassword.newSecureAlgo instanceof TLSecurePasswordKdfAlgoPBKDF2 newAlgo) {
 
 							saltedPassword = Utilities.computePBKDF2(AndroidUtilities.getStringBytes(textPassword), newAlgo.salt);
 							byte[] key = new byte[32];
@@ -1885,18 +1864,18 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 							Utilities.aesCbcEncryptionByteArraySafe(secureSecret, key, iv, 0, secureSecret.length, 0, 1);
 
-							req1.new_settings.new_secure_settings = new TLRPC.TL_secureSecretSettings();
-							req1.new_settings.new_secure_settings.secure_algo = newAlgo;
-							req1.new_settings.new_secure_settings.secure_secret = secureSecret;
-							req1.new_settings.new_secure_settings.secure_secret_id = secureSecretId;
-							req1.new_settings.flags |= 4;
+							req1.newSettings.newSecureSettings = new TLRPC.TLSecureSecretSettings();
+							req1.newSettings.newSecureSettings.secureAlgo = newAlgo;
+							req1.newSettings.newSecureSettings.secureSecret = secureSecret;
+							req1.newSettings.newSecureSettings.secureSecretId = secureSecretId;
+							req1.newSettings.flags |= 4;
 						}
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req1, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 							if (error != null && "SRP_ID_INVALID".equals(error.text)) {
-								TLRPC.TL_account_getPassword getPasswordReq = new TLRPC.TL_account_getPassword();
+								TLRPC.TLAccountGetPassword getPasswordReq = new TLRPC.TLAccountGetPassword();
 								ConnectionsManager.getInstance(currentAccount).sendRequest(getPasswordReq, (response2, error2) -> AndroidUtilities.runOnUIThread(() -> {
 									if (error2 == null) {
-										currentPassword = (TLRPC.account_Password)response2;
+										currentPassword = (TLRPC.TLAccountPassword)response2;
 										TwoStepVerificationActivity.initPasswordNewAlgo(currentPassword);
 										generateNewSecret();
 									}
@@ -1904,7 +1883,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 								return;
 							}
 							if (currentForm == null) {
-								currentForm = new TLRPC.TL_account_authorizationForm();
+								currentForm = new TLRPC.TLAccountAuthorizationForm();
 							}
 							openRequestInterface();
 						}));
@@ -1912,12 +1891,12 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 
 				@Override
-				public void run(final TLObject response, final TL_error error) {
+				public void run(final TLObject response, final TLError error) {
 					if (error != null && "SRP_ID_INVALID".equals(error.text)) {
-						TLRPC.TL_account_getPassword getPasswordReq = new TLRPC.TL_account_getPassword();
+						TLRPC.TLAccountGetPassword getPasswordReq = new TLRPC.TLAccountGetPassword();
 						ConnectionsManager.getInstance(currentAccount).sendRequest(getPasswordReq, (response2, error2) -> AndroidUtilities.runOnUIThread(() -> {
 							if (error2 == null) {
-								currentPassword = (TLRPC.account_Password)response2;
+								currentPassword = (TLRPC.TLAccountPassword)response2;
 								TwoStepVerificationActivity.initPasswordNewAlgo(currentPassword);
 								onPasswordDone(saved);
 							}
@@ -1926,22 +1905,20 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 					if (error == null) {
 						Utilities.globalQueue.postRunnable(() -> {
-							TLRPC.TL_account_passwordSettings settings = (TLRPC.TL_account_passwordSettings)response;
+							TLRPC.TLAccountPasswordSettings settings = (TLRPC.TLAccountPasswordSettings)response;
 							byte[] secure_salt;
-							if (settings.secure_settings != null) {
-								secureSecret = settings.secure_settings.secure_secret;
-								secureSecretId = settings.secure_settings.secure_secret_id;
-								if (settings.secure_settings.secure_algo instanceof TLRPC.TL_securePasswordKdfAlgoSHA512) {
-									TLRPC.TL_securePasswordKdfAlgoSHA512 algo = (TLRPC.TL_securePasswordKdfAlgoSHA512)settings.secure_settings.secure_algo;
+							if (settings.secureSettings != null) {
+								secureSecret = settings.secureSettings.secureSecret;
+								secureSecretId = settings.secureSettings.secureSecretId;
+								if (settings.secureSettings.secureAlgo instanceof TLSecurePasswordKdfAlgoSHA512 algo) {
 									secure_salt = algo.salt;
 									saltedPassword = Utilities.computeSHA512(secure_salt, AndroidUtilities.getStringBytes(textPassword), secure_salt);
 								}
-								else if (settings.secure_settings.secure_algo instanceof TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000) {
-									TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000 algo = (TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000)settings.secure_settings.secure_algo;
+								else if (settings.secureSettings.secureAlgo instanceof TLSecurePasswordKdfAlgoPBKDF2 algo) {
 									secure_salt = algo.salt;
 									saltedPassword = Utilities.computePBKDF2(AndroidUtilities.getStringBytes(textPassword), algo.salt);
 								}
-								else if (settings.secure_settings.secure_algo instanceof TLRPC.TL_securePasswordKdfAlgoUnknown) {
+								else if (settings.secureSettings.secureAlgo instanceof TLRPC.TLSecurePasswordKdfAlgoUnknown) {
 									AndroidUtilities.runOnUIThread(() -> AlertsCreator.showUpdateAppAlert(getParentActivity(), LocaleController.getString("UpdateAppAlert", R.string.UpdateAppAlert), true));
 									return;
 								}
@@ -1950,8 +1927,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 								}
 							}
 							else {
-								if (currentPassword.new_secure_algo instanceof TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000) {
-									TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000 algo = (TLRPC.TL_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000)currentPassword.new_secure_algo;
+								if (currentPassword.newSecureAlgo instanceof TLSecurePasswordKdfAlgoPBKDF2 algo) {
 									secure_salt = algo.salt;
 									saltedPassword = Utilities.computePBKDF2(AndroidUtilities.getStringBytes(textPassword), algo.salt);
 								}
@@ -1987,13 +1963,13 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 									}
 								}
 								else if (currentBotId == 0) {
-									TLRPC.TL_account_getAllSecureValues req12 = new TLRPC.TL_account_getAllSecureValues();
+									TLRPC.TLAccountGetAllSecureValues req12 = new TLRPC.TLAccountGetAllSecureValues();
 									ConnectionsManager.getInstance(currentAccount).sendRequest(req12, (response1, error1) -> AndroidUtilities.runOnUIThread(() -> {
 										if (response1 != null) {
-											currentForm = new TLRPC.TL_account_authorizationForm();
+											currentForm = new TLRPC.TLAccountAuthorizationForm();
 											Vector vector = (Vector)response1;
 											for (int a = 0, size = vector.objects.size(); a < size; a++) {
-												currentForm.values.add((TLRPC.TL_secureValue)vector.objects.get(a));
+												currentForm.values.add((TLRPC.TLSecureValue)vector.objects.get(a));
 											}
 											openRequestInterface();
 										}
@@ -2050,11 +2026,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 			};
 
-			if (currentPassword.current_algo instanceof TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) {
-				TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow algo = (TLRPC.TL_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)currentPassword.current_algo;
-				req.password = SRPHelper.startCheck(x_bytes, currentPassword.srp_id, currentPassword.srp_B, algo);
+			if (currentPassword.currentAlgo instanceof TLPasswordKdfAlgoModPow algo) {
+				req.password = SRPHelper.startCheck(x_bytes, currentPassword.srpId, currentPassword.srpB, algo);
 				if (req.password == null) {
-					TL_error error = new TL_error();
+					TLError error = new TLError();
 					error.text = "ALGO_INVALID";
 					requestDelegate.run(null, error);
 					return;
@@ -2063,7 +2038,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				ConnectionsManager.getInstance(currentAccount).bindRequestToGuid(reqId, classGuid);
 			}
 			else {
-				TL_error error = new TL_error();
+				TLError error = new TLError();
 				error.text = "PASSWORD_HASH_INVALID";
 				requestDelegate.run(null, error);
 			}
@@ -2071,11 +2046,11 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	}
 
 	private boolean isPersonalDocument(TLRPC.SecureValueType type) {
-		return type instanceof TLRPC.TL_secureValueTypeDriverLicense || type instanceof TLRPC.TL_secureValueTypePassport || type instanceof TLRPC.TL_secureValueTypeInternalPassport || type instanceof TLRPC.TL_secureValueTypeIdentityCard;
+		return type instanceof TLRPC.TLSecureValueTypeDriverLicense || type instanceof TLRPC.TLSecureValueTypePassport || type instanceof TLRPC.TLSecureValueTypeInternalPassport || type instanceof TLRPC.TLSecureValueTypeIdentityCard;
 	}
 
 	private boolean isAddressDocument(TLRPC.SecureValueType type) {
-		return type instanceof TLRPC.TL_secureValueTypeUtilityBill || type instanceof TLRPC.TL_secureValueTypeBankStatement || type instanceof TLRPC.TL_secureValueTypePassportRegistration || type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration || type instanceof TLRPC.TL_secureValueTypeRentalAgreement;
+		return type instanceof TLRPC.TLSecureValueTypeUtilityBill || type instanceof TLRPC.TLSecureValueTypeBankStatement || type instanceof TLRPC.TLSecureValueTypePassportRegistration || type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration || type instanceof TLRPC.TLSecureValueTypeRentalAgreement;
 	}
 
 	private void createRequestInterface(Context context) {
@@ -2121,17 +2096,16 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		linearLayout2.addView(headerCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
 		if (currentForm != null) {
-			int size = currentForm.required_types.size();
-			ArrayList<TLRPC.TL_secureRequiredType> personalDocuments = new ArrayList<>();
-			ArrayList<TLRPC.TL_secureRequiredType> addressDocuments = new ArrayList<>();
+			int size = currentForm.requiredTypes.size();
+			ArrayList<TLRPC.TLSecureRequiredType> personalDocuments = new ArrayList<>();
+			ArrayList<TLRPC.TLSecureRequiredType> addressDocuments = new ArrayList<>();
 			int personalCount = 0;
 			int addressCount = 0;
 			boolean hasPersonalInfo = false;
 			boolean hasAddressInfo = false;
 			for (int a = 0; a < size; a++) {
-				TLRPC.SecureRequiredType secureRequiredType = currentForm.required_types.get(a);
-				if (secureRequiredType instanceof TLRPC.TL_secureRequiredType) {
-					TLRPC.TL_secureRequiredType requiredType = (TLRPC.TL_secureRequiredType)secureRequiredType;
+				TLRPC.SecureRequiredType secureRequiredType = currentForm.requiredTypes.get(a);
+				if (secureRequiredType instanceof TLSecureRequiredType requiredType) {
 					if (isPersonalDocument(requiredType.type)) {
 						personalDocuments.add(requiredType);
 						personalCount++;
@@ -2140,41 +2114,39 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						addressDocuments.add(requiredType);
 						addressCount++;
 					}
-					else if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+					else if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 						hasPersonalInfo = true;
 					}
-					else if (requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+					else if (requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 						hasAddressInfo = true;
 					}
 				}
-				else if (secureRequiredType instanceof TLRPC.TL_secureRequiredTypeOneOf) {
-					TLRPC.TL_secureRequiredTypeOneOf requiredTypeOneOf = (TLRPC.TL_secureRequiredTypeOneOf)secureRequiredType;
+				else if (secureRequiredType instanceof TLSecureRequiredTypeOneOf requiredTypeOneOf) {
 					if (requiredTypeOneOf.types.isEmpty()) {
 						continue;
 					}
 					TLRPC.SecureRequiredType innerType = requiredTypeOneOf.types.get(0);
-					if (!(innerType instanceof TLRPC.TL_secureRequiredType)) {
+					if (!(innerType instanceof TLSecureRequiredType requiredType)) {
 						continue;
 					}
-					TLRPC.TL_secureRequiredType requiredType = (TLRPC.TL_secureRequiredType)innerType;
 
 					if (isPersonalDocument(requiredType.type)) {
 						for (int b = 0, size2 = requiredTypeOneOf.types.size(); b < size2; b++) {
 							innerType = requiredTypeOneOf.types.get(b);
-							if (!(innerType instanceof TLRPC.TL_secureRequiredType)) {
+							if (!(innerType instanceof TLRPC.TLSecureRequiredType)) {
 								continue;
 							}
-							personalDocuments.add((TLRPC.TL_secureRequiredType)innerType);
+							personalDocuments.add((TLRPC.TLSecureRequiredType)innerType);
 						}
 						personalCount++;
 					}
 					else if (isAddressDocument(requiredType.type)) {
 						for (int b = 0, size2 = requiredTypeOneOf.types.size(); b < size2; b++) {
 							innerType = requiredTypeOneOf.types.get(b);
-							if (!(innerType instanceof TLRPC.TL_secureRequiredType)) {
+							if (!(innerType instanceof TLRPC.TLSecureRequiredType)) {
 								continue;
 							}
-							addressDocuments.add((TLRPC.TL_secureRequiredType)innerType);
+							addressDocuments.add((TLRPC.TLSecureRequiredType)innerType);
 						}
 						addressCount++;
 					}
@@ -2183,17 +2155,17 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			boolean separatePersonal = !hasPersonalInfo || personalCount > 1;
 			boolean separateAddress = !hasAddressInfo || addressCount > 1;
 			for (int a = 0; a < size; a++) {
-				TLRPC.SecureRequiredType secureRequiredType = currentForm.required_types.get(a);
-				ArrayList<TLRPC.TL_secureRequiredType> documentTypes;
-				TLRPC.TL_secureRequiredType requiredType;
+				TLRPC.SecureRequiredType secureRequiredType = currentForm.requiredTypes.get(a);
+				ArrayList<TLRPC.TLSecureRequiredType> documentTypes;
+				TLRPC.TLSecureRequiredType requiredType;
 				boolean documentOnly;
-				if (secureRequiredType instanceof TLRPC.TL_secureRequiredType) {
-					requiredType = (TLRPC.TL_secureRequiredType)secureRequiredType;
-					if (requiredType.type instanceof TLRPC.TL_secureValueTypePhone || requiredType.type instanceof TLRPC.TL_secureValueTypeEmail) {
+				if (secureRequiredType instanceof TLRPC.TLSecureRequiredType) {
+					requiredType = (TLRPC.TLSecureRequiredType)secureRequiredType;
+					if (requiredType.type instanceof TLRPC.TLSecureValueTypePhone || requiredType.type instanceof TLRPC.TLSecureValueTypeEmail) {
 						documentTypes = null;
 						documentOnly = false;
 					}
-					else if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+					else if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 						if (separatePersonal) {
 							documentTypes = null;
 						}
@@ -2202,7 +2174,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						}
 						documentOnly = false;
 					}
-					else if (requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+					else if (requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 						if (separateAddress) {
 							documentTypes = null;
 						}
@@ -2214,48 +2186,47 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					else if (separatePersonal && isPersonalDocument(requiredType.type)) {
 						documentTypes = new ArrayList<>();
 						documentTypes.add(requiredType);
-						requiredType = new TLRPC.TL_secureRequiredType();
-						requiredType.type = new TLRPC.TL_secureValueTypePersonalDetails();
+						requiredType = new TLRPC.TLSecureRequiredType();
+						requiredType.type = new TLRPC.TLSecureValueTypePersonalDetails();
 						documentOnly = true;
 					}
 					else if (separateAddress && isAddressDocument(requiredType.type)) {
 						documentTypes = new ArrayList<>();
 						documentTypes.add(requiredType);
-						requiredType = new TLRPC.TL_secureRequiredType();
-						requiredType.type = new TLRPC.TL_secureValueTypeAddress();
+						requiredType = new TLRPC.TLSecureRequiredType();
+						requiredType.type = new TLRPC.TLSecureValueTypeAddress();
 						documentOnly = true;
 					}
 					else {
 						continue;
 					}
 				}
-				else if (secureRequiredType instanceof TLRPC.TL_secureRequiredTypeOneOf) {
-					TLRPC.TL_secureRequiredTypeOneOf requiredTypeOneOf = (TLRPC.TL_secureRequiredTypeOneOf)secureRequiredType;
+				else if (secureRequiredType instanceof TLSecureRequiredTypeOneOf requiredTypeOneOf) {
 					if (requiredTypeOneOf.types.isEmpty()) {
 						continue;
 					}
 					TLRPC.SecureRequiredType innerType = requiredTypeOneOf.types.get(0);
-					if (!(innerType instanceof TLRPC.TL_secureRequiredType)) {
+					if (!(innerType instanceof TLRPC.TLSecureRequiredType)) {
 						continue;
 					}
-					requiredType = (TLRPC.TL_secureRequiredType)innerType;
+					requiredType = (TLRPC.TLSecureRequiredType)innerType;
 
 					if (separatePersonal && isPersonalDocument(requiredType.type) || separateAddress && isAddressDocument(requiredType.type)) {
 						documentTypes = new ArrayList<>();
 						for (int b = 0, size2 = requiredTypeOneOf.types.size(); b < size2; b++) {
 							innerType = requiredTypeOneOf.types.get(b);
-							if (!(innerType instanceof TLRPC.TL_secureRequiredType)) {
+							if (!(innerType instanceof TLRPC.TLSecureRequiredType)) {
 								continue;
 							}
-							documentTypes.add((TLRPC.TL_secureRequiredType)innerType);
+							documentTypes.add((TLRPC.TLSecureRequiredType)innerType);
 						}
 						if (isPersonalDocument(requiredType.type)) {
-							requiredType = new TLRPC.TL_secureRequiredType();
-							requiredType.type = new TLRPC.TL_secureValueTypePersonalDetails();
+							requiredType = new TLRPC.TLSecureRequiredType();
+							requiredType.type = new TLRPC.TLSecureValueTypePersonalDetails();
 						}
 						else {
-							requiredType = new TLRPC.TL_secureRequiredType();
-							requiredType.type = new TLRPC.TL_secureValueTypeAddress();
+							requiredType = new TLRPC.TLSecureRequiredType();
+							requiredType.type = new TLRPC.TLSecureValueTypeAddress();
 						}
 
 						documentOnly = true;
@@ -2274,7 +2245,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		if (botUser != null) {
 			bottomCell = new TextInfoPrivacyCell(context);
 			bottomCell.setBackgroundDrawable(Theme.getThemedDrawable(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
-			if (!TextUtils.isEmpty(currentForm.privacy_policy_url)) {
+			if (!TextUtils.isEmpty(currentForm.privacyPolicyUrl)) {
 				String str2 = LocaleController.formatString("PassportPolicy", R.string.PassportPolicy, UserObject.getFirstName(botUser), botUser.username);
 				SpannableStringBuilder text = new SpannableStringBuilder(str2);
 				int index1 = str2.indexOf('*');
@@ -2301,11 +2272,11 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		bottomLayout.setOnClickListener(view -> {
 
 			class ValueToSend {
-				final TLRPC.TL_secureValue value;
+				final TLRPC.TLSecureValue value;
 				final boolean selfie_required;
 				final boolean translation_required;
 
-				public ValueToSend(TLRPC.TL_secureValue v, boolean s, boolean t) {
+				public ValueToSend(TLRPC.TLSecureValue v, boolean s, boolean t) {
 					value = v;
 					selfie_required = s;
 					translation_required = t;
@@ -2313,31 +2284,29 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			}
 
 			ArrayList<ValueToSend> valuesToSend = new ArrayList<>();
-			for (int a = 0, size = currentForm.required_types.size(); a < size; a++) {
+			for (int a = 0, size = currentForm.requiredTypes.size(); a < size; a++) {
 
-				TLRPC.TL_secureRequiredType requiredType;
+				TLRPC.TLSecureRequiredType requiredType;
 
-				TLRPC.SecureRequiredType secureRequiredType = currentForm.required_types.get(a);
-				if (secureRequiredType instanceof TLRPC.TL_secureRequiredType) {
-					requiredType = (TLRPC.TL_secureRequiredType)secureRequiredType;
+				TLRPC.SecureRequiredType secureRequiredType = currentForm.requiredTypes.get(a);
+				if (secureRequiredType instanceof TLRPC.TLSecureRequiredType) {
+					requiredType = (TLRPC.TLSecureRequiredType)secureRequiredType;
 				}
-				else if (secureRequiredType instanceof TLRPC.TL_secureRequiredTypeOneOf) {
-					TLRPC.TL_secureRequiredTypeOneOf requiredTypeOneOf = (TLRPC.TL_secureRequiredTypeOneOf)secureRequiredType;
+				else if (secureRequiredType instanceof TLSecureRequiredTypeOneOf requiredTypeOneOf) {
 					if (requiredTypeOneOf.types.isEmpty()) {
 						continue;
 					}
 					secureRequiredType = requiredTypeOneOf.types.get(0);
-					if (!(secureRequiredType instanceof TLRPC.TL_secureRequiredType)) {
+					if (!(secureRequiredType instanceof TLRPC.TLSecureRequiredType)) {
 						continue;
 					}
-					requiredType = (TLRPC.TL_secureRequiredType)secureRequiredType;
+					requiredType = (TLRPC.TLSecureRequiredType)secureRequiredType;
 
 					for (int b = 0, size2 = requiredTypeOneOf.types.size(); b < size2; b++) {
 						secureRequiredType = requiredTypeOneOf.types.get(b);
-						if (!(secureRequiredType instanceof TLRPC.TL_secureRequiredType)) {
+						if (!(secureRequiredType instanceof TLSecureRequiredType innerType)) {
 							continue;
 						}
-						TLRPC.TL_secureRequiredType innerType = (TLRPC.TL_secureRequiredType)secureRequiredType;
 						if (getValueByType(innerType, true) != null) {
 							requiredType = innerType;
 							break;
@@ -2348,7 +2317,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					continue;
 				}
 
-				TLRPC.TL_secureValue value = getValueByType(requiredType, true);
+				TLRPC.TLSecureValue value = getValueByType(requiredType, true);
 				if (value == null) {
 					Vibrator v = (Vibrator)getParentActivity().getSystemService(Context.VIBRATOR_SERVICE);
 					if (v != null) {
@@ -2367,35 +2336,33 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					AndroidUtilities.shakeView(getViewByType(requiredType), 2, 0);
 					return;
 				}
-				valuesToSend.add(new ValueToSend(value, requiredType.selfie_required, requiredType.translation_required));
+				valuesToSend.add(new ValueToSend(value, requiredType.selfieRequired, requiredType.translationRequired));
 			}
 			showEditDoneProgress(false, true);
-			TLRPC.TL_account_acceptAuthorization req = new TLRPC.TL_account_acceptAuthorization();
-			req.bot_id = currentBotId;
+			TLRPC.TLAccountAcceptAuthorization req = new TLRPC.TLAccountAcceptAuthorization();
+			req.botId = currentBotId;
 			req.scope = currentScope;
-			req.public_key = currentPublicKey;
+			req.publicKey = currentPublicKey;
 			JSONObject jsonObject = new JSONObject();
 			for (int a = 0, size = valuesToSend.size(); a < size; a++) {
 				ValueToSend valueToSend = valuesToSend.get(a);
-				TLRPC.TL_secureValue secureValue = valueToSend.value;
+				TLRPC.TLSecureValue secureValue = valueToSend.value;
 
 				JSONObject data = new JSONObject();
 
-				if (secureValue.plain_data != null) {
-					if (secureValue.plain_data instanceof TLRPC.TL_securePlainEmail) {
-						TLRPC.TL_securePlainEmail securePlainEmail = (TLRPC.TL_securePlainEmail)secureValue.plain_data;
+				if (secureValue.plainData != null) {
+					if (secureValue.plainData instanceof TLSecurePlainEmail securePlainEmail) {
 					}
-					else if (secureValue.plain_data instanceof TLRPC.TL_securePlainPhone) {
-						TLRPC.TL_securePlainPhone securePlainPhone = (TLRPC.TL_securePlainPhone)secureValue.plain_data;
+					else if (secureValue.plainData instanceof TLSecurePlainPhone securePlainPhone) {
 					}
 				}
 				else {
 					try {
 						JSONObject result = new JSONObject();
 						if (secureValue.data != null) {
-							byte[] decryptedSecret = decryptValueSecret(secureValue.data.secret, secureValue.data.data_hash);
+							byte[] decryptedSecret = decryptValueSecret(secureValue.data.secret, secureValue.data.dataHash);
 
-							data.put("data_hash", Base64.encodeToString(secureValue.data.data_hash, Base64.NO_WRAP));
+							data.put("data_hash", Base64.encodeToString(secureValue.data.dataHash, Base64.NO_WRAP));
 							data.put("secret", Base64.encodeToString(decryptedSecret, Base64.NO_WRAP));
 
 							result.put("data", data);
@@ -2403,51 +2370,48 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						if (!secureValue.files.isEmpty()) {
 							JSONArray files = new JSONArray();
 							for (int b = 0, size2 = secureValue.files.size(); b < size2; b++) {
-								TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)secureValue.files.get(b);
-								byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.file_hash);
+								TLRPC.TLSecureFile secureFile = (TLRPC.TLSecureFile)secureValue.files.get(b);
+								byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.fileHash);
 
 								JSONObject file = new JSONObject();
-								file.put("file_hash", Base64.encodeToString(secureFile.file_hash, Base64.NO_WRAP));
+								file.put("file_hash", Base64.encodeToString(secureFile.fileHash, Base64.NO_WRAP));
 								file.put("secret", Base64.encodeToString(decryptedSecret, Base64.NO_WRAP));
 								files.put(file);
 							}
 							result.put("files", files);
 						}
-						if (secureValue.front_side instanceof TLRPC.TL_secureFile) {
-							TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)secureValue.front_side;
-							byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.file_hash);
+						if (secureValue.frontSide instanceof TLSecureFile secureFile) {
+							byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.fileHash);
 
 							JSONObject front = new JSONObject();
-							front.put("file_hash", Base64.encodeToString(secureFile.file_hash, Base64.NO_WRAP));
+							front.put("file_hash", Base64.encodeToString(secureFile.fileHash, Base64.NO_WRAP));
 							front.put("secret", Base64.encodeToString(decryptedSecret, Base64.NO_WRAP));
 							result.put("front_side", front);
 						}
-						if (secureValue.reverse_side instanceof TLRPC.TL_secureFile) {
-							TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)secureValue.reverse_side;
-							byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.file_hash);
+						if (secureValue.reverseSide instanceof TLSecureFile secureFile) {
+							byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.fileHash);
 
 							JSONObject reverse = new JSONObject();
-							reverse.put("file_hash", Base64.encodeToString(secureFile.file_hash, Base64.NO_WRAP));
+							reverse.put("file_hash", Base64.encodeToString(secureFile.fileHash, Base64.NO_WRAP));
 							reverse.put("secret", Base64.encodeToString(decryptedSecret, Base64.NO_WRAP));
 							result.put("reverse_side", reverse);
 						}
-						if (valueToSend.selfie_required && secureValue.selfie instanceof TLRPC.TL_secureFile) {
-							TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)secureValue.selfie;
-							byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.file_hash);
+						if (valueToSend.selfie_required && secureValue.selfie instanceof TLSecureFile secureFile) {
+							byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.fileHash);
 
 							JSONObject selfie = new JSONObject();
-							selfie.put("file_hash", Base64.encodeToString(secureFile.file_hash, Base64.NO_WRAP));
+							selfie.put("file_hash", Base64.encodeToString(secureFile.fileHash, Base64.NO_WRAP));
 							selfie.put("secret", Base64.encodeToString(decryptedSecret, Base64.NO_WRAP));
 							result.put("selfie", selfie);
 						}
 						if (valueToSend.translation_required && !secureValue.translation.isEmpty()) {
 							JSONArray translation = new JSONArray();
 							for (int b = 0, size2 = secureValue.translation.size(); b < size2; b++) {
-								TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)secureValue.translation.get(b);
-								byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.file_hash);
+								TLRPC.TLSecureFile secureFile = (TLRPC.TLSecureFile)secureValue.translation.get(b);
+								byte[] decryptedSecret = decryptValueSecret(secureFile.secret, secureFile.fileHash);
 
 								JSONObject file = new JSONObject();
-								file.put("file_hash", Base64.encodeToString(secureFile.file_hash, Base64.NO_WRAP));
+								file.put("file_hash", Base64.encodeToString(secureFile.fileHash, Base64.NO_WRAP));
 								file.put("secret", Base64.encodeToString(decryptedSecret, Base64.NO_WRAP));
 								translation.put(file);
 							}
@@ -2460,10 +2424,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 				}
 
-				TLRPC.TL_secureValueHash hash = new TLRPC.TL_secureValueHash();
+				TLRPC.TLSecureValueHash hash = new TLRPC.TLSecureValueHash();
 				hash.type = secureValue.type;
 				hash.hash = secureValue.hash;
-				req.value_hashes.add(hash);
+				req.valueHashes.add(hash);
 			}
 			JSONObject result = new JSONObject();
 			try {
@@ -2492,7 +2456,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 			EncryptionResult encryptionResult = encryptData(AndroidUtilities.getStringBytes(json));
 
-			req.credentials = new TLRPC.TL_secureCredentialsEncrypted();
+			req.credentials = new TLRPC.TLSecureCredentialsEncrypted();
 			req.credentials.hash = encryptionResult.fileHash;
 			req.credentials.data = encryptionResult.encryptedData;
 			try {
@@ -2578,7 +2542,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			builder.setTitle(LocaleController.getString("TelegramPassportDeleteTitle", R.string.TelegramPassportDeleteTitle));
 			builder.setMessage(LocaleController.getString("TelegramPassportDeleteAlert", R.string.TelegramPassportDeleteAlert));
 			builder.setPositiveButton(LocaleController.getString("Delete", R.string.Delete), (dialog, which) -> {
-				TLRPC.TL_account_deleteSecureValue req = new TLRPC.TL_account_deleteSecureValue();
+				TLRPC.TLAccountDeleteSecureValue req = new TLRPC.TLAccountDeleteSecureValue();
 				for (int a = 0; a < currentForm.values.size(); a++) {
 					req.types.add(currentForm.values.get(a).type);
 				}
@@ -2622,12 +2586,12 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			linearLayout2.addView(emptyLayout, new LinearLayout.LayoutParams(LayoutHelper.MATCH_PARENT, AndroidUtilities.displaySize.y - ActionBar.getCurrentActionBarHeight()));
 		}
 
-		emptyImageView = new ImageView(context);
+		ImageView emptyImageView = new ImageView(context);
 		emptyImageView.setImageResource(R.drawable.no_passport);
 		emptyImageView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_sessions_devicesImage), PorterDuff.Mode.MULTIPLY));
 		emptyLayout.addView(emptyImageView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
-		emptyTextView1 = new TextView(context);
+		TextView emptyTextView1 = new TextView(context);
 		emptyTextView1.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
 		emptyTextView1.setGravity(Gravity.CENTER);
 		emptyTextView1.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
@@ -2635,7 +2599,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		emptyTextView1.setText(LocaleController.getString("PassportNoDocuments", R.string.PassportNoDocuments));
 		emptyLayout.addView(emptyTextView1, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 16, 0, 0));
 
-		emptyTextView2 = new TextView(context);
+		TextView emptyTextView2 = new TextView(context);
 		emptyTextView2.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
 		emptyTextView2.setGravity(Gravity.CENTER);
 		emptyTextView2.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
@@ -2643,7 +2607,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		emptyTextView2.setText(LocaleController.getString("PassportNoDocumentsInfo", R.string.PassportNoDocumentsInfo));
 		emptyLayout.addView(emptyTextView2, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 14, 0, 0));
 
-		emptyTextView3 = new TextView(context);
+		TextView emptyTextView3 = new TextView(context);
 		emptyTextView3.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
 		emptyTextView3.setGravity(Gravity.CENTER);
 		emptyTextView3.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
@@ -2654,33 +2618,33 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		emptyTextView3.setOnClickListener(v -> openAddDocumentAlert());
 
 		for (int a = 0, size = currentForm.values.size(); a < size; a++) {
-			TLRPC.TL_secureValue value = currentForm.values.get(a);
-			TLRPC.TL_secureRequiredType requiredType;
-			ArrayList<TLRPC.TL_secureRequiredType> documentTypes;
+			TLRPC.TLSecureValue value = currentForm.values.get(a);
+			TLRPC.TLSecureRequiredType requiredType;
+			ArrayList<TLRPC.TLSecureRequiredType> documentTypes;
 			boolean documentOnly;
 			if (isPersonalDocument(value.type)) {
 				documentTypes = new ArrayList<>();
-				requiredType = new TLRPC.TL_secureRequiredType();
+				requiredType = new TLRPC.TLSecureRequiredType();
 				requiredType.type = value.type;
-				requiredType.selfie_required = true;
-				requiredType.translation_required = true;
+				requiredType.selfieRequired = true;
+				requiredType.translationRequired = true;
 				documentTypes.add(requiredType);
-				requiredType = new TLRPC.TL_secureRequiredType();
-				requiredType.type = new TLRPC.TL_secureValueTypePersonalDetails();
+				requiredType = new TLRPC.TLSecureRequiredType();
+				requiredType.type = new TLRPC.TLSecureValueTypePersonalDetails();
 				documentOnly = true;
 			}
 			else if (isAddressDocument(value.type)) {
 				documentTypes = new ArrayList<>();
-				requiredType = new TLRPC.TL_secureRequiredType();
+				requiredType = new TLRPC.TLSecureRequiredType();
 				requiredType.type = value.type;
-				requiredType.translation_required = true;
+				requiredType.translationRequired = true;
 				documentTypes.add(requiredType);
-				requiredType = new TLRPC.TL_secureRequiredType();
-				requiredType.type = new TLRPC.TL_secureValueTypeAddress();
+				requiredType = new TLRPC.TLSecureRequiredType();
+				requiredType.type = new TLRPC.TLSecureValueTypeAddress();
 				documentOnly = true;
 			}
 			else {
-				requiredType = new TLRPC.TL_secureRequiredType();
+				requiredType = new TLRPC.TLSecureRequiredType();
 				requiredType.type = value.type;
 				documentTypes = null;
 				documentOnly = false;
@@ -2701,64 +2665,64 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	}
 
 	private boolean hasUnfilledValues() {
-		return hasNotValueForType(TLRPC.TL_secureValueTypePhone.class) || hasNotValueForType(TLRPC.TL_secureValueTypeEmail.class) || hasNotValueForType(TLRPC.TL_secureValueTypePersonalDetails.class) || hasNotValueForType(TLRPC.TL_secureValueTypePassport.class) || hasNotValueForType(TLRPC.TL_secureValueTypeInternalPassport.class) || hasNotValueForType(TLRPC.TL_secureValueTypeIdentityCard.class) || hasNotValueForType(TLRPC.TL_secureValueTypeDriverLicense.class) || hasNotValueForType(TLRPC.TL_secureValueTypeAddress.class) || hasNotValueForType(TLRPC.TL_secureValueTypeUtilityBill.class) || hasNotValueForType(TLRPC.TL_secureValueTypePassportRegistration.class) || hasNotValueForType(TLRPC.TL_secureValueTypeTemporaryRegistration.class) || hasNotValueForType(TLRPC.TL_secureValueTypeBankStatement.class) || hasNotValueForType(TLRPC.TL_secureValueTypeRentalAgreement.class);
+		return hasNotValueForType(TLRPC.TLSecureValueTypePhone.class) || hasNotValueForType(TLRPC.TLSecureValueTypeEmail.class) || hasNotValueForType(TLRPC.TLSecureValueTypePersonalDetails.class) || hasNotValueForType(TLRPC.TLSecureValueTypePassport.class) || hasNotValueForType(TLRPC.TLSecureValueTypeInternalPassport.class) || hasNotValueForType(TLRPC.TLSecureValueTypeIdentityCard.class) || hasNotValueForType(TLRPC.TLSecureValueTypeDriverLicense.class) || hasNotValueForType(TLRPC.TLSecureValueTypeAddress.class) || hasNotValueForType(TLRPC.TLSecureValueTypeUtilityBill.class) || hasNotValueForType(TLRPC.TLSecureValueTypePassportRegistration.class) || hasNotValueForType(TLRPC.TLSecureValueTypeTemporaryRegistration.class) || hasNotValueForType(TLRPC.TLSecureValueTypeBankStatement.class) || hasNotValueForType(TLRPC.TLSecureValueTypeRentalAgreement.class);
 	}
 
 	private void openAddDocumentAlert() {
 		ArrayList<CharSequence> values = new ArrayList<>();
 		final ArrayList<Class<? extends TLRPC.SecureValueType>> types = new ArrayList<>();
 
-		if (hasNotValueForType(TLRPC.TL_secureValueTypePhone.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypePhone.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentPhone", R.string.ActionBotDocumentPhone));
-			types.add(TLRPC.TL_secureValueTypePhone.class);
+			types.add(TLRPC.TLSecureValueTypePhone.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeEmail.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeEmail.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentEmail", R.string.ActionBotDocumentEmail));
-			types.add(TLRPC.TL_secureValueTypeEmail.class);
+			types.add(TLRPC.TLSecureValueTypeEmail.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypePersonalDetails.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypePersonalDetails.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentIdentity", R.string.ActionBotDocumentIdentity));
-			types.add(TLRPC.TL_secureValueTypePersonalDetails.class);
+			types.add(TLRPC.TLSecureValueTypePersonalDetails.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypePassport.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypePassport.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentPassport", R.string.ActionBotDocumentPassport));
-			types.add(TLRPC.TL_secureValueTypePassport.class);
+			types.add(TLRPC.TLSecureValueTypePassport.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeInternalPassport.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeInternalPassport.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentInternalPassport", R.string.ActionBotDocumentInternalPassport));
-			types.add(TLRPC.TL_secureValueTypeInternalPassport.class);
+			types.add(TLRPC.TLSecureValueTypeInternalPassport.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypePassportRegistration.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypePassportRegistration.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentPassportRegistration", R.string.ActionBotDocumentPassportRegistration));
-			types.add(TLRPC.TL_secureValueTypePassportRegistration.class);
+			types.add(TLRPC.TLSecureValueTypePassportRegistration.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeTemporaryRegistration.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeTemporaryRegistration.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentTemporaryRegistration", R.string.ActionBotDocumentTemporaryRegistration));
-			types.add(TLRPC.TL_secureValueTypeTemporaryRegistration.class);
+			types.add(TLRPC.TLSecureValueTypeTemporaryRegistration.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeIdentityCard.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeIdentityCard.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentIdentityCard", R.string.ActionBotDocumentIdentityCard));
-			types.add(TLRPC.TL_secureValueTypeIdentityCard.class);
+			types.add(TLRPC.TLSecureValueTypeIdentityCard.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeDriverLicense.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeDriverLicense.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentDriverLicence", R.string.ActionBotDocumentDriverLicence));
-			types.add(TLRPC.TL_secureValueTypeDriverLicense.class);
+			types.add(TLRPC.TLSecureValueTypeDriverLicense.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeAddress.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeAddress.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentAddress", R.string.ActionBotDocumentAddress));
-			types.add(TLRPC.TL_secureValueTypeAddress.class);
+			types.add(TLRPC.TLSecureValueTypeAddress.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeUtilityBill.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeUtilityBill.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentUtilityBill", R.string.ActionBotDocumentUtilityBill));
-			types.add(TLRPC.TL_secureValueTypeUtilityBill.class);
+			types.add(TLRPC.TLSecureValueTypeUtilityBill.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeBankStatement.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeBankStatement.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentBankStatement", R.string.ActionBotDocumentBankStatement));
-			types.add(TLRPC.TL_secureValueTypeBankStatement.class);
+			types.add(TLRPC.TLSecureValueTypeBankStatement.class);
 		}
-		if (hasNotValueForType(TLRPC.TL_secureValueTypeRentalAgreement.class)) {
+		if (hasNotValueForType(TLRPC.TLSecureValueTypeRentalAgreement.class)) {
 			values.add(LocaleController.getString("ActionBotDocumentRentalAgreement", R.string.ActionBotDocumentRentalAgreement));
-			types.add(TLRPC.TL_secureValueTypeRentalAgreement.class);
+			types.add(TLRPC.TLSecureValueTypeRentalAgreement.class);
 		}
 
 		if (getParentActivity() == null || values.isEmpty()) {
@@ -2767,10 +2731,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
 		builder.setTitle(LocaleController.getString("PassportNoDocumentsAdd", R.string.PassportNoDocumentsAdd));
 		builder.setItems(values.toArray(new CharSequence[0]), (dialog, which) -> {
-			TLRPC.TL_secureRequiredType requiredType = null;
-			TLRPC.TL_secureRequiredType documentRequiredType = null;
+			TLRPC.TLSecureRequiredType requiredType = null;
+			TLRPC.TLSecureRequiredType documentRequiredType = null;
 			try {
-				requiredType = new TLRPC.TL_secureRequiredType();
+				requiredType = new TLRPC.TLSecureRequiredType();
 				requiredType.type = types.get(which).newInstance();
 			}
 			catch (Exception ignore) {
@@ -2779,15 +2743,15 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 			if (isPersonalDocument(requiredType.type)) {
 				documentRequiredType = requiredType;
-				documentRequiredType.selfie_required = true;
-				documentRequiredType.translation_required = true;
-				requiredType = new TLRPC.TL_secureRequiredType();
-				requiredType.type = new TLRPC.TL_secureValueTypePersonalDetails();
+				documentRequiredType.selfieRequired = true;
+				documentRequiredType.translationRequired = true;
+				requiredType = new TLRPC.TLSecureRequiredType();
+				requiredType.type = new TLRPC.TLSecureValueTypePersonalDetails();
 			}
 			else if (isAddressDocument(requiredType.type)) {
 				documentRequiredType = requiredType;
-				requiredType = new TLRPC.TL_secureRequiredType();
-				requiredType.type = new TLRPC.TL_secureValueTypeAddress();
+				requiredType = new TLRPC.TLSecureRequiredType();
+				requiredType.type = new TLRPC.TLSecureValueTypeAddress();
 			}
 
 			openTypeActivity(requiredType, documentRequiredType, new ArrayList<>(), documentRequiredType != null);
@@ -2879,8 +2843,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			inputFields[a].setInputType(EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
 			inputFields[a].setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
 			inputFields[a].setHint(LocaleController.getString("PaymentShippingEmailPlaceholder", R.string.PaymentShippingEmailPlaceholder));
-			if (currentTypeValue != null && currentTypeValue.plain_data instanceof TLRPC.TL_securePlainEmail) {
-				TLRPC.TL_securePlainEmail securePlainEmail = (TLRPC.TL_securePlainEmail)currentTypeValue.plain_data;
+			if (currentTypeValue != null && currentTypeValue.plainData instanceof TLSecurePlainEmail securePlainEmail) {
 				if (!TextUtils.isEmpty(securePlainEmail.email)) {
 					inputFields[a].setText(securePlainEmail.email);
 				}
@@ -3028,7 +2991,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			inputFields[a].setSelection(inputFields[a].length());
 
 			if (a == FIELD_PHONECODE) {
-				plusTextView = new TextView(context);
+				TextView plusTextView = new TextView(context);
 				plusTextView.setText("+");
 				plusTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
 				plusTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
@@ -3287,19 +3250,19 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		checkTopErrorCell(true);
 
 		if (currentDocumentsType != null) {
-			if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeRentalAgreement) {
+			if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeRentalAgreement) {
 				actionBar.setTitle(LocaleController.getString("ActionBotDocumentRentalAgreement", R.string.ActionBotDocumentRentalAgreement));
 			}
-			else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeBankStatement) {
+			else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeBankStatement) {
 				actionBar.setTitle(LocaleController.getString("ActionBotDocumentBankStatement", R.string.ActionBotDocumentBankStatement));
 			}
-			else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeUtilityBill) {
+			else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeUtilityBill) {
 				actionBar.setTitle(LocaleController.getString("ActionBotDocumentUtilityBill", R.string.ActionBotDocumentUtilityBill));
 			}
-			else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypePassportRegistration) {
+			else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypePassportRegistration) {
 				actionBar.setTitle(LocaleController.getString("ActionBotDocumentPassportRegistration", R.string.ActionBotDocumentPassportRegistration));
 			}
-			else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration) {
+			else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration) {
 				actionBar.setTitle(LocaleController.getString("ActionBotDocumentTemporaryRegistration", R.string.ActionBotDocumentTemporaryRegistration));
 			}
 
@@ -3327,19 +3290,19 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				noAllDocumentsErrorText = LocaleController.getString("PassportAddAddressUploadInfo", R.string.PassportAddAddressUploadInfo);
 			}
 			else {
-				if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeRentalAgreement) {
+				if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeRentalAgreement) {
 					noAllDocumentsErrorText = LocaleController.getString("PassportAddAgreementInfo", R.string.PassportAddAgreementInfo);
 				}
-				else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeUtilityBill) {
+				else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeUtilityBill) {
 					noAllDocumentsErrorText = LocaleController.getString("PassportAddBillInfo", R.string.PassportAddBillInfo);
 				}
-				else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypePassportRegistration) {
+				else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypePassportRegistration) {
 					noAllDocumentsErrorText = LocaleController.getString("PassportAddPassportRegistrationInfo", R.string.PassportAddPassportRegistrationInfo);
 				}
-				else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration) {
+				else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration) {
 					noAllDocumentsErrorText = LocaleController.getString("PassportAddTemporaryRegistrationInfo", R.string.PassportAddTemporaryRegistrationInfo);
 				}
-				else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeBankStatement) {
+				else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeBankStatement) {
 					noAllDocumentsErrorText = LocaleController.getString("PassportAddBankInfo", R.string.PassportAddBankInfo);
 				}
 				else {
@@ -3362,7 +3325,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			bottomCell.setText(text);
 			linearLayout2.addView(bottomCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-			if (currentDocumentsType.translation_required) {
+			if (currentDocumentsType.translationRequired) {
 				headerCell = new HeaderCell(context);
 				headerCell.setText(LocaleController.getString("PassportTranslation", R.string.PassportTranslation));
 				headerCell.setBackgroundColor(context.getColor(R.color.background));
@@ -3387,19 +3350,19 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					noAllTranslationErrorText = LocaleController.getString("PassportAddTranslationUploadInfo", R.string.PassportAddTranslationUploadInfo);
 				}
 				else {
-					if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeRentalAgreement) {
+					if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeRentalAgreement) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddTranslationAgreementInfo", R.string.PassportAddTranslationAgreementInfo);
 					}
-					else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeUtilityBill) {
+					else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeUtilityBill) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddTranslationBillInfo", R.string.PassportAddTranslationBillInfo);
 					}
-					else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypePassportRegistration) {
+					else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypePassportRegistration) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddTranslationPassportRegistrationInfo", R.string.PassportAddTranslationPassportRegistrationInfo);
 					}
-					else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration) {
+					else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddTranslationTemporaryRegistrationInfo", R.string.PassportAddTranslationTemporaryRegistrationInfo);
 					}
-					else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeBankStatement) {
+					else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeBankStatement) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddTranslationBankInfo", R.string.PassportAddTranslationBankInfo);
 					}
 					else {
@@ -3471,7 +3434,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 
 				@Override
-				protected void onDraw(Canvas canvas) {
+				protected void onDraw(@NonNull Canvas canvas) {
 					if (errorLayout != null) {
 						canvas.save();
 						canvas.translate(AndroidUtilities.dp(21) + offsetX, field.getLineY() + AndroidUtilities.dp(3));
@@ -3703,10 +3666,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		});
 		builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
 		builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
-		if (documentOnly && currentDocumentsType == null && currentType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+		if (documentOnly && currentDocumentsType == null && currentType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 			builder.setMessage(LocaleController.getString("PassportDeleteAddressAlert", R.string.PassportDeleteAddressAlert));
 		}
-		else if (documentOnly && currentDocumentsType == null && currentType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+		else if (documentOnly && currentDocumentsType == null && currentType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 			builder.setMessage(LocaleController.getString("PassportDeletePersonalAlert", R.string.PassportDeletePersonalAlert));
 		}
 		else {
@@ -3717,10 +3680,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			FrameLayout frameLayout = new FrameLayout(getParentActivity());
 			CheckBoxCell cell = new CheckBoxCell(getParentActivity(), 1);
 			cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
-			if (currentType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+			if (currentType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 				cell.setText(LocaleController.getString("PassportDeleteDocumentAddress", R.string.PassportDeleteDocumentAddress), "", true, false);
 			}
-			else if (currentType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+			else if (currentType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 				cell.setText(LocaleController.getString("PassportDeleteDocumentPersonal", R.string.PassportDeleteDocumentPersonal), "", true, false);
 			}
 			cell.setPadding(LocaleController.isRTL ? AndroidUtilities.dp(16) : AndroidUtilities.dp(8), 0, LocaleController.isRTL ? AndroidUtilities.dp(8) : AndroidUtilities.dp(16), 0);
@@ -3762,8 +3725,8 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 	private String getDocumentHash(SecureDocument document) {
 		if (document != null) {
-			if (document.secureFile != null && document.secureFile.file_hash != null) {
-				return Base64.encodeToString(document.secureFile.file_hash, Base64.NO_WRAP);
+			if (document.secureFile != null && document.secureFile.fileHash != null) {
+				return Base64.encodeToString(document.secureFile.fileHash, Base64.NO_WRAP);
 			}
 			else if (document.fileHash != null) {
 				return Base64.encodeToString(document.fileHash, Base64.NO_WRAP);
@@ -3836,7 +3799,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 				}
 			}
-			if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeIdentityCard || currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+			if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeIdentityCard || currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 				if (uploadReverseCell != null) {
 					if (reverseDocument == null) {
 						onFieldError(uploadReverseCell);
@@ -3899,82 +3862,40 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 				if (!errorsValues.isEmpty()) {
 					String key;
-					if (currentType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+					if (currentType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 						if (i == 0) {
-							switch (a) {
-								case FIELD_NAME:
-									key = "first_name";
-									break;
-								case FIELD_MIDNAME:
-									key = "middle_name";
-									break;
-								case FIELD_SURNAME:
-									key = "last_name";
-									break;
-								case FIELD_BIRTHDAY:
-									key = "birth_date";
-									break;
-								case FIELD_GENDER:
-									key = "gender";
-									break;
-								case FIELD_CITIZENSHIP:
-									key = "country_code";
-									break;
-								case FIELD_RESIDENCE:
-									key = "residence_country_code";
-									break;
-								case FIELD_CARDNUMBER:
-									key = "document_no";
-									break;
-								case FIELD_EXPIRE:
-									key = "expiry_date";
-									break;
-								default:
-									key = null;
-									break;
-							}
+							key = switch (a) {
+								case FIELD_NAME -> "first_name";
+								case FIELD_MIDNAME -> "middle_name";
+								case FIELD_SURNAME -> "last_name";
+								case FIELD_BIRTHDAY -> "birth_date";
+								case FIELD_GENDER -> "gender";
+								case FIELD_CITIZENSHIP -> "country_code";
+								case FIELD_RESIDENCE -> "residence_country_code";
+								case FIELD_CARDNUMBER -> "document_no";
+								case FIELD_EXPIRE -> "expiry_date";
+								default -> null;
+							};
 						}
 						else {
-							switch (a) {
-								case FIELD_NATIVE_NAME:
-									key = "first_name_native";
-									break;
-								case FIELD_NATIVE_MIDNAME:
-									key = "middle_name_native";
-									break;
-								case FIELD_NATIVE_SURNAME:
-									key = "last_name_native";
-									break;
-								default:
-									key = null;
-									break;
-							}
+							key = switch (a) {
+								case FIELD_NATIVE_NAME -> "first_name_native";
+								case FIELD_NATIVE_MIDNAME -> "middle_name_native";
+								case FIELD_NATIVE_SURNAME -> "last_name_native";
+								default -> null;
+							};
 						}
 					}
-					else if (currentType.type instanceof TLRPC.TL_secureValueTypeAddress) {
-						switch (a) {
-							case FIELD_STREET1:
-								key = "street_line1";
-								break;
-							case FIELD_STREET2:
-								key = "street_line2";
-								break;
-							case FIELD_CITY:
-								key = "city";
-								break;
-							case FIELD_STATE:
-								key = "state";
-								break;
-							case FIELD_COUNTRY:
-								key = "country_code";
-								break;
-							case FIELD_POSTCODE:
-								key = "post_code";
-								break;
-							default:
-								key = null;
-								break;
-						}
+					else if (currentType.type instanceof TLRPC.TLSecureValueTypeAddress) {
+						key = switch (a) {
+							case FIELD_STREET1 -> "street_line1";
+							case FIELD_STREET2 -> "street_line2";
+							case FIELD_CITY -> "city";
+							case FIELD_STATE -> "state";
+							case FIELD_COUNTRY -> "country_code";
+							case FIELD_POSTCODE -> "post_code";
+							default -> null;
+						};
 					}
 					else {
 						key = null;
@@ -4100,7 +4021,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			reverseLayout.setOrientation(LinearLayout.VERTICAL);
 			linearLayout2.addView(reverseLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-			boolean divider = currentDocumentsType.selfie_required;
+			boolean divider = currentDocumentsType.selfieRequired;
 
 			uploadReverseCell = new TextDetailSettingsCell(context);
 			uploadReverseCell.setBackgroundDrawable(Theme.getSelectorDrawable(true));
@@ -4111,14 +4032,14 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				openAttachMenu();
 			});
 
-			if (currentDocumentsType.selfie_required) {
+			if (currentDocumentsType.selfieRequired) {
 				selfieLayout = new LinearLayout(context);
 				selfieLayout.setOrientation(LinearLayout.VERTICAL);
 				linearLayout2.addView(selfieLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
 				uploadSelfieCell = new TextDetailSettingsCell(context);
 				uploadSelfieCell.setBackgroundDrawable(Theme.getSelectorDrawable(true));
-				uploadSelfieCell.setTextAndValue(LocaleController.getString("PassportSelfie", R.string.PassportSelfie), LocaleController.getString("PassportSelfieInfo", R.string.PassportSelfieInfo), currentType.translation_required);
+				uploadSelfieCell.setTextAndValue(LocaleController.getString("PassportSelfie", R.string.PassportSelfie), LocaleController.getString("PassportSelfieInfo", R.string.PassportSelfieInfo), currentType.translationRequired);
 				linearLayout2.addView(uploadSelfieCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 				uploadSelfieCell.setOnClickListener(v -> {
 					uploadingFileType = UPLOADING_TYPE_SELFIE;
@@ -4131,7 +4052,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			bottomCell.setText(LocaleController.getString("PassportPersonalUploadInfo", R.string.PassportPersonalUploadInfo));
 			linearLayout2.addView(bottomCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-			if (currentDocumentsType.translation_required) {
+			if (currentDocumentsType.translationRequired) {
 				headerCell = new HeaderCell(context);
 				headerCell.setText(LocaleController.getString("PassportTranslation", R.string.PassportTranslation));
 				headerCell.setBackgroundColor(context.getColor(R.color.background));
@@ -4156,16 +4077,16 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					noAllTranslationErrorText = LocaleController.getString("PassportAddTranslationUploadInfo", R.string.PassportAddTranslationUploadInfo);
 				}
 				else {
-					if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypePassport) {
+					if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypePassport) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddPassportInfo", R.string.PassportAddPassportInfo);
 					}
-					else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+					else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddInternalPassportInfo", R.string.PassportAddInternalPassportInfo);
 					}
-					else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeIdentityCard) {
+					else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeIdentityCard) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddIdentityCardInfo", R.string.PassportAddIdentityCardInfo);
 					}
-					else if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+					else if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 						noAllTranslationErrorText = LocaleController.getString("PassportAddDriverLicenceInfo", R.string.PassportAddDriverLicenceInfo);
 					}
 					else {
@@ -4303,7 +4224,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 
 				@Override
-				protected void onDraw(Canvas canvas) {
+				protected void onDraw(@NonNull Canvas canvas) {
 					if (errorLayout != null) {
 						canvas.save();
 						canvas.translate(AndroidUtilities.dp(21) + offsetX, field.getLineY() + AndroidUtilities.dp(3));
@@ -4463,7 +4384,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			HashMap<String, String> values;
 			switch (a) {
 				case FIELD_NAME:
-					if (currentType.native_names) {
+					if (currentType.nativeNames) {
 						inputFields[a].setHintText(LocaleController.getString("PassportNameLatin", R.string.PassportNameLatin));
 					}
 					else {
@@ -4473,7 +4394,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					values = currentValues;
 					break;
 				case FIELD_MIDNAME:
-					if (currentType.native_names) {
+					if (currentType.nativeNames) {
 						inputFields[a].setHintText(LocaleController.getString("PassportMidnameLatin", R.string.PassportMidnameLatin));
 					}
 					else {
@@ -4483,7 +4404,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					values = currentValues;
 					break;
 				case FIELD_SURNAME:
-					if (currentType.native_names) {
+					if (currentType.nativeNames) {
 						inputFields[a].setHintText(LocaleController.getString("PassportSurnameLatin", R.string.PassportSurnameLatin));
 					}
 					else {
@@ -4660,7 +4581,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 
 				@Override
-				protected void onDraw(Canvas canvas) {
+				protected void onDraw(@NonNull Canvas canvas) {
 					if (errorLayout != null) {
 						canvas.save();
 						canvas.translate(AndroidUtilities.dp(21) + offsetX, field.getLineY() + AndroidUtilities.dp(3));
@@ -4770,14 +4691,14 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		if ((currentBotId != 0 || currentDocumentsType == null) && currentTypeValue != null && !documentOnly || currentDocumentsTypeValue != null) {
 			if (currentDocumentsTypeValue != null) {
 				addDocumentViews(currentDocumentsTypeValue.files);
-				if (currentDocumentsTypeValue.front_side instanceof TLRPC.TL_secureFile) {
-					addDocumentViewInternal((TLRPC.TL_secureFile)currentDocumentsTypeValue.front_side, UPLOADING_TYPE_FRONT);
+				if (currentDocumentsTypeValue.frontSide instanceof TLRPC.TLSecureFile) {
+					addDocumentViewInternal((TLRPC.TLSecureFile)currentDocumentsTypeValue.frontSide, UPLOADING_TYPE_FRONT);
 				}
-				if (currentDocumentsTypeValue.reverse_side instanceof TLRPC.TL_secureFile) {
-					addDocumentViewInternal((TLRPC.TL_secureFile)currentDocumentsTypeValue.reverse_side, UPLOADING_TYPE_REVERSE);
+				if (currentDocumentsTypeValue.reverseSide instanceof TLRPC.TLSecureFile) {
+					addDocumentViewInternal((TLRPC.TLSecureFile)currentDocumentsTypeValue.reverseSide, UPLOADING_TYPE_REVERSE);
 				}
-				if (currentDocumentsTypeValue.selfie instanceof TLRPC.TL_secureFile) {
-					addDocumentViewInternal((TLRPC.TL_secureFile)currentDocumentsTypeValue.selfie, UPLOADING_TYPE_SELFIE);
+				if (currentDocumentsTypeValue.selfie instanceof TLRPC.TLSecureFile) {
+					addDocumentViewInternal((TLRPC.TLSecureFile)currentDocumentsTypeValue.selfie, UPLOADING_TYPE_SELFIE);
 				}
 				addTranslationDocumentViews(currentDocumentsTypeValue.translation);
 			}
@@ -4854,8 +4775,8 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			if (uploadFrontCell == null) {
 				return;
 			}
-			boolean divider = currentDocumentsType != null && (currentDocumentsType.selfie_required || currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeIdentityCard || currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeDriverLicense);
-			if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypePassport || currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+			boolean divider = currentDocumentsType != null && (currentDocumentsType.selfieRequired || currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeIdentityCard || currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeDriverLicense);
+			if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypePassport || currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 				uploadFrontCell.setTextAndValue(LocaleController.getString("PassportMainPage", R.string.PassportMainPage), LocaleController.getString("PassportMainPageInfo", R.string.PassportMainPageInfo), divider);
 			}
 			else {
@@ -4867,7 +4788,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			if (uploadReverseCell == null) {
 				return;
 			}
-			if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeIdentityCard || currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+			if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeIdentityCard || currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 				reverseLayout.setVisibility(View.VISIBLE);
 				uploadReverseCell.setVisibility(reverseDocument != null ? View.GONE : View.VISIBLE);
 			}
@@ -4916,28 +4837,28 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	private void addDocumentViewInternal(TLRPC.TL_secureFile f, int uploadingType) {
-		SecureDocumentKey secureDocumentKey = getSecureDocumentKey(f.secret, f.file_hash);
+	private void addDocumentViewInternal(TLRPC.TLSecureFile f, int uploadingType) {
+		SecureDocumentKey secureDocumentKey = getSecureDocumentKey(f.secret, f.fileHash);
 		SecureDocument secureDocument = new SecureDocument(secureDocumentKey, f, null, null, null);
 		addDocumentView(secureDocument, uploadingType);
 	}
 
-	private void addDocumentViews(ArrayList<TLRPC.SecureFile> files) {
+	private void addDocumentViews(List<TLRPC.SecureFile> files) {
 		documents.clear();
 		for (int a = 0, size = files.size(); a < size; a++) {
 			TLRPC.SecureFile secureFile = files.get(a);
-			if (secureFile instanceof TLRPC.TL_secureFile) {
-				addDocumentViewInternal((TLRPC.TL_secureFile)secureFile, UPLOADING_TYPE_DOCUMENTS);
+			if (secureFile instanceof TLRPC.TLSecureFile) {
+				addDocumentViewInternal((TLRPC.TLSecureFile)secureFile, UPLOADING_TYPE_DOCUMENTS);
 			}
 		}
 	}
 
-	private void addTranslationDocumentViews(ArrayList<TLRPC.SecureFile> files) {
+	private void addTranslationDocumentViews(List<TLRPC.SecureFile> files) {
 		translationDocuments.clear();
 		for (int a = 0, size = files.size(); a < size; a++) {
 			TLRPC.SecureFile secureFile = files.get(a);
-			if (secureFile instanceof TLRPC.TL_secureFile) {
-				addDocumentViewInternal((TLRPC.TL_secureFile)secureFile, UPLOADING_TYPE_TRANSLATION);
+			if (secureFile instanceof TLRPC.TLSecureFile) {
+				addDocumentViewInternal((TLRPC.TLSecureFile)secureFile, UPLOADING_TYPE_TRANSLATION);
 			}
 		}
 	}
@@ -5059,7 +4980,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			key = "translation" + hash;
 		}
 		else if (type == UPLOADING_TYPE_FRONT) {
-			if (currentDocumentsType.type instanceof TLRPC.TL_secureValueTypePassport || currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+			if (currentDocumentsType.type instanceof TLRPC.TLSecureValueTypePassport || currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 				text = LocaleController.getString("PassportMainPage", R.string.PassportMainPage);
 			}
 			else {
@@ -5186,49 +5107,49 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	}
 
 	private String getNameForType(TLRPC.SecureValueType type) {
-		if (type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+		if (type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 			return "personal_details";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypePassport) {
+		else if (type instanceof TLRPC.TLSecureValueTypePassport) {
 			return "passport";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+		else if (type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 			return "internal_passport";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+		else if (type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 			return "driver_license";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeIdentityCard) {
+		else if (type instanceof TLRPC.TLSecureValueTypeIdentityCard) {
 			return "identity_card";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeUtilityBill) {
+		else if (type instanceof TLRPC.TLSecureValueTypeUtilityBill) {
 			return "utility_bill";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeAddress) {
+		else if (type instanceof TLRPC.TLSecureValueTypeAddress) {
 			return "address";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeBankStatement) {
+		else if (type instanceof TLRPC.TLSecureValueTypeBankStatement) {
 			return "bank_statement";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeRentalAgreement) {
+		else if (type instanceof TLRPC.TLSecureValueTypeRentalAgreement) {
 			return "rental_agreement";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration) {
+		else if (type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration) {
 			return "temporary_registration";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypePassportRegistration) {
+		else if (type instanceof TLRPC.TLSecureValueTypePassportRegistration) {
 			return "passport_registration";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeEmail) {
+		else if (type instanceof TLRPC.TLSecureValueTypeEmail) {
 			return "email";
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypePhone) {
+		else if (type instanceof TLRPC.TLSecureValueTypePhone) {
 			return "phone";
 		}
 		return "";
 	}
 
-	private TextDetailSecureCell getViewByType(TLRPC.TL_secureRequiredType requiredType) {
+	private TextDetailSecureCell getViewByType(TLRPC.TLSecureRequiredType requiredType) {
 		TextDetailSecureCell view = typesViews.get(requiredType);
 		if (view == null) {
 			requiredType = documentsToTypesLink.get(requiredType);
@@ -5240,47 +5161,47 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	}
 
 	private String getTextForType(TLRPC.SecureValueType type) {
-		if (type instanceof TLRPC.TL_secureValueTypePassport) {
+		if (type instanceof TLRPC.TLSecureValueTypePassport) {
 			return LocaleController.getString("ActionBotDocumentPassport", R.string.ActionBotDocumentPassport);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+		else if (type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 			return LocaleController.getString("ActionBotDocumentDriverLicence", R.string.ActionBotDocumentDriverLicence);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeIdentityCard) {
+		else if (type instanceof TLRPC.TLSecureValueTypeIdentityCard) {
 			return LocaleController.getString("ActionBotDocumentIdentityCard", R.string.ActionBotDocumentIdentityCard);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeUtilityBill) {
+		else if (type instanceof TLRPC.TLSecureValueTypeUtilityBill) {
 			return LocaleController.getString("ActionBotDocumentUtilityBill", R.string.ActionBotDocumentUtilityBill);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeBankStatement) {
+		else if (type instanceof TLRPC.TLSecureValueTypeBankStatement) {
 			return LocaleController.getString("ActionBotDocumentBankStatement", R.string.ActionBotDocumentBankStatement);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeRentalAgreement) {
+		else if (type instanceof TLRPC.TLSecureValueTypeRentalAgreement) {
 			return LocaleController.getString("ActionBotDocumentRentalAgreement", R.string.ActionBotDocumentRentalAgreement);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+		else if (type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 			return LocaleController.getString("ActionBotDocumentInternalPassport", R.string.ActionBotDocumentInternalPassport);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypePassportRegistration) {
+		else if (type instanceof TLRPC.TLSecureValueTypePassportRegistration) {
 			return LocaleController.getString("ActionBotDocumentPassportRegistration", R.string.ActionBotDocumentPassportRegistration);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration) {
+		else if (type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration) {
 			return LocaleController.getString("ActionBotDocumentTemporaryRegistration", R.string.ActionBotDocumentTemporaryRegistration);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypePhone) {
+		else if (type instanceof TLRPC.TLSecureValueTypePhone) {
 			return LocaleController.getString("ActionBotDocumentPhone", R.string.ActionBotDocumentPhone);
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeEmail) {
+		else if (type instanceof TLRPC.TLSecureValueTypeEmail) {
 			return LocaleController.getString("ActionBotDocumentEmail", R.string.ActionBotDocumentEmail);
 		}
 		return "";
 	}
 
-	private void setTypeValue(TLRPC.TL_secureRequiredType requiredType, String text, String json, TLRPC.TL_secureRequiredType documentRequiredType, String documentsJson, boolean documentOnly, int availableDocumentTypesCount) {
+	private void setTypeValue(TLRPC.TLSecureRequiredType requiredType, String text, String json, TLRPC.TLSecureRequiredType documentRequiredType, String documentsJson, boolean documentOnly, int availableDocumentTypesCount) {
 		TextDetailSecureCell view = typesViews.get(requiredType);
 		if (view == null) {
 			if (currentActivityType == TYPE_MANAGE) {
-				ArrayList<TLRPC.TL_secureRequiredType> documentTypes = new ArrayList<>();
+				ArrayList<TLRPC.TLSecureRequiredType> documentTypes = new ArrayList<>();
 				if (documentRequiredType != null) {
 					documentTypes.add(documentRequiredType);
 				}
@@ -5297,8 +5218,8 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 		HashMap<String, String> values = typesValues.get(requiredType);
 		HashMap<String, String> documentValues = documentRequiredType != null ? typesValues.get(documentRequiredType) : null;
-		TLRPC.TL_secureValue requiredTypeValue = getValueByType(requiredType, true);
-		TLRPC.TL_secureValue documentRequiredTypeValue = getValueByType(documentRequiredType, true);
+		TLRPC.TLSecureValue requiredTypeValue = getValueByType(requiredType, true);
+		TLRPC.TLSecureValue documentRequiredTypeValue = getValueByType(documentRequiredType, true);
 
 		if (json != null && languageMap == null) {
 			languageMap = new HashMap<>();
@@ -5321,10 +5242,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 		String value = null;
 		if (text != null) {
-			if (requiredType.type instanceof TLRPC.TL_secureValueTypePhone) {
+			if (requiredType.type instanceof TLRPC.TLSecureValueTypePhone) {
 				value = PhoneFormat.getInstance().format("+" + text);
 			}
-			else if (requiredType.type instanceof TLRPC.TL_secureValueTypeEmail) {
+			else if (requiredType.type instanceof TLRPC.TLSecureValueTypeEmail) {
 				value = text;
 			}
 		}
@@ -5348,7 +5269,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				values.clear();
 				String[] keys = null;
 				String[] documentKeys = null;
-				if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+				if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 					if (currentActivityType == TYPE_REQUEST && !documentOnly || currentActivityType == TYPE_MANAGE && documentRequiredType == null) {
 						keys = new String[]{"first_name", "middle_name", "last_name", "first_name_native", "middle_name_native", "last_name_native", "birth_date", "gender", "country_code", "residence_country_code"};
 					}
@@ -5356,7 +5277,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						documentKeys = new String[]{"document_no", "expiry_date"};
 					}
 				}
-				else if (requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+				else if (requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 					if (currentActivityType == TYPE_REQUEST && !documentOnly || currentActivityType == TYPE_MANAGE && documentRequiredType == null) {
 						keys = new String[]{"street_line1", "street_line2", "post_code", "city", "state", "country_code"};
 					}
@@ -5400,26 +5321,26 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 								FileLog.e(e);
 							}
 
-							for (int a = 0; a < currentKeys.length; a++) {
-								if (jsonObject.has(currentKeys[a])) {
+							for (String currentKey : currentKeys) {
+								if (jsonObject.has(currentKey)) {
 									if (stringBuilder == null) {
 										stringBuilder = new StringBuilder();
 									}
-									String jsonValue = jsonObject.getString(currentKeys[a]);
+									String jsonValue = jsonObject.getString(currentKey);
 									if (jsonValue != null) {
 										if (!TextUtils.isEmpty(jsonValue)) {
-											if ("first_name_native".equals(currentKeys[a]) || "middle_name_native".equals(currentKeys[a]) || "last_name_native".equals(currentKeys[a])) {
+											if ("first_name_native".equals(currentKey) || "middle_name_native".equals(currentKey) || "last_name_native".equals(currentKey)) {
 												continue;
 											}
 											if (stringBuilder.length() > 0) {
-												if ("last_name".equals(currentKeys[a]) || "last_name_native".equals(currentKeys[a]) || "middle_name".equals(currentKeys[a]) || "middle_name_native".equals(currentKeys[a])) {
+												if ("last_name".equals(currentKey) || "last_name_native".equals(currentKey) || "middle_name".equals(currentKey) || "middle_name_native".equals(currentKey)) {
 													stringBuilder.append(" ");
 												}
 												else {
 													stringBuilder.append(", ");
 												}
 											}
-											switch (currentKeys[a]) {
+											switch (currentKey) {
 												case "country_code":
 												case "residence_country_code":
 													String country = languageMap.get(jsonValue);
@@ -5469,7 +5390,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			isError = true;
 		}
 		else {
-			if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+			if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 				if (TextUtils.isEmpty(value)) {
 					if (documentRequiredType == null) {
 						value = LocaleController.getString("PassportPersonalDetailsInfo", R.string.PassportPersonalDetailsInfo);
@@ -5480,16 +5401,16 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						}
 						else {
 							if (availableDocumentTypesCount == 1) {
-								if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypePassport) {
+								if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypePassport) {
 									value = LocaleController.getString("PassportIdentityPassport", R.string.PassportIdentityPassport);
 								}
-								else if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+								else if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 									value = LocaleController.getString("PassportIdentityInternalPassport", R.string.PassportIdentityInternalPassport);
 								}
-								else if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+								else if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 									value = LocaleController.getString("PassportIdentityDriverLicence", R.string.PassportIdentityDriverLicence);
 								}
-								else if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypeIdentityCard) {
+								else if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypeIdentityCard) {
 									value = LocaleController.getString("PassportIdentityID", R.string.PassportIdentityID);
 								}
 							}
@@ -5500,7 +5421,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 				}
 			}
-			else if (requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+			else if (requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 				if (TextUtils.isEmpty(value)) {
 					if (documentRequiredType == null) {
 						value = LocaleController.getString("PassportAddressNoUploadInfo", R.string.PassportAddressNoUploadInfo);
@@ -5511,19 +5432,19 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						}
 						else {
 							if (availableDocumentTypesCount == 1) {
-								if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypeRentalAgreement) {
+								if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypeRentalAgreement) {
 									value = LocaleController.getString("PassportAddAgreementInfo", R.string.PassportAddAgreementInfo);
 								}
-								else if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypeUtilityBill) {
+								else if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypeUtilityBill) {
 									value = LocaleController.getString("PassportAddBillInfo", R.string.PassportAddBillInfo);
 								}
-								else if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypePassportRegistration) {
+								else if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypePassportRegistration) {
 									value = LocaleController.getString("PassportAddPassportRegistrationInfo", R.string.PassportAddPassportRegistrationInfo);
 								}
-								else if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration) {
+								else if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration) {
 									value = LocaleController.getString("PassportAddTemporaryRegistrationInfo", R.string.PassportAddTemporaryRegistrationInfo);
 								}
-								else if (documentRequiredType.type instanceof TLRPC.TL_secureValueTypeBankStatement) {
+								else if (documentRequiredType.type instanceof TLRPC.TLSecureValueTypeBankStatement) {
 									value = LocaleController.getString("PassportAddBankInfo", R.string.PassportAddBankInfo);
 								}
 							}
@@ -5534,12 +5455,12 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 				}
 			}
-			else if (requiredType.type instanceof TLRPC.TL_secureValueTypePhone) {
+			else if (requiredType.type instanceof TLRPC.TLSecureValueTypePhone) {
 				if (TextUtils.isEmpty(value)) {
 					value = LocaleController.getString("PassportPhoneInfo", R.string.PassportPhoneInfo);
 				}
 			}
-			else if (requiredType.type instanceof TLRPC.TL_secureValueTypeEmail) {
+			else if (requiredType.type instanceof TLRPC.TLSecureValueTypeEmail) {
 				if (TextUtils.isEmpty(value)) {
 					value = LocaleController.getString("PassportEmailInfo", R.string.PassportEmailInfo);
 				}
@@ -5558,13 +5479,13 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		HashMap<String, String> map = SharedConfig.getCountryLangs();
 		String lang = map.get(currentResidence);
 
-		if (!currentType.native_names || TextUtils.isEmpty(currentResidence) || "EN".equals(lang)) {
+		if (!currentType.nativeNames || TextUtils.isEmpty(currentResidence) || "EN".equals(lang)) {
 			if (nativeInfoCell.getVisibility() != View.GONE) {
 				nativeInfoCell.setVisibility(View.GONE);
 				headerCell.setVisibility(View.GONE);
 				extraBackgroundView2.setVisibility(View.GONE);
-				for (int a = 0; a < inputExtraFields.length; a++) {
-					((View)inputExtraFields[a].getParent()).setVisibility(View.GONE);
+				for (EditTextBoldCursor inputExtraField : inputExtraFields) {
+					((View)inputExtraField.getParent()).setVisibility(View.GONE);
 				}
 
 				if ((currentBotId != 0 || currentDocumentsType == null) && currentTypeValue != null && !documentOnly || currentDocumentsTypeValue != null) {
@@ -5580,12 +5501,12 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				nativeInfoCell.setVisibility(View.VISIBLE);
 				headerCell.setVisibility(View.VISIBLE);
 				extraBackgroundView2.setVisibility(View.VISIBLE);
-				for (int a = 0; a < inputExtraFields.length; a++) {
-					((View)inputExtraFields[a].getParent()).setVisibility(View.VISIBLE);
+				for (EditTextBoldCursor inputExtraField : inputExtraFields) {
+					((View)inputExtraField.getParent()).setVisibility(View.VISIBLE);
 				}
 				if (inputExtraFields[FIELD_NATIVE_NAME].length() == 0 && inputExtraFields[FIELD_NATIVE_MIDNAME].length() == 0 && inputExtraFields[FIELD_NATIVE_SURNAME].length() == 0) {
-					for (int a = 0; a < nonLatinNames.length; a++) {
-						if (nonLatinNames[a]) {
+					for (boolean nonLatinName : nonLatinNames) {
+						if (nonLatinName) {
 							inputExtraFields[FIELD_NATIVE_NAME].setText(inputFields[FIELD_NAME].getText());
 							inputExtraFields[FIELD_NATIVE_MIDNAME].setText(inputFields[FIELD_MIDNAME].getText());
 							inputExtraFields[FIELD_NATIVE_SURNAME].setText(inputFields[FIELD_SURNAME].getText());
@@ -5675,20 +5596,20 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		return stringBuilder.toString();
 	}
 
-	private TLRPC.TL_secureValue getValueByType(TLRPC.TL_secureRequiredType requiredType, boolean check) {
+	private TLRPC.TLSecureValue getValueByType(TLRPC.TLSecureRequiredType requiredType, boolean check) {
 		if (requiredType == null) {
 			return null;
 		}
 		for (int a = 0, size = currentForm.values.size(); a < size; a++) {
-			TLRPC.TL_secureValue secureValue = currentForm.values.get(a);
+			TLRPC.TLSecureValue secureValue = currentForm.values.get(a);
 			if (requiredType.type.getClass() == secureValue.type.getClass()) {
 				if (check) {
-					if (requiredType.selfie_required) {
-						if (!(secureValue.selfie instanceof TLRPC.TL_secureFile)) {
+					if (requiredType.selfieRequired) {
+						if (!(secureValue.selfie instanceof TLRPC.TLSecureFile)) {
 							return null;
 						}
 					}
-					if (requiredType.translation_required) {
+					if (requiredType.translationRequired) {
 						if (secureValue.translation.isEmpty()) {
 							return null;
 						}
@@ -5699,19 +5620,19 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						}
 					}
 					if (isPersonalDocument(requiredType.type)) {
-						if (!(secureValue.front_side instanceof TLRPC.TL_secureFile)) {
+						if (!(secureValue.frontSide instanceof TLRPC.TLSecureFile)) {
 							return null;
 						}
 					}
-					if (requiredType.type instanceof TLRPC.TL_secureValueTypeDriverLicense || requiredType.type instanceof TLRPC.TL_secureValueTypeIdentityCard) {
-						if (!(secureValue.reverse_side instanceof TLRPC.TL_secureFile)) {
+					if (requiredType.type instanceof TLRPC.TLSecureValueTypeDriverLicense || requiredType.type instanceof TLRPC.TLSecureValueTypeIdentityCard) {
+						if (!(secureValue.reverseSide instanceof TLRPC.TLSecureFile)) {
 							return null;
 						}
 					}
-					if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails || requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+					if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails || requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 						String[] keys;
-						if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
-							if (requiredType.native_names) {
+						if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
+							if (requiredType.nativeNames) {
 								keys = new String[]{"first_name_native", "last_name_native", "birth_date", "gender", "country_code", "residence_country_code"};
 							}
 							else {
@@ -5722,9 +5643,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 							keys = new String[]{"street_line1", "street_line2", "post_code", "city", "state", "country_code"};
 						}
 						try {
-							JSONObject jsonObject = new JSONObject(decryptData(secureValue.data.data, decryptValueSecret(secureValue.data.secret, secureValue.data.data_hash), secureValue.data.data_hash));
-							for (int b = 0; b < keys.length; b++) {
-								if (!jsonObject.has(keys[b]) || TextUtils.isEmpty(jsonObject.getString(keys[b]))) {
+							JSONObject jsonObject = new JSONObject(decryptData(secureValue.data.data, decryptValueSecret(secureValue.data.secret, secureValue.data.dataHash), secureValue.data.dataHash));
+							for (String key : keys) {
+								if (!jsonObject.has(key) || TextUtils.isEmpty(jsonObject.getString(key))) {
 									return null;
 								}
 							}
@@ -5740,94 +5661,94 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		return null;
 	}
 
-	private void openTypeActivity(TLRPC.TL_secureRequiredType requiredType, TLRPC.TL_secureRequiredType documentRequiredType, ArrayList<TLRPC.TL_secureRequiredType> availableDocumentTypes, boolean documentOnly) {
+	private void openTypeActivity(TLRPC.TLSecureRequiredType requiredType, TLRPC.TLSecureRequiredType documentRequiredType, ArrayList<TLRPC.TLSecureRequiredType> availableDocumentTypes, boolean documentOnly) {
 		int activityType = -1;
 		final int availableDocumentTypesCount = availableDocumentTypes != null ? availableDocumentTypes.size() : 0;
 		TLRPC.SecureValueType type = requiredType.type;
 		TLRPC.SecureValueType documentType = documentRequiredType != null ? documentRequiredType.type : null;
-		if (type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+		if (type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 			activityType = TYPE_IDENTITY;
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeAddress) {
+		else if (type instanceof TLRPC.TLSecureValueTypeAddress) {
 			activityType = TYPE_ADDRESS;
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypePhone) {
+		else if (type instanceof TLRPC.TLSecureValueTypePhone) {
 			activityType = TYPE_PHONE;
 		}
-		else if (type instanceof TLRPC.TL_secureValueTypeEmail) {
+		else if (type instanceof TLRPC.TLSecureValueTypeEmail) {
 			activityType = TYPE_EMAIL;
 		}
 		if (activityType != -1) {
 			HashMap<String, String> errors = !documentOnly ? errorsMap.get(getNameForType(type)) : null;
 			HashMap<String, String> documentsErrors = errorsMap.get(getNameForType(documentType));
-			TLRPC.TL_secureValue value = getValueByType(requiredType, false);
-			TLRPC.TL_secureValue documentsValue = getValueByType(documentRequiredType, false);
+			TLRPC.TLSecureValue value = getValueByType(requiredType, false);
+			TLRPC.TLSecureValue documentsValue = getValueByType(documentRequiredType, false);
 
 			final PassportActivity activity = new PassportActivity(activityType, currentForm, currentPassword, requiredType, value, documentRequiredType, documentsValue, typesValues.get(requiredType), documentRequiredType != null ? typesValues.get(documentRequiredType) : null);
 			activity.delegate = new PassportActivityDelegate() {
 
 				private TLRPC.InputSecureFile getInputSecureFile(SecureDocument document) {
 					if (document.inputFile != null) {
-						TLRPC.TL_inputSecureFileUploaded inputSecureFileUploaded = new TLRPC.TL_inputSecureFileUploaded();
+						TLRPC.TLInputSecureFileUploaded inputSecureFileUploaded = new TLRPC.TLInputSecureFileUploaded();
 						inputSecureFileUploaded.id = document.inputFile.id;
 						inputSecureFileUploaded.parts = document.inputFile.parts;
-						inputSecureFileUploaded.md5_checksum = document.inputFile.md5_checksum;
-						inputSecureFileUploaded.file_hash = document.fileHash;
+						inputSecureFileUploaded.md5Checksum = document.inputFile.md5Checksum;
+						inputSecureFileUploaded.fileHash = document.fileHash;
 						inputSecureFileUploaded.secret = document.fileSecret;
 						return inputSecureFileUploaded;
 					}
 					else {
-						TLRPC.TL_inputSecureFile inputSecureFile = new TLRPC.TL_inputSecureFile();
+						TLRPC.TLInputSecureFile inputSecureFile = new TLRPC.TLInputSecureFile();
 						inputSecureFile.id = document.secureFile.id;
-						inputSecureFile.access_hash = document.secureFile.access_hash;
+						inputSecureFile.accessHash = document.secureFile.accessHash;
 						return inputSecureFile;
 					}
 				}
 
-				private void renameFile(SecureDocument oldDocument, TLRPC.TL_secureFile newSecureFile) {
+				private void renameFile(SecureDocument oldDocument, TLRPC.TLSecureFile newSecureFile) {
 					File oldFile = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(oldDocument);
-					String oldKey = oldDocument.secureFile.dc_id + "_" + oldDocument.secureFile.id;
+					String oldKey = oldDocument.secureFile.dcId + "_" + oldDocument.secureFile.id;
 					File newFile = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(newSecureFile);
-					String newKey = newSecureFile.dc_id + "_" + newSecureFile.id;
+					String newKey = newSecureFile.dcId + "_" + newSecureFile.id;
 					oldFile.renameTo(newFile);
 					ImageLoader.getInstance().replaceImageInCache(oldKey, newKey, null, false);
 				}
 
 				@Override
-				public void saveValue(final TLRPC.TL_secureRequiredType requiredType, final String text, final String json, final TLRPC.TL_secureRequiredType documentRequiredType, final String documentsJson, final ArrayList<SecureDocument> documents, final SecureDocument selfie, final ArrayList<SecureDocument> translationDocuments, final SecureDocument front, final SecureDocument reverse, final Runnable finishRunnable, final ErrorRunnable errorRunnable) {
-					TLRPC.TL_inputSecureValue inputSecureValue = null;
+				public void saveValue(final TLRPC.TLSecureRequiredType requiredType, final String text, final String json, final TLRPC.TLSecureRequiredType documentRequiredType, final String documentsJson, final ArrayList<SecureDocument> documents, final SecureDocument selfie, final ArrayList<SecureDocument> translationDocuments, final SecureDocument front, final SecureDocument reverse, final Runnable finishRunnable, final ErrorRunnable errorRunnable) {
+					TLRPC.TLInputSecureValue inputSecureValue = null;
 
 					if (!TextUtils.isEmpty(json)) {
-						inputSecureValue = new TLRPC.TL_inputSecureValue();
+						inputSecureValue = new TLRPC.TLInputSecureValue();
 						inputSecureValue.type = requiredType.type;
 						inputSecureValue.flags |= 1;
 
 						EncryptionResult result = encryptData(AndroidUtilities.getStringBytes(json));
-						inputSecureValue.data = new TLRPC.TL_secureData();
+						inputSecureValue.data = new TLRPC.TLSecureData();
 						inputSecureValue.data.data = result.encryptedData;
-						inputSecureValue.data.data_hash = result.fileHash;
+						inputSecureValue.data.dataHash = result.fileHash;
 						inputSecureValue.data.secret = result.fileSecret;
 					}
 					else if (!TextUtils.isEmpty(text)) {
 						TLRPC.SecurePlainData plainData;
-						if (type instanceof TLRPC.TL_secureValueTypeEmail) {
-							TLRPC.TL_securePlainEmail securePlainEmail = new TLRPC.TL_securePlainEmail();
+						if (type instanceof TLRPC.TLSecureValueTypeEmail) {
+							TLRPC.TLSecurePlainEmail securePlainEmail = new TLRPC.TLSecurePlainEmail();
 							securePlainEmail.email = text;
 							plainData = securePlainEmail;
 						}
-						else if (type instanceof TLRPC.TL_secureValueTypePhone) {
-							TLRPC.TL_securePlainPhone securePlainPhone = new TLRPC.TL_securePlainPhone();
+						else if (type instanceof TLRPC.TLSecureValueTypePhone) {
+							TLRPC.TLSecurePlainPhone securePlainPhone = new TLRPC.TLSecurePlainPhone();
 							securePlainPhone.phone = text;
 							plainData = securePlainPhone;
 						}
 						else {
 							return;
 						}
-						inputSecureValue = new TLRPC.TL_inputSecureValue();
+						inputSecureValue = new TLRPC.TLInputSecureValue();
 						inputSecureValue.type = requiredType.type;
 						inputSecureValue.flags |= 32;
 
-						inputSecureValue.plain_data = plainData;
+						inputSecureValue.plainData = plainData;
 					}
 
 					if (!documentOnly && inputSecureValue == null) {
@@ -5837,27 +5758,27 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						return;
 					}
 
-					TLRPC.TL_inputSecureValue fileInputSecureValue;
+					TLRPC.TLInputSecureValue fileInputSecureValue;
 					if (documentRequiredType != null) {
-						fileInputSecureValue = new TLRPC.TL_inputSecureValue();
+						fileInputSecureValue = new TLRPC.TLInputSecureValue();
 						fileInputSecureValue.type = documentRequiredType.type;
 
 						if (!TextUtils.isEmpty(documentsJson)) {
 							fileInputSecureValue.flags |= 1;
 
 							EncryptionResult result = encryptData(AndroidUtilities.getStringBytes(documentsJson));
-							fileInputSecureValue.data = new TLRPC.TL_secureData();
+							fileInputSecureValue.data = new TLRPC.TLSecureData();
 							fileInputSecureValue.data.data = result.encryptedData;
-							fileInputSecureValue.data.data_hash = result.fileHash;
+							fileInputSecureValue.data.dataHash = result.fileHash;
 							fileInputSecureValue.data.secret = result.fileSecret;
 						}
 
 						if (front != null) {
-							fileInputSecureValue.front_side = getInputSecureFile(front);
+							fileInputSecureValue.frontSide = getInputSecureFile(front);
 							fileInputSecureValue.flags |= 2;
 						}
 						if (reverse != null) {
-							fileInputSecureValue.reverse_side = getInputSecureFile(reverse);
+							fileInputSecureValue.reverseSide = getInputSecureFile(reverse);
 							fileInputSecureValue.flags |= 4;
 						}
 						if (selfie != null) {
@@ -5887,14 +5808,14 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 
 					final PassportActivityDelegate currentDelegate = this;
-					final TLRPC.TL_inputSecureValue finalFileInputSecureValue = fileInputSecureValue;
+					final TLRPC.TLInputSecureValue finalFileInputSecureValue = fileInputSecureValue;
 
-					final TLRPC.TL_account_saveSecureValue req = new TLRPC.TL_account_saveSecureValue();
+					final TLRPC.TLAccountSaveSecureValue req = new TLRPC.TLAccountSaveSecureValue();
 					req.value = inputSecureValue;
-					req.secure_secret_id = secureSecretId;
+					req.secureSecretId = secureSecretId;
 					ConnectionsManager.getInstance(currentAccount).sendRequest(req, new RequestDelegate() {
 
-						private void onResult(final TL_error error, final TLRPC.TL_secureValue newValue, final TLRPC.TL_secureValue newPendingValue) {
+						private void onResult(final TLError error, final TLRPC.TLSecureValue newValue, final TLRPC.TLSecureValue newPendingValue) {
 							AndroidUtilities.runOnUIThread(() -> {
 								if (error != null) {
 									if (errorRunnable != null) {
@@ -5927,8 +5848,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 											if (document.inputFile != null) {
 												for (int b = 0, size2 = newValue.files.size(); b < size2; b++) {
 													TLRPC.SecureFile file = newValue.files.get(b);
-													if (file instanceof TLRPC.TL_secureFile) {
-														TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)file;
+													if (file instanceof TLSecureFile secureFile) {
 														if (Utilities.arraysEquals(document.fileSecret, 0, secureFile.secret, 0)) {
 															renameFile(document, secureFile);
 															break;
@@ -5938,20 +5858,17 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 											}
 										}
 									}
-									if (selfie != null && selfie.inputFile != null && newValue.selfie instanceof TLRPC.TL_secureFile) {
-										TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)newValue.selfie;
+									if (selfie != null && selfie.inputFile != null && newValue.selfie instanceof TLSecureFile secureFile) {
 										if (Utilities.arraysEquals(selfie.fileSecret, 0, secureFile.secret, 0)) {
 											renameFile(selfie, secureFile);
 										}
 									}
-									if (front != null && front.inputFile != null && newValue.front_side instanceof TLRPC.TL_secureFile) {
-										TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)newValue.front_side;
+									if (front != null && front.inputFile != null && newValue.frontSide instanceof TLSecureFile secureFile) {
 										if (Utilities.arraysEquals(front.fileSecret, 0, secureFile.secret, 0)) {
 											renameFile(front, secureFile);
 										}
 									}
-									if (reverse != null && reverse.inputFile != null && newValue.reverse_side instanceof TLRPC.TL_secureFile) {
-										TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)newValue.reverse_side;
+									if (reverse != null && reverse.inputFile != null && newValue.reverseSide instanceof TLSecureFile secureFile) {
 										if (Utilities.arraysEquals(reverse.fileSecret, 0, secureFile.secret, 0)) {
 											renameFile(reverse, secureFile);
 										}
@@ -5962,8 +5879,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 											if (document.inputFile != null) {
 												for (int b = 0, size2 = newValue.translation.size(); b < size2; b++) {
 													TLRPC.SecureFile file = newValue.translation.get(b);
-													if (file instanceof TLRPC.TL_secureFile) {
-														TLRPC.TL_secureFile secureFile = (TLRPC.TL_secureFile)file;
+													if (file instanceof TLSecureFile secureFile) {
 														if (Utilities.arraysEquals(document.fileSecret, 0, secureFile.secret, 0)) {
 															renameFile(document, secureFile);
 															break;
@@ -5983,18 +5899,18 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 						}
 
 						@Override
-						public void run(final TLObject response, final TL_error error) {
+						public void run(final TLObject response, final TLError error) {
 							if (error != null) {
 								if (error.text.equals("EMAIL_VERIFICATION_NEEDED")) {
-									TLRPC.TL_account_sendVerifyEmailCode req = new TLRPC.TL_account_sendVerifyEmailCode();
-									req.purpose = new TLRPC.TL_emailVerifyPurposePassport();
+									TLRPC.TLAccountSendVerifyEmailCode req = new TLRPC.TLAccountSendVerifyEmailCode();
+									req.purpose = new TLRPC.TLEmailVerifyPurposePassport();
 									req.email = text;
 									ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response1, error1) -> AndroidUtilities.runOnUIThread(() -> {
 										if (response1 != null) {
-											TLRPC.TL_account_sentEmailCode res = (TLRPC.TL_account_sentEmailCode)response1;
+											TLRPC.TLAccountSentEmailCode res = (TLRPC.TLAccountSentEmailCode)response1;
 											HashMap<String, String> values = new HashMap<>();
 											values.put("email", text);
-											values.put("pattern", res.email_pattern);
+											values.put("pattern", res.emailPattern);
 											PassportActivity activity1 = new PassportActivity(TYPE_EMAIL_VERIFICATION, currentForm, currentPassword, requiredType, null, null, null, values, null);
 											activity1.currentAccount = currentAccount;
 											activity1.emailCodeLength = res.length;
@@ -6018,28 +5934,28 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 								}
 							}
 							if (error == null && finalFileInputSecureValue != null) {
-								final TLRPC.TL_secureValue pendingValue = (TLRPC.TL_secureValue)response;
-								final TLRPC.TL_account_saveSecureValue req = new TLRPC.TL_account_saveSecureValue();
+								final TLRPC.TLSecureValue pendingValue = (TLRPC.TLSecureValue)response;
+								final TLRPC.TLAccountSaveSecureValue req = new TLRPC.TLAccountSaveSecureValue();
 								req.value = finalFileInputSecureValue;
-								req.secure_secret_id = secureSecretId;
-								ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response12, error12) -> onResult(error12, (TLRPC.TL_secureValue)response12, pendingValue));
+								req.secureSecretId = secureSecretId;
+								ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response12, error12) -> onResult(error12, (TLRPC.TLSecureValue)response12, pendingValue));
 							}
 							else {
-								onResult(error, (TLRPC.TL_secureValue)response, null);
+								onResult(error, (TLRPC.TLSecureValue)response, null);
 							}
 						}
 					});
 				}
 
 				@Override
-				public SecureDocument saveFile(TLRPC.TL_secureFile secureFile) {
-					String path = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE) + "/" + secureFile.dc_id + "_" + secureFile.id + ".jpg";
+				public SecureDocument saveFile(TLRPC.TLSecureFile secureFile) {
+					String path = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE) + "/" + secureFile.dcId + "_" + secureFile.id + ".jpg";
 					EncryptionResult result = createSecureDocument(path);
 					return new SecureDocument(result.secureDocumentKey, secureFile, path, result.fileHash, result.fileSecret);
 				}
 
 				@Override
-				public void deleteValue(TLRPC.TL_secureRequiredType requiredType, TLRPC.TL_secureRequiredType documentRequiredType, ArrayList<TLRPC.TL_secureRequiredType> documentRequiredTypes, boolean deleteType, Runnable finishRunnable, ErrorRunnable errorRunnable) {
+				public void deleteValue(TLRPC.TLSecureRequiredType requiredType, TLRPC.TLSecureRequiredType documentRequiredType, ArrayList<TLRPC.TLSecureRequiredType> documentRequiredTypes, boolean deleteType, Runnable finishRunnable, ErrorRunnable errorRunnable) {
 					deleteValueInternal(requiredType, documentRequiredType, documentRequiredTypes, deleteType, finishRunnable, errorRunnable, documentOnly);
 				}
 			};
@@ -6058,12 +5974,12 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	private TLRPC.TL_secureValue removeValue(TLRPC.TL_secureRequiredType requiredType) {
+	private TLRPC.TLSecureValue removeValue(TLRPC.TLSecureRequiredType requiredType) {
 		if (requiredType == null) {
 			return null;
 		}
 		for (int a = 0, size = currentForm.values.size(); a < size; a++) {
-			TLRPC.TL_secureValue secureValue = currentForm.values.get(a);
+			TLRPC.TLSecureValue secureValue = currentForm.values.get(a);
 			if (requiredType.type.getClass() == secureValue.type.getClass()) {
 				return currentForm.values.remove(a);
 			}
@@ -6071,11 +5987,11 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		return null;
 	}
 
-	private void deleteValueInternal(final TLRPC.TL_secureRequiredType requiredType, final TLRPC.TL_secureRequiredType documentRequiredType, final ArrayList<TLRPC.TL_secureRequiredType> documentRequiredTypes, final boolean deleteType, final Runnable finishRunnable, final ErrorRunnable errorRunnable, boolean documentOnly) {
+	private void deleteValueInternal(final TLRPC.TLSecureRequiredType requiredType, final TLRPC.TLSecureRequiredType documentRequiredType, final ArrayList<TLRPC.TLSecureRequiredType> documentRequiredTypes, final boolean deleteType, final Runnable finishRunnable, final ErrorRunnable errorRunnable, boolean documentOnly) {
 		if (requiredType == null) {
 			return;
 		}
-		TLRPC.TL_account_deleteSecureValue req = new TLRPC.TL_account_deleteSecureValue();
+		TLRPC.TLAccountDeleteSecureValue req = new TLRPC.TLAccountDeleteSecureValue();
 		if (documentOnly && documentRequiredType != null) {
 			req.types.add(documentRequiredType.type);
 		}
@@ -6123,14 +6039,14 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				else {
 
 					String documentJson = null;
-					TLRPC.TL_secureRequiredType documentsType = documentRequiredType;
+					TLRPC.TLSecureRequiredType documentsType = documentRequiredType;
 					if (documentsType != null && documentRequiredTypes != null && documentRequiredTypes.size() > 1) {
 						for (int a = 0, count = documentRequiredTypes.size(); a < count; a++) {
-							TLRPC.TL_secureRequiredType documentType = documentRequiredTypes.get(a);
-							TLRPC.TL_secureValue documentValue = getValueByType(documentType, false);
+							TLRPC.TLSecureRequiredType documentType = documentRequiredTypes.get(a);
+							TLRPC.TLSecureValue documentValue = getValueByType(documentType, false);
 							if (documentValue != null) {
 								if (documentValue.data != null) {
-									documentJson = decryptData(documentValue.data.data, decryptValueSecret(documentValue.data.secret, documentValue.data.data_hash), documentValue.data.data_hash);
+									documentJson = decryptData(documentValue.data.data, decryptValueSecret(documentValue.data.secret, documentValue.data.dataHash), documentValue.data.dataHash);
 								}
 								documentsType = documentType;
 								break;
@@ -6146,9 +6062,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 					else {
 						String json = null;
-						TLRPC.TL_secureValue value = getValueByType(requiredType, false);
+						TLRPC.TLSecureValue value = getValueByType(requiredType, false);
 						if (value != null && value.data != null) {
-							json = decryptData(value.data.data, decryptValueSecret(value.data.secret, value.data.data_hash), value.data.data_hash);
+							json = decryptData(value.data.data, decryptValueSecret(value.data.secret, value.data.dataHash), value.data.dataHash);
 						}
 						setTypeValue(requiredType, null, json, documentsType, documentJson, documentOnly, documentRequiredTypes != null ? documentRequiredTypes.size() : 0);
 					}
@@ -6160,11 +6076,11 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}));
 	}
 
-	private TextDetailSecureCell addField(Context context, final TLRPC.TL_secureRequiredType requiredType, final ArrayList<TLRPC.TL_secureRequiredType> documentRequiredTypes, boolean documentOnly, boolean last) {
+	private TextDetailSecureCell addField(Context context, final TLRPC.TLSecureRequiredType requiredType, final ArrayList<TLRPC.TLSecureRequiredType> documentRequiredTypes, boolean documentOnly, boolean last) {
 		final int availableDocumentTypesCount = documentRequiredTypes != null ? documentRequiredTypes.size() : 0;
 		TextDetailSecureCell view = new TextDetailSecureCell(context);
 		view.setBackgroundDrawable(Theme.getSelectorDrawable(true));
-		if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+		if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 			String text;
 			if (documentRequiredTypes == null || documentRequiredTypes.isEmpty()) {
 				text = LocaleController.getString("PassportPersonalDetails", R.string.PassportPersonalDetails);
@@ -6180,7 +6096,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			}
 			view.setTextAndValue(text, "", !last);
 		}
-		else if (requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+		else if (requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 			String text;
 			if (documentRequiredTypes == null || documentRequiredTypes.isEmpty()) {
 				text = LocaleController.getString("PassportAddress", R.string.PassportAddress);
@@ -6196,10 +6112,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			}
 			view.setTextAndValue(text, "", !last);
 		}
-		else if (requiredType.type instanceof TLRPC.TL_secureValueTypePhone) {
+		else if (requiredType.type instanceof TLRPC.TLSecureValueTypePhone) {
 			view.setTextAndValue(LocaleController.getString("PassportPhone", R.string.PassportPhone), "", !last);
 		}
-		else if (requiredType.type instanceof TLRPC.TL_secureValueTypeEmail) {
+		else if (requiredType.type instanceof TLRPC.TLSecureValueTypeEmail) {
 			view.setTextAndValue(LocaleController.getString("PassportEmail", R.string.PassportEmail), "", !last);
 		}
 		if (currentActivityType == TYPE_MANAGE) {
@@ -6209,56 +6125,56 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			linearLayout2.addView(view, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 		}
 		view.setOnClickListener(v -> {
-			TLRPC.TL_secureRequiredType documentsType = null;
+			TLRPC.TLSecureRequiredType documentsType = null;
 			if (documentRequiredTypes != null) {
 				for (int a = 0, count = documentRequiredTypes.size(); a < count; a++) {
-					TLRPC.TL_secureRequiredType documentType = documentRequiredTypes.get(a);
+					TLRPC.TLSecureRequiredType documentType = documentRequiredTypes.get(a);
 					if (getValueByType(documentType, false) != null || count == 1) {
 						documentsType = documentType;
 						break;
 					}
 				}
 			}
-			if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails || requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+			if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails || requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 				if (documentsType == null && documentRequiredTypes != null && !documentRequiredTypes.isEmpty()) {
 					AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
 					builder.setPositiveButton(LocaleController.getString("Cancel", R.string.Cancel), null);
 
-					if (requiredType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+					if (requiredType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 						builder.setTitle(LocaleController.getString("PassportIdentityDocument", R.string.PassportIdentityDocument));
 					}
-					else if (requiredType.type instanceof TLRPC.TL_secureValueTypeAddress) {
+					else if (requiredType.type instanceof TLRPC.TLSecureValueTypeAddress) {
 						builder.setTitle(LocaleController.getString("PassportAddress", R.string.PassportAddress));
 					}
 
 					ArrayList<String> strings = new ArrayList<>();
 					for (int a = 0, count = documentRequiredTypes.size(); a < count; a++) {
-						TLRPC.TL_secureRequiredType documentType = documentRequiredTypes.get(a);
-						if (documentType.type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+						TLRPC.TLSecureRequiredType documentType = documentRequiredTypes.get(a);
+						if (documentType.type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 							strings.add(LocaleController.getString("PassportAddLicence", R.string.PassportAddLicence));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypePassport) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypePassport) {
 							strings.add(LocaleController.getString("PassportAddPassport", R.string.PassportAddPassport));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 							strings.add(LocaleController.getString("PassportAddInternalPassport", R.string.PassportAddInternalPassport));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypeIdentityCard) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypeIdentityCard) {
 							strings.add(LocaleController.getString("PassportAddCard", R.string.PassportAddCard));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypeUtilityBill) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypeUtilityBill) {
 							strings.add(LocaleController.getString("PassportAddBill", R.string.PassportAddBill));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypeBankStatement) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypeBankStatement) {
 							strings.add(LocaleController.getString("PassportAddBank", R.string.PassportAddBank));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypeRentalAgreement) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypeRentalAgreement) {
 							strings.add(LocaleController.getString("PassportAddAgreement", R.string.PassportAddAgreement));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypeTemporaryRegistration) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypeTemporaryRegistration) {
 							strings.add(LocaleController.getString("PassportAddTemporaryRegistration", R.string.PassportAddTemporaryRegistration));
 						}
-						else if (documentType.type instanceof TLRPC.TL_secureValueTypePassportRegistration) {
+						else if (documentType.type instanceof TLRPC.TLSecureValueTypePassportRegistration) {
 							strings.add(LocaleController.getString("PassportAddPassportRegistration", R.string.PassportAddPassportRegistration));
 						}
 					}
@@ -6270,8 +6186,8 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			}
 			else {
 				boolean phoneField;
-				if ((phoneField = (requiredType.type instanceof TLRPC.TL_secureValueTypePhone)) || requiredType.type instanceof TLRPC.TL_secureValueTypeEmail) {
-					final TLRPC.TL_secureValue value = getValueByType(requiredType, false);
+				if ((phoneField = (requiredType.type instanceof TLRPC.TLSecureValueTypePhone)) || requiredType.type instanceof TLRPC.TLSecureValueTypeEmail) {
+					final TLRPC.TLSecureValue value = getValueByType(requiredType, false);
 					if (value != null) {
 						AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
 						builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), (dialog, which) -> {
@@ -6295,30 +6211,30 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		String documentJson = null;
 		typesValues.put(requiredType, new HashMap<>());
 
-		TLRPC.TL_secureValue value = getValueByType(requiredType, false);
+		TLRPC.TLSecureValue value = getValueByType(requiredType, false);
 		if (value != null) {
-			if (value.plain_data instanceof TLRPC.TL_securePlainEmail) {
-				text = ((TLRPC.TL_securePlainEmail)value.plain_data).email;
+			if (value.plainData instanceof TLRPC.TLSecurePlainEmail) {
+				text = ((TLRPC.TLSecurePlainEmail)value.plainData).email;
 			}
-			else if (value.plain_data instanceof TLRPC.TL_securePlainPhone) {
-				text = ((TLRPC.TL_securePlainPhone)value.plain_data).phone;
+			else if (value.plainData instanceof TLRPC.TLSecurePlainPhone) {
+				text = ((TLRPC.TLSecurePlainPhone)value.plainData).phone;
 			}
 			else if (value.data != null) {
-				json = decryptData(value.data.data, decryptValueSecret(value.data.secret, value.data.data_hash), value.data.data_hash);
+				json = decryptData(value.data.data, decryptValueSecret(value.data.secret, value.data.dataHash), value.data.dataHash);
 			}
 		}
-		TLRPC.TL_secureRequiredType documentsType = null;
+		TLRPC.TLSecureRequiredType documentsType = null;
 		if (documentRequiredTypes != null && !documentRequiredTypes.isEmpty()) {
 			boolean found = false;
 			for (int a = 0, count = documentRequiredTypes.size(); a < count; a++) {
-				TLRPC.TL_secureRequiredType documentType = documentRequiredTypes.get(a);
+				TLRPC.TLSecureRequiredType documentType = documentRequiredTypes.get(a);
 				typesValues.put(documentType, new HashMap<>());
 				documentsToTypesLink.put(documentType, requiredType);
 				if (!found) {
-					TLRPC.TL_secureValue documentValue = getValueByType(documentType, false);
+					TLRPC.TLSecureValue documentValue = getValueByType(documentType, false);
 					if (documentValue != null) {
 						if (documentValue.data != null) {
-							documentJson = decryptData(documentValue.data.data, decryptValueSecret(documentValue.data.secret, documentValue.data.data_hash), documentValue.data.data_hash);
+							documentJson = decryptData(documentValue.data.data, decryptValueSecret(documentValue.data.secret, documentValue.data.dataHash), documentValue.data.dataHash);
 						}
 						documentsType = documentType;
 						found = true;
@@ -6597,33 +6513,33 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 			}
 		}
-		final TLRPC.TL_account_sendVerifyPhoneCode req = new TLRPC.TL_account_sendVerifyPhoneCode();
-		req.phone_number = phone;
-		req.settings = new TLRPC.TL_codeSettings();
-		req.settings.allow_flashcall = simcardAvailable && allowCall;
-		req.settings.allow_app_hash = PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices();
+		final TLRPC.TLAccountSendVerifyPhoneCode req = new TLRPC.TLAccountSendVerifyPhoneCode();
+		req.phoneNumber = phone;
+		req.settings = new TLRPC.TLCodeSettings();
+		req.settings.allowFlashcall = simcardAvailable && allowCall;
+		req.settings.allowAppHash = PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices();
 //		SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-//		if (req.settings.allow_app_hash) {
+//		if (req.settings.allowAppHash) {
 //			preferences.edit().putString("sms_hash", BuildVars.SMS_HASH).commit();
 //		}
 //		else {
 //			preferences.edit().remove("sms_hash").commit();
 //		}
-		if (req.settings.allow_flashcall) {
+		if (req.settings.allowFlashcall) {
 			try {
 				@SuppressLint("HardwareIds") String number = tm.getLine1Number();
 				if (!TextUtils.isEmpty(number)) {
-					req.settings.current_number = PhoneNumberUtils.compare(phone, number);
-					if (!req.settings.current_number) {
-						req.settings.allow_flashcall = false;
+					req.settings.currentNumber = PhoneNumberUtils.compare(phone, number);
+					if (!req.settings.currentNumber) {
+						req.settings.allowFlashcall = false;
 					}
 				}
 				else {
-					req.settings.current_number = false;
+					req.settings.currentNumber = false;
 				}
 			}
 			catch (Exception e) {
-				req.settings.allow_flashcall = false;
+				req.settings.allowFlashcall = false;
 				FileLog.e(e);
 			}
 		}
@@ -6637,7 +6553,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				activity.saltedPassword = saltedPassword;
 				activity.secureSecret = secureSecret;
 				activity.delegate = delegate;
-				activity.currentPhoneVerification = (TLRPC.TL_auth_sentCode)response;
+				activity.currentPhoneVerification = (TLRPC.TLAuthSentCode)response;
 				presentFragment(activity, true);
 			}
 			else {
@@ -6662,7 +6578,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			passwordRequestTextView.setVisibility(View.GONE);
 			emptyView.setVisibility(View.VISIBLE);
 		}
-		else if (!currentPassword.has_password) {
+		else if (!currentPassword.hasPassword) {
 			passwordRequestTextView.setVisibility(View.VISIBLE);
 
 			noPasswordImageView.setVisibility(View.VISIBLE);
@@ -6785,7 +6701,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			final String location = (String)args[0];
 			SecureDocument document = uploadingDocuments.get(location);
 			if (document != null) {
-				document.inputFile = (TLRPC.TL_inputFile)args[1];
+				document.inputFile = (TLRPC.TLInputFile)args[1];
 				uploadingDocuments.remove(location);
 				if (uploadingDocuments.isEmpty()) {
 					if (doneItem != null) {
@@ -6826,15 +6742,15 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					inputFields[FIELD_PASSWORD].setText((String)args[7]);
 				}
 				if (args[6] == null) {
-					currentPassword = new TLRPC.TL_account_password();
-					currentPassword.current_algo = (TLRPC.PasswordKdfAlgo)args[1];
-					currentPassword.new_secure_algo = (TLRPC.SecurePasswordKdfAlgo)args[2];
-					currentPassword.secure_random = (byte[])args[3];
-					currentPassword.has_recovery = !TextUtils.isEmpty((String)args[4]);
+					currentPassword = new TLRPC.TLAccountPassword();
+					currentPassword.currentAlgo = (TLRPC.PasswordKdfAlgo)args[1];
+					currentPassword.newSecureAlgo = (TLRPC.SecurePasswordKdfAlgo)args[2];
+					currentPassword.secureRandom = (byte[])args[3];
+					currentPassword.hasRecovery = !TextUtils.isEmpty((String)args[4]);
 					currentPassword.hint = (String)args[5];
-					currentPassword.srp_id = -1;
-					currentPassword.srp_B = new byte[256];
-					Utilities.random.nextBytes(currentPassword.srp_B);
+					currentPassword.srpId = -1;
+					currentPassword.srpB = new byte[256];
+					Utilities.random.nextBytes(currentPassword.srpB);
 
 					if (inputFields[FIELD_PASSWORD] != null && inputFields[FIELD_PASSWORD].length() > 0) {
 						usingSavedPassword = 2;
@@ -6985,9 +6901,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 	public boolean onBackPressed() {
 		if (currentActivityType == TYPE_PHONE_VERIFICATION) {
 			views[currentViewNum].onBackPressed(true);
-			for (int a = 0; a < views.length; a++) {
-				if (views[a] != null) {
-					views[a].onDestroyActivity();
+			for (SlideView view : views) {
+				if (view != null) {
+					view.onDestroyActivity();
 				}
 			}
 		}
@@ -7082,32 +6998,32 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	private void fillNextCodeParams(Bundle params, TLRPC.TL_auth_sentCode res, boolean animated) {
-		params.putString("phoneHash", res.phone_code_hash);
-		if (res.next_type instanceof TLRPC.TL_auth_codeTypeCall) {
+	private void fillNextCodeParams(Bundle params, TLRPC.TLAuthSentCode res, boolean animated) {
+		params.putString("phoneHash", res.phoneCodeHash);
+		if (res.nextType instanceof TLRPC.TLAuthCodeTypeCall) {
 			params.putInt("nextType", 4);
 		}
-		else if (res.next_type instanceof TLRPC.TL_auth_codeTypeFlashCall) {
+		else if (res.nextType instanceof TLRPC.TLAuthCodeTypeFlashCall) {
 			params.putInt("nextType", 3);
 		}
-		else if (res.next_type instanceof TLRPC.TL_auth_codeTypeSms) {
+		else if (res.nextType instanceof TLRPC.TLAuthCodeTypeSms) {
 			params.putInt("nextType", 2);
 		}
 		if (res.timeout == 0) {
 			res.timeout = 60;
 		}
 		params.putInt("timeout", res.timeout * 1000);
-		if (res.type instanceof TLRPC.TL_auth_sentCodeTypeCall) {
+		if (res.type instanceof TLRPC.TLAuthSentCodeTypeCall) {
 			params.putInt("type", 4);
 			params.putInt("length", res.type.length);
 			setPage(2, animated, params);
 		}
-		else if (res.type instanceof TLRPC.TL_auth_sentCodeTypeFlashCall) {
+		else if (res.type instanceof TLRPC.TLAuthSentCodeTypeFlashCall flashCall) {
 			params.putInt("type", 3);
-			params.putString("pattern", res.type.pattern);
+			params.putString("pattern", flashCall.pattern);
 			setPage(1, animated, params);
 		}
-		else if (res.type instanceof TLRPC.TL_auth_sentCodeTypeSms) {
+		else if (res.type instanceof TLRPC.TLAuthSentCodeTypeSms) {
 			params.putInt("type", 2);
 			params.putInt("length", res.type.length);
 			setPage(0, animated, params);
@@ -7286,12 +7202,12 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 	private String getCurrentValues() {
 		StringBuilder values = new StringBuilder();
-		for (int a = 0; a < inputFields.length; a++) {
-			values.append(inputFields[a].getText()).append(",");
+		for (EditTextBoldCursor inputField : inputFields) {
+			values.append(inputField.getText()).append(",");
 		}
 		if (inputExtraFields != null) {
-			for (int a = 0; a < inputExtraFields.length; a++) {
-				values.append(inputExtraFields[a].getText()).append(",");
+			for (EditTextBoldCursor inputExtraField : inputExtraFields) {
+				values.append(inputExtraField.getText()).append(",");
 			}
 		}
 		for (int a = 0, count = documents.size(); a < count; a++) {
@@ -7337,7 +7253,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		if (uploadingFileType == UPLOADING_TYPE_SELFIE || uploadingFileType == UPLOADING_TYPE_TRANSLATION) {
 			needRecoginze = false;
 		}
-		else if (currentType.type instanceof TLRPC.TL_secureValueTypePersonalDetails) {
+		else if (currentType.type instanceof TLRPC.TLSecureValueTypePersonalDetails) {
 			boolean allFieldsAreEmpty = true;
 			for (int a = 0; a < inputFields.length; a++) {
 				if (a == FIELD_CITIZENSHIP || a == FIELD_EXPIRE || a == FIELD_GENDER || a == FIELD_RESIDENCE) {
@@ -7362,13 +7278,19 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				if (bitmap == null) {
 					continue;
 				}
+
 				TLRPC.PhotoSize size = ImageLoader.scaleAndSaveImage(bitmap, 2048, 2048, 89, false, 320, 320);
+
 				if (size == null) {
 					continue;
 				}
-				TLRPC.TL_secureFile secureFile = new TLRPC.TL_secureFile();
-				secureFile.dc_id = (int)size.location.volume_id;
-				secureFile.id = size.location.local_id;
+
+				long volumeId = size.location.volumeId;
+				int localId = size.location.localId;
+
+				TLRPC.TLSecureFile secureFile = new TLRPC.TLSecureFile();
+				secureFile.dcId = (int)volumeId;
+				secureFile.id = localId;
 				secureFile.date = (int)(System.currentTimeMillis() / 1000);
 
 				final SecureDocument document = delegate.saveFile(secureFile);
@@ -7421,15 +7343,15 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 				if (needRecoginze && !didRecognizeSuccessfully) {
 					try {
-						final MrzRecognizer.Result result = MrzRecognizer.recognize(bitmap, currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeDriverLicense);
+						final MrzRecognizer.Result result = MrzRecognizer.recognize(bitmap, currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeDriverLicense);
 						if (result != null) {
 							didRecognizeSuccessfully = true;
 							AndroidUtilities.runOnUIThread(() -> {
 								if (result.type == MrzRecognizer.Result.TYPE_ID) {
-									if (!(currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeIdentityCard)) {
+									if (!(currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeIdentityCard)) {
 										for (int a1 = 0, count1 = availableDocumentTypes.size(); a1 < count1; a1++) {
-											TLRPC.TL_secureRequiredType requiredType = availableDocumentTypes.get(a1);
-											if (requiredType.type instanceof TLRPC.TL_secureValueTypeIdentityCard) {
+											TLRPC.TLSecureRequiredType requiredType = availableDocumentTypes.get(a1);
+											if (requiredType.type instanceof TLRPC.TLSecureValueTypeIdentityCard) {
 												currentDocumentsType = requiredType;
 												updateInterfaceStringsForDocumentType();
 												break;
@@ -7438,10 +7360,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 									}
 								}
 								else if (result.type == MrzRecognizer.Result.TYPE_PASSPORT) {
-									if (!(currentDocumentsType.type instanceof TLRPC.TL_secureValueTypePassport)) {
+									if (!(currentDocumentsType.type instanceof TLRPC.TLSecureValueTypePassport)) {
 										for (int a1 = 0, count1 = availableDocumentTypes.size(); a1 < count1; a1++) {
-											TLRPC.TL_secureRequiredType requiredType = availableDocumentTypes.get(a1);
-											if (requiredType.type instanceof TLRPC.TL_secureValueTypePassport) {
+											TLRPC.TLSecureRequiredType requiredType = availableDocumentTypes.get(a1);
+											if (requiredType.type instanceof TLRPC.TLSecureValueTypePassport) {
 												currentDocumentsType = requiredType;
 												updateInterfaceStringsForDocumentType();
 												break;
@@ -7450,10 +7372,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 									}
 								}
 								else if (result.type == MrzRecognizer.Result.TYPE_INTERNAL_PASSPORT) {
-									if (!(currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeInternalPassport)) {
+									if (!(currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeInternalPassport)) {
 										for (int a1 = 0, count1 = availableDocumentTypes.size(); a1 < count1; a1++) {
-											TLRPC.TL_secureRequiredType requiredType = availableDocumentTypes.get(a1);
-											if (requiredType.type instanceof TLRPC.TL_secureValueTypeInternalPassport) {
+											TLRPC.TLSecureRequiredType requiredType = availableDocumentTypes.get(a1);
+											if (requiredType.type instanceof TLRPC.TLSecureValueTypeInternalPassport) {
 												currentDocumentsType = requiredType;
 												updateInterfaceStringsForDocumentType();
 												break;
@@ -7462,10 +7384,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 									}
 								}
 								else if (result.type == MrzRecognizer.Result.TYPE_DRIVER_LICENSE) {
-									if (!(currentDocumentsType.type instanceof TLRPC.TL_secureValueTypeDriverLicense)) {
+									if (!(currentDocumentsType.type instanceof TLRPC.TLSecureValueTypeDriverLicense)) {
 										for (int a1 = 0, count1 = availableDocumentTypes.size(); a1 < count1; a1++) {
-											TLRPC.TL_secureRequiredType requiredType = availableDocumentTypes.get(a1);
-											if (requiredType.type instanceof TLRPC.TL_secureValueTypeDriverLicense) {
+											TLRPC.TLSecureRequiredType requiredType = availableDocumentTypes.get(a1);
+											if (requiredType.type instanceof TLRPC.TLSecureValueTypeDriverLicense) {
 												currentDocumentsType = requiredType;
 												updateInterfaceStringsForDocumentType();
 												break;
@@ -7573,7 +7495,6 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 		private EditTextBoldCursor[] codeField;
 		private final TextView confirmTextView;
 		private final TextView titleTextView;
-		private ImageView blackImageView;
 		private ImageView blueImageView;
 		private final TextView timeText;
 		private final TextView problemText;
@@ -7639,7 +7560,7 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				addView(frameLayout, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
 
 				if (verificationType == 1) {
-					blackImageView = new ImageView(context);
+					ImageView blackImageView = new ImageView(context);
 					blackImageView.setImageResource(R.drawable.sms_devices);
 					blackImageView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText), PorterDuff.Mode.MULTIPLY));
 					frameLayout.addView(blackImageView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, 0, 0, 0, 0));
@@ -7790,13 +7711,13 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			nextPressed = true;
 			needShowProgress();
 
-			final TLRPC.TL_auth_resendCode req = new TLRPC.TL_auth_resendCode();
-			req.phone_number = phone;
-			req.phone_code_hash = phoneHash;
+			final TLRPC.TLAuthResendCode req = new TLRPC.TLAuthResendCode();
+			req.phoneNumber = phone;
+			req.phoneCodeHash = phoneHash;
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 				nextPressed = false;
 				if (error == null) {
-					fillNextCodeParams(params, (TLRPC.TL_auth_sentCode)response, true);
+					fillNextCodeParams(params, (TLRPC.TLAuthSentCode)response, true);
 				}
 				else {
 					AlertDialog dialog = (AlertDialog)AlertsCreator.processError(currentAccount, error, PassportActivity.this, req);
@@ -7938,8 +7859,8 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				}
 			}
 			else {
-				for (int a = 0; a < codeField.length; a++) {
-					codeField[a].setText("");
+				for (EditTextBoldCursor editTextBoldCursor : codeField) {
+					editTextBoldCursor.setText("");
 				}
 			}
 
@@ -8095,9 +8016,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 										timeText.setText(LocaleController.getString("SendingSms", R.string.SendingSms));
 									}
 									createCodeTimer();
-									TLRPC.TL_auth_resendCode req = new TLRPC.TL_auth_resendCode();
-									req.phone_number = phone;
-									req.phone_code_hash = phoneHash;
+									TLRPC.TLAuthResendCode req = new TLRPC.TLAuthResendCode();
+									req.phoneNumber = phone;
+									req.phoneCodeHash = phoneHash;
 									ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
 										if (error != null && error.text != null) {
 											AndroidUtilities.runOnUIThread(() -> lastError = error.text);
@@ -8141,8 +8062,8 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 
 			StringBuilder codeBuilder = new StringBuilder();
 
-			for (int a = 0; a < codeField.length; a++) {
-				codeBuilder.append(PhoneFormat.stripExceptNumbers(codeField[a].getText().toString()));
+			for (EditTextBoldCursor editTextBoldCursor : codeField) {
+				codeBuilder.append(PhoneFormat.stripExceptNumbers(editTextBoldCursor.getText().toString()));
 			}
 
 			return codeBuilder.toString();
@@ -8171,10 +8092,10 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 			}
 			waitingForEvent = false;
 			showEditDoneProgress(true, true);
-			final TLRPC.TL_account_verifyPhone req = new TLRPC.TL_account_verifyPhone();
-			req.phone_number = phone;
-			req.phone_code = code;
-			req.phone_code_hash = phoneHash;
+			final TLRPC.TLAccountVerifyPhone req = new TLRPC.TLAccountVerifyPhone();
+			req.phoneNumber = phone;
+			req.phoneCode = code;
+			req.phoneCodeHash = phoneHash;
 			destroyTimer();
 			needShowProgress();
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
@@ -8204,8 +8125,8 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 					}
 					showEditDoneProgress(true, false);
 					if (error.text.contains("PHONE_CODE_EMPTY") || error.text.contains("PHONE_CODE_INVALID")) {
-						for (int a = 0; a < codeField.length; a++) {
-							codeField[a].setText("");
+						for (EditTextBoldCursor editTextBoldCursor : codeField) {
+							editTextBoldCursor.setText("");
 						}
 						codeField[0].requestFocus();
 					}
@@ -8232,9 +8153,9 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				return false;
 			}
 
-			TLRPC.TL_auth_cancelCode req = new TLRPC.TL_auth_cancelCode();
-			req.phone_number = phone;
-			req.phone_code_hash = phoneHash;
+			TLRPC.TLAuthCancelCode req = new TLRPC.TLAuthCancelCode();
+			req.phoneNumber = phone;
+			req.phoneCodeHash = phoneHash;
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
 
 			}, ConnectionsManager.RequestFlagFailOnServerErrors);
@@ -8305,113 +8226,5 @@ public class PassportActivity extends BaseFragment implements NotificationCenter
 				onNextPressed(null);
 			}
 		}
-	}
-
-	@Override
-	public ArrayList<ThemeDescription> getThemeDescriptions() {
-		ArrayList<ThemeDescription> arrayList = new ArrayList<>();
-
-		arrayList.add(new ThemeDescription(fragmentView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundGray));
-		arrayList.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_actionBarDefault));
-		arrayList.add(new ThemeDescription(scrollView, ThemeDescription.FLAG_LISTGLOWCOLOR, null, null, null, null, Theme.key_actionBarDefault));
-		arrayList.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_ITEMSCOLOR, null, null, null, null, Theme.key_actionBarDefaultIcon));
-		arrayList.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_TITLECOLOR, null, null, null, null, Theme.key_actionBarDefaultTitle));
-		arrayList.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SELECTORCOLOR, null, null, null, null, Theme.key_actionBarDefaultSelector));
-		arrayList.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SEARCH, null, null, null, null, Theme.key_actionBarDefaultSearch));
-		arrayList.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SEARCHPLACEHOLDER, null, null, null, null, Theme.key_actionBarDefaultSearchPlaceholder));
-		arrayList.add(new ThemeDescription(linearLayout2, 0, new Class[]{View.class}, Theme.dividerPaint, null, null, Theme.key_divider));
-
-		arrayList.add(new ThemeDescription(extraBackgroundView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundWhite));
-		if (extraBackgroundView2 != null) {
-			arrayList.add(new ThemeDescription(extraBackgroundView2, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundWhite));
-		}
-
-		for (int a = 0; a < dividers.size(); a++) {
-			arrayList.add(new ThemeDescription(dividers.get(a), ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_divider));
-		}
-
-		for (HashMap.Entry<SecureDocument, SecureDocumentCell> entry : documentsCells.entrySet()) {
-			SecureDocumentCell cell = entry.getValue();
-			arrayList.add(new ThemeDescription(cell, ThemeDescription.FLAG_SELECTORWHITE, new Class[]{SecureDocumentCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
-			arrayList.add(new ThemeDescription(cell, 0, new Class[]{SecureDocumentCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-			arrayList.add(new ThemeDescription(cell, 0, new Class[]{SecureDocumentCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
-		}
-
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_SELECTORWHITE, new Class[]{TextDetailSettingsCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
-		arrayList.add(new ThemeDescription(linearLayout2, 0, new Class[]{TextDetailSettingsCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-		arrayList.add(new ThemeDescription(linearLayout2, 0, new Class[]{TextDetailSettingsCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
-
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_SELECTORWHITE, new Class[]{TextSettingsCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
-		arrayList.add(new ThemeDescription(linearLayout2, 0, new Class[]{TextSettingsCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-		arrayList.add(new ThemeDescription(linearLayout2, 0, new Class[]{TextSettingsCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteValueText));
-
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_BACKGROUNDFILTER, new Class[]{ShadowSectionCell.class}, null, null, null, Theme.key_windowBackgroundGrayShadow));
-
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_SELECTORWHITE, new Class[]{TextDetailSecureCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_TEXTCOLOR, new Class[]{TextDetailSecureCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_TEXTCOLOR, new Class[]{TextDetailSecureCell.class}, null, null, null, Theme.key_divider));
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_TEXTCOLOR, new Class[]{TextDetailSecureCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_IMAGECOLOR, new Class[]{TextDetailSecureCell.class}, new String[]{"checkImageView"}, null, null, null, Theme.key_featuredStickers_addedIcon));
-
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_CELLBACKGROUNDCOLOR, new Class[]{HeaderCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
-		arrayList.add(new ThemeDescription(linearLayout2, 0, new Class[]{HeaderCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlueHeader));
-
-		arrayList.add(new ThemeDescription(linearLayout2, ThemeDescription.FLAG_BACKGROUNDFILTER, new Class[]{TextInfoPrivacyCell.class}, null, null, null, Theme.key_windowBackgroundGrayShadow));
-		arrayList.add(new ThemeDescription(linearLayout2, 0, new Class[]{TextInfoPrivacyCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText4));
-		if (inputFields != null) {
-			for (int a = 0; a < inputFields.length; a++) {
-				arrayList.add(new ThemeDescription((View)inputFields[a].getParent(), ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundWhite));
-				arrayList.add(new ThemeDescription(inputFields[a], ThemeDescription.FLAG_TEXTCOLOR | ThemeDescription.FLAG_CURSORCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-				arrayList.add(new ThemeDescription(inputFields[a], ThemeDescription.FLAG_HINTTEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteHintText));
-				arrayList.add(new ThemeDescription(inputFields[a], ThemeDescription.FLAG_HINTTEXTCOLOR | ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_windowBackgroundWhiteBlueHeader));
-				arrayList.add(new ThemeDescription(inputFields[a], ThemeDescription.FLAG_BACKGROUNDFILTER, null, null, null, null, Theme.key_windowBackgroundWhiteInputField));
-				arrayList.add(new ThemeDescription(inputFields[a], ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_DRAWABLESELECTEDSTATE, null, null, null, null, Theme.key_windowBackgroundWhiteInputFieldActivated));
-				arrayList.add(new ThemeDescription(inputFields[a], ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_windowBackgroundWhiteRedText3));
-			}
-		}
-		else {
-			arrayList.add(new ThemeDescription(null, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-			arrayList.add(new ThemeDescription(null, ThemeDescription.FLAG_HINTTEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteHintText));
-			arrayList.add(new ThemeDescription(null, ThemeDescription.FLAG_HINTTEXTCOLOR | ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_windowBackgroundWhiteBlueHeader));
-			arrayList.add(new ThemeDescription(null, ThemeDescription.FLAG_BACKGROUNDFILTER, null, null, null, null, Theme.key_windowBackgroundWhiteInputField));
-			arrayList.add(new ThemeDescription(null, ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_DRAWABLESELECTEDSTATE, null, null, null, null, Theme.key_windowBackgroundWhiteInputFieldActivated));
-			arrayList.add(new ThemeDescription(null, ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_windowBackgroundWhiteRedText3));
-		}
-
-		if (inputExtraFields != null) {
-			for (int a = 0; a < inputExtraFields.length; a++) {
-				arrayList.add(new ThemeDescription((View)inputExtraFields[a].getParent(), ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundWhite));
-				arrayList.add(new ThemeDescription(inputExtraFields[a], ThemeDescription.FLAG_TEXTCOLOR | ThemeDescription.FLAG_CURSORCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-				arrayList.add(new ThemeDescription(inputExtraFields[a], ThemeDescription.FLAG_HINTTEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteHintText));
-				arrayList.add(new ThemeDescription(inputExtraFields[a], ThemeDescription.FLAG_HINTTEXTCOLOR | ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_windowBackgroundWhiteBlueHeader));
-				arrayList.add(new ThemeDescription(inputExtraFields[a], ThemeDescription.FLAG_BACKGROUNDFILTER, null, null, null, null, Theme.key_windowBackgroundWhiteInputField));
-				arrayList.add(new ThemeDescription(inputExtraFields[a], ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_DRAWABLESELECTEDSTATE, null, null, null, null, Theme.key_windowBackgroundWhiteInputFieldActivated));
-				arrayList.add(new ThemeDescription(inputExtraFields[a], ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_windowBackgroundWhiteRedText3));
-			}
-		}
-
-		arrayList.add(new ThemeDescription(emptyView, ThemeDescription.FLAG_PROGRESSBAR, null, null, null, null, Theme.key_progressCircle));
-		arrayList.add(new ThemeDescription(noPasswordImageView, ThemeDescription.FLAG_IMAGECOLOR, null, null, null, null, Theme.key_chat_messagePanelIcons));
-		arrayList.add(new ThemeDescription(noPasswordTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteGrayText4));
-		arrayList.add(new ThemeDescription(noPasswordSetTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlueText5));
-		arrayList.add(new ThemeDescription(passwordForgotButton, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlueText4));
-
-		arrayList.add(new ThemeDescription(plusTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-
-		arrayList.add(new ThemeDescription(acceptTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_passport_authorizeText));
-		arrayList.add(new ThemeDescription(bottomLayout, ThemeDescription.FLAG_BACKGROUNDFILTER, null, null, null, null, Theme.key_passport_authorizeBackground));
-		arrayList.add(new ThemeDescription(bottomLayout, ThemeDescription.FLAG_BACKGROUNDFILTER | ThemeDescription.FLAG_DRAWABLESELECTEDSTATE, null, null, null, null, Theme.key_passport_authorizeBackgroundSelected));
-
-		arrayList.add(new ThemeDescription(progressView, 0, null, null, null, null, Theme.key_contextProgressInner2));
-		arrayList.add(new ThemeDescription(progressView, 0, null, null, null, null, Theme.key_contextProgressOuter2));
-		arrayList.add(new ThemeDescription(progressViewButton, 0, null, null, null, null, Theme.key_contextProgressInner2));
-		arrayList.add(new ThemeDescription(progressViewButton, 0, null, null, null, null, Theme.key_contextProgressOuter2));
-
-		arrayList.add(new ThemeDescription(emptyImageView, ThemeDescription.FLAG_IMAGECOLOR, null, null, null, null, Theme.key_sessions_devicesImage));
-		arrayList.add(new ThemeDescription(emptyTextView1, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
-		arrayList.add(new ThemeDescription(emptyTextView2, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
-		arrayList.add(new ThemeDescription(emptyTextView3, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlueText4));
-
-		return arrayList;
 	}
 }

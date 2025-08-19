@@ -1,8 +1,5 @@
 package org.telegram.tgnet;
 
-import androidx.annotation.Nullable;
-
-import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 
 import java.nio.ByteBuffer;
@@ -10,15 +7,17 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 
-public class NativeByteBuffer extends AbstractSerializedData {
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
+public class NativeByteBuffer extends AbstractSerializedData {
 	protected long address;
 	public ByteBuffer buffer;
 	private boolean justCalc;
 	private int len;
 	public boolean reused = true;
 
-	private static final ThreadLocal<LinkedList<NativeByteBuffer>> addressWrappers = new ThreadLocal<LinkedList<NativeByteBuffer>>() {
+	private static final ThreadLocal<LinkedList<NativeByteBuffer>> addressWrappers = new ThreadLocal<>() {
 		@Override
 		protected LinkedList<NativeByteBuffer> initialValue() {
 			return new LinkedList<>();
@@ -206,10 +205,10 @@ public class NativeByteBuffer extends AbstractSerializedData {
 		}
 	}
 
-	public void writeString(String s) {
+	public void writeString(@Nullable String s) {
 		if (s == null) {
-			FileLog.e("write string null");
-			FileLog.e(new Throwable());
+//			FileLog.e("write string null");
+//			FileLog.e(new Throwable());
 
 			s = "";
 		}
@@ -482,12 +481,14 @@ public class NativeByteBuffer extends AbstractSerializedData {
 		}
 	}
 
+	@NonNull
 	public byte[] readData(int count, boolean exception) {
 		byte[] arr = new byte[count];
 		readBytes(arr, exception);
 		return arr;
 	}
 
+	@NonNull
 	public String readString(boolean exception) {
 		int startReadPosition = getPosition();
 		try {
@@ -519,6 +520,7 @@ public class NativeByteBuffer extends AbstractSerializedData {
 		return "";
 	}
 
+	@NonNull
 	public byte[] readByteArray(boolean exception) {
 		try {
 			int sl = 1;
@@ -548,6 +550,7 @@ public class NativeByteBuffer extends AbstractSerializedData {
 		return new byte[0];
 	}
 
+	@Nullable
 	public NativeByteBuffer readByteBuffer(boolean exception) {
 		try {
 			int sl = 1;

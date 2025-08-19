@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:fillViewport="true">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:orientation="vertical"
+		android:background="@color/background"
+		android:padding="24dp">
+
+		<com.google.android.material.card.MaterialCardView
+			android:id="@+id/bt_buy_ai_chat"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="vertical"
+			app:cardCornerRadius="16dp"
+			app:strokeWidth="0dp">
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:layout_width="match_parent"
+				android:layout_height="200dp"
+				android:padding="12dp"
+				android:background="@drawable/ai_buy_text">
+
+				<ImageView
+					android:id="@+id/imageView2"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:src="@drawable/ic_ai_chat_purchase"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/ai_chat"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginBottom="8dp"
+					android:text="@string/ai_buy_text"
+					android:textColor="@color/white"
+					android:textSize="20sp"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toTopOf="@+id/description_ai_chat"
+					app:layout_constraintStart_toStartOf="parent" />
+
+				<TextView
+					android:id="@+id/ai_chat_active"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="@string/txt_active"
+					android:background="@drawable/shape_15_dp"
+					android:backgroundTint="@color/white"
+					android:paddingHorizontal="10dp"
+					android:paddingVertical="4dp"
+					android:layout_marginBottom="8dp"
+					android:layout_marginStart="8dp"
+					android:textColor="@color/dark_fixed"
+					android:textSize="12sp"
+					android:textStyle="bold"
+					android:visibility="gone"
+					app:layout_constraintBottom_toTopOf="@+id/description_ai_chat"
+					app:layout_constraintStart_toEndOf="@+id/ai_chat" />
+
+				<TextView
+					android:id="@+id/description_ai_chat"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/buy_pack_or_subscription"
+					android:textColor="@color/white"
+					android:textSize="16sp"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toStartOf="@+id/imageView3"
+					app:layout_constraintStart_toStartOf="parent" />
+
+				<ImageView
+					android:id="@+id/imageView3"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:src="@drawable/my_ai_packs_button"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+		</com.google.android.material.card.MaterialCardView>
+
+		<com.google.android.material.card.MaterialCardView
+			android:id="@+id/bt_buy_ai_images"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="vertical"
+			app:cardCornerRadius="16dp"
+			android:layout_marginTop="20dp"
+			app:strokeWidth="0dp">
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:layout_width="match_parent"
+				android:layout_height="200dp"
+				android:padding="12dp"
+				android:background="@drawable/ai_buy_picture">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:src="@drawable/ic_ai_images_purchase"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/ai_images"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_marginBottom="8dp"
+					android:text="@string/ai_buy_picture"
+					android:textColor="@color/white"
+					android:textSize="20sp"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toTopOf="@+id/description_ai_images"
+					app:layout_constraintStart_toStartOf="parent" />
+
+				<TextView
+					android:id="@+id/ai_images_active"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:background="@drawable/shape_15_dp"
+					android:backgroundTint="@color/white"
+					android:paddingHorizontal="10dp"
+					android:paddingVertical="4dp"
+					android:layout_marginBottom="8dp"
+					android:layout_marginStart="8dp"
+					android:text="@string/txt_active"
+					android:textColor="@color/dark_fixed"
+					android:textSize="12sp"
+					android:textStyle="bold"
+					android:visibility="gone"
+					app:layout_constraintBottom_toTopOf="@+id/description_ai_images"
+					app:layout_constraintStart_toEndOf="@+id/ai_images" />
+
+				<TextView
+					android:id="@+id/description_ai_images"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/buy_pack_or_subscription"
+					android:textColor="@color/white"
+					android:textSize="16sp"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toStartOf="@+id/imageView4"
+					app:layout_constraintStart_toStartOf="parent" />
+
+				<ImageView
+					android:id="@+id/imageView4"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:src="@drawable/my_ai_packs_button"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+		</com.google.android.material.card.MaterialCardView>
+
+		<com.google.android.material.card.MaterialCardView
+			android:id="@+id/bt_buy_ai_chat_and_images"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="vertical"
+			app:cardCornerRadius="16dp"
+			android:layout_marginTop="20dp"
+			app:strokeWidth="0dp">
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:layout_width="match_parent"
+				android:layout_height="200dp"
+				android:padding="12dp"
+				android:background="@drawable/ai_buy_text_pictures">
+
+				<ImageView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:src="@drawable/ic_ai_chat_images_purchase"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/ai_chat_images"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="@string/ai_buy_text_pictures"
+					android:textColor="@color/white"
+					android:textSize="20sp"
+					android:textStyle="bold"
+					android:layout_marginBottom="8dp"
+					app:layout_constraintBottom_toTopOf="@+id/ai_chat_images_active"
+					app:layout_constraintStart_toStartOf="parent" />
+
+				<TextView
+					android:id="@+id/ai_chat_images_active"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:background="@drawable/shape_15_dp"
+					android:backgroundTint="@color/white"
+					android:paddingHorizontal="10dp"
+					android:paddingVertical="4dp"
+					android:text="@string/txt_active"
+					android:textColor="@color/dark_fixed"
+					android:textSize="12sp"
+					android:textStyle="bold"
+					android:visibility="gone"
+					android:layout_marginBottom="8dp"
+					app:layout_constraintBottom_toTopOf="@+id/description_ai_chat_images"
+					app:layout_constraintStart_toStartOf="parent" />
+
+
+				<TextView
+					android:id="@+id/description_ai_chat_images"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/buy_pack_or_subscription"
+					android:textColor="@color/white"
+					android:textSize="16sp"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toStartOf="@+id/imageView5"
+					app:layout_constraintStart_toStartOf="parent" />
+
+				<ImageView
+					android:id="@+id/imageView5"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:src="@drawable/my_ai_packs_button"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+		</com.google.android.material.card.MaterialCardView>
+
+
+	</LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

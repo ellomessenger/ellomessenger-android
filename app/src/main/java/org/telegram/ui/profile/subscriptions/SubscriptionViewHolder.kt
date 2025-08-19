@@ -3,13 +3,14 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
- * Copyright Shamil Afandiyev, Ello 2024
+ * Copyright Nikita Denin, Ello 2023-2025.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
  */
 package org.telegram.ui.profile.subscriptions
 
 import android.content.res.ColorStateList
 import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.ImageLocation
 import org.telegram.messenger.MessagesController
@@ -23,11 +24,14 @@ import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
 import org.telegram.ui.AvatarImageView
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.profile.utils.toFormattedDate
+import java.util.Currency
+import java.util.Locale
 
 class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : RecyclerView.ViewHolder(binding.root), NotificationCenter.NotificationCenterDelegate {
 	private val avatarDrawable = AvatarDrawable().apply { shouldDrawPlaceholder = true }
@@ -51,6 +55,7 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 
 	fun bind(subscription: ElloRpc.SubscriptionItem, action: ((CurrentSubscriptionsAdapter.SubscriptionItemAction) -> Unit)? = null, isHideOptions: Boolean? = false) {
 		this.subscription = subscription
+		val bot = messagesController.getUser(subscription.channelId)
 
 		binding.run {
 			if (isHideOptions == true) {
@@ -65,8 +70,8 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 				statusLayout.visible()
 
 				options.setOnClickListener {
-					val peer = channel ?: user ?: return@setOnClickListener
-					action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Subscribe(subscriptionItem = subscription, peer = peer, view = it))
+					val peer = channel ?: user ?: bot ?: return@setOnClickListener
+					action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Subscribe(subscriptionItem = subscription, peer = peer, view = it, botType = subscription.botType))
 				}
 			}
 			else if (subscription.isActive) {
@@ -77,8 +82,14 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 				statusLayout.visible()
 
 				options.setOnClickListener {
-					val peer = channel ?: user ?: return@setOnClickListener
-					action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Cancel(subscriptionItem = subscription, peer = peer, view = it))
+					println(subscription.type)
+					if (subscription.type == 1 || subscription.type == 0) {
+						action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Cancel(subscriptionItem = subscription, peer = null, view = it, botType = subscription.botType, expireAt = subscription.expireAt))
+					}
+					else {
+						val peer = channel ?: user ?: bot ?: return@setOnClickListener
+						action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Cancel(subscriptionItem = subscription, peer = peer, view = it, botType = subscription.botType, expireAt = subscription.expireAt))
+					}
 				}
 			}
 			else {
@@ -87,8 +98,13 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 				statusText.text = null
 
 				options.setOnClickListener {
-					val peer = channel ?: user ?: return@setOnClickListener
-					action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Subscribe(subscriptionItem = subscription, peer = peer, view = it))
+					if (subscription.type == 1 || subscription.type == 0) {
+						action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Cancel(subscriptionItem = subscription, peer = null, view = it, botType = subscription.botType, expireAt = subscription.expireAt))
+					}
+					else {
+						val peer = channel ?: user ?: bot ?: return@setOnClickListener
+						action?.invoke(CurrentSubscriptionsAdapter.SubscriptionItemAction.Cancel(subscriptionItem = subscription, peer = peer, view = it, botType = subscription.botType, expireAt = subscription.expireAt))
+					}
 				}
 			}
 
@@ -105,12 +121,27 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 				validTillLabel.setText(R.string.ongoing)
 			}
 
+			binding.elloCoinSymbol.text = getCurrencySymbol(subscription.currency)
+
 			if (subscription.channelId > 0) {
 				fillChannelPeerInfo(subscription.channelId)
 			}
 			else {
 				fillUserPeerInfo(subscription.userId)
 			}
+
+			if (bot?.bot == true) {
+				fillBotInfo(bot)
+			}
+		}
+	}
+
+	private fun getCurrencySymbol(currencyCode: String, locale: Locale = Locale.getDefault()): String {
+		return try {
+			Currency.getInstance(currencyCode).getSymbol(locale)
+		}
+		catch (e: IllegalArgumentException) {
+			"?"
 		}
 	}
 
@@ -143,7 +174,7 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 	}
 
 	private fun loadUserPeerInfo(peerId: Long) {
-		val user = TLRPC.TL_userEmpty().apply { id = peerId }
+		val user = TLRPC.TLUserEmpty().apply { id = peerId }
 		messagesController.loadFullUser(user, classGuid, true)
 	}
 
@@ -161,22 +192,48 @@ class SubscriptionViewHolder(private val binding: ItemSubscriptionBinding) : Rec
 	private fun fillChannelPeerInfo(chat: TLRPC.Chat?) {
 		this.channel = chat
 
-		avatarDrawable.setInfo(chat)
+		if (subscription?.channelId == 1L) {
+			avatarImageView.setImage(null, null, ResourcesCompat.getDrawable(binding.root.context.resources, R.drawable.ic_heart_donate_banner, null), user)
 
-		val photo = ImageLocation.getForUserOrChat(chat, ImageLocation.TYPE_SMALL)
-
-		if (photo != null) {
-			avatarImageView.setImage(photo, null, avatarDrawable, chat)
+			binding.channelName.text = binding.root.context.getString(R.string.membership)
 		}
 		else {
-			avatarImageView.setImage(null, null, avatarDrawable, chat)
-		}
+			avatarDrawable.setInfo(chat)
 
-		binding.channelName.text = if (chat?.deactivated == true) binding.root.context.getString(R.string.txt_deleted).uppercase() else chat?.title
+			val photo = ImageLocation.getForUserOrChat(chat, ImageLocation.TYPE_SMALL)
+
+			if (photo != null) {
+				avatarImageView.setImage(photo, null, avatarDrawable, chat)
+			}
+			else {
+				avatarImageView.setImage(null, null, avatarDrawable, chat)
+			}
+
+			binding.channelName.text = if ((chat as? TLRPC.TLChat)?.deactivated == true) binding.root.context.getString(R.string.txt_deleted).uppercase() else chat?.title
+		}
 	}
 
 	private fun loadChannelPeerInfo(peerId: Long) {
 		messagesController.loadFullChat(peerId, classGuid, true)
+	}
+
+	private fun fillBotInfo(bot: User) {
+		when (subscription?.botType) {
+			1 -> {
+				avatarImageView.setImage(null, null, ResourcesCompat.getDrawable(binding.root.context.resources, R.drawable.chat_ai_avatar, null), bot)
+				binding.channelName.text = binding.root.context?.getString(R.string.ai_text_subscription)
+			}
+
+			2 -> {
+				avatarImageView.setImage(null, null, ResourcesCompat.getDrawable(binding.root.context.resources, R.drawable.image_ai_avatar, null), bot)
+				binding.channelName.text = binding.root.context?.getString(R.string.ai_image_subscription)
+			}
+
+			3 -> {
+				avatarImageView.setImage(null, null, ResourcesCompat.getDrawable(binding.root.context.resources, R.drawable.mixed_ai_avatar, null), bot)
+				binding.channelName.text = binding.root.context.getString(R.string.ai_chat_images_subscription)
+			}
+		}
 	}
 
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {

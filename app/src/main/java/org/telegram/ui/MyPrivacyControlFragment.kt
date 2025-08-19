@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -30,26 +30,26 @@ import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_account_privacyRules
-import org.telegram.tgnet.TLRPC.TL_account_setPrivacy
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyChatInvite
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyForwards
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyPhoneCall
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyProfilePhoto
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyKeyStatusTimestamp
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyValueAllowAll
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyValueAllowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyValueAllowContacts
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyValueAllowUsers
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyValueDisallowAll
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyValueDisallowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_inputPrivacyValueDisallowUsers
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowAll
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowUsers
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowAll
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowUsers
+import org.telegram.tgnet.TLRPC.TLAccountPrivacyRules
+import org.telegram.tgnet.TLRPC.TLAccountSetPrivacy
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyChatInvite
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyForwards
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyPhoneCall
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyProfilePhoto
+import org.telegram.tgnet.TLRPC.TLInputPrivacyKeyStatusTimestamp
+import org.telegram.tgnet.TLRPC.TLInputPrivacyValueAllowAll
+import org.telegram.tgnet.TLRPC.TLInputPrivacyValueAllowChatParticipants
+import org.telegram.tgnet.TLRPC.TLInputPrivacyValueAllowContacts
+import org.telegram.tgnet.TLRPC.TLInputPrivacyValueAllowUsers
+import org.telegram.tgnet.TLRPC.TLInputPrivacyValueDisallowAll
+import org.telegram.tgnet.TLRPC.TLInputPrivacyValueDisallowChatParticipants
+import org.telegram.tgnet.TLRPC.TLInputPrivacyValueDisallowUsers
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowAll
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowChatParticipants
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowUsers
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowAll
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowChatParticipants
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowUsers
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -176,33 +176,33 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 	}
 
 	private fun applyCurrentPrivacySettings() {
-		val req = TL_account_setPrivacy()
+		val req = TLAccountSetPrivacy()
 
 		when (rulesType) {
 			PRIVACY_RULES_TYPE_FORWARDS -> {
-				req.key = TL_inputPrivacyKeyForwards()
+				req.key = TLInputPrivacyKeyForwards()
 			}
 
 			PRIVACY_RULES_TYPE_PHOTO -> {
-				req.key = TL_inputPrivacyKeyProfilePhoto()
+				req.key = TLInputPrivacyKeyProfilePhoto()
 			}
 
 			PRIVACY_RULES_TYPE_CALLS -> {
-				req.key = TL_inputPrivacyKeyPhoneCall()
+				req.key = TLInputPrivacyKeyPhoneCall()
 			}
 
 			PRIVACY_RULES_TYPE_INVITE -> {
-				req.key = TL_inputPrivacyKeyChatInvite()
+				req.key = TLInputPrivacyKeyChatInvite()
 			}
 
 			PRIVACY_RULES_TYPE_LAST_SEEN -> {
-				req.key = TL_inputPrivacyKeyStatusTimestamp()
+				req.key = TLInputPrivacyKeyStatusTimestamp()
 			}
 		}
 
 		if (currentType != 0 && currentPlus.isNotEmpty()) {
-			val usersRule = TL_inputPrivacyValueAllowUsers()
-			val chatsRule = TL_inputPrivacyValueAllowChatParticipants()
+			val usersRule = TLInputPrivacyValueAllowUsers()
+			val chatsRule = TLInputPrivacyValueAllowChatParticipants()
 
 			for (a in currentPlus.indices) {
 				val id = currentPlus[a]
@@ -228,8 +228,8 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 		}
 
 		if (currentType != 1 && currentMinus.size > 0) {
-			val usersRule = TL_inputPrivacyValueDisallowUsers()
-			val chatsRule = TL_inputPrivacyValueDisallowChatParticipants()
+			val usersRule = TLInputPrivacyValueDisallowUsers()
+			val chatsRule = TLInputPrivacyValueDisallowChatParticipants()
 
 			for (a in currentMinus.indices) {
 				val id = currentMinus[a]
@@ -255,9 +255,9 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 		}
 
 		when (currentType) {
-			TYPE_EVERYBODY -> req.rules.add(TL_inputPrivacyValueAllowAll())
-			TYPE_NOBODY -> req.rules.add(TL_inputPrivacyValueDisallowAll())
-			TYPE_CONTACTS -> req.rules.add(TL_inputPrivacyValueAllowContacts())
+			TYPE_EVERYBODY -> req.rules.add(TLInputPrivacyValueAllowAll())
+			TYPE_NOBODY -> req.rules.add(TLInputPrivacyValueDisallowAll())
+			TYPE_CONTACTS -> req.rules.add(TLInputPrivacyValueAllowContacts())
 		}
 
 		var progressDialog: AlertDialog? = null
@@ -279,7 +279,7 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 					FileLog.e(e)
 				}
 				if (error == null) {
-					val privacyRules = response as TL_account_privacyRules
+					val privacyRules = response as TLAccountPrivacyRules
 					MessagesController.getInstance(currentAccount).putUsers(privacyRules.users, false)
 					MessagesController.getInstance(currentAccount).putChats(privacyRules.chats, false)
 					ContactsController.getInstance(currentAccount).setPrivacyRules(privacyRules.rules, rulesType)
@@ -310,7 +310,7 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 
 		val privacyRules = ContactsController.getInstance(currentAccount).getPrivacyRules(rulesType)
 
-		if (privacyRules == null || privacyRules.size == 0) {
+		if (privacyRules.isNullOrEmpty()) {
 			currentType = TYPE_NOBODY
 		}
 		else {
@@ -319,7 +319,7 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 			for (a in privacyRules.indices) {
 				val rule = privacyRules[a]
 
-				if (rule is TL_privacyValueAllowChatParticipants) {
+				if (rule is TLPrivacyValueAllowChatParticipants) {
 					var b = 0
 					val n = rule.chats.size
 
@@ -328,7 +328,7 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 						b++
 					}
 				}
-				else if (rule is TL_privacyValueDisallowChatParticipants) {
+				else if (rule is TLPrivacyValueDisallowChatParticipants) {
 					var b = 0
 					val n = rule.chats.size
 
@@ -337,16 +337,16 @@ class MyPrivacyControlFragment @JvmOverloads constructor(private val rulesType: 
 						b++
 					}
 				}
-				else if (rule is TL_privacyValueAllowUsers) {
+				else if (rule is TLPrivacyValueAllowUsers) {
 					currentPlus.addAll(rule.users)
 				}
-				else if (rule is TL_privacyValueDisallowUsers) {
+				else if (rule is TLPrivacyValueDisallowUsers) {
 					currentMinus.addAll(rule.users)
 				}
 				else if (type == -1) {
 					type = when (rule) {
-						is TL_privacyValueAllowAll -> 0
-						is TL_privacyValueDisallowAll -> 1
+						is TLPrivacyValueAllowAll -> 0
+						is TLPrivacyValueDisallowAll -> 1
 						else -> 2
 					}
 				}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.channel
 
@@ -49,9 +49,9 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 	private var canCreatePublic = true
 
 	override fun onFragmentCreate(): Boolean {
-		val req = TLRPC.TL_channels_checkUsername()
+		val req = TLRPC.TLChannelsCheckUsername()
 		req.username = "1"
-		req.channel = TLRPC.TL_inputChannelEmpty()
+		req.channel = TLRPC.TLInputChannelEmpty()
 
 		connectionsManager.sendRequest(req) { _, error ->
 			AndroidUtilities.runOnUIThread {
@@ -67,7 +67,7 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 	override fun createView(context: Context): View? {
 		actionBar?.setBackButtonImage(R.drawable.ic_back_arrow)
 		actionBar?.setAllowOverlayTitle(true)
-		actionBar?.setTitle(context.getString(if (onlineCourse == true) R.string.online_course else R.string.channel_type))
+		actionBar?.setTitle(context.getString(if (onlineCourse == true) R.string.masterclass else R.string.channel_type))
 
 		val menu = actionBar?.createMenu()
 
@@ -144,7 +144,7 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 		if (onlineCourse == true) {
 			binding?.privateChannelButton?.root?.gone()
 			binding?.publicChannelButton?.root?.gone()
-			binding?.subscriptionChannelButton?.checkbox?.text = context.getString(R.string.online_course)
+			binding?.subscriptionChannelButton?.checkbox?.text = context.getString(R.string.masterclass)
 			selectedType = SUBSCRIPTION
 			binding?.description?.visible()
 		}
@@ -209,7 +209,7 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 		lastCheckName = name
 
 		checkRunnable = Runnable {
-			val req = TLRPC.TL_channels_checkUsername()
+			val req = TLRPC.TLChannelsCheckUsername()
 			req.username = name
 			req.channel = messagesController.getInputChannel(0)
 
@@ -218,7 +218,7 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 					checkReqId = 0
 
 					if (lastCheckName != null && lastCheckName == name) {
-						if (error == null && response is TLRPC.TL_boolTrue) {
+						if (error == null && response is TLRPC.TLBoolTrue) {
 							binding?.errorLabel?.visible()
 							binding?.errorLabel?.text = buildSpannedString {
 								inSpans(ForegroundColorSpan(ResourcesCompat.getColor(context?.resources!!, R.color.green, null))) {
@@ -311,7 +311,7 @@ class ChannelTypeFragment(args: Bundle) : BaseFragment(args) {
 				binding?.linkContainer?.visible()
 				binding?.linkHeader?.visible()
 
-				description = context.getString(R.string.public_channel_description)
+				description = if (onlineCourse == true) context.getString(R.string.masterclass_type_description) else context.getString(R.string.public_channel_description)
 				linkHeader = context.getString(R.string.public_link)
 
 				if (true == onlineCourse) {

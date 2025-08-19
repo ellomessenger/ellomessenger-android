@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -35,27 +35,25 @@ import org.telegram.messenger.R
 import org.telegram.messenger.SharedConfig
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_accountDaysTTL
-import org.telegram.tgnet.TLRPC.TL_account_getPassword
-import org.telegram.tgnet.TLRPC.TL_account_setAccountTTL
-import org.telegram.tgnet.TLRPC.TL_account_setGlobalPrivacySettings
-import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.TLRPC.TL_contacts_toggleTopPeers
-import org.telegram.tgnet.TLRPC.TL_globalPrivacySettings
-import org.telegram.tgnet.TLRPC.TL_payments_clearSavedInfo
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowAll
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowUsers
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowAll
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowUsers
-import org.telegram.tgnet.TLRPC.account_Password
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.TLRPC.TLAccountDaysTTL
+import org.telegram.tgnet.TLRPC.TLAccountGetPassword
+import org.telegram.tgnet.TLRPC.TLAccountSetAccountTTL
+import org.telegram.tgnet.TLRPC.TLAccountSetGlobalPrivacySettings
+import org.telegram.tgnet.TLRPC.TLBoolTrue
+import org.telegram.tgnet.TLRPC.TLContactsToggleTopPeers
+import org.telegram.tgnet.TLRPC.TLGlobalPrivacySettings
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowAll
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowChatParticipants
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowUsers
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowAll
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowChatParticipants
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowUsers
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
-import org.telegram.ui.Cells.CheckBoxCell
 import org.telegram.ui.Cells.HeaderCell
 import org.telegram.ui.Cells.RadioColorCell
 import org.telegram.ui.Cells.ShadowSectionCell
@@ -66,11 +64,12 @@ import org.telegram.ui.Components.AlertsCreator
 import org.telegram.ui.Components.BulletinFactory
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.LayoutHelper.createFrame
-import org.telegram.ui.Components.LayoutHelper.createLinear
 import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import org.telegram.ui.Components.TextStyleSpan
 import org.telegram.ui.Components.TextStyleSpan.TextStyleRun
+import androidx.core.content.edit
+import java.util.Locale
 
 @SuppressLint("NotifyDataSetChanged")
 class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
@@ -78,7 +77,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 	private var listView: RecyclerListView? = null
 	private var progressDialog: AlertDialog? = null
 	private var layoutManager: LinearLayoutManager? = null
-	private var currentPassword: account_Password? = null
+	private var currentPassword: TLRPC.TLAccountPassword? = null
 	private var privacySectionRow = 0
 	private var blockedRow = 0
 	private var phoneNumberRow = 0
@@ -104,12 +103,14 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 	private var deleteAccountDetailRow = 0
 	private var botsSectionRow = 0
 	private var passportRow = 0
-	private var paymentsClearRow = 0
+
+	// private var paymentsClearRow = 0
 	private var webSessionsRow = 0
 	private var botsDetailRow = 0
 	private var contactsSectionRow = 0
 	private var contactsDeleteRow = 0
-	private var contactsSuggestRow = 0
+
+	// private var contactsSuggestRow = 0
 	private var contactsSyncRow = 0
 	private var contactsDetailRow = 0
 	private var secretSectionRow = 0
@@ -122,7 +123,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 	private var currentSuggest = false
 	private var newSuggest = false
 	private var archiveChats = false
-	private val clear = BooleanArray(2)
+	// private val clear = BooleanArray(2)
 
 	override fun onFragmentCreate(): Boolean {
 		super.onFragmentCreate()
@@ -136,7 +137,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 		val privacySettings = contactsController.globalPrivacySettings
 
 		if (privacySettings != null) {
-			archiveChats = privacySettings.archive_and_mute_new_noncontact_peers
+			archiveChats = privacySettings.archiveAndMuteNewNoncontactPeers
 		}
 
 		updateRows()
@@ -168,7 +169,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 
 			save = true
 
-			val req = TL_contacts_toggleTopPeers()
+			val req = TLContactsToggleTopPeers()
 			req.enabled = newSuggest
 
 			connectionsManager.sendRequest(req)
@@ -176,15 +177,17 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 
 		val globalPrivacySettings = contactsController.globalPrivacySettings
 
-		if (globalPrivacySettings != null && globalPrivacySettings.archive_and_mute_new_noncontact_peers != archiveChats) {
-			globalPrivacySettings.archive_and_mute_new_noncontact_peers = archiveChats
+		if (globalPrivacySettings != null && globalPrivacySettings.archiveAndMuteNewNoncontactPeers != archiveChats) {
+			globalPrivacySettings.archiveAndMuteNewNoncontactPeers = archiveChats
 
 			save = true
 
-			val req = TL_account_setGlobalPrivacySettings()
-			req.settings = TL_globalPrivacySettings()
-			req.settings.flags = req.settings.flags or 1
-			req.settings.archive_and_mute_new_noncontact_peers = archiveChats
+			val req = TLAccountSetGlobalPrivacySettings()
+
+			req.settings = TLGlobalPrivacySettings().also {
+				it.flags = it.flags or 1
+				it.archiveAndMuteNewNoncontactPeers = archiveChats
+			}
 
 			connectionsManager.sendRequest(req)
 		}
@@ -296,9 +299,8 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 						progressDialog.setCanCancel(false)
 						progressDialog.show()
 
-						val req = TL_account_setAccountTTL()
-						req.ttl = TL_accountDaysTTL()
-						req.ttl.days = value
+						val req = TLAccountSetAccountTTL()
+						req.ttl = TLAccountDaysTTL().also { it.days = value }
 
 						connectionsManager.sendRequest(req) { response, _ ->
 							AndroidUtilities.runOnUIThread {
@@ -309,8 +311,8 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 									FileLog.e(e)
 								}
 
-								if (response is TL_boolTrue) {
-									contactsController.deleteAccountTTL = req.ttl.days
+								if (response is TLBoolTrue) {
+									contactsController.deleteAccountTTL = req.ttl?.days ?: 0
 									listAdapter?.notifyDataSetChanged()
 								}
 							}
@@ -359,13 +361,13 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 			else if (position == emailLoginRow) {
 				val currentPassword = currentPassword
 
-				if (currentPassword?.login_email_pattern == null) {
+				if (currentPassword?.loginEmailPattern == null) {
 					return@setOnItemClickListener
 				}
 
-				val spannable = SpannableStringBuilder.valueOf(currentPassword.login_email_pattern)
-				val startIndex = currentPassword.login_email_pattern.indexOf('*')
-				val endIndex = currentPassword.login_email_pattern.lastIndexOf('*')
+				val spannable = SpannableStringBuilder.valueOf(currentPassword.loginEmailPattern)
+				val startIndex = currentPassword.loginEmailPattern?.indexOf('*') ?: -1
+				val endIndex = currentPassword.loginEmailPattern?.lastIndexOf('*') ?: -1
 
 				if (startIndex != endIndex && startIndex != -1 && endIndex != -1) {
 					val run = TextStyleRun()
@@ -403,13 +405,13 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 					AlertsCreator.showUpdateAppAlert(parentActivity, context.getString(R.string.UpdateAppAlert), true)
 				}
 
-				if (currentPassword.has_password) {
+				if (currentPassword.hasPassword) {
 					val fragment = TwoStepVerificationActivity()
 					fragment.setPassword(currentPassword)
 					presentFragment(fragment)
 				}
 				else {
-					val type = if (currentPassword.email_unconfirmed_pattern.isNullOrEmpty()) {
+					val type = if (currentPassword.emailUnconfirmedPattern.isNullOrEmpty()) {
 						TwoStepVerificationSetupActivity.TYPE_INTRO
 					}
 					else {
@@ -430,7 +432,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 					messagesController.secretWebpagePreview = 1
 				}
 
-				MessagesController.getGlobalMainSettings().edit().putInt("secretWebpage2", messagesController.secretWebpagePreview).commit()
+				MessagesController.getGlobalMainSettings().edit { putInt("secretWebpage2", messagesController.secretWebpagePreview) }
 
 				if (view is TextCheckCell) {
 					view.isChecked = messagesController.secretWebpagePreview == 1
@@ -466,45 +468,46 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 				val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
 				button?.setTextColor(context.getColor(R.color.purple))
 			}
-			else if (position == contactsSuggestRow) {
-				val cell = view as TextCheckCell
-
-				if (newSuggest) {
-					val parentActivity = parentActivity ?: return@setOnItemClickListener
-
-					val builder = AlertDialog.Builder(parentActivity)
-					builder.setTitle(parentActivity.getString(R.string.SuggestContactsTitle))
-					builder.setMessage(parentActivity.getString(R.string.SuggestContactsAlert))
-
-					builder.setPositiveButton(parentActivity.getString(R.string.MuteDisable)) { _, _ ->
-						val req = TL_payments_clearSavedInfo()
-						req.credentials = clear[1]
-						req.info = clear[0]
-
-						userConfig.tmpPassword = null
-						userConfig.saveConfig(false)
-
-						connectionsManager.sendRequest(req) { _, _ ->
-							AndroidUtilities.runOnUIThread {
-								newSuggest = !newSuggest
-								cell.isChecked = newSuggest
-							}
-						}
-					}
-
-					builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
-
-					val alertDialog = builder.create()
-					showDialog(alertDialog)
-
-					val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
-					button?.setTextColor(parentActivity.getColor(R.color.purple))
-				}
-				else {
-					newSuggest = true
-					cell.isChecked = true
-				}
-			}
+//			else if (position == contactsSuggestRow) {
+//				val cell = view as TextCheckCell
+//
+//				if (newSuggest) {
+//					val parentActivity = parentActivity ?: return@setOnItemClickListener
+//
+//					val builder = AlertDialog.Builder(parentActivity)
+//					builder.setTitle(parentActivity.getString(R.string.SuggestContactsTitle))
+//					builder.setMessage(parentActivity.getString(R.string.SuggestContactsAlert))
+//
+//					builder.setPositiveButton(parentActivity.getString(R.string.MuteDisable)) { _, _ ->
+			// MARK: unsupported on server side
+//						val req = TLRPC.TLPaymentsClearSavedInfo()
+//						req.credentials = clear[1]
+//						req.info = clear[0]
+//
+//						userConfig.tmpPassword = null
+//						userConfig.saveConfig(false)
+//
+//						connectionsManager.sendRequest(req) { _, _ ->
+//							AndroidUtilities.runOnUIThread {
+//								newSuggest = !newSuggest
+//								cell.isChecked = newSuggest
+//							}
+//						}
+//					}
+//
+//					builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
+//
+//					val alertDialog = builder.create()
+//					showDialog(alertDialog)
+//
+//					val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
+//					button?.setTextColor(parentActivity.getColor(R.color.purple))
+//				}
+//				else {
+//					newSuggest = true
+//					cell.isChecked = true
+//				}
+//			}
 			else if (position == newChatsRow) {
 				val cell = view as TextCheckCell
 				archiveChats = !archiveChats
@@ -521,108 +524,108 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 				val parentActivity = parentActivity ?: return@setOnItemClickListener
 				AlertsCreator.showSecretLocationAlert(parentActivity, currentAccount, { listAdapter?.notifyDataSetChanged() }, false)
 			}
-			else if (position == paymentsClearRow) {
-				val parentActivity = parentActivity ?: return@setOnItemClickListener
-
-				val builder = AlertDialog.Builder(parentActivity)
-				builder.setTitle(parentActivity.getString(R.string.PrivacyPaymentsClearAlertTitle))
-				builder.setMessage(parentActivity.getString(R.string.PrivacyPaymentsClearAlertText))
-
-				val linearLayout = LinearLayout(parentActivity)
-				linearLayout.orientation = LinearLayout.VERTICAL
-
-				builder.setView(linearLayout)
-
-				for (a in 0..1) {
-					val name = if (a == 0) {
-						parentActivity.getString(R.string.PrivacyClearShipping)
-					}
-					else {
-						parentActivity.getString(R.string.PrivacyClearPayment)
-					}
-
-					clear[a] = true
-
-					val checkBoxCell = CheckBoxCell(parentActivity, 1, 21)
-					checkBoxCell.tag = a
-					checkBoxCell.background = Theme.getSelectorDrawable(false)
-					checkBoxCell.setPadding(AndroidUtilities.dp(4f), 0, AndroidUtilities.dp(4f), 0)
-
-					linearLayout.addView(checkBoxCell, createLinear(LayoutHelper.MATCH_PARENT, 50))
-
-					checkBoxCell.setText(name, null, checked = true, divider = false)
-					checkBoxCell.setTextColor(parentActivity.getColor(R.color.text))
-
-					checkBoxCell.setOnClickListener {
-						val cell = it as CheckBoxCell
-						val num = cell.tag as Int
-						clear[num] = !clear[num]
-						cell.setChecked(clear[num], true)
-					}
-				}
-
-				builder.setPositiveButton(parentActivity.getString(R.string.ClearButton)) { _, _ ->
-					try {
-						visibleDialog?.dismiss()
-					}
-					catch (e: Exception) {
-						FileLog.e(e)
-					}
-
-					val builder1 = AlertDialog.Builder(parentActivity)
-					builder1.setTitle(parentActivity.getString(R.string.PrivacyPaymentsClearAlertTitle))
-					builder1.setMessage(parentActivity.getString(R.string.PrivacyPaymentsClearAlert))
-
-					builder1.setPositiveButton(parentActivity.getString(R.string.ClearButton)) { _, _ ->
-						val req = TL_payments_clearSavedInfo()
-						req.credentials = clear[1]
-						req.info = clear[0]
-
-						userConfig.tmpPassword = null
-						userConfig.saveConfig(false)
-
-						connectionsManager.sendRequest(req)
-
-						val text = if (clear[0] && clear[1]) {
-							parentActivity.getString(R.string.PrivacyPaymentsPaymentShippingCleared)
-						}
-						else if (clear[0]) {
-							parentActivity.getString(R.string.PrivacyPaymentsShippingInfoCleared)
-						}
-						else if (clear[1]) {
-							parentActivity.getString(R.string.PrivacyPaymentsPaymentInfoCleared)
-						}
-						else {
-							return@setPositiveButton
-						}
-
-						BulletinFactory.of(this@PrivacySettingsActivity).createSimpleBulletin(R.raw.chats_infotip, text).show()
-					}
-
-					builder1.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
-
-					showDialog(builder1.create())
-
-					val alertDialog = builder1.create()
-
-					showDialog(alertDialog)
-
-					val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
-					button?.setTextColor(parentActivity.getColor(R.color.purple))
-				}
-
-				builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
-
-				showDialog(builder.create())
-
-				val alertDialog = builder.create()
-
-				showDialog(alertDialog)
-
-				val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
-
-				button?.setTextColor(parentActivity.getColor(R.color.purple))
-			}
+//			else if (position == paymentsClearRow) {
+//				val parentActivity = parentActivity ?: return@setOnItemClickListener
+//
+//				val builder = AlertDialog.Builder(parentActivity)
+//				builder.setTitle(parentActivity.getString(R.string.PrivacyPaymentsClearAlertTitle))
+//				builder.setMessage(parentActivity.getString(R.string.PrivacyPaymentsClearAlertText))
+//
+//				val linearLayout = LinearLayout(parentActivity)
+//				linearLayout.orientation = LinearLayout.VERTICAL
+//
+//				builder.setView(linearLayout)
+//
+//				for (a in 0..1) {
+//					val name = if (a == 0) {
+//						parentActivity.getString(R.string.PrivacyClearShipping)
+//					}
+//					else {
+//						parentActivity.getString(R.string.PrivacyClearPayment)
+//					}
+//
+//					clear[a] = true
+//
+//					val checkBoxCell = CheckBoxCell(parentActivity, 1, 21)
+//					checkBoxCell.tag = a
+//					checkBoxCell.background = Theme.getSelectorDrawable(false)
+//					checkBoxCell.setPadding(AndroidUtilities.dp(4f), 0, AndroidUtilities.dp(4f), 0)
+//
+//					linearLayout.addView(checkBoxCell, createLinear(LayoutHelper.MATCH_PARENT, 50))
+//
+//					checkBoxCell.setText(name, null, checked = true, divider = false)
+//					checkBoxCell.setTextColor(parentActivity.getColor(R.color.text))
+//
+//					checkBoxCell.setOnClickListener {
+//						val cell = it as CheckBoxCell
+//						val num = cell.tag as Int
+//						clear[num] = !clear[num]
+//						cell.setChecked(clear[num], true)
+//					}
+//				}
+//
+//				builder.setPositiveButton(parentActivity.getString(R.string.ClearButton)) { _, _ ->
+//					try {
+//						visibleDialog?.dismiss()
+//					}
+//					catch (e: Exception) {
+//						FileLog.e(e)
+//					}
+//
+//					val builder1 = AlertDialog.Builder(parentActivity)
+//					builder1.setTitle(parentActivity.getString(R.string.PrivacyPaymentsClearAlertTitle))
+//					builder1.setMessage(parentActivity.getString(R.string.PrivacyPaymentsClearAlert))
+//
+//					builder1.setPositiveButton(parentActivity.getString(R.string.ClearButton)) { _, _ ->
+//						val req = TLPaymentsClearSavedInfo()
+//						req.credentials = clear[1]
+//						req.info = clear[0]
+//
+//						userConfig.tmpPassword = null
+//						userConfig.saveConfig(false)
+//
+//						connectionsManager.sendRequest(req)
+//
+//						val text = if (clear[0] && clear[1]) {
+//							parentActivity.getString(R.string.PrivacyPaymentsPaymentShippingCleared)
+//						}
+//						else if (clear[0]) {
+//							parentActivity.getString(R.string.PrivacyPaymentsShippingInfoCleared)
+//						}
+//						else if (clear[1]) {
+//							parentActivity.getString(R.string.PrivacyPaymentsPaymentInfoCleared)
+//						}
+//						else {
+//							return@setPositiveButton
+//						}
+//
+//						BulletinFactory.of(this@PrivacySettingsActivity).createSimpleBulletin(R.raw.chats_infotip, text).show()
+//					}
+//
+//					builder1.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
+//
+//					showDialog(builder1.create())
+//
+//					val alertDialog = builder1.create()
+//
+//					showDialog(alertDialog)
+//
+//					val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
+//					button?.setTextColor(parentActivity.getColor(R.color.purple))
+//				}
+//
+//				builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
+//
+//				showDialog(builder.create())
+//
+//				val alertDialog = builder.create()
+//
+//				showDialog(alertDialog)
+//
+//				val button = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
+//
+//				button?.setTextColor(parentActivity.getColor(R.color.purple))
+//			}
 			else if (position == passportRow) {
 				presentFragment(PassportActivity(PassportActivity.TYPE_PASSWORD, 0, "", "", null, null, null, null, null))
 			}
@@ -637,7 +640,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 				val privacySettings = contactsController.globalPrivacySettings
 
 				if (privacySettings != null) {
-					archiveChats = privacySettings.archive_and_mute_new_noncontact_peers
+					archiveChats = privacySettings.archiveAndMuteNewNoncontactPeers
 				}
 
 				listAdapter?.notifyDataSetChanged()
@@ -649,7 +652,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 
 			NotificationCenter.didSetOrRemoveTwoStepPassword -> {
 				if (args.isNotEmpty()) {
-					currentPassword = args[0] as account_Password
+					currentPassword = args[0] as TLRPC.TLAccountPassword
 					listAdapter?.notifyItemChanged(passwordRow)
 				}
 				else {
@@ -685,7 +688,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 		passcodeRow = rowCount++
 		passwordRow = rowCount++
 
-		emailLoginRow = if (if (currentPassword != null) currentPassword?.login_email_pattern != null else SharedConfig.hasEmailLogin) {
+		emailLoginRow = if (if (currentPassword != null) currentPassword?.loginEmailPattern != null else SharedConfig.hasEmailLogin) {
 			rowCount++
 		}
 		else {
@@ -693,7 +696,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 		}
 
 		if (currentPassword != null) {
-			val hasEmail = currentPassword?.login_email_pattern != null
+			val hasEmail = currentPassword?.loginEmailPattern != null
 
 			if (SharedConfig.hasEmailLogin != hasEmail) {
 				SharedConfig.hasEmailLogin = hasEmail
@@ -727,13 +730,13 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 			-1
 		}
 
-		paymentsClearRow = rowCount++
+//		paymentsClearRow = rowCount++
 		webSessionsRow = rowCount++
 		botsDetailRow = rowCount++
 		contactsSectionRow = rowCount++
 		contactsDeleteRow = rowCount++
 		contactsSyncRow = rowCount++
-		contactsSuggestRow = rowCount++
+//		contactsSuggestRow = rowCount++
 		contactsDetailRow = rowCount++
 		secretSectionRow = rowCount++
 		secretMapRow = rowCount++
@@ -745,7 +748,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 		}
 	}
 
-	fun setCurrentPassword(currentPassword: account_Password?): PrivacySettingsActivity {
+	fun setCurrentPassword(currentPassword: TLRPC.TLAccountPassword?): PrivacySettingsActivity {
 		this.currentPassword = currentPassword
 
 		if (currentPassword != null) {
@@ -758,7 +761,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 	private fun initPassword() {
 		TwoStepVerificationActivity.initPasswordNewAlgo(currentPassword)
 
-		if (!userConfig.hasSecureData && currentPassword!!.has_secure_values) {
+		if (!userConfig.hasSecureData && currentPassword?.hasSecureValues == true) {
 			userConfig.hasSecureData = true
 			userConfig.saveConfig(false)
 			updateRows()
@@ -766,8 +769,8 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 		else {
 			if (currentPassword != null) {
 				val wasEmailRow = emailLoginRow
-				val appear = currentPassword!!.login_email_pattern != null && emailLoginRow == -1
-				val disappear = currentPassword!!.login_email_pattern == null && emailLoginRow != -1
+				val appear = currentPassword!!.loginEmailPattern != null && emailLoginRow == -1
+				val disappear = currentPassword!!.loginEmailPattern == null && emailLoginRow != -1
 
 				if (appear || disappear) {
 					updateRows(false)
@@ -786,11 +789,11 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 	}
 
 	private fun loadPasswordSettings() {
-		val req = TL_account_getPassword()
+		val req = TLAccountGetPassword()
 
 		connectionsManager.sendRequest(req, { response, _ ->
 			if (response != null) {
-				val password = response as account_Password
+				val password = response as TLRPC.TLAccountPassword
 
 				AndroidUtilities.runOnUIThread {
 					currentPassword = password
@@ -808,7 +811,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 	private inner class ListAdapter(private val mContext: Context) : SelectionAdapter() {
 		override fun isEnabled(holder: RecyclerView.ViewHolder): Boolean {
 			val position = holder.adapterPosition
-			return position == passcodeRow || position == passwordRow || position == blockedRow || position == sessionsRow || position == secretWebpageRow || position == webSessionsRow || position == groupsRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_INVITE) || position == lastSeenRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_LAST_SEEN) || position == callsRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_CALLS) || position == profilePhotoRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_PHOTO) || position == forwardsRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_FORWARDS) || position == phoneNumberRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_PHONE) || position == voicesRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_VOICE_MESSAGES) || position == deleteAccountRow && !contactsController.getLoadingDeleteInfo() || position == newChatsRow && !contactsController.getLoadingGlobalSettings() || position == emailLoginRow || position == paymentsClearRow || position == secretMapRow || position == contactsSyncRow || position == passportRow || position == contactsDeleteRow || position == contactsSuggestRow
+			return position == passcodeRow || position == passwordRow || position == blockedRow || position == sessionsRow || position == secretWebpageRow || position == webSessionsRow || position == groupsRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_INVITE) || position == lastSeenRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_LAST_SEEN) || position == callsRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_CALLS) || position == profilePhotoRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_PHOTO) || position == forwardsRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_FORWARDS) || position == phoneNumberRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_PHONE) || position == voicesRow && !contactsController.getLoadingPrivacyInfo(ContactsController.PRIVACY_RULES_TYPE_VOICE_MESSAGES) || position == deleteAccountRow && !contactsController.getLoadingDeleteInfo() || position == newChatsRow && !contactsController.getLoadingGlobalSettings() || position == emailLoginRow || /*position == paymentsClearRow || */ position == secretMapRow || position == contactsSyncRow || position == passportRow || position == contactsDeleteRow /*|| position == contactsSuggestRow*/
 		}
 
 		override fun getItemCount(): Int {
@@ -869,7 +872,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 							textCell.setTextAndValue(textCell.context.getString(R.string.BlockedUsers), textCell.context.getString(R.string.BlockedEmpty), true)
 						}
 						else if (totalCount > 0) {
-							textCell.setTextAndValue(textCell.context.getString(R.string.BlockedUsers), String.format("%d", totalCount), true)
+							textCell.setTextAndValue(textCell.context.getString(R.string.BlockedUsers), String.format(Locale.getDefault(), "%d", totalCount), true)
 						}
 						else {
 							showLoading = true
@@ -886,7 +889,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 						if (currentPassword == null) {
 							showLoading = true
 						}
-						else if (currentPassword!!.has_password) {
+						else if (currentPassword!!.hasPassword) {
 							value = textCell.context.getString(R.string.PasswordOn)
 						}
 						else {
@@ -1015,9 +1018,9 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 
 						textCell.setTextAndValue(textCell.context.getString(R.string.DeleteAccountIfAwayFor3), value, false)
 					}
-					else if (position == paymentsClearRow) {
-						textCell.setText(textCell.context.getString(R.string.PrivacyPaymentsClear), true)
-					}
+//					else if (position == paymentsClearRow) {
+//						textCell.setText(textCell.context.getString(R.string.PrivacyPaymentsClear), true)
+//					}
 					else if (position == secretMapRow) {
 						value = when (SharedConfig.mapPreviewType) {
 							SharedConfig.MAP_PREVIEW_PROVIDER_ELLO -> textCell.context.getString(R.string.MapPreviewProviderTelegram)
@@ -1123,9 +1126,9 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 							textCheckCell.setTextAndCheck(textCheckCell.context.getString(R.string.SyncContacts), newSync, true)
 						}
 
-						contactsSuggestRow -> {
-							textCheckCell.setTextAndCheck(textCheckCell.context.getString(R.string.SuggestContacts), newSuggest, false)
-						}
+//						contactsSuggestRow -> {
+//							textCheckCell.setTextAndCheck(textCheckCell.context.getString(R.string.SuggestContacts), newSuggest, false)
+//						}
 
 						newChatsRow -> {
 							textCheckCell.setTextAndCheck(textCheckCell.context.getString(R.string.ArchiveAndMute), archiveChats, false)
@@ -1137,7 +1140,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 
 		override fun getItemViewType(position: Int): Int {
 			when (position) {
-				passportRow, lastSeenRow, phoneNumberRow, blockedRow, deleteAccountRow, sessionsRow, webSessionsRow, passwordRow, passcodeRow, groupsRow, paymentsClearRow, secretMapRow, contactsDeleteRow, emailLoginRow -> {
+				passportRow, lastSeenRow, phoneNumberRow, blockedRow, deleteAccountRow, sessionsRow, webSessionsRow, passwordRow, passcodeRow, groupsRow, /*paymentsClearRow, */ secretMapRow, contactsDeleteRow, emailLoginRow -> {
 					return 0
 				}
 
@@ -1149,7 +1152,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 					return 2
 				}
 
-				secretWebpageRow, contactsSyncRow, contactsSuggestRow, newChatsRow -> {
+				secretWebpageRow, contactsSyncRow, /*contactsSuggestRow,*/ newChatsRow -> {
 					return 3
 				}
 
@@ -1169,7 +1172,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 		fun formatRulesString(accountInstance: AccountInstance, rulesType: Int): String {
 			val privacyRules = accountInstance.contactsController.getPrivacyRules(rulesType)
 
-			if (privacyRules == null || privacyRules.size == 0) {
+			if (privacyRules.isNullOrEmpty()) {
 				return if (rulesType == 3) {
 					ApplicationLoader.applicationContext.getString(R.string.P2PNobody)
 				}
@@ -1185,7 +1188,7 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 			for (a in privacyRules.indices) {
 				val rule = privacyRules[a]
 
-				if (rule is TL_privacyValueAllowChatParticipants) {
+				if (rule is TLPrivacyValueAllowChatParticipants) {
 					var b = 0
 					val n = rule.chats.size
 
@@ -1197,12 +1200,12 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 							continue
 						}
 
-						plus += chat.participants_count
+						plus += chat.participantsCount
 
 						b++
 					}
 				}
-				else if (rule is TL_privacyValueDisallowChatParticipants) {
+				else if (rule is TLPrivacyValueDisallowChatParticipants) {
 					var b = 0
 					val n = rule.chats.size
 
@@ -1214,21 +1217,21 @@ class PrivacySettingsActivity : BaseFragment(), NotificationCenterDelegate {
 							continue
 						}
 
-						minus += chat.participants_count
+						minus += chat.participantsCount
 
 						b++
 					}
 				}
-				else if (rule is TL_privacyValueAllowUsers) {
+				else if (rule is TLPrivacyValueAllowUsers) {
 					plus += rule.users.size
 				}
-				else if (rule is TL_privacyValueDisallowUsers) {
+				else if (rule is TLPrivacyValueDisallowUsers) {
 					minus += rule.users.size
 				}
 				else if (type == -1) {
 					type = when (rule) {
-						is TL_privacyValueAllowAll -> 0
-						is TL_privacyValueDisallowAll -> 1
+						is TLPrivacyValueAllowAll -> 0
+						is TLPrivacyValueDisallowAll -> 1
 						else -> 2
 					}
 				}

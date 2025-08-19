@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -12,7 +12,6 @@ import android.content.Context
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
-import android.graphics.drawable.ColorDrawable
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
@@ -24,6 +23,7 @@ import android.view.View.OnClickListener
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearSmoothScroller
@@ -35,10 +35,10 @@ import org.telegram.messenger.MediaDataController
 import org.telegram.messenger.R
 import org.telegram.messenger.Utilities
 import org.telegram.tgnet.SerializedData
-import org.telegram.tgnet.TLRPC.TL_messageMediaPoll
-import org.telegram.tgnet.TLRPC.TL_poll
-import org.telegram.tgnet.TLRPC.TL_pollAnswer
-import org.telegram.tgnet.TLRPC.TL_pollResults
+import org.telegram.tgnet.TLRPC.TLMessageMediaPoll
+import org.telegram.tgnet.TLRPC.TLPoll
+import org.telegram.tgnet.TLRPC.TLPollAnswer
+import org.telegram.tgnet.TLRPC.TLPollResults
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.Theme
@@ -351,12 +351,14 @@ class ChatAttachAlertPollLayout(alert: ChatAttachAlert, context: Context) : Atta
 				return
 			}
 
-			val poll = TL_messageMediaPoll()
-			poll.poll = TL_poll()
-			poll.poll.multiple_choice = multipleChoice
-			poll.poll.quiz = quizPoll
-			poll.poll.public_voters = !anonymousPoll
-			poll.poll.question = getFixedString(questionString)?.toString()
+			val poll = TLMessageMediaPoll()
+
+			poll.poll = TLPoll().also {
+				it.multipleChoice = multipleChoice
+				it.quiz = quizPoll
+				it.publicVoters = !anonymousPoll
+				it.question = getFixedString(questionString)?.toString()
+			}
 
 			val serializedData = SerializedData(10)
 
@@ -365,37 +367,38 @@ class ChatAttachAlertPollLayout(alert: ChatAttachAlert, context: Context) : Atta
 					continue
 				}
 
-				val answer = TL_pollAnswer()
+				val answer = TLPollAnswer()
 				answer.text = getFixedString(answers[a])?.toString()
-				answer.option = ByteArray(1)
-				answer.option[0] = (48 + poll.poll.answers.size).toByte()
+				answer.option = ByteArray(1).also {
+					it[0] = (48 + poll.poll!!.answers.size).toByte()
+				}
 
-				poll.poll.answers.add(answer)
+				poll.poll?.answers?.add(answer)
 
 				if ((multipleChoice || quizPoll) && answersChecks[a]) {
-					serializedData.writeByte(answer.option[0])
+					serializedData.writeByte(answer.option!![0])
 				}
 			}
 
 			val params = HashMap<String, String>()
 			params["answers"] = Utilities.bytesToHex(serializedData.toByteArray())
 
-			poll.results = TL_pollResults()
+			poll.results = TLPollResults()
 
 			val solution = getFixedString(solutionString)
 
 			if (solution != null) {
-				poll.results.solution = solution.toString()
+				poll.results?.solution = solution.toString()
 
 				val message: Array<CharSequence?> = arrayOf(solution)
 				val entities = MediaDataController.getInstance(parentAlert.currentAccount).getEntities(message, true)
 
 				if (!entities.isNullOrEmpty()) {
-					poll.results.solution_entities = ArrayList(entities)
+					poll.results?.solutionEntities?.addAll(entities)
 				}
 
-				if (!poll.results.solution.isNullOrEmpty()) {
-					poll.results.flags = poll.results.flags or 16
+				if (!poll.results?.solution.isNullOrEmpty()) {
+					poll.results?.flags = poll.results!!.flags or 16
 				}
 			}
 
@@ -738,7 +741,7 @@ class ChatAttachAlertPollLayout(alert: ChatAttachAlert, context: Context) : Atta
 	}
 
 	fun interface PollCreateActivityDelegate {
-		fun sendPoll(poll: TL_messageMediaPoll, params: HashMap<String, String>, notify: Boolean, scheduleDate: Int)
+		fun sendPoll(poll: TLMessageMediaPoll, params: HashMap<String, String>, notify: Boolean, scheduleDate: Int)
 	}
 
 	private class EmptyView(context: Context) : View(context)
@@ -824,7 +827,7 @@ class ChatAttachAlertPollLayout(alert: ChatAttachAlert, context: Context) : Atta
 					val cell = holder.itemView as TextInfoPrivacyCell
 					val drawable = Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow)
 
-					val combinedDrawable = CombinedDrawable(ColorDrawable(ResourcesCompat.getColor(resources, R.color.light_background, null)), drawable)
+					val combinedDrawable = CombinedDrawable(ResourcesCompat.getColor(resources, R.color.light_background, null).toDrawable(), drawable)
 					combinedDrawable.setFullSize(true)
 
 					cell.background = combinedDrawable
@@ -965,7 +968,7 @@ class ChatAttachAlertPollLayout(alert: ChatAttachAlert, context: Context) : Atta
 
 					val drawable = Theme.getThemedDrawable(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow)
 
-					val combinedDrawable = CombinedDrawable(ColorDrawable(ResourcesCompat.getColor(mContext.resources, R.color.light_background, null)), drawable)
+					val combinedDrawable = CombinedDrawable(ResourcesCompat.getColor(mContext.resources, R.color.light_background, null).toDrawable(), drawable)
 					combinedDrawable.setFullSize(true)
 
 					view.setBackground(combinedDrawable)

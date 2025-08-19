@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Adapters
 
@@ -19,13 +19,12 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.RequestDelegate
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
-import org.telegram.tgnet.tlrpc.TL_contacts_found
-import org.telegram.tgnet.tlrpc.TL_contacts_search
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.userId
 import org.telegram.ui.Adapters.DialogsSearchAdapter.RecentSearchObject
 import org.telegram.ui.ChatUsersActivity
 import org.telegram.ui.Components.ShareAlert
@@ -50,7 +49,7 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 		val excludeUsers: LongSparseArray<User>?
 			get() = null
 
-		val excludeCallParticipants: LongSparseArray<TLRPC.TL_groupCallParticipant>?
+		val excludeCallParticipants: LongSparseArray<TLRPC.TLGroupCallParticipant>?
 			get() = null
 
 		fun canApplySearchResults(searchId: Int): Boolean {
@@ -120,34 +119,34 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 
 		if (query.isNotEmpty()) {
 			if (channelId != 0L) {
-				val req = TLRPC.TL_channels_getParticipants()
+				val req = TLRPC.TLChannelsGetParticipants()
 
 				when (type) {
 					ChatUsersActivity.TYPE_ADMIN -> {
-						req.filter = TLRPC.TL_channelParticipantsAdmins()
+						req.filter = TLRPC.TLChannelParticipantsAdmins()
 					}
 
 					ChatUsersActivity.TYPE_KICKED -> {
-						req.filter = TLRPC.TL_channelParticipantsBanned()
+						req.filter = TLRPC.TLChannelParticipantsBanned()
 					}
 
 					ChatUsersActivity.TYPE_BANNED -> {
-						req.filter = TLRPC.TL_channelParticipantsKicked()
+						req.filter = TLRPC.TLChannelParticipantsKicked()
 					}
 
 					else -> {
-						req.filter = TLRPC.TL_channelParticipantsSearch()
+						req.filter = TLRPC.TLChannelParticipantsSearch()
 					}
 				}
 
-				req.filter.q = query
+				req.filter?.q = query
 				req.limit = 50
 				req.offset = 0
 				req.channel = MessagesController.getInstance(currentAccount).getInputChannel(channelId)
 
 				requests.add(Pair(req, RequestDelegate { response, error ->
 					if (error == null) {
-						val res = response as TL_channels_channelParticipants
+						val res = response as TLRPC.TLChannelsChannelParticipants
 
 						lastFoundChannel = query.lowercase()
 
@@ -165,7 +164,12 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 
 						while (a < n) {
 							val participant = res.participants[a]
-							val peerId = MessageObject.getPeerId(participant.peer)
+
+							var peerId = MessageObject.getPeerId(participant.peer)
+
+							if (peerId == 0L) {
+								peerId = participant.userId
+							}
 
 							if (!allowSelf && peerId == currentUserId) {
 								groupSearch.remove(participant)
@@ -192,14 +196,14 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 
 		if (allowUsername) {
 			if (query.isNotEmpty()) {
-				val req = TL_contacts_search()
+				val req = TLRPC.TLContactsSearch()
 				req.q = query
 				req.limit = 20
 
 				requests.add(Pair(req, RequestDelegate { response, error ->
 					if (delegate?.canApplySearchResults(searchId) == true) {
 						if (error == null) {
-							val res = response as TL_contacts_found
+							val res = response as TLRPC.TLContactsFound
 							globalSearch.clear()
 							globalSearchMap.clear()
 							localServerSearch.clear()
@@ -239,14 +243,14 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 									var user: User? = null
 									var chat: TLRPC.Chat? = null
 
-									if (peer.user_id != 0L) {
-										user = usersMap[peer.user_id]
+									if (peer.userId != 0L) {
+										user = usersMap[peer.userId]
 									}
-									else if (peer.chat_id != 0L) {
-										chat = chatsMap[peer.chat_id]
+									else if (peer.chatId != 0L) {
+										chat = chatsMap[peer.chatId]
 									}
-									else if (peer.channel_id != 0L) {
-										chat = chatsMap[peer.channel_id]
+									else if (peer.channelId != 0L) {
+										chat = chatsMap[peer.channelId]
 									}
 
 									if (chat != null) {
@@ -257,8 +261,8 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 										globalSearch.add(chat)
 										globalSearchMap.put(-chat.id, chat)
 									}
-									else if (user != null) {
-										if (canAddGroupsOnly || !allowBots && user.bot || !allowSelf && user.self || !allowGlobalResults && b == 1 && !user.contact) {
+									else if (user != null && user is TLRPC.TLUser) {
+										if (canAddGroupsOnly || !allowBots && user.bot || !allowSelf && user.isSelf || !allowGlobalResults && b == 1 && !user.contact) {
 											continue
 										}
 
@@ -274,14 +278,14 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 									var user: User? = null
 									var chat: TLRPC.Chat? = null
 
-									if (peer.user_id != 0L) {
-										user = usersMap[peer.user_id]
+									if (peer.userId != 0L) {
+										user = usersMap[peer.userId]
 									}
-									else if (peer.chat_id != 0L) {
-										chat = chatsMap[peer.chat_id]
+									else if (peer.chatId != 0L) {
+										chat = chatsMap[peer.chatId]
 									}
-									else if (peer.channel_id != 0L) {
-										chat = chatsMap[peer.channel_id]
+									else if (peer.channelId != 0L) {
+										chat = chatsMap[peer.channelId]
 									}
 
 									if (chat != null) {
@@ -292,8 +296,8 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 										localServerSearch.add(chat)
 										globalSearchMap.put(-chat.id, chat)
 									}
-									else if (user != null) {
-										if (canAddGroupsOnly || !allowBots && user.bot || !allowSelf && user.self) {
+									else if (user != null && user is TLRPC.TLUser) {
+										if (canAddGroupsOnly || !allowBots && user.bot || !allowSelf && user.isSelf) {
 											continue
 										}
 
@@ -321,7 +325,7 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 		}
 
 		val gotResponses = AtomicInteger(0)
-		val responses = ArrayList<Pair<TLObject, TL_error>?>()
+		val responses = ArrayList<Pair<TLObject, TLRPC.TLError>?>()
 
 		for (i in requests.indices) {
 			val r = requests[i]
@@ -453,10 +457,10 @@ class SearchAdapterHelper(private val allResultsAreGlobal: Boolean) {
 			val `object` = participants[a]
 
 			if (`object` is TLRPC.ChatParticipant) {
-				groupSearchMap.put(`object`.user_id, `object`)
+				groupSearchMap.put(`object`.userId, `object`)
 			}
 			else if (`object` is TLRPC.ChannelParticipant) {
-				groupSearchMap.put(MessageObject.getPeerId(`object`.peer), `object`)
+				groupSearchMap.put(`object`.userId, `object`)
 			}
 
 			a++

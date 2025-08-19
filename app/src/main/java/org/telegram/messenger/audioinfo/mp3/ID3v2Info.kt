@@ -21,7 +21,6 @@ import org.telegram.messenger.audioinfo.AudioInfo
 import org.telegram.messenger.audioinfo.mp3.ID3v1Genre.Companion.getGenre
 import java.io.IOException
 import java.io.InputStream
-import java.util.Locale
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.math.max

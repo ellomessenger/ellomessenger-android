@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -17,7 +17,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.drawable.BitmapDrawable
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -44,8 +43,11 @@ import androidx.annotation.UiThread
 import androidx.collection.LongSparseArray
 import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.scale
+import androidx.core.util.isEmpty
+import androidx.core.util.size
 import androidx.core.view.inputmethod.InputContentInfoCompat
-import org.json.JSONObject
 import org.telegram.messenger.MediaController.SearchImage
 import org.telegram.messenger.MessagesStorage.LongCallback
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
@@ -56,16 +58,10 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.messageobject.SendAnimationData
 import org.telegram.messenger.support.SparseLongArray
 import org.telegram.messenger.utils.getImageDimensions
-import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.ElloRpc
+import org.telegram.tgnet.*
 import org.telegram.tgnet.ElloRpc.readData
-import org.telegram.tgnet.NativeByteBuffer
-import org.telegram.tgnet.RequestDelegate
-import org.telegram.tgnet.SerializedData
-import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.BotInlineResult
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.DecryptedMessage
 import org.telegram.tgnet.TLRPC.EncryptedChat
 import org.telegram.tgnet.TLRPC.InputCheckPasswordSRP
 import org.telegram.tgnet.TLRPC.InputDocument
@@ -74,186 +70,15 @@ import org.telegram.tgnet.TLRPC.InputMedia
 import org.telegram.tgnet.TLRPC.InputPeer
 import org.telegram.tgnet.TLRPC.InputStickerSet
 import org.telegram.tgnet.TLRPC.KeyboardButton
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.MessageEntity
 import org.telegram.tgnet.TLRPC.MessageMedia
-import org.telegram.tgnet.TLRPC.MessageReplies
 import org.telegram.tgnet.TLRPC.Peer
 import org.telegram.tgnet.TLRPC.PhotoSize
 import org.telegram.tgnet.TLRPC.ReplyMarkup
-import org.telegram.tgnet.TLRPC.TL_account_getPassword
-import org.telegram.tgnet.TLRPC.TL_botInlineMediaResult
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaAuto
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaContact
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaGeo
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaInvoice
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageText
-import org.telegram.tgnet.TLRPC.TL_dataJSON
-import org.telegram.tgnet.TLRPC.TL_decryptedMessage
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionAbortKey
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionAcceptKey
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionCommitKey
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionDeleteMessages
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionFlushHistory
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionNoop
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionNotifyLayer
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionReadMessages
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionRequestKey
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionResend
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionScreenshotMessages
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionSetMessageTTL
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionTyping
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaContact
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaEmpty
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaExternalDocument
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaGeoPoint
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaVideo
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageMediaWebPage
-import org.telegram.tgnet.TLRPC.TL_decryptedMessage_layer45
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAnimated
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAudio
-import org.telegram.tgnet.TLRPC.TL_documentAttributeFilename
-import org.telegram.tgnet.TLRPC.TL_documentAttributeHasStickers
-import org.telegram.tgnet.TLRPC.TL_documentAttributeImageSize
-import org.telegram.tgnet.TLRPC.TL_documentAttributeSticker
-import org.telegram.tgnet.TLRPC.TL_documentAttributeSticker_layer55
-import org.telegram.tgnet.TLRPC.TL_documentAttributeVideo
-import org.telegram.tgnet.TLRPC.TL_document_layer82
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.TLRPC.TL_fileLocationUnavailable
-import org.telegram.tgnet.TLRPC.TL_fileLocation_layer82
-import org.telegram.tgnet.TLRPC.TL_game
-import org.telegram.tgnet.TLRPC.TL_geoPoint
-import org.telegram.tgnet.TLRPC.TL_inputCheckPasswordEmpty
-import org.telegram.tgnet.TLRPC.TL_inputDocument
-import org.telegram.tgnet.TLRPC.TL_inputEncryptedFile
-import org.telegram.tgnet.TLRPC.TL_inputGeoPoint
-import org.telegram.tgnet.TLRPC.TL_inputInvoiceMessage
-import org.telegram.tgnet.TLRPC.TL_inputMediaContact
-import org.telegram.tgnet.TLRPC.TL_inputMediaDice
-import org.telegram.tgnet.TLRPC.TL_inputMediaDocument
-import org.telegram.tgnet.TLRPC.TL_inputMediaGame
-import org.telegram.tgnet.TLRPC.TL_inputMediaGeoLive
-import org.telegram.tgnet.TLRPC.TL_inputMediaGeoPoint
-import org.telegram.tgnet.TLRPC.TL_inputMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_inputMediaPoll
-import org.telegram.tgnet.TLRPC.TL_inputMediaUploadedDocument
-import org.telegram.tgnet.TLRPC.TL_inputMediaUploadedPhoto
-import org.telegram.tgnet.TLRPC.TL_inputMediaVenue
-import org.telegram.tgnet.TLRPC.TL_inputPeerChannel
-import org.telegram.tgnet.TLRPC.TL_inputPeerChat
-import org.telegram.tgnet.TLRPC.TL_inputPeerEmpty
-import org.telegram.tgnet.TLRPC.TL_inputPeerSelf
-import org.telegram.tgnet.TLRPC.TL_inputPeerUser
-import org.telegram.tgnet.TLRPC.TL_inputPhoto
-import org.telegram.tgnet.TLRPC.TL_inputSingleMedia
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetEmpty
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetID
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetItem
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetShortName
-import org.telegram.tgnet.TLRPC.TL_inputUserSelf
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonBuy
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonGame
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonRow
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonSwitchInline
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonUrl
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonUrlAuth
-import org.telegram.tgnet.TLRPC.TL_messageActionScreenshotTaken
-import org.telegram.tgnet.TLRPC.TL_messageEncryptedAction
-import org.telegram.tgnet.TLRPC.TL_messageFwdHeader
-import org.telegram.tgnet.TLRPC.TL_messageMediaContact
-import org.telegram.tgnet.TLRPC.TL_messageMediaDice
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_messageMediaEmpty
-import org.telegram.tgnet.TLRPC.TL_messageMediaGame
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeo
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeoLive
-import org.telegram.tgnet.TLRPC.TL_messageMediaInvoice
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messageMediaPoll
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_messageMediaWebPage
-import org.telegram.tgnet.TLRPC.TL_messageReplies
-import org.telegram.tgnet.TLRPC.TL_messageReplyHeader
-import org.telegram.tgnet.TLRPC.TL_messageService
-import org.telegram.tgnet.TLRPC.TL_message_secret
-import org.telegram.tgnet.TLRPC.TL_messages_botCallbackAnswer
-import org.telegram.tgnet.TLRPC.TL_messages_forwardMessages
-import org.telegram.tgnet.TLRPC.TL_messages_getBotCallbackAnswer
-import org.telegram.tgnet.TLRPC.TL_messages_getStickerSet
-import org.telegram.tgnet.TLRPC.TL_messages_historyImport
-import org.telegram.tgnet.TLRPC.TL_messages_initHistoryImport
-import org.telegram.tgnet.TLRPC.TL_messages_requestUrlAuth
-import org.telegram.tgnet.TLRPC.TL_messages_sendEncryptedMultiMedia
-import org.telegram.tgnet.TLRPC.TL_messages_sendInlineBotResult
-import org.telegram.tgnet.TLRPC.TL_messages_sendMedia
-import org.telegram.tgnet.TLRPC.TL_messages_sendMessage
-import org.telegram.tgnet.TLRPC.TL_messages_sendMultiMedia
-import org.telegram.tgnet.TLRPC.TL_messages_sendReaction
-import org.telegram.tgnet.TLRPC.TL_messages_sendScreenshotNotification
-import org.telegram.tgnet.TLRPC.TL_messages_sendVote
-import org.telegram.tgnet.TLRPC.TL_messages_startHistoryImport
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
-import org.telegram.tgnet.TLRPC.TL_messages_uploadImportedMedia
-import org.telegram.tgnet.TLRPC.TL_messages_uploadMedia
-import org.telegram.tgnet.TLRPC.TL_payments_getPaymentForm
-import org.telegram.tgnet.TLRPC.TL_payments_getPaymentReceipt
-import org.telegram.tgnet.TLRPC.TL_payments_paymentForm
-import org.telegram.tgnet.TLRPC.TL_payments_paymentReceipt
-import org.telegram.tgnet.TLRPC.TL_peerChannel
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.TLRPC.TL_photoCachedSize
-import org.telegram.tgnet.TLRPC.TL_photoEmpty
-import org.telegram.tgnet.TLRPC.TL_photoPathSize
-import org.telegram.tgnet.TLRPC.TL_photoSize
-import org.telegram.tgnet.TLRPC.TL_photoSizeEmpty
-import org.telegram.tgnet.TLRPC.TL_photoSizeProgressive
-import org.telegram.tgnet.TLRPC.TL_photoSize_layer127
-import org.telegram.tgnet.TLRPC.TL_photoStrippedSize
-import org.telegram.tgnet.TLRPC.TL_pollAnswer
-import org.telegram.tgnet.TLRPC.TL_replyInlineMarkup
-import org.telegram.tgnet.TLRPC.TL_restrictionReason
-import org.telegram.tgnet.TLRPC.TL_stickers_createStickerSet
-import org.telegram.tgnet.TLRPC.TL_updateEditChannelMessage
-import org.telegram.tgnet.TLRPC.TL_updateEditMessage
-import org.telegram.tgnet.TLRPC.TL_updateMessageID
-import org.telegram.tgnet.TLRPC.TL_updateNewChannelMessage
-import org.telegram.tgnet.TLRPC.TL_updateNewMessage
-import org.telegram.tgnet.TLRPC.TL_updateNewScheduledMessage
-import org.telegram.tgnet.TLRPC.TL_updateShortSentMessage
-import org.telegram.tgnet.TLRPC.TL_urlAuthResultAccepted
-import org.telegram.tgnet.TLRPC.TL_urlAuthResultDefault
-import org.telegram.tgnet.TLRPC.TL_urlAuthResultRequest
-import org.telegram.tgnet.TLRPC.TL_user
-import org.telegram.tgnet.TLRPC.TL_userContact_old2
-import org.telegram.tgnet.TLRPC.TL_userRequest_old2
-import org.telegram.tgnet.TLRPC.TL_webDocument
-import org.telegram.tgnet.TLRPC.TL_webPagePending
-import org.telegram.tgnet.TLRPC.TL_webPageUrlPending
 import org.telegram.tgnet.TLRPC.Updates
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.tgnet.TLRPC.WebPage
-import org.telegram.tgnet.TLRPC.account_Password
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.MessageEntity
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_message
-import org.telegram.tgnet.tlrpc.TL_messageEntityBold
-import org.telegram.tgnet.tlrpc.TL_messageEntityCode
-import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_messageEntityItalic
-import org.telegram.tgnet.tlrpc.TL_messageEntityPre
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
-import org.telegram.tgnet.tlrpc.TL_messageEntityUrl
-import org.telegram.tgnet.tlrpc.TL_messages_editMessage
-import org.telegram.tgnet.tlrpc.TL_messages_messages
-import org.telegram.tgnet.tlrpc.TL_reactionCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
-import org.telegram.tgnet.tlrpc.User
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
@@ -268,7 +93,6 @@ import org.telegram.ui.Components.LayoutHelper.createLinear
 import org.telegram.ui.Components.Premium.LimitReachedBottomSheet
 import org.telegram.ui.Components.Reactions.ReactionsUtils
 import org.telegram.ui.Components.Reactions.VisibleReaction
-import org.telegram.ui.PaymentFormActivity
 import org.telegram.ui.TwoStepVerificationActivity
 import org.telegram.ui.TwoStepVerificationSetupActivity
 import java.io.File
@@ -290,29 +114,29 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 class SendMessagesHelper(instance: Int) : BaseController(instance), NotificationCenterDelegate {
-	private val delayedMessages = HashMap<String, ArrayList<DelayedMessage>>()
+	private val delayedMessages = HashMap<String, MutableList<DelayedMessage>>()
 	private val unsentMessages = SparseArray<MessageObject>()
 	private val sendingMessages = SparseArray<Message>()
 	private val editingMessages = SparseArray<Message>()
 	private val uploadMessages = SparseArray<Message>()
 	private val sendingMessagesIdDialogs = LongSparseArray<Int>()
 	private val uploadingMessagesIdDialogs = LongSparseArray<Int>()
-	private val waitingForLocation = HashMap<String, MessageObject>()
-	private val waitingForCallback = HashMap<String, Boolean>()
-	private val waitingForVote = HashMap<String, ByteArray>()
+	private val waitingForLocation = mutableMapOf<String, MessageObject>()
+	private val waitingForCallback = mutableMapOf<String, Boolean>()
+	private val waitingForVote = mutableMapOf<String, ByteArray>()
 	private val voteSendTime = LongSparseArray<Long>()
-	private val importingHistoryFiles = HashMap<String, ImportingHistory>()
-	private val importingHistoryMap = LongSparseArray<ImportingHistory?>()
-	private val importingStickersFiles = HashMap<String, ImportingStickers>()
-	private val importingStickersMap = HashMap<String, ImportingStickers?>()
+	private val importingHistoryFiles = mutableMapOf<String, ImportingHistory>()
+	private val importingHistoryMap = LongSparseArray<ImportingHistory>()
+	private val importingStickersFiles = mutableMapOf<String, ImportingStickers>()
+	private val importingStickersMap = mutableMapOf<String, ImportingStickers>()
 
 	inner class ImportingHistory {
 		var historyPath: String? = null
-		var mediaPaths = ArrayList<Uri>()
-		var uploadSet = HashSet<String>()
-		private var uploadProgresses = HashMap<String, Float>()
-		private var uploadSize = HashMap<String, Long>()
-		var uploadMedia = ArrayList<String>()
+		var mediaPaths = mutableListOf<Uri>()
+		var uploadSet = mutableSetOf<String>()
+		private var uploadProgresses = mutableMapOf<String, Float>()
+		private var uploadSize = mutableMapOf<String, Long>()
+		var uploadMedia = mutableListOf<String>()
 		var peer: InputPeer? = null
 		var totalCount: Long = 0
 		var uploadedCount: Long = 0
@@ -329,14 +153,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		var timeUntilFinish = Int.MAX_VALUE
 
 		fun initImport(inputFile: TLRPC.InputFile) {
-			val req = TL_messages_initHistoryImport()
+			val req = TLRPC.TLMessagesInitHistoryImport()
 			req.file = inputFile
-			req.media_count = mediaPaths.size
+			req.mediaCount = mediaPaths.size
 			req.peer = peer
 
 			connectionsManager.sendRequest(req, { response, error ->
 				AndroidUtilities.runOnUIThread {
-					if (response is TL_messages_historyImport) {
+					if (response is TLRPC.TLMessagesHistoryImport) {
 						importId = response.id
 						uploadSet.remove(historyPath)
 
@@ -364,11 +188,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (path == historyPath) {
 				importingHistoryMap.remove(dialogId)
 
-				val error = TL_error()
+				val error = TLRPC.TLError()
 				error.code = 400
 				error.text = "IMPORT_UPLOAD_FAILED"
 
-				notificationCenter.postNotificationName(NotificationCenter.historyImportProgressChanged, dialogId, TL_messages_initHistoryImport(), error)
+				notificationCenter.postNotificationName(NotificationCenter.historyImportProgressChanged, dialogId, TLRPC.TLMessagesInitHistoryImport(), error)
 			}
 			else {
 				uploadSet.remove(path)
@@ -415,17 +239,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		fun onMediaImport(path: String, size: Long, inputFile: TLRPC.InputFile) {
 			addUploadProgress(path, size, 1.0f)
 
-			val req = TL_messages_uploadImportedMedia()
+			val req = TLRPC.TLMessagesUploadImportedMedia()
 			req.peer = peer
-			req.import_id = importId
-			req.file_name = File(path).name
+			req.importId = importId
+			req.fileName = File(path).name
 
 			val myMime = MimeTypeMap.getSingleton()
 			var ext = "txt"
-			val idx = req.file_name.lastIndexOf('.')
+			val idx = req.fileName?.lastIndexOf('.') ?: -1
 
 			if (idx != -1) {
-				ext = req.file_name.substring(idx + 1).lowercase(Locale.getDefault())
+				ext = req.fileName?.substring(idx + 1)?.lowercase() ?: "txt"
 			}
 
 			var mimeType = myMime.getMimeTypeFromExtension(ext)
@@ -439,15 +263,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			if (mimeType == "image/jpg" || mimeType == "image/jpeg") {
-				val inputMediaUploadedPhoto = TL_inputMediaUploadedPhoto()
+				val inputMediaUploadedPhoto = TLRPC.TLInputMediaUploadedPhoto()
 				inputMediaUploadedPhoto.file = inputFile
 
 				req.media = inputMediaUploadedPhoto
 			}
 			else {
-				val inputMediaDocument = TL_inputMediaUploadedDocument()
+				val inputMediaDocument = TLRPC.TLInputMediaUploadedDocument()
 				inputMediaDocument.file = inputFile
-				inputMediaDocument.mime_type = mimeType
+				inputMediaDocument.mimeType = mimeType
 
 				req.media = inputMediaDocument
 			}
@@ -466,9 +290,9 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		}
 
 		private fun startImport() {
-			val req = TL_messages_startHistoryImport()
+			val req = TLRPC.TLMessagesStartHistoryImport()
 			req.peer = peer
-			req.import_id = importId
+			req.importId = importId
 
 			connectionsManager.sendRequest(req) { _, error ->
 				AndroidUtilities.runOnUIThread {
@@ -509,26 +333,35 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		@JvmField
 		var animated = false
 
-		var item: TL_inputStickerSetItem? = null
+		var item: TLRPC.TLInputStickerSetItem? = null
 
 		fun uploadMedia(account: Int, inputFile: TLRPC.InputFile, onFinish: Runnable) {
-			val req = TL_messages_uploadMedia()
-			req.peer = TL_inputPeerSelf()
-			req.media = TL_inputMediaUploadedDocument()
-			req.media.file = inputFile
-			req.media.mime_type = mimeType
+			val req = TLRPC.TLMessagesUploadMedia()
+			req.peer = TLRPC.TLInputPeerSelf()
+
+			req.media = TLRPC.TLInputMediaUploadedDocument().also {
+				it.file = inputFile
+				it.mimeType = mimeType
+			}
 
 			ConnectionsManager.getInstance(account).sendRequest(req, { response, _ ->
 				AndroidUtilities.runOnUIThread {
-					if (response is TL_messageMediaDocument) {
-						item = TL_inputStickerSetItem()
-						item?.document = TL_inputDocument()
-						item?.document?.id = response.document.id
-						item?.document?.access_hash = response.document.access_hash
-						item?.document?.file_reference = response.document.file_reference
-						item?.emoji = if (emoji != null) emoji else ""
+					if (response is TLRPC.TLMessageMediaDocument) {
+						val doc = response.document
 
-						mimeType = response.document.mime_type
+						if (doc is TLRPC.TLDocument) {
+							item = TLRPC.TLInputStickerSetItem()
+
+							item?.document = TLRPC.TLInputDocument().also {
+								it.id = doc.id
+								it.accessHash = doc.accessHash
+								it.fileReference = doc.fileReference
+							}
+
+							item?.emoji = emoji ?: ""
+
+							mimeType = doc.mimeType
+						}
 					}
 					else if (animated) {
 						mimeType = "application/x-bad-tgsticker"
@@ -541,10 +374,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	inner class ImportingStickers {
-		var uploadSet = HashMap<String, ImportingSticker>()
-		private var uploadProgresses = HashMap<String, Float>()
-		private var uploadSize = HashMap<String, Long>()
-		var uploadMedia = ArrayList<ImportingSticker>()
+		var uploadSet = mutableMapOf<String, ImportingSticker>()
+		private var uploadProgresses = mutableMapOf<String, Float>()
+		private var uploadSize = mutableMapOf<String, Long>()
+		var uploadMedia = mutableListOf<ImportingSticker>()
 		var shortName: String? = null
 		var title: String? = null
 		var software: String? = null
@@ -631,10 +464,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		}
 
 		fun startImport() {
-			val req = TL_stickers_createStickerSet()
-			req.user_id = TL_inputUserSelf()
+			val req = TLRPC.TLStickersCreateStickerSet()
+			req.userId = TLRPC.TLInputUserSelf()
 			req.title = title
-			req.short_name = shortName
+			req.shortName = shortName
 			req.animated = uploadMedia[0].animated
 
 			if (software != null) {
@@ -658,7 +491,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						notificationCenter.postNotificationName(NotificationCenter.stickersImportProgressChanged, shortName, req, error)
 					}
 
-					if (response is TL_messages_stickerSet) {
+					if (response is TLRPC.TLMessagesStickerSet) {
 						if (notificationCenter.hasObservers(NotificationCenter.stickersImportComplete)) {
 							notificationCenter.postNotificationName(NotificationCenter.stickersImportComplete, response)
 						}
@@ -681,7 +514,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 	private class MediaSendPrepareWorker {
 		@Volatile
-		var photo: TL_photo? = null
+		var photo: TLRPC.TLPhoto? = null
 
 		@Volatile
 		var parentObject: String? = null
@@ -990,11 +823,12 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				val request = requests[a]
 
 				when (val innerRequest = request.request) {
-					is TL_messages_sendEncryptedMultiMedia -> {
-						secretChatHelper.performSendEncryptedRequest(innerRequest, this)
-					}
+					// MARK: uncomment to enable secret chats
+//					is TLRPC.TLMessagesSendEncryptedMultiMedia -> {
+//						secretChatHelper.performSendEncryptedRequest(innerRequest, this)
+//					}
 
-					is TL_messages_sendMultiMedia -> {
+					is TLRPC.TLMessagesSendMultiMedia -> {
 						performSendMessageRequestMulti(innerRequest, request.msgObjs, request.originalPaths, request.parentObjects, request.delayedMessage, request.scheduled)
 					}
 
@@ -1011,7 +845,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (type == 4) {
 				messageObjects?.forEach { obj ->
 					messagesStorage.markMessageAsSendError(obj.messageOwner, obj.scheduled)
-					obj.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+					obj.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 					notificationCenter.postNotificationName(NotificationCenter.messageSendError, obj.id)
 					processSentMessage(obj.id)
 					removeFromUploadingMessages(obj.id, scheduled)
@@ -1021,7 +855,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 			else {
 				messagesStorage.markMessageAsSendError(obj!!.messageOwner, obj!!.scheduled)
-				obj?.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+				obj?.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 				notificationCenter.postNotificationName(NotificationCenter.messageSendError, obj!!.id)
 				processSentMessage(obj!!.id)
 				removeFromUploadingMessages(obj!!.id, scheduled)
@@ -1050,284 +884,245 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {
-		if (id == NotificationCenter.fileUploadProgressChanged) {
-			val fileName = args[0] as String
-			val importingHistory = importingHistoryFiles[fileName]
+		when (id) {
+			NotificationCenter.fileUploadProgressChanged -> {
+				val fileName = args[0] as String
+				val importingHistory = importingHistoryFiles[fileName]
 
-			if (importingHistory != null) {
-				val loadedSize = args[1] as Long
-				val totalSize = args[2] as Long
-				importingHistory.addUploadProgress(fileName, loadedSize, loadedSize / totalSize.toFloat())
-			}
-			val importingStickers = importingStickersFiles[fileName]
-			if (importingStickers != null) {
-				val loadedSize = args[1] as Long
-				val totalSize = args[2] as Long
-				importingStickers.addUploadProgress(fileName, loadedSize, loadedSize / totalSize.toFloat())
-			}
-		}
-		else if (id == NotificationCenter.fileUploaded) {
-			val location = args[0] as String
-			val file = args[1] as? TLRPC.InputFile
-			val encryptedFile = args[2] as? InputEncryptedFile
-			val importingHistory = importingHistoryFiles[location]
-
-			if (importingHistory != null && file != null) {
-				if (location == importingHistory.historyPath) {
-					importingHistory.initImport(file)
+				if (importingHistory != null) {
+					val loadedSize = args[1] as Long
+					val totalSize = args[2] as Long
+					importingHistory.addUploadProgress(fileName, loadedSize, loadedSize / totalSize.toFloat())
 				}
-				else {
-					importingHistory.onMediaImport(location, args[5] as Long, file)
+				val importingStickers = importingStickersFiles[fileName]
+				if (importingStickers != null) {
+					val loadedSize = args[1] as Long
+					val totalSize = args[2] as Long
+					importingStickers.addUploadProgress(fileName, loadedSize, loadedSize / totalSize.toFloat())
 				}
 			}
 
-			if (file != null) {
-				val importingStickers = importingStickersFiles[location]
-				importingStickers?.onMediaImport(location, args[5] as Long, file)
-			}
+			NotificationCenter.fileUploaded -> {
+				val location = args[0] as String
+				val file = args[1] as? TLRPC.InputFile
+				val encryptedFile = args[2] as? InputEncryptedFile
+				val importingHistory = importingHistoryFiles[location]
 
-			val arr = delayedMessages[location]
-
-			if (arr != null) {
-				var a = 0
-
-				while (a < arr.size) {
-					val message = arr[a]
-					var media: InputMedia? = null
-
-					when (val sendRequest = message.sendRequest) {
-						is TL_messages_sendMedia -> {
-							media = sendRequest.media
-						}
-
-						is TL_messages_editMessage -> {
-							media = sendRequest.media
-						}
-
-						is TL_messages_sendMultiMedia -> {
-							media = message.extraHashMap?.get(location) as? InputMedia
-
-							if (media == null) {
-								media = sendRequest.multi_media?.firstOrNull()?.media
-							}
-						}
+				if (importingHistory != null && file != null) {
+					if (location == importingHistory.historyPath) {
+						importingHistory.initImport(file)
 					}
+					else {
+						importingHistory.onMediaImport(location, args[5] as Long, file)
+					}
+				}
 
-					if (file != null && media != null) {
-						if (message.type == 0) {
-							media.file = file
-							performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, message, true, null, message.parentObject, message.scheduled)
+				if (file != null) {
+					val importingStickers = importingStickersFiles[location]
+					importingStickers?.onMediaImport(location, args[5] as Long, file)
+				}
+
+				val arr = delayedMessages[location]
+
+				if (arr != null) {
+					var a = 0
+
+					while (a < arr.size) {
+						val message = arr[a]
+						var media: InputMedia? = null
+
+						when (val sendRequest = message.sendRequest) {
+							is TLRPC.TLMessagesSendMedia -> {
+								media = sendRequest.media
+							}
+
+							is TLRPC.TLMessagesEditMessage -> {
+								media = sendRequest.media
+							}
+
+							is TLRPC.TLMessagesSendMultiMedia -> {
+								media = message.extraHashMap?.get(location) as? InputMedia
+
+								if (media == null) {
+									media = sendRequest.multiMedia.firstOrNull()?.media
+								}
+							}
 						}
-						else if (message.type == 1) {
-							if (media.file == null) {
+
+						if (file != null && media != null) {
+							if (message.type == 0) {
 								media.file = file
-
-								if (media.thumb == null && message.photoSize != null && message.photoSize!!.location != null) {
-									performSendDelayedMessage(message)
-								}
-								else {
-									performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
-								}
+								performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, message, true, null, message.parentObject, message.scheduled)
 							}
-							else {
-								media.thumb = file
-								media.flags = media.flags or 4
-
-								performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
-							}
-						}
-						else if (message.type == 2) {
-							if (media.file == null) {
-								media.file = file
-
-								if (media.thumb == null && message.photoSize != null && message.photoSize!!.location != null) {
-									performSendDelayedMessage(message)
-								}
-								else {
-									performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
-								}
-							}
-							else {
-								media.thumb = file
-								media.flags = media.flags or 4
-								performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
-							}
-						}
-						else if (message.type == 3) {
-							media.file = file
-							performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
-						}
-						else if (message.type == 4) {
-							if (media is TL_inputMediaUploadedDocument) {
+							else if (message.type == 1) {
 								if (media.file == null) {
 									media.file = file
 
-									val messageObject = message.extraHashMap!![location + "_i"] as? MessageObject
-									val index = message.messageObjects!!.indexOf(messageObject)
-
-									if (index >= 0) {
-										stopVideoService(message.messageObjects!![index].messageOwner?.attachPath)
-									}
-
-									message.photoSize = message.extraHashMap!![location + "_t"] as PhotoSize?
-
 									if (media.thumb == null && message.photoSize?.location != null) {
-										message.performMediaUpload = true
-										performSendDelayedMessage(message, index)
+										performSendDelayedMessage(message)
 									}
 									else {
-										uploadMultiMedia(message, media, null, location)
+										performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
 									}
 								}
 								else {
 									media.thumb = file
 									media.flags = media.flags or 4
-									uploadMultiMedia(message, media, null, message.extraHashMap!![location + "_o"] as String?)
+
+									performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
 								}
 							}
-							else {
+							else if (message.type == 2) {
+								if (media.file == null) {
+									media.file = file
+
+									if (media.thumb == null && message.photoSize?.location != null) {
+										performSendDelayedMessage(message)
+									}
+									else {
+										performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
+									}
+								}
+								else {
+									media.thumb = file
+									media.flags = media.flags or 4
+									performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
+								}
+							}
+							else if (message.type == 3) {
 								media.file = file
-								uploadMultiMedia(message, media, null, location)
+								performSendMessageRequest(message.sendRequest, message.obj, message.originalPath, null, message.parentObject, message.scheduled)
 							}
-						}
+							else if (message.type == 4) {
+								if (media is TLRPC.TLInputMediaUploadedDocument) {
+									if (media.file == null) {
+										media.file = file
 
-						arr.removeAt(a)
+										val messageObject = message.extraHashMap!![location + "_i"] as? MessageObject
+										val index = message.messageObjects!!.indexOf(messageObject)
 
-						a--
-					}
-					else if (encryptedFile != null && message.sendEncryptedRequest != null) {
-						var decryptedMessage: TL_decryptedMessage? = null
+										if (index >= 0) {
+											stopVideoService(message.messageObjects!![index].messageOwner?.attachPath)
+										}
 
-						if (message.type == 4) {
-							val req = message.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?
-							val inputEncryptedFile = message.extraHashMap!![location] as InputEncryptedFile?
-							val index = req!!.files.indexOf(inputEncryptedFile)
+										message.photoSize = message.extraHashMap!![location + "_t"] as PhotoSize?
 
-							if (index >= 0) {
-								req.files[index] = encryptedFile
-
-								if (inputEncryptedFile!!.id == 1L) {
-									message.photoSize = message.extraHashMap!![location + "_t"] as? PhotoSize
-									stopVideoService(message.messageObjects!![index].messageOwner?.attachPath)
+										if (media.thumb == null && message.photoSize?.location != null) {
+											message.performMediaUpload = true
+											performSendDelayedMessage(message, index)
+										}
+										else {
+											uploadMultiMedia(message, media, null, location)
+										}
+									}
+									else {
+										media.thumb = file
+										media.flags = media.flags or 4
+										uploadMultiMedia(message, media, null, message.extraHashMap!![location + "_o"] as String?)
+									}
 								}
-
-								decryptedMessage = req.messages[index]
+								else {
+									media.file = file
+									uploadMultiMedia(message, media, null, location)
+								}
 							}
+
+							arr.removeAt(a)
+
+							a--
 						}
-						else {
-							decryptedMessage = message.sendEncryptedRequest as TL_decryptedMessage?
+						// MARK: uncomment to enable secret chats
+//						else if (encryptedFile != null && message.sendEncryptedRequest != null) {
+//							var decryptedMessage: TLRPC.TLDecryptedMessage? = null
+//
+//							if (message.type == 4) {
+//								val req = message.sendEncryptedRequest as TLRPC.TLMessagesSendEncryptedMultiMedia?
+//								val inputEncryptedFile = message.extraHashMap!![location] as InputEncryptedFile?
+//								val index = req!!.files.indexOf(inputEncryptedFile)
+//
+//								if (index >= 0) {
+//									req.files[index] = encryptedFile
+//
+//									if (inputEncryptedFile!!.id == 1L) {
+//										message.photoSize = message.extraHashMap!![location + "_t"] as? PhotoSize
+//										stopVideoService(message.messageObjects!![index].messageOwner?.attachPath)
+//									}
+//
+//									decryptedMessage = req.messages[index]
+//								}
+//							}
+//							else {
+//								decryptedMessage = message.sendEncryptedRequest as TLRPC.TLDecryptedMessage?
+//							}
+//
+//							if (decryptedMessage != null) {
+//								if (decryptedMessage.media is TLRPC.TLDecryptedMessageMediaVideo || decryptedMessage.media is TLRPC.TLDecryptedMessageMediaPhoto || decryptedMessage.media is TLRPC.TLDecryptedMessageMediaDocument) {
+//									decryptedMessage.media.size = args[5] as Long
+//								}
+//
+//								decryptedMessage.media.key = args[3] as ByteArray
+//								decryptedMessage.media.iv = args[4] as ByteArray
+//
+//								if (message.type == 4) {
+//									uploadMultiMedia(message, null, encryptedFile, location)
+//								}
+//								else {
+//									secretChatHelper.performSendEncryptedRequest(decryptedMessage, message.obj!!.messageOwner, message.encryptedChat, encryptedFile, message.originalPath, message.obj)
+//								}
+//							}
+//
+//							arr.removeAt(a)
+//							a--
+//						}
+
+						a++
+					}
+
+					if (arr.isEmpty()) {
+						delayedMessages.remove(location)
+					}
+				}
+			}
+
+			NotificationCenter.fileUploadFailed -> {
+				val location = args[0] as String
+				val enc = args[1] as Boolean
+
+				val importingHistory = importingHistoryFiles[location]
+				importingHistory?.onFileFailedToUpload(location)
+
+				val importingStickers = importingStickersFiles[location]
+				importingStickers?.onFileFailedToUpload(location)
+
+				val arr = delayedMessages[location]
+
+				if (arr != null) {
+					var a = 0
+
+					while (a < arr.size) {
+						val obj = arr[a]
+
+						if (enc && obj.sendEncryptedRequest != null || !enc && obj.sendRequest != null) {
+							obj.markAsError()
+							arr.removeAt(a)
+							a--
 						}
 
-						if (decryptedMessage != null) {
-							if (decryptedMessage.media is TL_decryptedMessageMediaVideo || decryptedMessage.media is TL_decryptedMessageMediaPhoto || decryptedMessage.media is TL_decryptedMessageMediaDocument) {
-								decryptedMessage.media.size = args[5] as Long
-							}
-
-							decryptedMessage.media.key = args[3] as ByteArray
-							decryptedMessage.media.iv = args[4] as ByteArray
-
-							if (message.type == 4) {
-								uploadMultiMedia(message, null, encryptedFile, location)
-							}
-							else {
-								secretChatHelper.performSendEncryptedRequest(decryptedMessage, message.obj!!.messageOwner, message.encryptedChat, encryptedFile, message.originalPath, message.obj)
-							}
-						}
-
-						arr.removeAt(a)
-						a--
+						a++
 					}
 
-					a++
-				}
-
-				if (arr.isEmpty()) {
-					delayedMessages.remove(location)
-				}
-			}
-		}
-		else if (id == NotificationCenter.fileUploadFailed) {
-			val location = args[0] as String
-			val enc = args[1] as Boolean
-
-			val importingHistory = importingHistoryFiles[location]
-			importingHistory?.onFileFailedToUpload(location)
-
-			val importingStickers = importingStickersFiles[location]
-			importingStickers?.onFileFailedToUpload(location)
-
-			val arr = delayedMessages[location]
-
-			if (arr != null) {
-				var a = 0
-
-				while (a < arr.size) {
-					val obj = arr[a]
-
-					if (enc && obj.sendEncryptedRequest != null || !enc && obj.sendRequest != null) {
-						obj.markAsError()
-						arr.removeAt(a)
-						a--
-					}
-
-					a++
-				}
-
-				if (arr.isEmpty()) {
-					delayedMessages.remove(location)
-				}
-			}
-		}
-		else if (id == NotificationCenter.filePreparingStarted) {
-			val messageObject = args[0] as MessageObject
-
-			if (messageObject.id == 0) {
-				return
-			}
-
-			val arr = delayedMessages[messageObject.messageOwner?.attachPath]
-
-			if (arr != null) {
-				for (a in arr.indices) {
-					val message = arr[a]
-
-					if (message.type == 4) {
-						val index = message.messageObjects!!.indexOf(messageObject)
-						message.photoSize = message.extraHashMap!![messageObject.messageOwner?.attachPath + "_t"] as PhotoSize?
-						message.performMediaUpload = true
-						performSendDelayedMessage(message, index)
-						arr.removeAt(a)
-						break
-					}
-					else if (message.obj === messageObject) {
-						message.videoEditedInfo = null
-						performSendDelayedMessage(message)
-						arr.removeAt(a)
-						break
+					if (arr.isEmpty()) {
+						delayedMessages.remove(location)
 					}
 				}
+			}
 
-				if (arr.isEmpty()) {
-					delayedMessages.remove(messageObject.messageOwner?.attachPath)
+			NotificationCenter.filePreparingStarted -> {
+				val messageObject = args[0] as MessageObject
+
+				if (messageObject.id == 0) {
+					return
 				}
-			}
-		}
-		else if (id == NotificationCenter.fileNewChunkAvailable) {
-			val messageObject = args[0] as MessageObject
-
-			if (messageObject.id == 0) {
-				return
-			}
-
-			val finalPath = args[1] as String
-			val availableSize = args[2] as Long
-			val finalSize = args[3] as Long
-			val isEncrypted = DialogObject.isEncryptedDialog(messageObject.dialogId)
-
-			fileLoader.checkUploadNewDataAvailable(finalPath, isEncrypted, availableSize, finalSize)
-
-			if (finalSize != 0L) {
-				stopVideoService(messageObject.messageOwner?.attachPath)
 
 				val arr = delayedMessages[messageObject.messageOwner?.attachPath]
 
@@ -1336,223 +1131,273 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						val message = arr[a]
 
 						if (message.type == 4) {
-							for (b in message.messageObjects!!.indices) {
-								val obj = message.messageObjects!![b]
+							val index = message.messageObjects!!.indexOf(messageObject)
+							message.photoSize = message.extraHashMap!![messageObject.messageOwner?.attachPath + "_t"] as PhotoSize?
+							message.performMediaUpload = true
+							performSendDelayedMessage(message, index)
+							arr.removeAt(a)
+							break
+						}
+						else if (message.obj === messageObject) {
+							message.videoEditedInfo = null
+							performSendDelayedMessage(message)
+							arr.removeAt(a)
+							break
+						}
+					}
 
-								if (obj === messageObject) {
-									message.obj?.shouldRemoveVideoEditedInfo = true
-									obj.messageOwner?.params?.remove("ve")
-									obj.messageOwner?.media?.document?.size = finalSize
+					if (arr.isEmpty()) {
+						delayedMessages.remove(messageObject.messageOwner?.attachPath)
+					}
+				}
+			}
 
-									val messages = ArrayList<Message>()
-									messages.add(obj.messageOwner!!)
+			NotificationCenter.fileNewChunkAvailable -> {
+				val messageObject = args[0] as MessageObject
 
-									messagesStorage.putMessages(messages, false, true, false, 0, obj.scheduled)
+				if (messageObject.id == 0) {
+					return
+				}
 
+				val finalPath = args[1] as String
+				val availableSize = args[2] as Long
+				val finalSize = args[3] as Long
+				val isEncrypted = DialogObject.isEncryptedDialog(messageObject.dialogId)
+
+				fileLoader.checkUploadNewDataAvailable(finalPath, isEncrypted, availableSize, finalSize)
+
+				if (finalSize != 0L) {
+					stopVideoService(messageObject.messageOwner?.attachPath)
+
+					val arr = delayedMessages[messageObject.messageOwner?.attachPath]
+
+					if (arr != null) {
+						for (a in arr.indices) {
+							val message = arr[a]
+
+							if (message.type == 4) {
+								for (b in message.messageObjects!!.indices) {
+									val obj = message.messageObjects!![b]
+
+									if (obj === messageObject) {
+										message.obj?.shouldRemoveVideoEditedInfo = true
+										obj.messageOwner?.params?.remove("ve")
+										obj.messageOwner?.media?.document?.size = finalSize
+
+										messagesStorage.putMessages(listOf(obj.messageOwner!!), false, true, false, 0, obj.scheduled)
+
+										break
+									}
+								}
+							}
+							else if (message.obj === messageObject) {
+								message.obj!!.shouldRemoveVideoEditedInfo = true
+								message.obj!!.messageOwner?.params?.remove("ve")
+								message.obj!!.messageOwner?.media?.document?.size = finalSize
+
+								messagesStorage.putMessages(listOf(message.obj!!.messageOwner!!), false, true, false, 0, message.obj!!.scheduled)
+
+								break
+							}
+						}
+					}
+				}
+			}
+
+			NotificationCenter.filePreparingFailed -> {
+				val messageObject = args[0] as MessageObject
+
+				if (messageObject.id == 0) {
+					return
+				}
+
+				val finalPath = args[1] as String
+
+				stopVideoService(messageObject.messageOwner?.attachPath)
+
+				val arr = delayedMessages[finalPath]
+
+				if (arr != null) {
+					var a = 0
+
+					while (a < arr.size) {
+						val message = arr[a]
+
+						if (message.type == 4) {
+							for (b in message.messages!!.indices) {
+								if (message.messageObjects!![b] === messageObject) {
+									message.markAsError()
+									arr.removeAt(a)
+									a--
 									break
 								}
 							}
 						}
 						else if (message.obj === messageObject) {
-							message.obj!!.shouldRemoveVideoEditedInfo = true
-							message.obj!!.messageOwner?.params?.remove("ve")
-							message.obj!!.messageOwner?.media?.document?.size = finalSize
-
-							messagesStorage.putMessages(listOf(message.obj!!.messageOwner!!), false, true, false, 0, message.obj!!.scheduled)
-
-							break
+							message.markAsError()
+							arr.removeAt(a)
+							a--
 						}
+
+						a++
+					}
+
+					if (arr.isEmpty()) {
+						delayedMessages.remove(finalPath)
 					}
 				}
 			}
-		}
-		else if (id == NotificationCenter.filePreparingFailed) {
-			val messageObject = args[0] as MessageObject
 
-			if (messageObject.id == 0) {
-				return
-			}
+			NotificationCenter.httpFileDidLoad -> {
+				val path = args[0] as String
+				val arr = delayedMessages[path]
 
-			val finalPath = args[1] as String
+				if (arr != null) {
+					for (a in arr.indices) {
+						val message = arr[a]
+						val messageObject: MessageObject?
+						var fileType = -1
 
-			stopVideoService(messageObject.messageOwner?.attachPath)
+						when (message.type) {
+							0 -> {
+								fileType = 0
+								messageObject = message.obj
+							}
 
-			val arr = delayedMessages[finalPath]
+							2 -> {
+								fileType = 1
+								messageObject = message.obj
+							}
 
-			if (arr != null) {
-				var a = 0
+							4 -> {
+								messageObject = message.extraHashMap!![path] as? MessageObject
 
-				while (a < arr.size) {
-					val message = arr[a]
+								fileType = if (messageObject?.document != null) {
+									1
+								}
+								else {
+									0
+								}
+							}
 
-					if (message.type == 4) {
-						for (b in message.messages!!.indices) {
-							if (message.messageObjects!![b] === messageObject) {
-								message.markAsError()
-								arr.removeAt(a)
-								a--
-								break
+							else -> {
+								messageObject = null
 							}
 						}
-					}
-					else if (message.obj === messageObject) {
-						message.markAsError()
-						arr.removeAt(a)
-						a--
-					}
+						if (fileType == 0) {
+							val md5 = Utilities.MD5(path) + "." + ImageLoader.getHttpUrlExtension(path, "file")
+							val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), md5)
 
-					a++
-				}
+							Utilities.globalQueue.postRunnable {
+								val photo = generatePhotoSizes(cacheFile.toString(), null)
 
-				if (arr.isEmpty()) {
-					delayedMessages.remove(finalPath)
-				}
-			}
-		}
-		else if (id == NotificationCenter.httpFileDidLoad) {
-			val path = args[0] as String
-			val arr = delayedMessages[path]
+								AndroidUtilities.runOnUIThread {
+									if (photo != null) {
+										messageObject?.messageOwner?.media?.photo = photo
+										messageObject?.messageOwner?.attachPath = cacheFile.toString()
 
-			if (arr != null) {
-				for (a in arr.indices) {
-					val message = arr[a]
-					val messageObject: MessageObject?
-					var fileType = -1
+										messagesStorage.putMessages(listOf(messageObject!!.messageOwner!!), false, true, false, 0, messageObject.scheduled)
 
-					when (message.type) {
-						0 -> {
-							fileType = 0
-							messageObject = message.obj
-						}
+										notificationCenter.postNotificationName(NotificationCenter.updateMessageMedia, messageObject.messageOwner)
 
-						2 -> {
-							fileType = 1
-							messageObject = message.obj
-						}
+										message.photoSize = photo.sizes[photo.sizes.size - 1]
+										message.locationParent = photo
+										message.httpLocation = null
 
-						4 -> {
-							messageObject = message.extraHashMap!![path] as? MessageObject
-
-							fileType = if (messageObject?.document != null) {
-								1
-							}
-							else {
-								0
+										if (message.type == 4) {
+											message.performMediaUpload = true
+											performSendDelayedMessage(message, message.messageObjects!!.indexOf(messageObject))
+										}
+										else {
+											performSendDelayedMessage(message)
+										}
+									}
+									else {
+										FileLog.e("can't load image $path to file $cacheFile")
+										message.markAsError()
+									}
+								}
 							}
 						}
+						else if (fileType == 1) {
+							val md5 = Utilities.MD5(path) + ".gif"
+							val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), md5)
 
-						else -> {
-							messageObject = null
-						}
-					}
-					if (fileType == 0) {
-						val md5 = Utilities.MD5(path) + "." + ImageLoader.getHttpUrlExtension(path, "file")
-						val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), md5)
+							Utilities.globalQueue.postRunnable {
+								val document = message.obj?.document
 
-						Utilities.globalQueue.postRunnable {
-							val photo = generatePhotoSizes(cacheFile.toString(), null)
+								if (document != null) {
+									if (document.thumbs.isNullOrEmpty() || document.thumbs?.firstOrNull()?.location is TLRPC.TLFileLocationUnavailable) {
+										try {
+											val bitmap = ImageLoader.loadBitmap(cacheFile.absolutePath, null, 90f, 90f, true)
 
-							AndroidUtilities.runOnUIThread {
-								if (photo != null) {
-									messageObject?.messageOwner?.media?.photo = photo
-									messageObject?.messageOwner?.attachPath = cacheFile.toString()
+											if (bitmap != null) {
+												document.thumbs?.clear()
+												document.thumbs?.add(ImageLoader.scaleAndSaveImage(bitmap, 90f, 90f, 55, message.sendEncryptedRequest != null))
+
+												bitmap.recycle()
+											}
+										}
+										catch (e: Exception) {
+											document.thumbs?.clear()
+											FileLog.e(e)
+										}
+									}
+								}
+
+								AndroidUtilities.runOnUIThread {
+									message.httpLocation = null
+									message.obj?.messageOwner?.attachPath = cacheFile.toString()
+
+									if (!document?.thumbs.isNullOrEmpty()) {
+										val photoSize = document?.thumbs?.firstOrNull()
+
+										if (photoSize !is TLRPC.TLPhotoStrippedSize) {
+											message.photoSize = photoSize
+											message.locationParent = document
+										}
+									}
 
 									messagesStorage.putMessages(listOf(messageObject!!.messageOwner!!), false, true, false, 0, messageObject.scheduled)
 
-									notificationCenter.postNotificationName(NotificationCenter.updateMessageMedia, messageObject.messageOwner)
+									message.performMediaUpload = true
 
-									message.photoSize = photo.sizes[photo.sizes.size - 1]
-									message.locationParent = photo
-									message.httpLocation = null
+									performSendDelayedMessage(message)
 
-									if (message.type == 4) {
-										message.performMediaUpload = true
-										performSendDelayedMessage(message, message.messageObjects!!.indexOf(messageObject))
-									}
-									else {
-										performSendDelayedMessage(message)
-									}
-								}
-								else {
-									FileLog.e("can't load image $path to file $cacheFile")
-									message.markAsError()
+									notificationCenter.postNotificationName(NotificationCenter.updateMessageMedia, message.obj!!.messageOwner)
 								}
 							}
 						}
 					}
-					else if (fileType == 1) {
-						val md5 = Utilities.MD5(path) + ".gif"
-						val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), md5)
 
-						Utilities.globalQueue.postRunnable {
-							val document = message.obj?.document
+					delayedMessages.remove(path)
+				}
+			}
 
-							if (document?.thumbs.isNullOrEmpty() || document.thumbs?.firstOrNull()?.location is TL_fileLocationUnavailable) {
-								try {
-									val bitmap = ImageLoader.loadBitmap(cacheFile.absolutePath, null, 90f, 90f, true)
+			NotificationCenter.fileLoaded -> {
+				val path = args[0] as String
+				val arr = delayedMessages[path]
 
-									if (bitmap != null) {
-										document?.thumbs?.clear()
-										document?.thumbs?.add(ImageLoader.scaleAndSaveImage(bitmap, 90f, 90f, 55, message.sendEncryptedRequest != null))
-
-										bitmap.recycle()
-									}
-								}
-								catch (e: Exception) {
-									document?.thumbs?.clear()
-									FileLog.e(e)
-								}
-							}
-							AndroidUtilities.runOnUIThread {
-								message.httpLocation = null
-								message.obj?.messageOwner?.attachPath = cacheFile.toString()
-
-								if (!document?.thumbs.isNullOrEmpty()) {
-									val photoSize = document.thumbs?.firstOrNull()
-
-									if (photoSize !is TL_photoStrippedSize) {
-										message.photoSize = photoSize
-										message.locationParent = document
-									}
-								}
-
-								messagesStorage.putMessages(listOf(messageObject!!.messageOwner!!), false, true, false, 0, messageObject.scheduled)
-
-								message.performMediaUpload = true
-
-								performSendDelayedMessage(message)
-
-								notificationCenter.postNotificationName(NotificationCenter.updateMessageMedia, message.obj!!.messageOwner)
-							}
-						}
+				if (arr != null) {
+					for (a in arr.indices) {
+						performSendDelayedMessage(arr[a])
 					}
-				}
 
-				delayedMessages.remove(path)
+					delayedMessages.remove(path)
+				}
 			}
-		}
-		else if (id == NotificationCenter.fileLoaded) {
-			val path = args[0] as String
-			val arr = delayedMessages[path]
 
-			if (arr != null) {
-				for (a in arr.indices) {
-					performSendDelayedMessage(arr[a])
+			NotificationCenter.httpFileDidFailedLoad, NotificationCenter.fileLoadFailed -> {
+				val path = args[0] as String
+				val arr = delayedMessages[path]
+
+				if (arr != null) {
+					for (a in arr.indices) {
+						arr[a].markAsError()
+					}
+
+					delayedMessages.remove(path)
 				}
-
-				delayedMessages.remove(path)
-			}
-		}
-		else if (id == NotificationCenter.httpFileDidFailedLoad || id == NotificationCenter.fileLoadFailed) {
-			val path = args[0] as String
-			val arr = delayedMessages[path]
-
-			if (arr != null) {
-				for (a in arr.indices) {
-					arr[a].markAsError()
-				}
-
-				delayedMessages.remove(path)
 			}
 		}
 	}
@@ -1562,9 +1407,9 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		`object`.messageOwner?.media = `object`.previousMedia
 		`object`.messageOwner?.message = `object`.previousMessage
-		`object`.messageOwner?.entities = `object`.previousMessageEntities ?: arrayListOf()
+		`object`.messageOwner?.entities = `object`.previousMessageEntities
 		`object`.messageOwner?.attachPath = `object`.previousAttachPath
-		`object`.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
+		`object`.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
 
 		if (`object`.messageOwner?.entities != null) {
 			`object`.messageOwner?.flags = `object`.messageOwner!!.flags or 128
@@ -1655,14 +1500,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							}
 
 							if (message.sendRequest != null) {
-								val request = message.sendRequest as TL_messages_sendMultiMedia?
-								request!!.multi_media.removeAt(index)
+								val request = message.sendRequest as TLRPC.TLMessagesSendMultiMedia?
+								request!!.multiMedia.removeAt(index)
 							}
-							else {
-								val request = message.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?
-								request!!.messages.removeAt(index)
-								request.files.removeAt(index)
-							}
+							// MARK: uncomment to enable secret chats
+//							else {
+//								val request = message.sendEncryptedRequest as TLRPC.TLMessagesSendEncryptedMultiMedia?
+//								request!!.messages.removeAt(index)
+//								request.files.removeAt(index)
+//							}
 
 							MediaController.getInstance().cancelVideoConvert(`object`)
 
@@ -1683,7 +1529,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 									prevMessage.messageOwner?.params?.put("final", "1")
 
-									val messagesRes = TL_messages_messages()
+									val messagesRes = TLRPC.TLMessagesMessages()
 									messagesRes.messages.add(prevMessage.messageOwner!!)
 
 									messagesStorage.putMessages(messagesRes, message.peer, -2, 0, false, scheduled)
@@ -1752,79 +1598,81 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return false
 		}
 
-		if (messageObject.messageOwner?.action is TL_messageEncryptedAction) {
-			val encId = DialogObject.getEncryptedChatId(messageObject.dialogId)
-			val encryptedChat = messagesController.getEncryptedChat(encId)
-
-			if (encryptedChat == null) {
-				messagesStorage.markMessageAsSendError(messageObject.messageOwner, messageObject.scheduled)
-				messageObject.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
-				notificationCenter.postNotificationName(NotificationCenter.messageSendError, messageObject.id)
-				processSentMessage(messageObject.id)
-				return false
-			}
-
-			if (messageObject.messageOwner?.random_id == 0L) {
-				messageObject.messageOwner?.random_id = nextRandomId
-			}
-
-			when (messageObject.messageOwner?.action?.encryptedAction) {
-				is TL_decryptedMessageActionSetMessageTTL -> {
-					secretChatHelper.sendTTLMessage(encryptedChat, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionDeleteMessages -> {
-					secretChatHelper.sendMessagesDeleteMessage(encryptedChat, null, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionFlushHistory -> {
-					secretChatHelper.sendClearHistoryMessage(encryptedChat, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionNotifyLayer -> {
-					secretChatHelper.sendNotifyLayerMessage(encryptedChat, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionReadMessages -> {
-					secretChatHelper.sendMessagesReadMessage(encryptedChat, null, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionScreenshotMessages -> {
-					secretChatHelper.sendScreenshotMessage(encryptedChat, null, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionTyping -> {
-					// unused
-				}
-
-				is TL_decryptedMessageActionResend -> {
-					secretChatHelper.sendResendMessage(encryptedChat, 0, 0, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionCommitKey -> {
-					secretChatHelper.sendCommitKeyMessage(encryptedChat, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionAbortKey -> {
-					secretChatHelper.sendAbortKeyMessage(encryptedChat, messageObject.messageOwner, 0)
-				}
-
-				is TL_decryptedMessageActionRequestKey -> {
-					secretChatHelper.sendRequestKeyMessage(encryptedChat, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionAcceptKey -> {
-					secretChatHelper.sendAcceptKeyMessage(encryptedChat, messageObject.messageOwner)
-				}
-
-				is TL_decryptedMessageActionNoop -> {
-					secretChatHelper.sendNoopMessage(encryptedChat, messageObject.messageOwner)
-				}
-			}
-
-			return true
-		}
-		else if (messageObject.messageOwner?.action is TL_messageActionScreenshotTaken) {
+		// MARK: uncomment to enable secret chats
+//		if (messageObject.messageOwner?.action is TLRPC.TLMessageEncryptedAction) {
+//			val encId = DialogObject.getEncryptedChatId(messageObject.dialogId)
+//			val encryptedChat = messagesController.getEncryptedChat(encId)
+//
+//			if (encryptedChat == null) {
+//				messagesStorage.markMessageAsSendError(messageObject.messageOwner, messageObject.scheduled)
+//				messageObject.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+//				notificationCenter.postNotificationName(NotificationCenter.messageSendError, messageObject.id)
+//				processSentMessage(messageObject.id)
+//				return false
+//			}
+//
+//			if (messageObject.messageOwner?.randomId == 0L) {
+//				messageObject.messageOwner?.randomId = nextRandomId
+//			}
+//
+//			when (messageObject.messageOwner?.action?.encryptedAction) {
+//				is TLRPC.TLDecryptedMessageActionSetMessageTTL -> {
+//					secretChatHelper.sendTTLMessage(encryptedChat, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionDeleteMessages -> {
+//					secretChatHelper.sendMessagesDeleteMessage(encryptedChat, null, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionFlushHistory -> {
+//					secretChatHelper.sendClearHistoryMessage(encryptedChat, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionNotifyLayer -> {
+//					secretChatHelper.sendNotifyLayerMessage(encryptedChat, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionReadMessages -> {
+//					secretChatHelper.sendMessagesReadMessage(encryptedChat, null, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionScreenshotMessages -> {
+//					secretChatHelper.sendScreenshotMessage(encryptedChat, null, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionTyping -> {
+//					// unused
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionResend -> {
+//					secretChatHelper.sendResendMessage(encryptedChat, 0, 0, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionCommitKey -> {
+//					secretChatHelper.sendCommitKeyMessage(encryptedChat, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionAbortKey -> {
+//					secretChatHelper.sendAbortKeyMessage(encryptedChat, messageObject.messageOwner, 0)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionRequestKey -> {
+//					secretChatHelper.sendRequestKeyMessage(encryptedChat, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionAcceptKey -> {
+//					secretChatHelper.sendAcceptKeyMessage(encryptedChat, messageObject.messageOwner)
+//				}
+//
+//				is TLRPC.TLDecryptedMessageActionNoop -> {
+//					secretChatHelper.sendNoopMessage(encryptedChat, messageObject.messageOwner)
+//				}
+//			}
+//
+//			return true
+//		}
+//		else
+		if (messageObject.messageOwner?.action is TLRPC.TLMessageActionScreenshotTaken) {
 			val user = messagesController.getUser(messageObject.dialogId)
 			sendScreenshotMessage(user, messageObject.replyMsgId, messageObject.messageOwner)
 		}
@@ -1839,11 +1687,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun processSentMessage(id: Int) {
-		val prevSize = unsentMessages.size()
+		val prevSize = unsentMessages.size
 
 		unsentMessages.remove(id)
 
-		if (prevSize != 0 && unsentMessages.size() == 0) {
+		if (prevSize != 0 && unsentMessages.isEmpty()) {
 			checkUnsentMessages()
 		}
 	}
@@ -1853,54 +1701,48 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return
 		}
 
-		if (messageObject.messageOwner?.media != null && messageObject.messageOwner?.media !is TL_messageMediaEmpty && messageObject.messageOwner?.media !is TL_messageMediaWebPage && messageObject.messageOwner?.media !is TL_messageMediaGame && messageObject.messageOwner?.media !is TL_messageMediaInvoice) {
+		if (messageObject.messageOwner?.media != null && messageObject.messageOwner?.media !is TLRPC.TLMessageMediaEmpty && messageObject.messageOwner?.media !is TLRPC.TLMessageMediaWebPage && messageObject.messageOwner?.media !is TLRPC.TLMessageMediaGame && messageObject.messageOwner?.media !is TLRPC.TLMessageMediaInvoice) {
 			var params: HashMap<String, String>? = null
 
-			if (DialogObject.isEncryptedDialog(did) && messageObject.messageOwner?.peer_id != null && (messageObject.messageOwner?.media?.photo is TL_photo || messageObject.messageOwner?.media?.document is TL_document)) {
+			if (DialogObject.isEncryptedDialog(did) && messageObject.messageOwner?.peerId != null && (messageObject.messageOwner?.media?.photo is TLRPC.TLPhoto || messageObject.messageOwner?.media?.document is TLRPC.TLDocument)) {
 				params = HashMap()
-				params["parentObject"] = "sent_" + messageObject.messageOwner?.peer_id?.channel_id + "_" + messageObject.id
+				params["parentObject"] = "sent_" + messageObject.messageOwner?.peerId?.channelId + "_" + messageObject.id
 			}
 
-			if (messageObject.messageOwner?.media?.photo is TL_photo) {
-				sendMessage(messageObject.messageOwner?.media?.photo as TL_photo, null, did, messageObject.replyMessageObject, null, messageObject.messageOwner?.message, messageObject.messageOwner?.entities, null, params, true, 0, messageObject.messageOwner?.media?.ttl_seconds ?: 0, messageObject, false, messageObject.isMediaSale, messageObject.mediaSaleHash)
+			if (messageObject.messageOwner?.media?.photo is TLRPC.TLPhoto) {
+				sendMessage(messageObject.messageOwner?.media?.photo as TLRPC.TLPhoto, null, did, messageObject.replyMessageObject, null, messageObject.messageOwner?.message, messageObject.messageOwner?.entities, null, params, true, 0, messageObject.messageOwner?.media?.ttlSeconds ?: 0, messageObject, false)
 			}
-			else if (messageObject.messageOwner?.media?.document is TL_document) {
-				sendMessage(messageObject.messageOwner?.media?.document as TL_document, null, messageObject.messageOwner?.attachPath, did, messageObject.replyMessageObject, null, messageObject.messageOwner?.message, messageObject.messageOwner?.entities, null, params, true, 0, messageObject.messageOwner?.media?.ttl_seconds ?: 0, messageObject, null, false, messageObject.isMediaSale, messageObject.mediaSaleHash)
+			else if (messageObject.messageOwner?.media?.document is TLRPC.TLDocument) {
+				sendMessage(messageObject.messageOwner?.media?.document as TLRPC.TLDocument, null, messageObject.messageOwner?.attachPath, did, messageObject.replyMessageObject, null, messageObject.messageOwner?.message, messageObject.messageOwner?.entities, null, params, true, 0, messageObject.messageOwner?.media?.ttlSeconds ?: 0, messageObject, null, false)
 			}
-			else if (messageObject.messageOwner?.media is TL_messageMediaVenue || messageObject.messageOwner?.media is TL_messageMediaGeo) {
-				sendMessage(messageObject.messageOwner?.media, did, messageObject.replyMessageObject, null, null, null, true, 0, messageObject.isMediaSale, messageObject.mediaSaleHash)
+			else if (messageObject.messageOwner?.media is TLRPC.TLMessageMediaVenue || messageObject.messageOwner?.media is TLRPC.TLMessageMediaGeo) {
+				sendMessage(messageObject.messageOwner?.media, did, messageObject.replyMessageObject, null, null, null, true, 0)
 			}
-			else if (messageObject.messageOwner?.media?.phone_number != null) {
-				val user: User = TL_userContact_old2()
-				// user.phone = messageObject.messageOwner.media.phone_number;
-				user.first_name = messageObject.messageOwner?.media?.first_name
-				user.last_name = messageObject.messageOwner?.media?.last_name
-				user.id = messageObject.messageOwner?.media?.user_id ?: 0
-
-				sendMessage(user, did, messageObject.replyMessageObject, null, null, null, true, 0, messageObject.isMediaSale, messageObject.mediaSaleHash)
-			}
+			// MARK: we do not have phone contacts in scheme
+//			else if (messageObject.messageOwner?.media?.phoneNumber != null) {
+//				val user: User = TLRPC.TLUserContact_old2()
+//				// user.phone = messageObject.messageOwner.media.phoneNumber;
+//				user.firstName = messageObject.messageOwner?.media?.firstName
+//				user.lastName = messageObject.messageOwner?.media?.lastName
+//				user.id = messageObject.messageOwner?.media?.userId ?: 0
+//
+//				sendMessage(user, did, messageObject.replyMessageObject, null, null, null, true, 0, messageObject.isMediaSale, messageObject.mediaSaleHash)
+//			}
 			else if (!DialogObject.isEncryptedDialog(did)) {
-				val arrayList = ArrayList<MessageObject>()
-				arrayList.add(messageObject)
-				sendMessage(arrayList, did, forwardFromMyName = true, hideCaption = false, notify = true, scheduleDate = 0)
+				sendMessage(listOf(messageObject), did, forwardFromMyName = true, hideCaption = false, notify = true, scheduleDate = 0)
 			}
 		}
 		else if (messageObject.messageOwner?.message != null) {
-			var webPage: WebPage? = null
-
-			if (messageObject.messageOwner?.media is TL_messageMediaWebPage) {
-				webPage = messageObject.messageOwner?.media?.webpage
-			}
-
-			val entities: ArrayList<MessageEntity>?
+			val webPage = (messageObject.messageOwner?.media as? TLRPC.TLMessageMediaWebPage)?.webpage
+			val entities: List<MessageEntity>?
 
 			if (!messageObject.messageOwner?.entities.isNullOrEmpty()) {
-				entities = ArrayList()
+				entities = mutableListOf()
 
 				for (a in messageObject.messageOwner?.entities!!.indices) {
 					val entity = messageObject.messageOwner?.entities!![a]
 
-					if (entity is TL_messageEntityBold || entity is TL_messageEntityItalic || entity is TL_messageEntityPre || entity is TL_messageEntityCode || entity is TL_messageEntityTextUrl || entity is TL_messageEntitySpoiler || entity is TL_messageEntityCustomEmoji) {
+					if (entity is TLRPC.TLMessageEntityBold || entity is TLRPC.TLMessageEntityItalic || entity is TLRPC.TLMessageEntityPre || entity is TLRPC.TLMessageEntityCode || entity is TLRPC.TLMessageEntityTextUrl || entity is TLRPC.TLMessageEntitySpoiler || entity is TLRPC.TLMessageEntityCustomEmoji) {
 						entities.add(entity)
 					}
 				}
@@ -1909,7 +1751,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				entities = null
 			}
 
-			sendMessage(messageObject.messageOwner?.message, did, messageObject.replyMessageObject, null, webPage, true, entities, null, null, true, 0, null, false, messageObject.isMediaSale, messageObject.mediaSaleHash)
+			sendMessage(messageObject.messageOwner?.message, did, messageObject.replyMessageObject, null, webPage, true, entities, null, null, true, 0, null, false)
 		}
 		else if (DialogObject.isEncryptedDialog(did)) {
 			val arrayList = ArrayList<MessageObject>()
@@ -1919,55 +1761,59 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun sendScreenshotMessage(user: User?, messageId: Int, resendMessage: Message?) {
-		if (user == null || messageId == 0 || user.id == userConfig.getClientUserId()) {
+		if (user == null || messageId == 0 || user.id == userConfig.getClientUserId() || user !is TLRPC.TLUser) {
 			return
 		}
 
-		val req = TL_messages_sendScreenshotNotification()
-		req.peer = TL_inputPeerUser()
-		req.peer.access_hash = user.access_hash
-		req.peer.user_id = user.id
+		val req = TLRPC.TLMessagesSendScreenshotNotification()
+
+		req.peer = TLRPC.TLInputPeerUser().also {
+			it.accessHash = user.accessHash
+			it.userId = user.id
+		}
 
 		val message: Message
 
 		if (resendMessage != null) {
 			message = resendMessage
 
-			req.reply_to_msg_id = messageId
-			req.random_id = resendMessage.random_id
+			req.replyToMsgId = messageId
+			req.randomId = resendMessage.randomId
 		}
 		else {
-			message = TL_messageService()
-			message.random_id = nextRandomId
-			message.dialog_id = user.id
+			message = TLRPC.TLMessageService()
+			message.randomId = nextRandomId
+			message.dialogId = user.id
 			message.unread = true
 			message.out = true
 			message.id = userConfig.newMessageId
-			message.local_id = message.id
-			message.from_id = TL_peerUser()
-			message.from_id?.user_id = userConfig.getClientUserId()
+			message.localId = message.id
+
+			message.fromId = TLRPC.TLPeerUser().also { it.userId = userConfig.getClientUserId() }
+
 			message.flags = message.flags or 256
 			message.flags = message.flags or 8
-			message.reply_to = TL_messageReplyHeader()
-			message.reply_to?.reply_to_msg_id = messageId
-			message.peer_id = TL_peerUser()
-			message.peer_id?.user_id = user.id
+
+			message.replyTo = TLRPC.TLMessageReplyHeader().also { it.replyToMsgId = messageId }
+
+			message.peerId = TLRPC.TLPeerUser().also { it.userId = user.id }
+
 			message.date = connectionsManager.currentTime
-			message.action = TL_messageActionScreenshotTaken()
+			message.action = TLRPC.TLMessageActionScreenshotTaken()
 
 			userConfig.saveConfig(false)
 		}
 
-		req.random_id = message.random_id
+		req.randomId = message.randomId
 
 		val newMsgObj = MessageObject(currentAccount, message, generateLayout = false, checkMediaExists = true)
-		newMsgObj.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SENDING
+		newMsgObj.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SENDING
 		newMsgObj.wasJustSent = true
 
 		val objArr = ArrayList<MessageObject>()
 		objArr.add(newMsgObj)
 
-		messagesController.updateInterfaceWithMessages(message.dialog_id, objArr, false)
+		messagesController.updateInterfaceWithMessages(message.dialogId, objArr, false)
 		notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 
 		val arr = ArrayList<Message>()
@@ -1979,35 +1825,35 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun sendSticker(document: TLRPC.Document?, query: String?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, parentObject: Any?, sendAnimationData: SendAnimationData?, notify: Boolean, scheduleDate: Int, updateStickersOrder: Boolean) {
-		@Suppress("NAME_SHADOWING") var document = document ?: return
+		@Suppress("NAME_SHADOWING") var document = document as? TLRPC.TLDocument ?: return
 
 		if (DialogObject.isEncryptedDialog(peer)) {
 			val encryptedId = DialogObject.getEncryptedChatId(peer)
 
 			messagesController.getEncryptedChat(encryptedId) ?: return
 
-			val newDocument = TL_document_layer82()
+			val newDocument = TLRPC.TLDocument()
 			newDocument.id = document.id
-			newDocument.access_hash = document.access_hash
+			newDocument.accessHash = document.accessHash
 			newDocument.date = document.date
-			newDocument.mime_type = document.mime_type
-			newDocument.file_reference = document.file_reference
+			newDocument.mimeType = document.mimeType
+			newDocument.fileReference = document.fileReference
 
-			if (newDocument.file_reference == null) {
-				newDocument.file_reference = ByteArray(0)
+			if (newDocument.fileReference == null) {
+				newDocument.fileReference = ByteArray(0)
 			}
 
 			newDocument.size = document.size
-			newDocument.dc_id = document.dc_id
-			newDocument.attributes = ArrayList(document.attributes)
+			newDocument.dcId = document.dcId
+			newDocument.attributes.addAll(document.attributes)
 
-			if (newDocument.mime_type == null) {
-				newDocument.mime_type = ""
+			if (newDocument.mimeType == null) {
+				newDocument.mimeType = ""
 			}
 
 			var thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90)
 
-			if (thumb is TL_photoSize || thumb is TL_photoSizeProgressive) {
+			if (thumb is TLRPC.PhotoSize || thumb is TLRPC.TLPhotoSizeProgressive) {
 				val file = FileLoader.getInstance(currentAccount).getPathToAttach(thumb, true)
 
 				if (file.exists()) {
@@ -2018,15 +1864,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						val reader = RandomAccessFile(file, "r")
 						reader.readFully(arr)
 
-						val newThumb: PhotoSize = TL_photoCachedSize()
+						val newThumb = TLRPC.TLPhotoCachedSize()
 
-						val fileLocation = TL_fileLocation_layer82()
-						fileLocation.dc_id = thumb.location.dc_id
-						fileLocation.volume_id = thumb.location.volume_id
-						fileLocation.local_id = thumb.location.local_id
-						fileLocation.secret = thumb.location.secret
+//						val fileLocation = TLRPC.TLFileLocation()
+//						fileLocation.dcId = (thumb.location as? TLRPC.TLFileLocation)?.dcId ?: 0
+//						fileLocation.volumeId = thumb.location?.volumeId ?: 0L
+//						fileLocation.localId = thumb.location?.localId ?: 0
+						//fileLocation.secret = thumb.location?.secret ?: 0L
 
-						newThumb.location = fileLocation
+//						newThumb.location = fileLocation
 						newThumb.size = thumb.size
 						newThumb.w = thumb.w
 						newThumb.h = thumb.h
@@ -2043,7 +1889,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			if (newDocument.thumbs.isEmpty()) {
-				thumb = TL_photoSizeEmpty()
+				thumb = TLRPC.TLPhotoSizeEmpty()
 				thumb.type = "s"
 
 				newDocument.thumbs.add(thumb)
@@ -2058,7 +1904,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				val keyFinal = arrayOfNulls<String>(1)
 				val mediaLocationKey = ImageLocation.getForDocument(document)?.getKey(null, null, false)
 
-				val docExt = when (document.mime_type) {
+				val docExt = when (document.mimeType) {
 					"video/mp4" -> ".mp4"
 					"video/x-matroska" -> ".mkv"
 					else -> ""
@@ -2076,10 +1922,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				AndroidUtilities.runOnUIThread {
 					if (bitmapFinal[0] != null && keyFinal[0] != null) {
-						ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, bitmapFinal[0]), keyFinal[0], false)
+						ImageLoader.getInstance().putImageToCache(bitmapFinal[0]?.toDrawable(ApplicationLoader.applicationContext.resources), keyFinal[0], false)
 					}
 
-					sendMessage(document as TL_document, null, null, peer, replyToMsg, replyToTopMsg, null, null, null, null, notify, scheduleDate, 0, parentObject, sendAnimationData, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+					sendMessage(document, null, null, peer, replyToMsg, replyToTopMsg, null, null, null, null, notify, scheduleDate, 0, parentObject, sendAnimationData, updateStickersOrder = false)
 				}
 			}
 		}
@@ -2094,7 +1940,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				params = null
 			}
 
-			sendMessage(document as TL_document, null, null, peer, replyToMsg, replyToTopMsg, null, null, null, params, notify, scheduleDate, 0, parentObject, sendAnimationData, updateStickersOrder, false, null)
+			sendMessage(document, null, null, peer, replyToMsg, replyToTopMsg, null, null, null, params, notify, scheduleDate, 0, parentObject, sendAnimationData, updateStickersOrder)
 		}
 	}
 
@@ -2128,7 +1974,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				val userFull = messagesController.getUserFull(peer)
 
 				if (userFull != null) {
-					canSendVoiceMessages = !userFull.voice_messages_forbidden
+					canSendVoiceMessages = !userFull.voiceMessagesForbidden
 				}
 			}
 			else {
@@ -2138,11 +1984,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					isSignature = chat.signatures
 					isChannel = !chat.megagroup
 
-					if (isChannel && chat.has_link) {
+					if (isChannel && chat.hasLink) {
 						val chatFull = messagesController.getChatFull(chat.id)
 
 						if (chatFull != null) {
-							linkedToGroup = chatFull.linked_chat_id
+							linkedToGroup = chatFull.linkedChatId
 						}
 					}
 				}
@@ -2160,9 +2006,9 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			val groupsMap = LongSparseArray<Long>()
 			var objArr = ArrayList<MessageObject>()
 			var arr = ArrayList<Message>()
-			var randomIds = ArrayList<Long?>()
-			var ids = ArrayList<Int?>()
-			var messagesByRandomIds = LongSparseArray<Message?>()
+			var randomIds = ArrayList<Long>()
+			var ids = ArrayList<Int>()
+			var messagesByRandomIds = LongSparseArray<Message>()
 			val inputPeer = messagesController.getInputPeer(peer)
 			// val lastDialogId: Long = 0
 			val toMyself = peer == myId
@@ -2174,7 +2020,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				if (msgObj.id <= 0 || msgObj.needDrawBluredPreview()) {
 					if (msgObj.type == MessageObject.TYPE_COMMON && !TextUtils.isEmpty(msgObj.messageText)) {
 						val webPage = msgObj.messageOwner?.media?.webpage
-						sendMessage(msgObj.messageText.toString(), peer, null, null, webPage, webPage != null, msgObj.messageOwner?.entities, null, null, notify, scheduleDate, null, false, msgObj.isMediaSale, msgObj.mediaSaleHash)
+						sendMessage(msgObj.messageText.toString(), peer, null, null, webPage, webPage != null, msgObj.messageOwner?.entities, null, null, notify, scheduleDate, null, false)
 					}
 
 					continue
@@ -2189,14 +2035,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					continue
 				}
-				else if (!canSendMedia && (msgObj.messageOwner?.media is TL_messageMediaPhoto || msgObj.messageOwner?.media is TL_messageMediaDocument) && !mediaIsSticker) {
+				else if (!canSendMedia && (msgObj.messageOwner?.media is TLRPC.TLMessageMediaPhoto || msgObj.messageOwner?.media is TLRPC.TLMessageMediaDocument) && !mediaIsSticker) {
 					if (sendResult == 0) {
 						sendResult = if (ChatObject.isActionBannedByDefault(chat, ChatObject.ACTION_SEND_MEDIA)) 5 else 2
 					}
 
 					continue
 				}
-				else if (!canSendPolls && msgObj.messageOwner?.media is TL_messageMediaPoll) {
+				else if (!canSendPolls && msgObj.messageOwner?.media is TLRPC.TLMessageMediaPoll) {
 					if (sendResult == 0) {
 						sendResult = if (ChatObject.isActionBannedByDefault(chat, ChatObject.ACTION_SEND_POLLS)) 6 else 3
 					}
@@ -2218,74 +2064,78 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					continue
 				}
 
-				val newMsg: Message = TL_message()
+				val newMsg = TLRPC.TLMessage()
 
 				if (!forwardFromMyName) {
-					val forwardFromSaved = msgObj.dialogId == myId && msgObj.isFromUser && msgObj.messageOwner?.from_id?.user_id == myId
+					val forwardFromSaved = msgObj.dialogId == myId && msgObj.isFromUser && msgObj.messageOwner?.fromId?.userId == myId
 
 					if (msgObj.isForwarded) {
-						newMsg.fwd_from = TL_messageFwdHeader()
+						newMsg.fwdFrom = TLRPC.TLMessageFwdHeader().also {
+							if (msgObj.messageOwner!!.fwdFrom!!.flags and 1 != 0) {
+								it.flags = it.flags or 1
+								it.fromId = msgObj.messageOwner!!.fwdFrom!!.fromId
+							}
 
-						if (msgObj.messageOwner!!.fwd_from!!.flags and 1 != 0) {
-							newMsg.fwd_from?.flags = newMsg.fwd_from!!.flags or 1
-							newMsg.fwd_from!!.from_id = msgObj.messageOwner!!.fwd_from!!.from_id
+							if (msgObj.messageOwner!!.fwdFrom!!.flags and 32 != 0) {
+								it.flags = it.flags or 32
+								it.fromName = msgObj.messageOwner!!.fwdFrom!!.fromName
+							}
+
+							if (msgObj.messageOwner!!.fwdFrom!!.flags and 4 != 0) {
+								it.flags = it.flags or 4
+								it.channelPost = msgObj.messageOwner!!.fwdFrom!!.channelPost
+							}
+
+							if (msgObj.messageOwner!!.fwdFrom!!.flags and 8 != 0) {
+								it.flags = it.flags or 8
+								it.postAuthor = msgObj.messageOwner!!.fwdFrom!!.postAuthor
+							}
+
+							if ((peer == myId || isChannel) && msgObj.messageOwner!!.fwdFrom!!.flags and 16 != 0 && !isReplyUser(msgObj.dialogId)) {
+								it.flags = it.flags or 16
+								it.savedFromPeer = msgObj.messageOwner!!.fwdFrom!!.savedFromPeer
+								it.savedFromMsgId = msgObj.messageOwner!!.fwdFrom!!.savedFromMsgId
+							}
+
+							it.date = msgObj.messageOwner!!.fwdFrom!!.date
 						}
 
-						if (msgObj.messageOwner!!.fwd_from!!.flags and 32 != 0) {
-							newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 32
-							newMsg.fwd_from!!.from_name = msgObj.messageOwner!!.fwd_from!!.from_name
-						}
-
-						if (msgObj.messageOwner!!.fwd_from!!.flags and 4 != 0) {
-							newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 4
-							newMsg.fwd_from!!.channel_post = msgObj.messageOwner!!.fwd_from!!.channel_post
-						}
-
-						if (msgObj.messageOwner!!.fwd_from!!.flags and 8 != 0) {
-							newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 8
-							newMsg.fwd_from!!.post_author = msgObj.messageOwner!!.fwd_from!!.post_author
-						}
-
-						if ((peer == myId || isChannel) && msgObj.messageOwner!!.fwd_from!!.flags and 16 != 0 && !isReplyUser(msgObj.dialogId)) {
-							newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 16
-							newMsg.fwd_from!!.saved_from_peer = msgObj.messageOwner!!.fwd_from!!.saved_from_peer
-							newMsg.fwd_from!!.saved_from_msg_id = msgObj.messageOwner!!.fwd_from!!.saved_from_msg_id
-						}
-
-						newMsg.fwd_from!!.date = msgObj.messageOwner!!.fwd_from!!.date
 						newMsg.flags = TLRPC.MESSAGE_FLAG_FWD
 					}
 					else if (!forwardFromSaved) { //if (!toMyself || !msgObj.isOutOwner())
 						val fromId = msgObj.fromChatId
 
-						newMsg.fwd_from = TL_messageFwdHeader()
-						newMsg.fwd_from!!.channel_post = msgObj.id
-						newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 4
+						newMsg.fwdFrom = TLRPC.TLMessageFwdHeader().also {
+							it.channelPost = msgObj.id
+							it.flags = it.flags or 4
 
-						if (msgObj.isFromUser) {
-							newMsg.fwd_from!!.from_id = msgObj.messageOwner!!.from_id
-							newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 1
-						}
-						else {
-							newMsg.fwd_from!!.from_id = TL_peerChannel()
-							newMsg.fwd_from!!.from_id.channel_id = msgObj.messageOwner!!.peer_id!!.channel_id
-							newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 1
-
-							if (msgObj.messageOwner!!.post && fromId > 0) {
-								newMsg.fwd_from!!.from_id = if (msgObj.messageOwner!!.from_id != null) msgObj.messageOwner!!.from_id else msgObj.messageOwner!!.peer_id
+							if (msgObj.isFromUser) {
+								it.fromId = msgObj.messageOwner!!.fromId
+								it.flags = it.flags or 1
 							}
-						}
+							else {
+								it.fromId = TLRPC.TLPeerChannel().also {
+									it.channelId = msgObj.messageOwner!!.peerId!!.channelId
+								}
 
-						if (msgObj.messageOwner?.post_author != null) {
-							// newMsg.fwd_from.post_author = msgObj.messageOwner.post_author;
-							// newMsg.fwd_from.flags |= 8;
-						}
-						else if (!msgObj.isOutOwner && fromId > 0 && msgObj.messageOwner!!.post) {
-							val signUser = messagesController.getUser(fromId)
+								it.flags = it.flags or 1
 
-							if (signUser != null) {
-								newMsg.fwd_from!!.post_author = ContactsController.formatName(signUser.first_name, signUser.last_name)
-								newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 8
+								if (msgObj.messageOwner!!.post && fromId > 0) {
+									it.fromId = msgObj.messageOwner?.fromId ?: msgObj.messageOwner?.peerId
+								}
+							}
+
+							if (msgObj.messageOwner?.postAuthor != null) {
+								// newMsg.fwdFrom.postAuthor = msgObj.messageOwner.postAuthor
+								// newMsg.fwdFrom.flags |= 8
+							}
+							else if (!msgObj.isOutOwner && fromId > 0 && msgObj.messageOwner!!.post) {
+								val signUser = messagesController.getUser(fromId)
+
+								if (signUser != null) {
+									it.postAuthor = ContactsController.formatName(signUser.firstName, signUser.lastName)
+									it.flags = it.flags or 8
+								}
 							}
 						}
 
@@ -2293,28 +2143,30 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						newMsg.flags = TLRPC.MESSAGE_FLAG_FWD
 					}
 
-					if (peer == myId && newMsg.fwd_from != null) {
-						newMsg.fwd_from!!.flags = newMsg.fwd_from!!.flags or 16
-						newMsg.fwd_from!!.saved_from_msg_id = msgObj.id
-						newMsg.fwd_from!!.saved_from_peer = msgObj.messageOwner!!.peer_id
+					if (peer == myId && newMsg.fwdFrom != null) {
+						newMsg.fwdFrom?.flags = newMsg.fwdFrom!!.flags or 16
+						newMsg.fwdFrom?.savedFromMsgId = msgObj.id
+						newMsg.fwdFrom?.savedFromPeer = msgObj.messageOwner!!.peerId
 
-						if (newMsg.fwd_from!!.saved_from_peer.user_id == myId) {
-							newMsg.fwd_from!!.saved_from_peer.user_id = msgObj.dialogId
+						if (newMsg.fwdFrom?.savedFromPeer?.userId == myId) {
+							newMsg.fwdFrom?.savedFromPeer?.userId = msgObj.dialogId
 						}
 					}
 				}
 
-				newMsg.params = HashMap()
-				newMsg.params!!["fwd_id"] = "" + msgObj.id
-				newMsg.params!!["fwd_peer"] = "" + msgObj.dialogId
+				newMsg.params = mutableMapOf<String, String>().also {
+					it["fwd_id"] = "" + msgObj.id
+					it["fwd_peer"] = "" + msgObj.dialogId
+				}
 
-				if (msgObj.messageOwner!!.restriction_reason.isNotEmpty()) {
-					newMsg.restriction_reason = msgObj.messageOwner!!.restriction_reason
+				if (!msgObj.messageOwner!!.restrictionReason.isNullOrEmpty()) {
+					newMsg.restrictionReason.clear()
+					newMsg.restrictionReason.addAll(msgObj.messageOwner!!.restrictionReason!!)
 					newMsg.flags = newMsg.flags or 4194304
 				}
 
-				if (!canSendPreview && msgObj.messageOwner?.media is TL_messageMediaWebPage) {
-					newMsg.media = TL_messageMediaEmpty()
+				if (!canSendPreview && msgObj.messageOwner?.media is TLRPC.TLMessageMediaWebPage) {
+					newMsg.media = TLRPC.TLMessageMediaEmpty()
 				}
 				else {
 					newMsg.media = msgObj.messageOwner?.media
@@ -2324,16 +2176,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_MEDIA
 				}
 
-				if (msgObj.messageOwner?.via_bot_id != 0L) {
-					newMsg.via_bot_id = msgObj.messageOwner!!.via_bot_id
+				if (msgObj.messageOwner?.viaBotId != 0L) {
+					newMsg.viaBotId = msgObj.messageOwner!!.viaBotId
 					newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_BOT_ID
 				}
 
 				if (linkedToGroup != 0L) {
-					newMsg.replies = TL_messageReplies()
-					newMsg.replies!!.comments = true
-					newMsg.replies!!.channel_id = linkedToGroup
-					newMsg.replies!!.flags = newMsg.replies!!.flags or 1
+					newMsg.replies = TLRPC.TLMessageReplies()
+					newMsg.replies?.comments = true
+					newMsg.replies?.channelId = linkedToGroup
+					newMsg.replies?.flags = newMsg.replies!!.flags or 1
+
 					newMsg.flags = newMsg.flags or 8388608
 				}
 
@@ -2345,47 +2198,50 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					newMsg.message = ""
 				}
 
-				newMsg.fwd_msg_id = msgObj.id
+				newMsg.fwdMsgId = msgObj.id
 				newMsg.attachPath = msgObj.messageOwner?.attachPath
-				newMsg.entities = msgObj.messageOwner?.entities ?: arrayListOf()
 
-				if (msgObj.messageOwner?.reply_markup is TL_replyInlineMarkup) {
-					newMsg.reply_markup = TL_replyInlineMarkup()
+				msgObj.messageOwner?.entities?.let {
+					newMsg.entities.addAll(it)
+				}
+
+				if (msgObj.messageOwner?.replyMarkup is TLRPC.TLReplyInlineMarkup) {
+					newMsg.replyMarkup = TLRPC.TLReplyInlineMarkup()
 
 					var dropMarkup = false
 					var b = 0
-					val n = msgObj.messageOwner?.reply_markup?.rows?.size ?: 0
+					val n = msgObj.messageOwner?.replyMarkup?.rows?.size ?: 0
 
 					while (b < n) {
-						val oldRow = msgObj.messageOwner!!.reply_markup!!.rows[b]
-						var newRow: TL_keyboardButtonRow? = null
+						val oldRow = msgObj.messageOwner!!.replyMarkup!!.rows[b]
+						var newRow: TLRPC.TLKeyboardButtonRow? = null
 						var c = 0
 						val n2 = oldRow.buttons.size
 
 						while (c < n2) {
 							var button = oldRow.buttons[c]
 
-							if (button is TL_keyboardButtonUrlAuth || button is TL_keyboardButtonUrl || button is TL_keyboardButtonSwitchInline || button is TL_keyboardButtonBuy) {
-								if (button is TL_keyboardButtonUrlAuth) {
-									val auth = TL_keyboardButtonUrlAuth()
+							if (button is TLRPC.TLKeyboardButtonUrlAuth || button is TLRPC.TLKeyboardButtonUrl || button is TLRPC.TLKeyboardButtonSwitchInline || button is TLRPC.TLKeyboardButtonBuy) {
+								if (button is TLRPC.TLKeyboardButtonUrlAuth) {
+									val auth = TLRPC.TLKeyboardButtonUrlAuth()
 									auth.flags = button.flags
 
-									if (button.fwd_text != null) {
-										auth.fwd_text = button.fwd_text
-										auth.text = auth.fwd_text
+									if (button.fwdText != null) {
+										auth.fwdText = button.fwdText
+										auth.text = auth.fwdText
 									}
 									else {
 										auth.text = button.text
 									}
 
 									auth.url = button.url
-									auth.button_id = button.button_id
+									auth.buttonId = button.buttonId
 									button = auth
 								}
 
 								if (newRow == null) {
-									newRow = TL_keyboardButtonRow()
-									newMsg.reply_markup?.rows?.add(newRow)
+									newRow = TLRPC.TLKeyboardButtonRow()
+									newMsg.replyMarkup?.rows?.add(newRow)
 								}
 
 								newRow.buttons.add(button)
@@ -2409,7 +2265,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						newMsg.flags = newMsg.flags or 64
 					}
 					else {
-						msgObj.messageOwner?.reply_markup = null
+						msgObj.messageOwner?.replyMarkup = null
 						newMsg.flags = newMsg.flags and 64.inv()
 					}
 				}
@@ -2423,28 +2279,28 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 
 				newMsg.id = userConfig.newMessageId
-				newMsg.local_id = newMsg.id
+				newMsg.localId = newMsg.id
 				newMsg.out = true
 
-				if (msgObj.messageOwner!!.realGroupId != 0L) {
-					var gId = groupsMap[msgObj.messageOwner!!.realGroupId]
+				if (msgObj.messageOwner!!.groupedId != 0L) {
+					var gId = groupsMap[msgObj.messageOwner!!.groupedId]
 
 					if (gId == null) {
 						gId = Utilities.random.nextLong()
-						groupsMap.put(msgObj.messageOwner!!.realGroupId, gId)
+						groupsMap.put(msgObj.messageOwner!!.groupedId, gId)
 					}
 
-					newMsg.groupId = gId
+					newMsg.groupedId = gId
 					newMsg.flags = newMsg.flags or 131072
 				}
 
-				if (peerId.channel_id != 0L && isChannel) {
+				if (peerId.channelId != 0L && isChannel) {
 					if (isSignature) {
-						newMsg.from_id = TL_peerUser()
-						newMsg.from_id?.user_id = myId
+						newMsg.fromId = TLRPC.TLPeerUser()
+						newMsg.fromId?.userId = myId
 					}
 					else {
-						newMsg.from_id = peerId
+						newMsg.fromId = peerId
 					}
 
 					newMsg.post = true
@@ -2453,33 +2309,33 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val fromPeerId = ChatObject.getSendAsPeerId(chat, messagesController.getChatFull(-peer), true)
 
 					if (fromPeerId == myId) {
-						newMsg.from_id = TL_peerUser()
-						newMsg.from_id?.user_id = myId
+						newMsg.fromId = TLRPC.TLPeerUser()
+						newMsg.fromId?.userId = myId
 						newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_FROM_ID
 					}
 					else {
-						newMsg.from_id = messagesController.getPeer(fromPeerId)
+						newMsg.fromId = messagesController.getPeer(fromPeerId)
 
 						if (rank != null) {
-							newMsg.post_author = rank
+							newMsg.postAuthor = rank
 							newMsg.flags = newMsg.flags or 65536
 						}
 					}
 				}
 
-				if (newMsg.random_id == 0L) {
-					newMsg.random_id = nextRandomId
+				if (newMsg.randomId == 0L) {
+					newMsg.randomId = nextRandomId
 				}
 
-				randomIds.add(newMsg.random_id)
+				randomIds.add(newMsg.randomId)
 
-				messagesByRandomIds.put(newMsg.random_id, newMsg)
+				messagesByRandomIds.put(newMsg.randomId, newMsg)
 
-				ids.add(newMsg.fwd_msg_id)
+				ids.add(newMsg.fwdMsgId)
 
 				newMsg.date = if (scheduleDate != 0) scheduleDate else connectionsManager.currentTime
 
-				if (inputPeer is TL_inputPeerChannel && isChannel) {
+				if (inputPeer is TLRPC.TLInputPeerChannel && isChannel) {
 					if (scheduleDate == 0) {
 						newMsg.views = 1
 						newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_VIEWS
@@ -2496,21 +2352,21 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					newMsg.unread = true
 				}
 
-				newMsg.dialog_id = peer
-				newMsg.peer_id = peerId
+				newMsg.dialogId = peer
+				newMsg.peerId = peerId
 
 				if (MessageObject.isVoiceMessage(newMsg) || MessageObject.isRoundVideoMessage(newMsg)) {
-					if (inputPeer is TL_inputPeerChannel && msgObj.channelId != 0L) {
-						newMsg.media_unread = msgObj.isContentUnread
+					if (inputPeer is TLRPC.TLInputPeerChannel && msgObj.channelId != 0L) {
+						newMsg.mediaUnread = msgObj.isContentUnread
 					}
 					else {
-						newMsg.media_unread = true
+						newMsg.mediaUnread = true
 					}
 				}
 
 				val newMsgObj = MessageObject(currentAccount, newMsg, generateLayout = true, checkMediaExists = true)
 				newMsgObj.scheduled = scheduleDate != 0
-				newMsgObj.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SENDING
+				newMsgObj.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SENDING
 				newMsgObj.wasJustSent = true
 
 				objArr.add(newMsgObj)
@@ -2531,7 +2387,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				//val differentDialog = false
 
-				FileLog.d("forward message user_id = " + inputPeer.user_id + " chat_id = " + inputPeer.chat_id + " channel_id = " + inputPeer.channel_id + " access_hash = " + inputPeer.access_hash)
+				FileLog.d("forward message user_id = " + inputPeer.userId + " chat_id = " + inputPeer.chatId + " channel_id = " + inputPeer.channelId + " access_hash = " + inputPeer.accessHash)
 
 				if (arr.size == 100 || a == messages.size - 1 || a != messages.size - 1 && messages[a + 1].dialogId != msgObj.dialogId) {
 					messagesStorage.putMessages(ArrayList(arr), false, true, false, 0, scheduleDate != 0)
@@ -2539,34 +2395,35 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 					userConfig.saveConfig(false)
 
-					val req = TL_messages_forwardMessages()
-					req.to_peer = inputPeer
+					val req = TLRPC.TLMessagesForwardMessages()
+					req.toPeer = inputPeer
 					req.silent = !notify || MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_$peer", false)
 
 					if (scheduleDate != 0) {
-						req.schedule_date = scheduleDate
+						req.scheduleDate = scheduleDate
 						req.flags = req.flags or 1024
 					}
 
-					if (msgObj.messageOwner?.peer_id is TL_peerChannel) {
-						val channel = messagesController.getChat(msgObj.messageOwner?.peer_id?.channel_id)
+					if (msgObj.messageOwner?.peerId is TLRPC.TLPeerChannel) {
+						val channel = messagesController.getChat(msgObj.messageOwner?.peerId?.channelId)
 
-						req.from_peer = TL_inputPeerChannel()
-						req.from_peer.channel_id = msgObj.messageOwner?.peer_id?.channel_id ?: 0L
+						req.fromPeer = TLRPC.TLInputPeerChannel().also {
+							it.channelId = msgObj.messageOwner?.peerId?.channelId ?: 0L
+						}
 
 						if (channel != null) {
-							req.from_peer.access_hash = channel.access_hash
+							req.fromPeer?.accessHash = channel.accessHash
 						}
 					}
 					else {
-						req.from_peer = TL_inputPeerEmpty()
+						req.fromPeer = TLRPC.TLInputPeerEmpty()
 					}
 
-					req.random_id = randomIds
-					req.id = ids
-					req.drop_author = forwardFromMyName
-					req.drop_media_captions = hideCaption
-					req.with_my_score = messages.size == 1 && messages[0].messageOwner!!.with_my_score
+					req.randomId.addAll(randomIds)
+					req.id.addAll(ids)
+					req.dropAuthor = forwardFromMyName
+					req.dropMediaCaptions = hideCaption
+					// req.withMyScore = messages.size == 1 && ((messages[0].messageOwner as? TLRPC.TLMessage)?.withMyScore ?: false)
 
 					val newMsgObjArr = arr
 					val newMsgArr = ArrayList(objArr)
@@ -2584,8 +2441,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								while (a1 < updates.updates.size) {
 									val update = updates.updates[a1]
 
-									if (update is TL_updateMessageID) {
-										newMessagesByIds.put(update.id, update.random_id)
+									if (update is TLRPC.TLUpdateMessageID) {
+										newMessagesByIds.put(update.id, update.randomId)
 										updates.updates.removeAt(a1)
 										a1--
 									}
@@ -2607,120 +2464,122 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							while (a1 < updates.updates.size) {
 								val update = updates.updates[a1]
 
-								if (update is TL_updateNewMessage || update is TL_updateNewChannelMessage || update is TL_updateNewScheduledMessage) {
+								if (update is TLRPC.TLUpdateNewMessage || update is TLRPC.TLUpdateNewChannelMessage || update is TLRPC.TLUpdateNewScheduledMessage) {
 									var currentSchedule = scheduleDate != 0
 
 									updates.updates.removeAt(a1)
 
 									a1--
 
-									val message: Message
+									val message: Message?
 
 									when (update) {
-										is TL_updateNewMessage -> {
+										is TLRPC.TLUpdateNewMessage -> {
 											message = update.message
-											messagesController.processNewDifferenceParams(-1, update.pts, -1, update.pts_count)
+											messagesController.processNewDifferenceParams(-1, update.pts, -1, update.ptsCount)
 										}
 
-										is TL_updateNewScheduledMessage -> {
+										is TLRPC.TLUpdateNewScheduledMessage -> {
 											message = update.message
 										}
 
 										else -> {
-											val updateNewChannelMessage = update as TL_updateNewChannelMessage
+											val updateNewChannelMessage = update as TLRPC.TLUpdateNewChannelMessage
 											message = updateNewChannelMessage.message
-											messagesController.processNewChannelDifferenceParams(updateNewChannelMessage.pts, updateNewChannelMessage.pts_count, message.peer_id?.channel_id ?: 0L)
+											messagesController.processNewChannelDifferenceParams(updateNewChannelMessage.pts, updateNewChannelMessage.ptsCount, message?.peerId?.channelId ?: 0L)
 										}
 									}
 
-									if (scheduledOnline && message.date != 0x7FFFFFFE) {
-										currentSchedule = false
-									}
-
-									ImageLoader.saveMessageThumbs(message)
-
-									if (!currentSchedule) {
-										message.unread = value < message.id
-									}
-
-									if (toMyself) {
-										message.out = true
-										message.unread = false
-										message.media_unread = false
-									}
-
-									val randomId = newMessagesByIds[message.id]
-
-									if (randomId != 0L) {
-										val newMsgObj1 = messagesByRandomIdsFinal[randomId]
-
-										if (newMsgObj1 == null) {
-											a1++
-											continue
+									if (message != null) {
+										if (scheduledOnline && message.date != 0x7FFFFFFE) {
+											currentSchedule = false
 										}
 
-										val index = newMsgObjArr.indexOf(newMsgObj1)
+										ImageLoader.saveMessageThumbs(message)
 
-										if (index == -1) {
-											a1++
-											continue
+										if (!currentSchedule) {
+											message.unread = value < message.id
 										}
 
-										val msgObj1 = newMsgArr[index]
-
-										newMsgObjArr.removeAt(index)
-										newMsgArr.removeAt(index)
-
-										val oldId = newMsgObj1.id
-
-										val sentMessages = ArrayList<Message>()
-										sentMessages.add(message)
-
-										msgObj1.messageOwner?.post_author = message.post_author
-
-										if (message.flags and 33554432 != 0) {
-											msgObj1.messageOwner?.ttl_period = message.ttl_period
-											msgObj1.messageOwner?.flags = msgObj1.messageOwner!!.flags or 33554432
+										if (toMyself) {
+											message.out = true
+											message.unread = false
+											message.mediaUnread = false
 										}
 
-										updateMediaPaths(msgObj1, message, message.id, null, true)
+										val randomId = newMessagesByIds[message.id]
 
-										val existFlags = msgObj1.mediaExistanceFlags
+										if (randomId != 0L) {
+											val newMsgObj1 = messagesByRandomIdsFinal[randomId]
 
-										newMsgObj1.id = message.id
+											if (newMsgObj1 == null) {
+												a1++
+												continue
+											}
 
-										sentCount++
+											val index = newMsgObjArr.indexOf(newMsgObj1)
 
-										if (scheduleDate != 0 && !currentSchedule) {
-											AndroidUtilities.runOnUIThread {
-												val messageIds = ArrayList<Int>()
-												messageIds.add(oldId)
+											if (index == -1) {
+												a1++
+												continue
+											}
 
-												messagesController.deleteMessages(messageIds, null, null, newMsgObj1.dialog_id, forAll = false, scheduled = true)
+											val msgObj1 = newMsgArr[index]
 
-												messagesStorage.storageQueue.postRunnable {
-													messagesStorage.putMessages(sentMessages, true, false, false, 0, false)
+											newMsgObjArr.removeAt(index)
+											newMsgArr.removeAt(index)
 
-													AndroidUtilities.runOnUIThread {
-														messagesController.updateInterfaceWithMessages(newMsgObj1.dialog_id, listOf(MessageObject(msgObj.currentAccount, msgObj.messageOwner!!, generateLayout = true, checkMediaExists = true)), false)
-														mediaDataController.increasePeerRating(newMsgObj1.dialog_id)
-														processSentMessage(oldId)
-														removeFromSendingMessages(oldId, scheduleDate != 0)
+											val oldId = newMsgObj1.id
+
+											val sentMessages = ArrayList<Message>()
+											sentMessages.add(message)
+
+											msgObj1.messageOwner?.postAuthor = message.postAuthor
+
+											if (message.flags and 33554432 != 0) {
+												msgObj1.messageOwner?.ttlPeriod = message.ttlPeriod
+												msgObj1.messageOwner?.flags = msgObj1.messageOwner!!.flags or 33554432
+											}
+
+											updateMediaPaths(msgObj1, message, message.id, null, true)
+
+											val existFlags = msgObj1.mediaExistanceFlags
+
+											newMsgObj1.id = message.id
+
+											sentCount++
+
+											if (scheduleDate != 0 && !currentSchedule) {
+												AndroidUtilities.runOnUIThread {
+													val messageIds = ArrayList<Int>()
+													messageIds.add(oldId)
+
+													messagesController.deleteMessages(messageIds, null, null, newMsgObj1.dialogId, forAll = false, scheduled = true)
+
+													messagesStorage.storageQueue.postRunnable {
+														messagesStorage.putMessages(sentMessages, true, false, false, 0, false)
+
+														AndroidUtilities.runOnUIThread {
+															messagesController.updateInterfaceWithMessages(newMsgObj1.dialogId, listOf(MessageObject(msgObj.currentAccount, msgObj.messageOwner!!, generateLayout = true, checkMediaExists = true)), false)
+															mediaDataController.increasePeerRating(newMsgObj1.dialogId)
+															processSentMessage(oldId)
+															removeFromSendingMessages(oldId, scheduleDate != 0)
+														}
 													}
 												}
 											}
-										}
-										else {
-											messagesStorage.storageQueue.postRunnable {
-												messagesStorage.updateMessageStateAndId(newMsgObj1.random_id, MessageObject.getPeerId(peerId), oldId, newMsgObj1.id, 0, false, if (scheduleDate != 0) 1 else 0)
-												messagesStorage.putMessages(sentMessages, true, false, false, 0, scheduleDate != 0)
+											else {
+												messagesStorage.storageQueue.postRunnable {
+													messagesStorage.updateMessageStateAndId(newMsgObj1.randomId, MessageObject.getPeerId(peerId), oldId, newMsgObj1.id, 0, false, if (scheduleDate != 0) 1 else 0)
+													messagesStorage.putMessages(sentMessages, true, false, false, 0, scheduleDate != 0)
 
-												AndroidUtilities.runOnUIThread {
-													newMsgObj1.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
-													mediaDataController.increasePeerRating(peer)
-													notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, message.id, message, peer, 0L, existFlags, scheduleDate != 0)
-													processSentMessage(oldId)
-													removeFromSendingMessages(oldId, scheduleDate != 0)
+													AndroidUtilities.runOnUIThread {
+														newMsgObj1.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
+														mediaDataController.increasePeerRating(peer)
+														notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, message.id, message, peer, 0L, existFlags, scheduleDate != 0)
+														processSentMessage(oldId)
+														removeFromSendingMessages(oldId, scheduleDate != 0)
+													}
 												}
 											}
 										}
@@ -2748,7 +2607,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							messagesStorage.markMessageAsSendError(newMsgObj1, scheduleDate != 0)
 
 							AndroidUtilities.runOnUIThread {
-								newMsgObj1.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+								newMsgObj1.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 								notificationCenter.postNotificationName(NotificationCenter.messageSendError, newMsgObj1.id)
 								processSentMessage(newMsgObj1.id)
 								removeFromSendingMessages(newMsgObj1.id, scheduleDate != 0)
@@ -2769,7 +2628,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		else {
 			var canSendVoiceMessages = true
 			val encryptedChat = messagesController.getEncryptedChat(peer.toInt())
-			val userId = encryptedChat?.user_id ?: 0
+			val userId = encryptedChat?.userId ?: 0
 
 			if (DialogObject.isUserDialog(userId)) {
 				val sendToUser = messagesController.getUser(userId)
@@ -2778,7 +2637,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val userFull = messagesController.getUserFull(userId)
 
 					if (userFull != null) {
-						canSendVoiceMessages = !userFull.voice_messages_forbidden
+						canSendVoiceMessages = !userFull.voiceMessagesForbidden
 					}
 				}
 			}
@@ -2812,26 +2671,31 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		}
 
 		if (message.media == null) {
-			val media = TL_messageMediaEmpty()
+			val media = TLRPC.TLMessageMediaEmpty()
 			media.serializeToStream(data)
 		}
 		else {
 			message.media?.serializeToStream(data)
 		}
 
-		data.writeString(if (message.message != null) message.message else "")
-		data.writeString(if (message.attachPath != null) message.attachPath else "")
+		data.writeString(message.message ?: "")
+		data.writeString(message.attachPath ?: "")
 
-		var count: Int
+		val entities = message.entities
 
-		data.writeInt32(message.entities.size.also { count = it })
+		if (!entities.isNullOrEmpty()) {
+			data.writeInt32(entities.size)
 
-		for (a in 0 until count) {
-			message.entities[a].serializeToStream(data)
+			for (entity in entities) {
+				entity.serializeToStream(data)
+			}
+		}
+		else {
+			data.writeInt32(0)
 		}
 	}
 
-	fun editMessage(messageObject: MessageObject?, photo: TL_photo?, videoEditedInfo: VideoEditedInfo?, document: TL_document?, path: String?, params: HashMap<String, String>?, retry: Boolean, parentObject: Any?) {
+	fun editMessage(messageObject: MessageObject?, photo: TLRPC.TLPhoto?, videoEditedInfo: VideoEditedInfo?, document: TLRPC.TLDocument?, path: String?, params: MutableMap<String, String>?, retry: Boolean, parentObject: Any?) {
 		@Suppress("NAME_SHADOWING") var photo = photo
 		@Suppress("NAME_SHADOWING") var videoEditedInfo = videoEditedInfo
 		@Suppress("NAME_SHADOWING") var document = document
@@ -2844,10 +2708,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		}
 
 		if (params == null) {
-			params = HashMap()
+			params = mutableMapOf()
 		}
 
-		val newMsg = messageObject.messageOwner
+		val newMsg = messageObject.messageOwner!!
 		messageObject.cancelEditing = false
 
 		if (messageObject.editingMessage.isNullOrEmpty() && MediaDataController.getMediaType(messageObject.messageOwner) == MediaDataController.TEXT_ONLY) {
@@ -2871,17 +2735,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 			if (retry) {
 				when (messageObject.messageOwner?.media) {
-					is TL_messageMediaWebPage, null, is TL_messageMediaEmpty -> {
+					is TLRPC.TLMessageMediaWebPage, null, is TLRPC.TLMessageMediaEmpty -> {
 						type = 1
 					}
 
-					is TL_messageMediaPhoto -> {
-						photo = messageObject.messageOwner?.media?.photo as? TL_photo
+					is TLRPC.TLMessageMediaPhoto -> {
+						photo = messageObject.messageOwner?.media?.photo as? TLRPC.TLPhoto
 						type = 2
 					}
 
-					is TL_messageMediaDocument -> {
-						document = messageObject.messageOwner?.media?.document as? TL_document
+					is TLRPC.TLMessageMediaDocument -> {
+						document = messageObject.messageOwner?.media?.document as? TLRPC.TLDocument
 
 						type = if (MessageObject.isVideoDocument(document) || videoEditedInfo != null) {
 							3
@@ -2894,26 +2758,26 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 
-				params = newMsg?.params
+				params = newMsg.params
 
 				if (parentObject == null && params != null && params.containsKey("parentObject")) {
 					parentObject = params["parentObject"]
 				}
 
-				messageObject.editingMessage = newMsg?.message
-				messageObject.editingMessageEntities = newMsg?.entities
-				path = newMsg?.attachPath
+				messageObject.editingMessage = newMsg.message
+				messageObject.editingMessageEntities = newMsg.entities
+				path = newMsg.attachPath
 			}
 			else {
-				messageObject.previousMedia = newMsg?.media
-				messageObject.previousMessage = newMsg?.message
-				messageObject.previousMessageEntities = newMsg?.entities
-				messageObject.previousAttachPath = newMsg?.attachPath
+				messageObject.previousMedia = newMsg.media
+				messageObject.previousMessage = newMsg.message
+				messageObject.previousMessageEntities = newMsg.entities
+				messageObject.previousAttachPath = newMsg.attachPath
 
 //				var media = newMsg.media
 //
 //				if (media == null) {
-//					media = TL_messageMediaEmpty()
+//					media = TLRPC.TLMessageMediaEmpty()
 //				}
 
 				val serializedDataCalc = SerializedData(true)
@@ -2928,24 +2792,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				prevMessageData.cleanup()
 
 				if (photo != null) {
-					newMsg?.media = TL_messageMediaPhoto()
-					newMsg?.media?.flags = newMsg.media!!.flags or 3
-					newMsg?.media?.photo = photo
+					newMsg.media = TLRPC.TLMessageMediaPhoto()
+					newMsg.media?.flags = newMsg.media!!.flags or 3
+					newMsg.media?.photo = photo
 
 					type = 2
 
 					if (!path.isNullOrEmpty() && path.startsWith("http")) {
-						newMsg?.attachPath = path
+						newMsg.attachPath = path
 					}
 					else {
 						val location1 = photo.sizes[photo.sizes.size - 1].location
-						newMsg?.attachPath = FileLoader.getInstance(currentAccount).getPathToAttach(location1, true).toString()
+						newMsg.attachPath = FileLoader.getInstance(currentAccount).getPathToAttach(location1, true).toString()
 					}
 				}
 				else if (document != null) {
-					newMsg?.media = TL_messageMediaDocument()
-					newMsg?.media?.flags = newMsg.media!!.flags or 3
-					newMsg?.media?.document = document
+					newMsg.media = TLRPC.TLMessageMediaDocument()
+					newMsg.media?.flags = newMsg.media!!.flags or 3
+					newMsg.media?.document = document
 
 					type = if (MessageObject.isVideoDocument(document) || videoEditedInfo != null) {
 						3
@@ -2959,23 +2823,23 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						params["ve"] = ve
 					}
 
-					newMsg?.attachPath = path
+					newMsg.attachPath = path
 				}
 				else {
 					type = 1
 				}
 
-				newMsg?.params = params
-				newMsg?.send_state = MessageObject.MESSAGE_SEND_STATE_EDITING
+				newMsg.params = params
+				newMsg.sendState = MessageObject.MESSAGE_SEND_STATE_EDITING
 			}
 
-			if (newMsg?.attachPath == null) {
-				newMsg?.attachPath = ""
+			if (newMsg.attachPath == null) {
+				newMsg.attachPath = ""
 			}
 
-			newMsg?.local_id = 0
+			newMsg.localId = 0
 
-			if (messageObject.type == MessageObject.TYPE_VIDEO || videoEditedInfo != null || messageObject.type == MessageObject.TYPE_VOICE && !newMsg?.attachPath.isNullOrEmpty()) {
+			if (messageObject.type == MessageObject.TYPE_VIDEO || videoEditedInfo != null || messageObject.type == MessageObject.TYPE_VOICE && !newMsg.attachPath.isNullOrEmpty()) {
 				messageObject.attachPathExists = true
 			}
 
@@ -2985,36 +2849,36 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			if (!retry) {
 				if (messageObject.editingMessage != null) {
-					val oldMessage = newMsg?.message
+					val oldMessage = newMsg.message
 
-					newMsg?.message = messageObject.editingMessage.toString()
+					newMsg.message = messageObject.editingMessage?.toString()
 
 					messageObject.caption = null
 
 					if (type == 1) {
 						if (messageObject.editingMessageEntities != null) {
-							newMsg?.entities = ArrayList(messageObject.editingMessageEntities!!)
-							newMsg?.flags = newMsg.flags or 128
+							newMsg.entities = ArrayList(messageObject.editingMessageEntities!!)
+							newMsg.flags = newMsg.flags or 128
 						}
-						else if (!TextUtils.equals(oldMessage, newMsg?.message)) {
-							newMsg?.flags = newMsg.flags and 128.inv()
+						else if (!TextUtils.equals(oldMessage, newMsg.message)) {
+							newMsg.flags = newMsg.flags and 128.inv()
 						}
 					}
 					else {
 						if (messageObject.editingMessageEntities != null) {
-							newMsg?.entities = ArrayList(messageObject.editingMessageEntities!!)
-							newMsg?.flags = newMsg.flags or 128
+							newMsg.entities = ArrayList(messageObject.editingMessageEntities!!)
+							newMsg.flags = newMsg.flags or 128
 						}
 						else {
 							val message = arrayOf(messageObject.editingMessage)
 							val entities = mediaDataController.getEntities(message, supportsSendingNewEntities)
 
 							if (!entities.isNullOrEmpty()) {
-								newMsg?.entities = ArrayList(entities)
-								newMsg?.flags = newMsg.flags or 128
+								newMsg.entities = ArrayList(entities)
+								newMsg.flags = newMsg.flags or 128
 							}
-							else if (!TextUtils.equals(oldMessage, newMsg?.message)) {
-								newMsg?.flags = newMsg.flags and 128.inv()
+							else if (!TextUtils.equals(oldMessage, newMsg.message)) {
+								newMsg.flags = newMsg.flags and 128.inv()
 							}
 						}
 
@@ -3028,7 +2892,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				messageObject.setType()
 
 				if (type == 1) {
-					if (messageObject.messageOwner?.media is TL_messageMediaPhoto || messageObject.messageOwner?.media is TL_messageMediaDocument) {
+					if (messageObject.messageOwner?.media is TLRPC.TLMessageMediaPhoto || messageObject.messageOwner?.media is TLRPC.TLMessageMediaDocument) {
 						messageObject.generateCaption()
 					}
 					else {
@@ -3039,10 +2903,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				messageObject.createMessageSendInfo()
 
-				val arrayList = ArrayList<MessageObject>()
-				arrayList.add(messageObject)
-
-				notificationCenter.postNotificationName(NotificationCenter.replaceMessagesObjects, peer, arrayList)
+				notificationCenter.postNotificationName(NotificationCenter.replaceMessagesObjects, peer, listOf(messageObject))
 			}
 
 			var originalPath: String? = null
@@ -3060,7 +2921,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					// unused
 				}
 				else if (type == 2) {
-					val uploadedPhoto = TL_inputMediaUploadedPhoto()
+					val uploadedPhoto = TLRPC.TLInputMediaUploadedPhoto()
 
 					if (params != null) {
 						val masks = params["masks"]
@@ -3070,7 +2931,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							val count = serializedData.readInt32(false)
 
 							for (a in 0 until count) {
-								uploadedPhoto.stickers.add(InputDocument.TLdeserialize(serializedData, serializedData.readInt32(false), false))
+								uploadedPhoto.stickers.add(InputDocument.deserialize(serializedData, serializedData.readInt32(false), false) ?: TLRPC.TLInputDocumentEmpty())
 							}
 
 							uploadedPhoto.flags = uploadedPhoto.flags or 1
@@ -3078,19 +2939,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						}
 					}
 
-					if (photo!!.access_hash == 0L) {
+					if (photo!!.accessHash == 0L) {
 						inputMedia = uploadedPhoto
 						performMediaUpload = true
 					}
 					else {
-						val media = TL_inputMediaPhoto()
-						media.id = TL_inputPhoto()
-						media.id.id = photo.id
-						media.id.access_hash = photo.access_hash
-						media.id.file_reference = photo.file_reference
+						val media = TLRPC.TLInputMediaPhoto()
 
-						if (media.id.file_reference == null) {
-							media.id.file_reference = ByteArray(0)
+						media.id = TLRPC.TLInputPhoto().also {
+							it.id = photo.id
+							it.accessHash = photo.accessHash
+							it.fileReference = photo.fileReference ?: ByteArray(0)
 						}
 
 						inputMedia = media
@@ -3112,8 +2971,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						delayedMessage.locationParent = photo
 					}
 				}
-				else if (type == 3) {
-					val uploadedDocument = TL_inputMediaUploadedDocument()
+				else if (type == 3 && document != null) {
+					val uploadedDocument = TLRPC.TLInputMediaUploadedDocument()
 
 					if (params != null) {
 						val masks = params["masks"]
@@ -3123,7 +2982,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							val count = serializedData.readInt32(false)
 
 							for (a in 0 until count) {
-								uploadedDocument.stickers.add(InputDocument.TLdeserialize(serializedData, serializedData.readInt32(false), false))
+								uploadedDocument.stickers.add(InputDocument.deserialize(serializedData, serializedData.readInt32(false), false) ?: TLRPC.TLInputDocumentEmpty())
 							}
 
 							uploadedDocument.flags = uploadedDocument.flags or 1
@@ -3132,27 +2991,25 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						}
 					}
 
-					uploadedDocument.mime_type = document!!.mime_type
-					uploadedDocument.attributes = document.attributes
+					uploadedDocument.mimeType = document.mimeType
+					uploadedDocument.attributes.addAll(document.attributes)
 
 					if (!messageObject.isGif && (videoEditedInfo == null || !videoEditedInfo.muted)) {
-						uploadedDocument.nosound_video = true
+						uploadedDocument.nosoundVideo = true
 						FileLog.d("nosound_video = true")
 					}
 
-					if (document.access_hash == 0L) {
+					if (document.accessHash == 0L) {
 						inputMedia = uploadedDocument
 						performMediaUpload = true
 					}
 					else {
-						val media = TL_inputMediaDocument()
-						media.id = TL_inputDocument()
-						media.id.id = document.id
-						media.id.access_hash = document.access_hash
-						media.id.file_reference = document.file_reference
+						val media = TLRPC.TLInputMediaDocument()
 
-						if (media.id.file_reference == null) {
-							media.id.file_reference = ByteArray(0)
+						media.id = TLRPC.TLInputDocument().also {
+							it.id = document.id
+							it.accessHash = document.accessHash
+							it.fileReference = document.fileReference ?: ByteArray(0)
 						}
 
 						inputMedia = media
@@ -3169,7 +3026,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					if (document.thumbs.isNotEmpty()) {
 						val photoSize = document.thumbs[0]
 
-						if (photoSize !is TL_photoStrippedSize) {
+						if (photoSize !is TLRPC.TLPhotoStrippedSize) {
 							delayedMessage.photoSize = photoSize
 							delayedMessage.locationParent = document
 						}
@@ -3177,27 +3034,26 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					delayedMessage.videoEditedInfo = videoEditedInfo
 				}
-				else if (type == 7) {
+				else if (type == 7 && document != null) {
 					val http = false
 
-					val uploadedDocument: InputMedia = TL_inputMediaUploadedDocument()
-					uploadedDocument.mime_type = document!!.mime_type
-					uploadedDocument.attributes = document.attributes
+					val uploadedDocument = TLRPC.TLInputMediaUploadedDocument()
+					uploadedDocument.mimeType = document.mimeType
+					uploadedDocument.attributes.addAll(document.attributes)
 
-					if (document.access_hash == 0L) {
+					if (document.accessHash == 0L) {
 						inputMedia = uploadedDocument
-						performMediaUpload = uploadedDocument is TL_inputMediaUploadedDocument
+						performMediaUpload = true
 					}
 					else {
-						val media = TL_inputMediaDocument()
-						media.id = TL_inputDocument()
-						media.id.id = document.id
-						media.id.access_hash = document.access_hash
-						media.id.file_reference = document.file_reference
+						val media = TLRPC.TLInputMediaDocument()
 
-						if (media.id.file_reference == null) {
-							media.id.file_reference = ByteArray(0)
+						media.id = TLRPC.TLInputDocument().also {
+							it.id = document.id
+							it.accessHash = document.accessHash
+							it.fileReference = document.fileReference ?: ByteArray(0)
 						}
+
 						inputMedia = media
 					}
 
@@ -3210,7 +3066,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						if (document.thumbs.isNotEmpty()) {
 							val photoSize = document.thumbs[0]
 
-							if (photoSize !is TL_photoStrippedSize) {
+							if (photoSize !is TLRPC.TLPhotoStrippedSize) {
 								delayedMessage.photoSize = photoSize
 								delayedMessage.locationParent = document
 							}
@@ -3224,7 +3080,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				val reqSend: TLObject
 
-				val request = TL_messages_editMessage()
+				val request = TLRPC.TLMessagesEditMessage()
 				request.id = messageObject.id
 				request.peer = messagesController.getInputPeer(peer)
 
@@ -3244,7 +3100,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					request.noWebpage = !messageObject.editingMessageSearchWebPage
 
 					if (messageObject.editingMessageEntities != null) {
-						request.entities = messageObject.editingMessageEntities!!
+						request.entities.addAll(messageObject.editingMessageEntities!!)
 						request.flags = request.flags or 8
 					}
 					else {
@@ -3252,7 +3108,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						val entities = mediaDataController.getEntities(message, supportsSendingNewEntities)
 
 						if (!entities.isNullOrEmpty()) {
-							request.entities = entities
+							request.entities.addAll(entities)
 							request.flags = request.flags or 8
 						}
 					}
@@ -3318,7 +3174,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return 0
 		}
 
-		val req = TL_messages_editMessage()
+		val req = TLRPC.TLMessagesEditMessage()
 		req.peer = messagesController.getInputPeer(messageObject.dialogId)
 
 		if (message != null) {
@@ -3329,8 +3185,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		req.id = messageObject.id
 
-		if (entities != null) {
-			req.entities = entities
+		if (!entities.isNullOrEmpty()) {
+			req.entities.addAll(entities)
 			req.flags = req.flags or 8
 		}
 
@@ -3352,13 +3208,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	private fun sendLocation(location: Location) {
-		val mediaGeo = TL_messageMediaGeo()
-		mediaGeo.geo = TL_geoPoint()
-		mediaGeo.geo.lat = AndroidUtilities.fixLocationCoordinate(location.latitude)
-		mediaGeo.geo._long = AndroidUtilities.fixLocationCoordinate(location.longitude)
+		val mediaGeo = TLRPC.TLMessageMediaGeo()
+
+		mediaGeo.geo = TLRPC.TLGeoPoint().also {
+			it.lat = AndroidUtilities.fixLocationCoordinate(location.latitude)
+			it.lon = AndroidUtilities.fixLocationCoordinate(location.longitude)
+		}
 
 		for ((_, messageObject) in waitingForLocation) {
-			sendMessage(mediaGeo, messageObject.dialogId, messageObject, null, null, null, true, 0, false, null)
+			sendMessage(mediaGeo, messageObject.dialogId, messageObject, null, null, null, true, 0)
 		}
 	}
 
@@ -3367,7 +3225,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return
 		}
 
-		val key = messageObject.dialogId.toString() + "_" + messageObject.id + "_" + Utilities.bytesToHex(button.data) + "_" + if (button is TL_keyboardButtonGame) "1" else "0"
+		val key = messageObject.dialogId.toString() + "_" + messageObject.id + "_" + Utilities.bytesToHex(button.data) + "_" + if (button is TLRPC.TLKeyboardButtonGame) "1" else "0"
 
 		waitingForLocation[key] = messageObject
 
@@ -3379,7 +3237,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return false
 		}
 
-		val key = messageObject.dialogId.toString() + "_" + messageObject.id + "_" + Utilities.bytesToHex(button.data) + "_" + if (button is TL_keyboardButtonGame) "1" else "0"
+		val key = messageObject.dialogId.toString() + "_" + messageObject.id + "_" + Utilities.bytesToHex(button.data) + "_" + if (button is TLRPC.TLKeyboardButtonGame) "1" else "0"
 
 		return waitingForLocation.containsKey(key)
 	}
@@ -3413,9 +3271,9 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 			}
 
-			val req = TL_messages_getBotCallbackAnswer()
+			val req = TLRPC.TLMessagesGetBotCallbackAnswer()
 			req.peer = messagesController.getInputPeer(dialogId)
-			req.msg_id = msgId
+			req.msgId = msgId
 			req.game = false
 
 			if (data != null) {
@@ -3443,7 +3301,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		return waitingForVote[key]
 	}
 
-	fun sendVote(messageObject: MessageObject?, answers: ArrayList<TL_pollAnswer>?, finishRunnable: Runnable?): Int {
+	fun sendVote(messageObject: MessageObject?, answers: List<TLRPC.TLPollAnswer>?, finishRunnable: Runnable?): Int {
 		if (messageObject == null) {
 			return 0
 		}
@@ -3454,8 +3312,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return 0
 		}
 
-		val req = TL_messages_sendVote()
-		req.msg_id = messageObject.id
+		val req = TLRPC.TLMessagesSendVote()
+		req.msgId = messageObject.id
 		req.peer = messagesController.getInputPeer(messageObject.dialogId)
 
 		val options: ByteArray
@@ -3465,8 +3323,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			for (a in answers.indices) {
 				val answer = answers[a]
-				req.options.add(answer.option)
-				options[a] = answer.option[0]
+
+				answer.option?.let {
+					req.options.add(it)
+					options[a] = it[0]
+				}
 			}
 		}
 		else {
@@ -3475,7 +3336,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		waitingForVote[key] = options
 
-		return connectionsManager.sendRequest(req) { response: TLObject?, error: TL_error? ->
+		return connectionsManager.sendRequest(req) { response: TLObject?, error: TLRPC.TLError? ->
 			if (error == null) {
 				voteSendTime.put(messageObject.pollId, 0L)
 				messagesController.processUpdates(response as Updates?, false)
@@ -3489,11 +3350,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun getVoteSendTime(pollId: Long): Long {
-		return voteSendTime[pollId, 0L]
+		return voteSendTime.get(pollId, 0L)
 	}
 
 	fun like(message: Message, callback: Runnable?) {
-		val channelId = message.peer_id?.channel_id ?: run {
+		val channelId = message.peerId?.channelId ?: run {
 			callback?.run()
 			return
 		}
@@ -3504,7 +3365,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		connectionsManager.sendRequest(req) { response, error ->
 			var ok = false
 
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val res = response.readData<ElloRpc.SimpleStringStatusResponse>()
 
 				if (res?.status == "success") {
@@ -3518,7 +3379,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (ok) {
 				AndroidUtilities.runOnUIThread {
 					message.likes = likesCount + 1
-					message.is_liked = true
+					message.isLiked = true
 
 					messagesStorage.putMessages(java.util.ArrayList(listOf(message)), true, true, true, 0, false)
 
@@ -3529,7 +3390,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun dislike(message: Message, callback: Runnable?) {
-		val channelId = message.peer_id?.channel_id ?: run {
+		val channelId = message.peerId?.channelId ?: run {
 			callback?.run()
 			return
 		}
@@ -3540,7 +3401,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		connectionsManager.sendRequest(req) { response, error ->
 			var ok = false
 
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val res = response.readData<ElloRpc.SimpleStringStatusResponse>()
 
 				if (res?.status == "success") {
@@ -3554,7 +3415,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (ok) {
 				AndroidUtilities.runOnUIThread {
 					message.likes = (likesCount - 1).coerceAtLeast(0)
-					message.is_liked = false
+					message.isLiked = false
 
 					messagesStorage.putMessages(java.util.ArrayList(listOf(message)), true, true, true, 0, false)
 
@@ -3569,18 +3430,18 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return
 		}
 
-		val req = TL_messages_sendReaction()
+		val req = TLRPC.TLMessagesSendReaction()
 
-		if (messageObject.messageOwner!!.isThreadMessage && messageObject.messageOwner!!.fwd_from != null) {
+		if (messageObject.messageOwner!!.isThreadMessage && messageObject.messageOwner!!.fwdFrom != null) {
 			req.peer = messagesController.getInputPeer(messageObject.fromChatId)
-			req.msg_id = messageObject.messageOwner?.fwd_from?.saved_from_msg_id ?: 0
+			req.msgId = messageObject.messageOwner?.fwdFrom?.savedFromMsgId ?: 0
 		}
 		else {
 			req.peer = messagesController.getInputPeer(messageObject.dialogId)
-			req.msg_id = messageObject.id
+			req.msgId = messageObject.id
 		}
 
-		req.add_to_recent = addToRecent
+		req.addToRecent = addToRecent
 
 		if (addToRecent && addedReaction != null) {
 			MediaDataController.getInstance(currentAccount).recentReactions.add(0, ReactionsUtils.toTLReaction(addedReaction))
@@ -3591,13 +3452,13 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				val visibleReaction = visibleReactions[i]
 
 				if (visibleReaction.documentId != 0L) {
-					val reactionCustomEmoji = TL_reactionCustomEmoji()
+					val reactionCustomEmoji = TLRPC.TLReactionCustomEmoji()
 					reactionCustomEmoji.documentId = visibleReaction.documentId
 					req.reaction.add(reactionCustomEmoji)
 					req.flags = req.flags or 1
 				}
 				else if (visibleReaction.emojicon != null) {
-					val defaultReaction = TL_reactionEmoji()
+					val defaultReaction = TLRPC.TLReactionEmoji()
 					defaultReaction.emoticon = visibleReaction.emojicon
 					req.reaction.add(defaultReaction)
 					req.flags = req.flags or 1
@@ -3622,22 +3483,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun requestUrlAuth(url: String, parentFragment: ChatActivity, ask: Boolean) {
-		val req = TL_messages_requestUrlAuth()
+		val req = TLRPC.TLMessagesRequestUrlAuth()
 		req.url = url
 		req.flags = req.flags or 4
 
 		connectionsManager.sendRequest(req, { response, _ ->
 			if (response != null) {
 				when (response) {
-					is TL_urlAuthResultRequest -> {
+					is TLRPC.TLUrlAuthResultRequest -> {
 						parentFragment.showRequestUrlAlert(response, req, url, ask)
 					}
 
-					is TL_urlAuthResultAccepted -> {
-						AlertsCreator.showOpenUrlAlert(parentFragment, response.url, punycode = false, ask = false)
+					is TLRPC.TLUrlAuthResultAccepted -> {
+						response.url?.let {
+							AlertsCreator.showOpenUrlAlert(parentFragment, it, punycode = false, ask = false)
+						}
 					}
 
-					is TL_urlAuthResultDefault -> {
+					is TLRPC.TLUrlAuthResultDefault -> {
 						AlertsCreator.showOpenUrlAlert(parentFragment, url, false, ask)
 					}
 				}
@@ -3661,19 +3524,19 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		val type: Int
 
 		when (button) {
-			is TL_keyboardButtonUrlAuth -> {
+			is TLRPC.TLKeyboardButtonUrlAuth -> {
 				cacheFinal = false
 				type = 3
 			}
 
-			is TL_keyboardButtonGame -> {
+			is TLRPC.TLKeyboardButtonGame -> {
 				cacheFinal = false
 				type = 1
 			}
 
 			else -> {
 				cacheFinal = cache
-				type = if (button is TL_keyboardButtonBuy) {
+				type = if (button is TLRPC.TLKeyboardButtonBuy) {
 					2
 				}
 				else {
@@ -3703,8 +3566,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					var uid = messageObject.fromChatId
 
-					if (messageObject.messageOwner?.via_bot_id != 0L) {
-						uid = messageObject.messageOwner!!.via_bot_id
+					if (messageObject.messageOwner?.viaBotId != 0L) {
+						uid = messageObject.messageOwner!!.viaBotId
 					}
 
 					var name: String? = null
@@ -3713,7 +3576,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						val user = messagesController.getUser(uid)
 
 						if (user != null) {
-							name = ContactsController.formatName(user.first_name, user.last_name)
+							name = ContactsController.formatName(user.firstName, user.lastName)
 						}
 					}
 					else {
@@ -3728,38 +3591,38 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						name = "bot"
 					}
 
-					if (button is TL_keyboardButtonUrlAuth) {
+					if (button is TLRPC.TLKeyboardButtonUrlAuth) {
 						when (response) {
-							is TL_urlAuthResultRequest -> {
-								parentFragment.showRequestUrlAlert(response, request[0] as TL_messages_requestUrlAuth, button.url, false)
+							is TLRPC.TLUrlAuthResultRequest -> {
+								button.url?.let {
+									parentFragment.showRequestUrlAlert(response, request[0] as TLRPC.TLMessagesRequestUrlAuth, it, false)
+								}
 							}
 
-							is TL_urlAuthResultAccepted -> {
-								AlertsCreator.showOpenUrlAlert(parentFragment, response.url, punycode = false, ask = false)
+							is TLRPC.TLUrlAuthResultAccepted -> {
+								response.url?.let {
+									AlertsCreator.showOpenUrlAlert(parentFragment, it, punycode = false, ask = false)
+								}
 							}
 
-							is TL_urlAuthResultDefault -> {
-								AlertsCreator.showOpenUrlAlert(parentFragment, button.url, punycode = false, ask = true)
+							is TLRPC.TLUrlAuthResultDefault -> {
+								button.url?.let {
+									AlertsCreator.showOpenUrlAlert(parentFragment, it, punycode = false, ask = true)
+								}
 							}
 						}
 					}
-					else if (button is TL_keyboardButtonBuy) {
-						if (response is TL_payments_paymentForm) {
-							messagesController.putUsers(response.users, false)
-							parentFragment.presentFragment(PaymentFormActivity(response, messageObject, parentFragment))
-						}
-						else if (response is TL_payments_paymentReceipt) {
-							parentFragment.presentFragment(PaymentFormActivity(response as TL_payments_paymentReceipt?))
-						}
+					else if (button is TLRPC.TLKeyboardButtonBuy) {
+						// unused
 					}
 					else {
-						val res = response as TL_messages_botCallbackAnswer
+						val res = response as? TLRPC.TLMessagesBotCallbackAnswer
 
-						if (!cacheFinal && res.cache_time != 0 && !button.requires_password) {
+						if (!cacheFinal && res?.cacheTime != 0 && !button.requiresPassword) {
 							messagesStorage.saveBotCache(key, res)
 						}
 
-						if (res.message != null) {
+						if (res?.message != null) {
 							if (res.alert) {
 								if (parentFragment.parentActivity == null) {
 									return@runOnUIThread
@@ -3776,7 +3639,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								parentFragment.showAlert(name, res.message)
 							}
 						}
-						else if (res.url != null) {
+						else if (res?.url != null) {
 							if (parentFragment.parentActivity == null) {
 								return@runOnUIThread
 							}
@@ -3784,12 +3647,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							val user = messagesController.getUser(uid)
 							val verified = user != null && user.verified
 
-							if (button is TL_keyboardButtonGame) {
-								val game = (if (messageObject.messageOwner?.media is TL_messageMediaGame) messageObject.messageOwner?.media?.game else null) ?: return@runOnUIThread
+							if (button is TLRPC.TLKeyboardButtonGame) {
+								val game = (messageObject.messageOwner?.media as? TLRPC.TLMessageMediaGame)?.game ?: return@runOnUIThread
 								parentFragment.showOpenGameAlert(game, messageObject, res.url, !verified && MessagesController.getNotificationsSettings(currentAccount).getBoolean("askgame_$uid", true), uid)
 							}
 							else {
-								AlertsCreator.showOpenUrlAlert(parentFragment, res.url, punycode = false, ask = false)
+								res.url?.let {
+									AlertsCreator.showOpenUrlAlert(parentFragment, it, punycode = false, ask = false)
+								}
 							}
 						}
 					}
@@ -3910,15 +3775,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						parentFragment.showDialog(builder.create())
 					}
 					else if ("SRP_ID_INVALID" == error.text) {
-						val getPasswordReq = TL_account_getPassword()
+						val getPasswordReq = TLRPC.TLAccountGetPassword()
 
 						ConnectionsManager.getInstance(currentAccount).sendRequest(getPasswordReq, { response2, error2 ->
 							AndroidUtilities.runOnUIThread {
 								if (error2 == null) {
-									val currentPassword = response2 as? account_Password
-									passwordFragment!!.setCurrentPasswordInfo(null, currentPassword)
+									val currentPassword = response2 as? TLRPC.TLAccountPassword
+									passwordFragment?.setCurrentPasswordInfo(null, currentPassword)
 									TwoStepVerificationActivity.initPasswordNewAlgo(currentPassword)
-									sendCallback(cache, messageObject, button, passwordFragment.newSrpPassword, passwordFragment, parentFragment)
+									sendCallback(cache, messageObject, button, passwordFragment?.newSrpPassword, passwordFragment, parentFragment)
 								}
 							}
 						}, ConnectionsManager.RequestFlagWithoutLogin)
@@ -3937,62 +3802,63 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			messagesStorage.getBotCache(key, requestDelegate)
 		}
 		else {
-			if (button is TL_keyboardButtonUrlAuth) {
-				val req = TL_messages_requestUrlAuth()
+			if (button is TLRPC.TLKeyboardButtonUrlAuth) {
+				val req = TLRPC.TLMessagesRequestUrlAuth()
 				req.peer = messagesController.getInputPeer(messageObject.dialogId)
-				req.msg_id = messageObject.id
-				req.button_id = button.button_id
+				req.msgId = messageObject.id
+				req.buttonId = button.buttonId
 				req.flags = req.flags or 2
 
 				request[0] = req
 
 				connectionsManager.sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors)
 			}
-			else if (button is TL_keyboardButtonBuy) {
-				if (messageObject.messageOwner!!.media!!.flags and 4 == 0) {
-					val req = TL_payments_getPaymentForm()
-
-					val inputInvoice = TL_inputInvoiceMessage()
-					inputInvoice.msg_id = messageObject.id
-					inputInvoice.peer = messagesController.getInputPeer(messageObject.messageOwner?.peer_id)
-
-					req.invoice = inputInvoice
-
-					try {
-						val jsonObject = JSONObject()
-						jsonObject.put("bg_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.background, null))
-						jsonObject.put("text_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.text, null))
-						jsonObject.put("hint_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.hint, null))
-						jsonObject.put("link_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.brand, null))
-						jsonObject.put("button_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.brand, null))
-						jsonObject.put("button_text_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.white, null))
-
-						req.theme_params = TL_dataJSON()
-						req.theme_params.data = jsonObject.toString()
-						req.flags = req.flags or 1
-					}
-					catch (e: Exception) {
-						FileLog.e(e)
-					}
-
-					connectionsManager.sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors)
-				}
-				else {
-					val req = TL_payments_getPaymentReceipt()
-					req.msg_id = messageObject.messageOwner!!.media!!.receipt_msg_id
-					req.peer = messagesController.getInputPeer(messageObject.messageOwner?.peer_id)
-
-					connectionsManager.sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors)
-				}
+			else if (button is TLRPC.TLKeyboardButtonBuy) {
+				// MARK: uncomment to enable invoices
+//				if (messageObject.messageOwner!!.media!!.flags and 4 == 0) {
+//					val req = TLRPC.TLPaymentsGetPaymentForm()
+//
+//					val inputInvoice = TLRPC.TLInputInvoiceMessage()
+//					inputInvoice.msgId = messageObject.id
+//					inputInvoice.peer = messagesController.getInputPeer(messageObject.messageOwner?.peerId)
+//
+//					req.invoice = inputInvoice
+//
+//					try {
+//						val jsonObject = JSONObject()
+//						jsonObject.put("bg_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.background, null))
+//						jsonObject.put("text_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.text, null))
+//						jsonObject.put("hint_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.hint, null))
+//						jsonObject.put("link_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.brand, null))
+//						jsonObject.put("button_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.brand, null))
+//						jsonObject.put("button_text_color", ResourcesCompat.getColor(ApplicationLoader.applicationContext.resources, R.color.white, null))
+//
+//						req.theme_params = TLRPC.TLDataJSON()
+//						req.theme_params.data = jsonObject.toString()
+//						req.flags = req.flags or 1
+//					}
+//					catch (e: Exception) {
+//						FileLog.e(e)
+//					}
+//
+//					connectionsManager.sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors)
+//				}
+//				else {
+//					val req = TLRPC.TLPaymentsGetPaymentReceipt()
+//					req.msgId = messageObject.messageOwner!!.media!!.receipt_msg_id
+//					req.peer = messagesController.getInputPeer(messageObject.messageOwner?.peerId)
+//
+//					connectionsManager.sendRequest(req, requestDelegate, ConnectionsManager.RequestFlagFailOnServerErrors)
+//				}
 			}
 			else {
-				val req = TL_messages_getBotCallbackAnswer()
+				val req = TLRPC.TLMessagesGetBotCallbackAnswer()
 				req.peer = messagesController.getInputPeer(messageObject.dialogId)
-				req.msg_id = messageObject.id
-				req.game = button is TL_keyboardButtonGame
+				req.msgId = messageObject.id
+				req.game = button is TLRPC.TLKeyboardButtonGame
 
-				if (button.requires_password) {
-					req.password = srp ?: TL_inputCheckPasswordEmpty()
+				if (button.requiresPassword) {
+					req.password = srp ?: TLRPC.TLInputCheckPasswordEmpty()
 					req.password = req.password
 					req.flags = req.flags or 4
 				}
@@ -4013,9 +3879,9 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		}
 
 		val type = when (button) {
-			is TL_keyboardButtonUrlAuth -> 3
-			is TL_keyboardButtonGame -> 1
-			is TL_keyboardButtonBuy -> 2
+			is TLRPC.TLKeyboardButtonUrlAuth -> 3
+			is TLRPC.TLKeyboardButtonGame -> 1
+			is TLRPC.TLKeyboardButtonBuy -> 2
 			else -> 0
 		}
 
@@ -4024,36 +3890,36 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		return waitingForCallback.containsKey(key)
 	}
 
-	fun sendGame(peer: InputPeer?, game: TL_inputMediaGame?, randomId: Long, taskId: Long) {
+	fun sendGame(peer: InputPeer?, game: TLRPC.TLInputMediaGame?, randomId: Long, taskId: Long) {
 		if (peer == null || game == null) {
 			return
 		}
 
-		val request = TL_messages_sendMedia()
+		val request = TLRPC.TLMessagesSendMedia()
 		request.peer = peer
 
 		when (request.peer) {
-			is TL_inputPeerChannel -> {
-				request.silent = MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_" + -peer.channel_id, false)
+			is TLRPC.TLInputPeerChannel -> {
+				request.silent = MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_" + -peer.channelId, false)
 			}
 
-			is TL_inputPeerChat -> {
-				request.silent = MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_" + -peer.chat_id, false)
+			is TLRPC.TLInputPeerChat -> {
+				request.silent = MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_" + -peer.chatId, false)
 			}
 
 			else -> {
-				request.silent = MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_" + peer.user_id, false)
+				request.silent = MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_" + peer.userId, false)
 			}
 		}
 
-		request.random_id = if (randomId != 0L) randomId else nextRandomId
+		request.randomId = if (randomId != 0L) randomId else nextRandomId
 		request.message = ""
 		request.media = game
 
-		val fromId = ChatObject.getSendAsPeerId(messagesController.getChat(peer.chat_id), messagesController.getChatFull(peer.chat_id))
+		val fromId = ChatObject.getSendAsPeerId(messagesController.getChat(peer.chatId), messagesController.getChatFull(peer.chatId))
 
 		if (fromId != UserConfig.getInstance(currentAccount).getClientUserId()) {
-			request.send_as = messagesController.getInputPeer(fromId)
+			request.sendAs = messagesController.getInputPeer(fromId)
 		}
 
 		val newTaskId: Long
@@ -4090,42 +3956,42 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun sendMessage(retryMessageObject: MessageObject) {
-		sendMessage(null, null, null, null, null, null, null, null, null, null, retryMessageObject.dialogId, retryMessageObject.messageOwner?.attachPath, null, null, null, true, retryMessageObject, null, retryMessageObject.messageOwner?.reply_markup, retryMessageObject.messageOwner?.params, retryMessageObject.messageOwner?.silent != true, if (retryMessageObject.scheduled) retryMessageObject.messageOwner!!.date else 0, 0, null, null, false, retryMessageObject.isMediaSale, retryMessageObject.mediaSaleHash)
+		sendMessage(null, null, null, null, null, null, null, null, null, null, retryMessageObject.dialogId, retryMessageObject.messageOwner?.attachPath, null, null, null, true, retryMessageObject, null, retryMessageObject.messageOwner?.replyMarkup, retryMessageObject.messageOwner?.params, retryMessageObject.messageOwner?.silent != true, if (retryMessageObject.scheduled) retryMessageObject.messageOwner!!.date else 0, 0, null, null, false)
 	}
 
-	fun sendMessage(user: User?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(null, null, null, null, null, user, null, null, null, null, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false, isMediaSale, mediaSaleHash)
+	fun sendMessage(user: User?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int) {
+		sendMessage(null, null, null, null, null, user, null, null, null, null, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false)
 	}
 
-	fun sendMessage(invoice: TL_messageMediaInvoice?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(null, null, null, null, null, null, null, null, null, invoice, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false, isMediaSale, mediaSaleHash)
+	fun sendMessage(invoice: TLRPC.TLMessageMediaInvoice?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int) {
+		sendMessage(null, null, null, null, null, null, null, null, null, invoice, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false)
 	}
 
-	fun sendMessage(document: TL_document?, videoEditedInfo: VideoEditedInfo?, path: String?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: String?, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, ttl: Int, parentObject: Any?, sendAnimationData: SendAnimationData?, updateStickersOrder: Boolean, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(null, caption, null, null, videoEditedInfo, null, document, null, null, null, peer, path, replyToMsg, replyToTopMsg, null, true, null, entities, replyMarkup, params, notify, scheduleDate, ttl, parentObject, sendAnimationData, updateStickersOrder, isMediaSale, mediaSaleHash)
+	fun sendMessage(document: TLRPC.TLDocument?, videoEditedInfo: VideoEditedInfo?, path: String?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: String?, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, ttl: Int, parentObject: Any?, sendAnimationData: SendAnimationData?, updateStickersOrder: Boolean) {
+		sendMessage(null, caption, null, null, videoEditedInfo, null, document, null, null, null, peer, path, replyToMsg, replyToTopMsg, null, true, null, entities, replyMarkup, params, notify, scheduleDate, ttl, parentObject, sendAnimationData, updateStickersOrder)
 	}
 
-	fun sendMessage(message: String?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, webPage: WebPage?, searchLinks: Boolean, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, sendAnimationData: SendAnimationData?, updateStickersOrder: Boolean, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(message, null, null, null, null, null, null, null, null, null, peer, null, replyToMsg, replyToTopMsg, webPage, searchLinks, null, entities, replyMarkup, params, notify, scheduleDate, 0, null, sendAnimationData, updateStickersOrder, isMediaSale, mediaSaleHash)
+	fun sendMessage(message: String?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, webPage: WebPage?, searchLinks: Boolean, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, sendAnimationData: SendAnimationData?, updateStickersOrder: Boolean) {
+		sendMessage(message, null, null, null, null, null, null, null, null, null, peer, null, replyToMsg, replyToTopMsg, webPage, searchLinks, null, entities, replyMarkup, params, notify, scheduleDate, 0, null, sendAnimationData, updateStickersOrder)
 	}
 
-	fun sendMessage(location: MessageMedia?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(null, null, location, null, null, null, null, null, null, null, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false, isMediaSale, mediaSaleHash)
+	fun sendMessage(location: MessageMedia?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int) {
+		sendMessage(null, null, location, null, null, null, null, null, null, null, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false)
 	}
 
-	fun sendMessage(poll: TL_messageMediaPoll?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(null, null, null, null, null, null, null, null, poll, null, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false, isMediaSale, mediaSaleHash)
+	fun sendMessage(poll: TLRPC.TLMessageMediaPoll?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int) {
+		sendMessage(null, null, null, null, null, null, null, null, poll, null, peer, null, replyToMsg, replyToTopMsg, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false)
 	}
 
-	fun sendMessage(game: TL_game?, peer: Long, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(null, null, null, null, null, null, null, game, null, null, peer, null, null, null, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false, isMediaSale, mediaSaleHash)
+	fun sendMessage(game: TLRPC.TLGame?, peer: Long, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int) {
+		sendMessage(null, null, null, null, null, null, null, game, null, null, peer, null, null, null, null, true, null, null, replyMarkup, params, notify, scheduleDate, 0, null, null, false)
 	}
 
-	fun sendMessage(photo: TL_photo?, path: String?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: String?, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, ttl: Int, parentObject: Any?, updateStickersOrder: Boolean, isMediaSale: Boolean, mediaSaleHash: String?) {
-		sendMessage(null, caption, null, photo, null, null, null, null, null, null, peer, path, replyToMsg, replyToTopMsg, null, true, null, entities, replyMarkup, params, notify, scheduleDate, ttl, parentObject, null, updateStickersOrder, isMediaSale, mediaSaleHash)
+	fun sendMessage(photo: TLRPC.TLPhoto?, path: String?, peer: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: String?, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, ttl: Int, parentObject: Any?, updateStickersOrder: Boolean) {
+		sendMessage(null, caption, null, photo, null, null, null, null, null, null, peer, path, replyToMsg, replyToTopMsg, null, true, null, entities, replyMarkup, params, notify, scheduleDate, ttl, parentObject, null, updateStickersOrder)
 	}
 
-	private fun sendMessage(message: String?, caption: String?, location: MessageMedia?, photo: TL_photo?, videoEditedInfo: VideoEditedInfo?, user: User?, document: TL_document?, game: TL_game?, poll: TL_messageMediaPoll?, invoice: TL_messageMediaInvoice?, peer: Long, path: String?, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, webPage: WebPage?, searchLinks: Boolean, retryMessageObject: MessageObject?, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int, ttl: Int, parentObject: Any?, sendAnimationData: SendAnimationData?, updateStickersOrder: Boolean, isMediaSale: Boolean, mediaSaleHash: String?) {
+	private fun sendMessage(message: String?, caption: String?, location: MessageMedia?, photo: TLRPC.TLPhoto?, videoEditedInfo: VideoEditedInfo?, user: User?, document: TLRPC.TLDocument?, game: TLRPC.TLGame?, poll: TLRPC.TLMessageMediaPoll?, invoice: TLRPC.TLMessageMediaInvoice?, peer: Long, path: String?, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, webPage: WebPage?, searchLinks: Boolean, retryMessageObject: MessageObject?, entities: List<MessageEntity>?, replyMarkup: ReplyMarkup?, params: MutableMap<String, String>?, notify: Boolean, scheduleDate: Int, ttl: Int, parentObject: Any?, sendAnimationData: SendAnimationData?, updateStickersOrder: Boolean) {
 		if (peer == 0L) {
 			return
 		}
@@ -4135,10 +4001,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		@Suppress("NAME_SHADOWING") var location = location
 		@Suppress("NAME_SHADOWING") var photo = photo
 		@Suppress("NAME_SHADOWING") var videoEditedInfo = videoEditedInfo
-		@Suppress("NAME_SHADOWING") var user = user
 		@Suppress("NAME_SHADOWING") var document = document
 		@Suppress("NAME_SHADOWING") var poll = poll
-		@Suppress("NAME_SHADOWING") var webPage = webPage
 		@Suppress("NAME_SHADOWING") var params = params
 		@Suppress("NAME_SHADOWING") var ttl = ttl
 		@Suppress("NAME_SHADOWING") var parentObject = parentObject
@@ -4173,21 +4037,21 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (encryptedChat == null) {
 				if (retryMessageObject != null) {
 					messagesStorage.markMessageAsSendError(retryMessageObject.messageOwner, retryMessageObject.scheduled)
-					retryMessageObject.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+					retryMessageObject.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 					notificationCenter.postNotificationName(NotificationCenter.messageSendError, retryMessageObject.id)
 					processSentMessage(retryMessageObject.id)
 				}
 				return
 			}
 		}
-		else if (sendToPeer is TL_inputPeerChannel) {
-			val chat = messagesController.getChat(sendToPeer.channel_id)
+		else if (sendToPeer is TLRPC.TLInputPeerChannel) {
+			val chat = messagesController.getChat(sendToPeer.channelId)
 			val chatFull = messagesController.getChatFull(chat?.id)
 
 			isChannel = chat != null && !chat.megagroup
 
-			if (isChannel && chat?.has_link == true && chatFull != null) {
-				linkedToGroup = chatFull.linked_chat_id
+			if (isChannel && chat?.hasLink == true && chatFull != null) {
+				linkedToGroup = chatFull.linkedChatId
 			}
 
 			fromPeer = messagesController.getPeer(ChatObject.getSendAsPeerId(chat, chatFull, true))
@@ -4211,7 +4075,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						caption = ""
 					}
 					else if (retryMessageObject.type == MessageObject.TYPE_COMMON || retryMessageObject.isAnimatedEmoji) {
-						if (retryMessageObject.messageOwner?.media is TL_messageMediaGame) {
+						if (retryMessageObject.messageOwner?.media is TLRPC.TLMessageMediaGame) {
 							//game = retryMessageObject.messageOwner.media.game;
 						}
 						else {
@@ -4224,7 +4088,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						type = 1
 					}
 					else if (retryMessageObject.type == MessageObject.TYPE_PHOTO) {
-						photo = newMsg?.media?.photo as? TL_photo
+						photo = newMsg?.media?.photo as? TLRPC.TLPhoto
 
 						if (retryMessageObject.messageOwner?.message != null) {
 							caption = retryMessageObject.messageOwner?.message
@@ -4234,30 +4098,31 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 					else if (retryMessageObject.type == MessageObject.TYPE_VIDEO || retryMessageObject.type == MessageObject.TYPE_ROUND_VIDEO || retryMessageObject.videoEditedInfo != null) {
 						type = 3
-						document = newMsg?.media?.document as? TL_document
+						document = newMsg?.media?.document as? TLRPC.TLDocument
 
 						if (retryMessageObject.messageOwner?.message != null) {
 							caption = retryMessageObject.messageOwner?.message
 						}
 					}
 					else if (retryMessageObject.type == 12) {
-						user = TL_userRequest_old2()
-						// user.phone = newMsg.media.phone_number;
-						user.first_name = newMsg?.media?.first_name
-						user.last_name = newMsg?.media?.last_name
-
-						val reason = TL_restrictionReason()
-						reason.platform = ""
-						reason.reason = ""
-						reason.text = newMsg?.media?.vcard
-
-						user.restriction_reason.add(reason)
-						user.id = newMsg?.media?.user_id ?: 0
-
-						type = 6
+						// MARK: old unsupported models
+//						user = TLRPC.TLUserRequest_old2()
+//						// user.phone = newMsg.media.phoneNumber;
+//						user.firstName = newMsg?.media?.firstName
+//						user.lastName = newMsg?.media?.lastName
+//
+//						val reason = TLRPC.TLRestrictionReason()
+//						reason.platform = ""
+//						reason.reason = ""
+//						reason.text = newMsg?.media?.vcard
+//
+//						user.restrictionReason.add(reason)
+//						user.id = newMsg?.media?.userId ?: 0
+//
+//						type = 6
 					}
 					else if (retryMessageObject.type == 8 || retryMessageObject.type == 9 || retryMessageObject.type == MessageObject.TYPE_STICKER || retryMessageObject.type == MessageObject.TYPE_MUSIC || retryMessageObject.type == MessageObject.TYPE_ANIMATED_STICKER) {
-						document = newMsg?.media?.document as? TL_document
+						document = newMsg?.media?.document as? TLRPC.TLDocument
 						type = 7
 
 						if (retryMessageObject.messageOwner?.message != null) {
@@ -4265,7 +4130,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						}
 					}
 					else if (retryMessageObject.type == MessageObject.TYPE_VOICE) {
-						document = newMsg?.media?.document as? TL_document
+						document = newMsg?.media?.document as? TLRPC.TLDocument
 						type = 8
 
 						if (retryMessageObject.messageOwner?.message != null) {
@@ -4273,7 +4138,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						}
 					}
 					else if (retryMessageObject.type == MessageObject.TYPE_POLL) {
-						poll = newMsg?.media as TL_messageMediaPoll
+						poll = newMsg?.media as TLRPC.TLMessageMediaPoll
 						type = 10
 					}
 
@@ -4281,8 +4146,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						type = 9
 					}
 
-					if ((newMsg?.media?.ttl_seconds ?: 0) > 0) {
-						ttl = newMsg?.media?.ttl_seconds ?: 0
+					if ((newMsg?.media?.ttlSeconds ?: 0) > 0) {
+						ttl = newMsg?.media?.ttlSeconds ?: 0
 					}
 				}
 			}
@@ -4295,25 +4160,28 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 
 				if (message != null) {
-					newMsg = if (encryptedChat != null) {
-						TL_message_secret()
-					}
-					else {
-						TL_message()
-					}
+					// MARK: uncomment to enable secret chats
+//					newMsg = if (encryptedChat != null) {
+//						TLRPC.TLMessageSecret()
+//					}
+//					else {
+//						TLRPC.TLMessage()
+//					}
+					newMsg = TLRPC.TLMessage() // MARK: and remove this
 
-					if (encryptedChat != null && webPage is TL_webPagePending) {
-						if (webPage.url != null) {
-							val newWebPage: WebPage = TL_webPageUrlPending()
-							newWebPage.url = webPage.url
-							webPage = newWebPage
-						}
-						else {
-							webPage = null
-						}
-					}
+					// MARK: uncomment to enable secret chats
+//					if (encryptedChat != null && webPage is TLRPC.TLWebPagePending) {
+//						if (webPage.url != null) {
+//							val newWebPage: WebPage = TLRPC.TLWebPageUrlPending()
+//							newWebPage.url = webPage.url
+//							webPage = newWebPage
+//						}
+//						else {
+//							webPage = null
+//						}
+//					}
 					if (canSendStickers && message.length < 30 && webPage == null && entities.isNullOrEmpty() && messagesController.diceEmojies?.contains(message.replace("\ufe0f", "")) == true && encryptedChat == null && scheduleDate == 0) {
-						val mediaDice = TL_messageMediaDice()
+						val mediaDice = TLRPC.TLMessageMediaDice()
 						mediaDice.emoticon = message
 						mediaDice.value = -1
 
@@ -4324,10 +4192,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 					else {
 						if (webPage == null) {
-							newMsg.media = TL_messageMediaEmpty()
+							newMsg.media = TLRPC.TLMessageMediaEmpty()
 						}
 						else {
-							newMsg.media = TL_messageMediaWebPage()
+							newMsg.media = TLRPC.TLMessageMediaWebPage()
 							newMsg.media?.webpage = webPage
 						}
 
@@ -4342,23 +4210,27 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 				else if (poll != null) {
-					newMsg = if (encryptedChat != null) {
-						TL_message_secret()
-					}
-					else {
-						TL_message()
-					}
+					// MARK: uncomment to enable secret chats
+//					newMsg = if (encryptedChat != null) {
+//						TLRPC.TLMessage_secret()
+//					}
+//					else {
+//						TLRPC.TLMessage()
+//					}
+					newMsg = TLRPC.TLMessage() // MARK: and remove this
 
 					newMsg.media = poll
 					type = 10
 				}
 				else if (location != null) {
-					newMsg = if (encryptedChat != null) {
-						TL_message_secret()
-					}
-					else {
-						TL_message()
-					}
+// MARK: uncomment to enable secret chats
+//					newMsg = if (encryptedChat != null) {
+//						TLRPC.TLMessage_secret()
+//					}
+//					else {
+//						TLRPC.TLMessage()
+//					}
+					newMsg = TLRPC.TLMessage() // MARK: and remove this
 
 					newMsg.media = location
 
@@ -4370,23 +4242,25 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 				else if (photo != null) {
-					newMsg = if (encryptedChat != null) {
-						TL_message_secret()
-					}
-					else {
-						TL_message()
-					}
+					// MARK: uncomment to enable secret chats
+//					newMsg = if (encryptedChat != null) {
+//						TLRPC.TLMessage_secret()
+//					}
+//					else {
+//						TLRPC.TLMessage()
+//					}
+					newMsg = TLRPC.TLMessage() // MARK: and remove this
 
-					newMsg.media = TL_messageMediaPhoto()
+					newMsg.media = TLRPC.TLMessageMediaPhoto()
 					newMsg.media!!.flags = newMsg.media!!.flags or 3
 
 					if (entities != null) {
-						newMsg.entities = ArrayList(entities)
+						newMsg.entities.addAll(entities)
 					}
 
 					if (ttl != 0) {
-						newMsg.media!!.ttl_seconds = ttl
-						newMsg.ttl = newMsg.media!!.ttl_seconds
+						newMsg.media!!.ttlSeconds = ttl
+						newMsg.ttl = newMsg.media!!.ttlSeconds
 						newMsg.media!!.flags = newMsg.media!!.flags or 4
 					}
 
@@ -4408,16 +4282,18 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 				else if (game != null) {
-					newMsg = TL_message()
-					newMsg.media = TL_messageMediaGame()
-					newMsg.media?.game = game
+					newMsg = TLRPC.TLMessage()
+
+					newMsg.media = TLRPC.TLMessageMediaGame().also {
+						it.game = game
+					}
 
 					if (params != null && params.containsKey("query_id")) {
 						type = 9
 					}
 				}
 				else if (invoice != null) {
-					newMsg = TL_message()
+					newMsg = TLRPC.TLMessage()
 					newMsg.media = invoice
 
 					if (params != null && params.containsKey("query_id")) {
@@ -4425,33 +4301,36 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 				else if (user != null) {
-					newMsg = if (encryptedChat != null) {
-						TL_message_secret()
-					}
-					else {
-						TL_message()
-					}
+					// MARK: uncomment to enable secret chats
+//					newMsg = if (encryptedChat != null) {
+//						TLRPC.TLMessage_secret()
+//					}
+//					else {
+//						TLRPC.TLMessage()
+//					}
+					newMsg = TLRPC.TLMessage() // MARK: and remove this
 
-					newMsg.media = TL_messageMediaContact()
-					newMsg.media?.first_name = user.first_name
-					newMsg.media?.last_name = user.last_name
-					newMsg.media?.user_id = user.id
+					newMsg.media = TLRPC.TLMessageMediaContact().also {
+						it.firstName = user.firstName
+						it.lastName = user.lastName
+						it.userId = user.id
 
-					if (user.restriction_reason.isNotEmpty() && user.restriction_reason[0].text.startsWith("BEGIN:VCARD")) {
-						newMsg.media?.vcard = user.restriction_reason[0].text
-					}
-					else {
-						newMsg.media?.vcard = ""
-					}
+						if (user.restrictionReason?.firstOrNull()?.text?.startsWith("BEGIN:VCARD") == true) {
+							it.vcard = user.restrictionReason?.firstOrNull()?.text ?: ""
+						}
+						else {
+							it.vcard = ""
+						}
 
-					if (newMsg.media?.first_name == null) {
-						newMsg.media?.first_name = ""
-						user.first_name = newMsg.media?.first_name
-					}
+						if (it.firstName == null) {
+							it.firstName = ""
+							user.firstName = it.firstName
+						}
 
-					if (newMsg.media?.last_name == null) {
-						newMsg.media?.last_name = ""
-						user.last_name = newMsg.media?.last_name
+						if (it.lastName == null) {
+							it.lastName = ""
+							user.lastName = it.lastName
+						}
 					}
 
 					type = if (params != null && params.containsKey("query_id")) {
@@ -4462,12 +4341,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 				else if (document != null) {
-					newMsg = if (encryptedChat != null) {
-						TL_message_secret()
-					}
-					else {
-						TL_message()
-					}
+					// MARK: uncomment to enable secret chats
+//					newMsg = if (encryptedChat != null) {
+//						TLRPC.TLMessage_secret()
+//					}
+//					else {
+//						TLRPC.TLMessage()
+//					}
+					newMsg = TLRPC.TLMessage() // MARK: and remove this
 
 					if (DialogObject.isChatDialog(peer)) {
 						if (!canSendStickers) {
@@ -4475,7 +4356,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							val n = document.attributes.size
 
 							while (a < n) {
-								if (document.attributes[a] is TL_documentAttributeAnimated) {
+								if (document.attributes[a] is TLRPC.TLDocumentAttributeAnimated) {
 									document.attributes.removeAt(a)
 									forceNoSoundVideo = true
 									break
@@ -4486,12 +4367,12 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						}
 					}
 
-					newMsg.media = TL_messageMediaDocument()
+					newMsg.media = TLRPC.TLMessageMediaDocument()
 					newMsg.media!!.flags = newMsg.media!!.flags or 3
 
 					if (ttl != 0) {
-						newMsg.media!!.ttl_seconds = ttl
-						newMsg.ttl = newMsg.media!!.ttl_seconds
+						newMsg.media!!.ttlSeconds = ttl
+						newMsg.ttl = newMsg.media!!.ttlSeconds
 						newMsg.media!!.flags = newMsg.media!!.flags or 4
 					}
 
@@ -4520,7 +4401,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						params["ve"] = ve
 					}
 
-					if (encryptedChat != null && document.dc_id > 0 && !MessageObject.isStickerDocument(document) && !MessageObject.isAnimatedStickerDocument(document, true)) {
+					if (encryptedChat != null && document.dcId > 0 && !MessageObject.isStickerDocument(document) && !MessageObject.isAnimatedStickerDocument(document, true)) {
 						newMsg.attachPath = FileLoader.getInstance(currentAccount).getPathToAttach(document).toString()
 					}
 					else {
@@ -4531,29 +4412,30 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						for (a in document.attributes.indices) {
 							val attribute = document.attributes[a]
 
-							if (attribute is TL_documentAttributeSticker) {
+							if (attribute is TLRPC.TLDocumentAttributeSticker) {
 								document.attributes.removeAt(a)
 
-								val attributeSticker = TL_documentAttributeSticker_layer55()
+								val attributeSticker = TLRPC.TLDocumentAttributeSticker()
 
 								document.attributes.add(attributeSticker)
 
 								attributeSticker.alt = attribute.alt
 
 								if (attribute.stickerset != null) {
-									val name = if (attribute.stickerset is TL_inputStickerSetShortName) {
-										attribute.stickerset.short_name
+									val name = if (attribute.stickerset is TLRPC.TLInputStickerSetShortName) {
+										(attribute.stickerset as? TLRPC.TLInputStickerSetShortName)?.shortName
 									}
 									else {
-										mediaDataController.getStickerSetName(attribute.stickerset.id)
+										mediaDataController.getStickerSetName((attribute.stickerset as? TLRPC.TLInputStickerSetID)?.id)
 									}
 
 									if (!name.isNullOrEmpty()) {
-										attributeSticker.stickerset = TL_inputStickerSetShortName()
-										attributeSticker.stickerset.short_name = name
+										attributeSticker.stickerset = TLRPC.TLInputStickerSetShortName().also {
+											it.shortName = name
+										}
 									}
 									else {
-										if (attribute.stickerset is TL_inputStickerSetID) {
+										if (attribute.stickerset is TLRPC.TLInputStickerSetID) {
 											delayedMessage = DelayedMessage(peer)
 											delayedMessage.encryptedChat = encryptedChat
 											delayedMessage.locationParent = attributeSticker
@@ -4561,11 +4443,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 											delayedMessage.parentObject = attribute.stickerset
 										}
 
-										attributeSticker.stickerset = TL_inputStickerSetEmpty()
+										attributeSticker.stickerset = TLRPC.TLInputStickerSetEmpty()
 									}
 								}
 								else {
-									attributeSticker.stickerset = TL_inputStickerSetEmpty()
+									attributeSticker.stickerset = TLRPC.TLInputStickerSetEmpty()
 								}
 
 								break
@@ -4576,7 +4458,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				if (!entities.isNullOrEmpty()) {
 					newMsg?.entities = ArrayList(entities)
-					newMsg?.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
+					newMsg?.flags = newMsg!!.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
 				}
 
 				if (caption != null) {
@@ -4591,25 +4473,26 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 
 				newMsg?.id = userConfig.newMessageId
-				newMsg?.local_id = newMsg.id
+				newMsg?.localId = newMsg?.id ?: 0
 				newMsg?.out = true
 
 				if (isChannel && sendToPeer != null) {
-					newMsg?.from_id = TL_peerChannel()
-					newMsg?.from_id?.channel_id = sendToPeer.channel_id
+					newMsg?.fromId = TLRPC.TLPeerChannel().also {
+						it.channelId = sendToPeer.channelId
+					}
 				}
 				else if (fromPeer != null) {
-					newMsg?.from_id = fromPeer
+					newMsg?.fromId = fromPeer
 
 					if (rank != null) {
-						newMsg?.post_author = rank
-						newMsg?.flags = newMsg.flags or 65536
+						newMsg?.postAuthor = rank
+						newMsg?.flags = newMsg!!.flags or 65536
 					}
 				}
 				else {
-					newMsg?.from_id = TL_peerUser()
-					newMsg?.from_id?.user_id = myId
-					newMsg?.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_FROM_ID
+					newMsg?.fromId = TLRPC.TLPeerUser()
+					newMsg?.fromId?.userId = myId
+					newMsg?.flags = newMsg!!.flags or TLRPC.MESSAGE_FLAG_HAS_FROM_ID
 				}
 
 				userConfig.saveConfig(false)
@@ -4617,21 +4500,22 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			newMsg!!.silent = !notify || MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_$peer", false)
 
-			if (newMsg.random_id == 0L) {
-				newMsg.random_id = nextRandomId
+			if (newMsg.randomId == 0L) {
+				newMsg.randomId = nextRandomId
 			}
 
 			if (params != null && params.containsKey("bot")) {
-				if (encryptedChat != null) {
-					newMsg.via_bot_name = params["bot_name"]
-
-					if (newMsg.via_bot_name == null) {
-						newMsg.via_bot_name = ""
-					}
-				}
-				else {
-					newMsg.via_bot_id = Utilities.parseInt(params["bot"]).toLong()
-				}
+				// MARK: uncomment to enable secret chats
+//				if (encryptedChat != null) {
+//					newMsg.viaBotName = params["bot_name"]
+//
+//					if (newMsg.viaBotName == null) {
+//						newMsg.viaBotName = ""
+//					}
+//				}
+//				else {
+				newMsg.viaBotId = Utilities.parseInt(params["bot"]).toLong()
+//				}
 
 				newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_BOT_ID
 			}
@@ -4641,13 +4525,13 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (retryMessageObject == null || !retryMessageObject.resendAsIs) {
 				newMsg.date = if (scheduleDate != 0) scheduleDate else connectionsManager.currentTime
 
-				if (sendToPeer is TL_inputPeerChannel) {
+				if (sendToPeer is TLRPC.TLInputPeerChannel) {
 					if (scheduleDate == 0 && isChannel) {
 						newMsg.views = 1
 						newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_VIEWS
 					}
 
-					val chat = messagesController.getChat(sendToPeer.channel_id)
+					val chat = messagesController.getChat(sendToPeer.channelId)
 
 					if (chat != null) {
 						if (chat.megagroup) {
@@ -4657,8 +4541,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							newMsg.post = true
 
 							if (chat.signatures) {
-								newMsg.from_id = TL_peerUser()
-								newMsg.from_id!!.user_id = myId
+								newMsg.fromId = TLRPC.TLPeerUser()
+								newMsg.fromId!!.userId = myId
 							}
 						}
 					}
@@ -4669,48 +4553,50 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_MEDIA
-			newMsg.dialog_id = peer
+			newMsg.dialogId = peer
 
 			if (replyToMsg != null) {
-				newMsg.reply_to = TL_messageReplyHeader()
+				newMsg.replyTo = TLRPC.TLMessageReplyHeader()
 
-				if (encryptedChat != null && replyToMsg.messageOwner?.random_id != 0L) {
-					newMsg.reply_to!!.reply_to_random_id = replyToMsg.messageOwner!!.random_id
+				if (encryptedChat != null && replyToMsg.messageOwner?.randomId != 0L) {
+					newMsg.replyTo!!.replyToRandomId = replyToMsg.messageOwner!!.randomId
 					newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_REPLY
 				}
 				else {
 					newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_REPLY
 				}
 
-				newMsg.reply_to!!.reply_to_msg_id = replyToMsg.id
+				newMsg.replyTo!!.replyToMsgId = replyToMsg.id
 
 				if (replyToTopMsg != null && replyToTopMsg !== replyToMsg) {
-					newMsg.reply_to!!.reply_to_top_id = replyToTopMsg.id
-					newMsg.reply_to!!.flags = newMsg.reply_to!!.flags or 2
+					newMsg.replyTo!!.replyToTopId = replyToTopMsg.id
+					newMsg.replyTo!!.flags = newMsg.replyTo!!.flags or 2
 				}
 			}
 
 			if (linkedToGroup != 0L) {
-				newMsg.replies = TL_messageReplies()
-				newMsg.replies!!.comments = true
-				newMsg.replies!!.channel_id = linkedToGroup
-				newMsg.replies!!.flags = newMsg.replies!!.flags or 1
+				newMsg.replies = TLRPC.TLMessageReplies().also {
+					it.comments = true
+					it.channelId = linkedToGroup
+					it.flags = it.flags or 1
+				}
+
 				newMsg.flags = newMsg.flags or 8388608
 			}
 
 			if (replyMarkup != null && encryptedChat == null) {
 				newMsg.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_MARKUP
-				newMsg.reply_markup = replyMarkup
+				newMsg.replyMarkup = replyMarkup
 
 				val bot = params!!["bot"]
 
 				if (bot != null) {
-					newMsg.via_bot_id = bot.toLong()
+					newMsg.viaBotId = bot.toLong()
 				}
 			}
 
 			if (!DialogObject.isEncryptedDialog(peer)) {
-				newMsg.peer_id = messagesController.getPeer(peer)
+				newMsg.peerId = messagesController.getPeer(peer)
 
 				if (DialogObject.isUserDialog(peer)) {
 					val sendToUser = messagesController.getUser(peer)
@@ -4720,19 +4606,19 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						return
 					}
 
-					if (sendToUser.bot) {
+					if ((sendToUser as? TLRPC.TLUser)?.bot == true) {
 						newMsg.unread = false
 					}
 				}
 			}
 			else {
-				newMsg.peer_id = TL_peerUser()
+				newMsg.peerId = TLRPC.TLPeerUser()
 
-				if (encryptedChat!!.participant_id == myId) {
-					newMsg.peer_id!!.user_id = encryptedChat.admin_id
+				if (encryptedChat!!.participantId == myId) {
+					newMsg.peerId!!.userId = encryptedChat.adminId
 				}
 				else {
-					newMsg.peer_id!!.user_id = encryptedChat.participant_id
+					newMsg.peerId!!.userId = encryptedChat.participantId
 				}
 
 				if (ttl != 0) {
@@ -4742,7 +4628,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					newMsg.ttl = encryptedChat.ttl
 
 					if (newMsg.ttl != 0 && newMsg.media != null) {
-						newMsg.media!!.ttl_seconds = newMsg.ttl
+						newMsg.media!!.ttlSeconds = newMsg.ttl
 						newMsg.media!!.flags = newMsg.media!!.flags or 4
 					}
 				}
@@ -4751,12 +4637,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					if (MessageObject.isVoiceMessage(newMsg)) {
 						var duration = 0
 
-						for (a in newMsg.media!!.document.attributes.indices) {
-							val attribute = newMsg.media!!.document.attributes[a]
+						val attributes = (newMsg.media?.document as? TLRPC.TLDocument)?.attributes
 
-							if (attribute is TL_documentAttributeAudio) {
-								duration = attribute.duration
-								break
+						if (!attributes.isNullOrEmpty()) {
+							for (attribute in attributes) {
+								if (attribute is TLRPC.TLDocumentAttributeAudio) {
+									duration = attribute.duration
+									break
+								}
 							}
 						}
 
@@ -4765,12 +4653,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					else if (MessageObject.isVideoMessage(newMsg) || MessageObject.isRoundVideoMessage(newMsg)) {
 						var duration = 0
 
-						for (a in newMsg.media!!.document.attributes.indices) {
-							val attribute = newMsg.media!!.document.attributes[a]
+						val attributes = (newMsg.media?.document as? TLRPC.TLDocument)?.attributes
 
-							if (attribute is TL_documentAttributeVideo) {
-								duration = attribute.duration
-								break
+						if (!attributes.isNullOrEmpty()) {
+							for (attribute in attributes) {
+								if (attribute is TLRPC.TLDocumentAttributeVideo) {
+									duration = attribute.duration
+									break
+								}
 							}
 						}
 
@@ -4780,14 +4670,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			if (MessageObject.isVoiceMessage(newMsg) || MessageObject.isRoundVideoMessage(newMsg)) {
-				newMsg.media_unread = true
+				newMsg.mediaUnread = true
 			}
 
-			if (newMsg.from_id == null) {
-				newMsg.from_id = newMsg.peer_id
+			if (newMsg.fromId == null) {
+				newMsg.fromId = newMsg.peerId
 			}
 
-			newMsg.send_state = MessageObject.MESSAGE_SEND_STATE_SENDING
+			newMsg.sendState = MessageObject.MESSAGE_SEND_STATE_SENDING
 
 			var groupId: Long = 0
 			var isFinalGroupMedia = false
@@ -4798,7 +4688,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				if (groupIdStr != null) {
 					groupId = Utilities.parseLong(groupIdStr)
 
-					newMsg.groupId = groupId
+					newMsg.groupedId = groupId
 					newMsg.flags = newMsg.flags or 131072
 				}
 
@@ -4809,8 +4699,6 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			newMsgObj.sendAnimationData = sendAnimationData
 			newMsgObj.wasJustSent = true
 			newMsgObj.scheduled = scheduleDate != 0
-			newMsgObj.isMediaSale = isMediaSale
-			newMsgObj.mediaSaleHash = mediaSaleHash
 
 			if (!newMsgObj.isForwarded && (newMsgObj.type == MessageObject.TYPE_VIDEO || videoEditedInfo != null || newMsgObj.type == MessageObject.TYPE_VOICE) && !TextUtils.isEmpty(newMsg.attachPath)) {
 				newMsgObj.attachPathExists = true
@@ -4860,44 +4748,44 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			if (sendToPeer != null) {
-				FileLog.d("send message user_id = " + sendToPeer.user_id + " chat_id = " + sendToPeer.chat_id + " channel_id = " + sendToPeer.channel_id + " access_hash = " + sendToPeer.access_hash + " notify = " + notify + " silent = " + MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_$peer", false))
+				FileLog.d("send message user_id = " + sendToPeer.userId + " chat_id = " + sendToPeer.chatId + " channel_id = " + sendToPeer.channelId + " access_hash = " + sendToPeer.accessHash + " notify = " + notify + " silent = " + MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_$peer", false))
 			}
 
 			var performMediaUpload = false
 
 			if (type == 0 || type == 9 && message != null && encryptedChat != null) {
 				if (encryptedChat == null) {
-					val reqSend = TL_messages_sendMessage()
+					val reqSend = TLRPC.TLMessagesSendMessage()
 					reqSend.message = message
-					reqSend.clear_draft = retryMessageObject == null
+					reqSend.clearDraft = retryMessageObject == null
 					reqSend.silent = newMsg.silent
 					reqSend.peer = sendToPeer
-					reqSend.random_id = newMsg.random_id
+					reqSend.randomId = newMsg.randomId
 
 					if (updateStickersOrder) {
-						reqSend.update_stickersets_order = true
+						reqSend.updateStickersetsOrder = true
 					}
 
-					if (newMsg.from_id != null) {
-						reqSend.send_as = messagesController.getInputPeer(newMsg.from_id)
+					if (newMsg.fromId != null) {
+						reqSend.sendAs = messagesController.getInputPeer(newMsg.fromId)
 					}
 
-					if (newMsg.reply_to != null && newMsg.reply_to?.reply_to_msg_id != 0) {
+					if (newMsg.replyTo != null && newMsg.replyTo?.replyToMsgId != 0) {
 						reqSend.flags = reqSend.flags or 1
-						reqSend.reply_to_msg_id = newMsg.reply_to?.reply_to_msg_id ?: 0
+						reqSend.replyToMsgId = newMsg.replyTo?.replyToMsgId ?: 0
 					}
 
 					if (!searchLinks) {
-						reqSend.no_webpage = true
+						reqSend.noWebpage = true
 					}
 
 					if (!entities.isNullOrEmpty()) {
-						reqSend.entities = ArrayList(entities)
+						reqSend.entities.addAll(entities)
 						reqSend.flags = reqSend.flags or 8
 					}
 
 					if (scheduleDate != 0) {
-						reqSend.schedule_date = scheduleDate
+						reqSend.scheduleDate = scheduleDate
 						reqSend.flags = reqSend.flags or 1024
 					}
 
@@ -4907,87 +4795,94 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						mediaDataController.cleanDraft(peer, replyToTopMsg?.id ?: 0, false)
 					}
 				}
-				else {
-					val reqSend = TL_decryptedMessage()
-					reqSend.ttl = newMsg.ttl
-
-					if (!entities.isNullOrEmpty()) {
-						reqSend.entities = ArrayList(entities)
-						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
-					}
-
-					if (newMsg.reply_to != null && newMsg.reply_to?.reply_to_random_id != 0L) {
-						reqSend.reply_to_random_id = newMsg.reply_to?.reply_to_random_id ?: 0
-						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_REPLY
-					}
-
-					if (params != null && params["bot_name"] != null) {
-						reqSend.via_bot_name = params["bot_name"]
-						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_BOT_ID
-					}
-
-					reqSend.silent = newMsg.silent
-					reqSend.random_id = newMsg.random_id
-					reqSend.message = message
-
-					if (webPage?.url != null) {
-						reqSend.media = TL_decryptedMessageMediaWebPage()
-						reqSend.media.url = webPage.url
-						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_MEDIA
-					}
-					else {
-						reqSend.media = TL_decryptedMessageMediaEmpty()
-					}
-
-					secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
-
-					if (retryMessageObject == null) {
-						mediaDataController.cleanDraft(peer, replyToTopMsg?.id ?: 0, false)
-					}
-				}
+				// MARK: uncomment to enable secrect chats
+//				else {
+//					val reqSend = TLRPC.TLDecryptedMessage()
+//					reqSend.ttl = newMsg.ttl
+//
+//					if (!entities.isNullOrEmpty()) {
+//						reqSend.entities = ArrayList(entities)
+//						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
+//					}
+//
+//					if (newMsg.replyTo != null && newMsg.replyTo?.replyToRandomId != 0L) {
+//						reqSend.replyToRandomId = newMsg.replyTo?.replyToRandomId ?: 0
+//						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_REPLY
+//					}
+//
+//					if (params != null && params["bot_name"] != null) {
+//						reqSend.viaBotName = params["bot_name"]
+//						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_BOT_ID
+//					}
+//
+//					reqSend.silent = newMsg.silent
+//					reqSend.randomId = newMsg.randomId
+//					reqSend.message = message
+//
+//					if (webPage?.url != null) {
+//						reqSend.media = TLRPC.TLDecryptedMessageMediaWebPage()
+//						reqSend.media.url = webPage.url
+//						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_MEDIA
+//					}
+//					else {
+//						reqSend.media = TLRPC.TLDecryptedMessageMediaEmpty()
+//					}
+//
+//					secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
+//
+//					if (retryMessageObject == null) {
+//						mediaDataController.cleanDraft(peer, replyToTopMsg?.id ?: 0, false)
+//					}
+//				}
 			}
 			else if (type in 1..3 || type in 5..8 || type == 9 && encryptedChat != null || type == 10 || type == 11) {
 				if (encryptedChat == null) {
 					var inputMedia: InputMedia? = null
 
 					if (type == 1) {
-						if (location is TL_messageMediaVenue) {
-							inputMedia = TL_inputMediaVenue()
-							inputMedia.address = location.address
-							inputMedia.title = location.title
-							inputMedia.provider = location.provider
-							inputMedia.venue_id = location.venue_id
-							inputMedia.venue_type = ""
-						}
-						else if (location is TL_messageMediaGeoLive) {
-							inputMedia = TL_inputMediaGeoLive()
-							inputMedia.period = location.period
-							inputMedia.flags = inputMedia.flags or 2
-
-							if (location.heading != 0) {
-								inputMedia.heading = location.heading
-								inputMedia.flags = inputMedia.flags or 4
+						if (location is TLRPC.TLMessageMediaVenue) {
+							inputMedia = TLRPC.TLInputMediaVenue().also {
+								it.address = location.address
+								it.title = location.title
+								it.provider = location.provider
+								it.venueId = location.venueId
+								it.venueType = ""
 							}
+						}
+						else if (location is TLRPC.TLMessageMediaGeoLive) {
+							inputMedia = TLRPC.TLInputMediaGeoLive().also {
+								it.period = location.period
+								it.flags = it.flags or 2
 
-							if (location.proximity_notification_radius != 0) {
-								inputMedia.proximity_notification_radius = location.proximity_notification_radius
-								inputMedia.flags = inputMedia.flags or 8
+								if (location.heading != 0) {
+									it.heading = location.heading
+									it.flags = it.flags or 4
+								}
+
+								if (location.proximityNotificationRadius != 0) {
+									it.proximityNotificationRadius = location.proximityNotificationRadius
+									it.flags = it.flags or 8
+								}
 							}
 						}
 						else {
-							inputMedia = TL_inputMediaGeoPoint()
+							inputMedia = TLRPC.TLInputMediaGeoPoint()
 						}
 
-						inputMedia.geo_point = TL_inputGeoPoint()
-						inputMedia.geo_point.lat = location!!.geo.lat
-						inputMedia.geo_point._long = location.geo._long
+						inputMedia.geoPoint = TLRPC.TLInputGeoPoint().also {
+							(location?.geo as? TLRPC.TLGeoPoint)?.let { geoPoint ->
+								it.lat = geoPoint.lat
+								it.lon = geoPoint.lon
+							}
+
+						}
 					}
 					else if (type == 2 || type == 9 && photo != null) {
-						val uploadedPhoto = TL_inputMediaUploadedPhoto()
+						val uploadedPhoto = TLRPC.TLInputMediaUploadedPhoto()
 
 						if (ttl != 0) {
-							uploadedPhoto.ttl_seconds = ttl
-							newMsg.ttl = uploadedPhoto.ttl_seconds
+							uploadedPhoto.ttlSeconds = ttl
+							newMsg.ttl = uploadedPhoto.ttlSeconds
 							uploadedPhoto.flags = uploadedPhoto.flags or 2
 						}
 
@@ -4999,7 +4894,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								val count = serializedData.readInt32(false)
 
 								for (a in 0 until count) {
-									uploadedPhoto.stickers.add(InputDocument.TLdeserialize(serializedData, serializedData.readInt32(false), false))
+									uploadedPhoto.stickers.add(InputDocument.deserialize(serializedData, serializedData.readInt32(false), false) ?: TLRPC.TLInputDocumentEmpty())
 								}
 
 								uploadedPhoto.flags = uploadedPhoto.flags or 1
@@ -5007,19 +4902,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							}
 						}
 
-						if (photo?.access_hash == 0L) {
+						if (photo?.accessHash == 0L) {
 							inputMedia = uploadedPhoto
 							performMediaUpload = true
 						}
 						else {
-							val media = TL_inputMediaPhoto()
-							media.id = TL_inputPhoto()
-							media.id.id = photo!!.id
-							media.id.access_hash = photo.access_hash
-							media.id.file_reference = photo.file_reference
+							val media = TLRPC.TLInputMediaPhoto()
 
-							if (media.id.file_reference == null) {
-								media.id.file_reference = ByteArray(0)
+							media.id = TLRPC.TLInputPhoto().also {
+								it.id = photo!!.id
+								it.accessHash = photo.accessHash
+								it.fileReference = photo.fileReference ?: ByteArray(0)
 							}
 
 							inputMedia = media
@@ -5040,24 +4933,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							delayedMessage.httpLocation = path
 						}
 						else {
-							delayedMessage.photoSize = photo.sizes[photo.sizes.size - 1]
+							delayedMessage.photoSize = photo?.sizes?.lastOrNull()
 							delayedMessage.locationParent = photo
 						}
 					}
 					else if (type == 3) {
-						val uploadedDocument = TL_inputMediaUploadedDocument()
-						uploadedDocument.mime_type = document!!.mime_type
-						uploadedDocument.attributes = document.attributes
+						val uploadedDocument = TLRPC.TLInputMediaUploadedDocument()
+						uploadedDocument.mimeType = document!!.mimeType
+						uploadedDocument.attributes.addAll(document.attributes)
 
 						if (forceNoSoundVideo || !MessageObject.isRoundVideoDocument(document) && (videoEditedInfo == null || !videoEditedInfo.muted && !videoEditedInfo.roundVideo)) {
-							uploadedDocument.nosound_video = true
+							uploadedDocument.nosoundVideo = true
 
 							FileLog.d("nosound_video = true")
 						}
 
 						if (ttl != 0) {
-							uploadedDocument.ttl_seconds = ttl
-							newMsg.ttl = uploadedDocument.ttl_seconds
+							uploadedDocument.ttlSeconds = ttl
+							newMsg.ttl = uploadedDocument.ttlSeconds
 							uploadedDocument.flags = uploadedDocument.flags or 2
 						}
 
@@ -5069,7 +4962,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								val count = serializedData.readInt32(false)
 
 								for (a in 0 until count) {
-									uploadedDocument.stickers.add(InputDocument.TLdeserialize(serializedData, serializedData.readInt32(false), false))
+									uploadedDocument.stickers.add(InputDocument.deserialize(serializedData, serializedData.readInt32(false), false) ?: TLRPC.TLInputDocumentEmpty())
 								}
 
 								uploadedDocument.flags = uploadedDocument.flags or 1
@@ -5077,19 +4970,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							}
 						}
 
-						if (document.access_hash == 0L) {
+						if (document.accessHash == 0L) {
 							inputMedia = uploadedDocument
 							performMediaUpload = true
 						}
 						else {
-							val media = TL_inputMediaDocument()
-							media.id = TL_inputDocument()
-							media.id.id = document.id
-							media.id.access_hash = document.access_hash
-							media.id.file_reference = document.file_reference
+							val media = TLRPC.TLInputMediaDocument()
 
-							if (media.id.file_reference == null) {
-								media.id.file_reference = ByteArray(0)
+							media.id = TLRPC.TLInputDocument().also {
+								it.id = document.id
+								it.accessHash = document.accessHash
+								it.fileReference = document.fileReference ?: ByteArray(0)
 							}
 
 							if (params != null && params.containsKey("query")) {
@@ -5115,7 +5006,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						if (document.thumbs.isNotEmpty()) {
 							val photoSize = document.thumbs[0]
 
-							if (photoSize !is TL_photoStrippedSize) {
+							if (photoSize !is TLRPC.TLPhotoStrippedSize) {
 								delayedMessage.photoSize = photoSize
 								delayedMessage.locationParent = document
 							}
@@ -5124,14 +5015,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						delayedMessage.videoEditedInfo = videoEditedInfo
 					}
 					else if (type == 6) {
-						inputMedia = TL_inputMediaContact()
-						inputMedia.first_name = user!!.first_name
-						inputMedia.last_name = user.last_name
-						inputMedia.phone_number = String.format("@%s", user.username) // MARK: this is workaround to get contacts work on chat screen // Nik
-						inputMedia.user_id = user.id
+						inputMedia = TLRPC.TLInputMediaContact()
+						inputMedia.firstName = user!!.firstName
+						inputMedia.lastName = user.lastName
+						inputMedia.phoneNumber = String.format("@%s", user.username) // MARK: this is workaround to get contacts work on chat screen // Nik
+						inputMedia.userId = user.id
 
-						if (user.restriction_reason.isNotEmpty() && user.restriction_reason[0].text.startsWith("BEGIN:VCARD")) {
-							inputMedia.vcard = user.restriction_reason[0].text
+						if (user.restrictionReason?.firstOrNull()?.text?.startsWith("BEGIN:VCARD") == true) {
+							inputMedia.vcard = user.restrictionReason?.firstOrNull()?.text ?: ""
 						}
 						else {
 							inputMedia.vcard = ""
@@ -5139,42 +5030,40 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 					else if (type == 7 || type == 9) {
 						val http = false
-						val uploadedMedia: InputMedia?
+						val uploadedMedia: TLRPC.TLInputMediaUploadedDocument?
 
-						if (originalPath != null || path != null || document!!.access_hash == 0L) {
-							uploadedMedia = TL_inputMediaUploadedDocument()
+						if (originalPath != null || path != null || document!!.accessHash == 0L) {
+							uploadedMedia = TLRPC.TLInputMediaUploadedDocument()
 
 							if (ttl != 0) {
-								uploadedMedia.ttl_seconds = ttl
-								newMsg.ttl = uploadedMedia.ttl_seconds
+								uploadedMedia.ttlSeconds = ttl
+								newMsg.ttl = uploadedMedia.ttlSeconds
 								uploadedMedia.flags = uploadedMedia.flags or 2
 							}
 
-							if (forceNoSoundVideo || !TextUtils.isEmpty(path) && path!!.lowercase(Locale.getDefault()).endsWith("mp4") && (params == null || params.containsKey("forceDocument"))) {
-								uploadedMedia.nosound_video = true
+							if (forceNoSoundVideo || !TextUtils.isEmpty(path) && path!!.lowercase().endsWith("mp4") && (params == null || params.containsKey("forceDocument"))) {
+								uploadedMedia.nosoundVideo = true
 							}
 
-							uploadedMedia.force_file = params != null && params.containsKey("forceDocument")
-							uploadedMedia.mime_type = document!!.mime_type
-							uploadedMedia.attributes = document.attributes
+							uploadedMedia.forceFile = params != null && params.containsKey("forceDocument")
+							uploadedMedia.mimeType = document!!.mimeType
+							uploadedMedia.attributes.addAll(document.attributes)
 						}
 						else {
 							uploadedMedia = null
 						}
 
-						if (document.access_hash == 0L) {
+						if (document.accessHash == 0L) {
 							inputMedia = uploadedMedia
-							performMediaUpload = uploadedMedia is TL_inputMediaUploadedDocument
+							performMediaUpload = uploadedMedia is TLRPC.TLInputMediaUploadedDocument
 						}
 						else {
-							val media = TL_inputMediaDocument()
-							media.id = TL_inputDocument()
-							media.id.id = document.id
-							media.id.access_hash = document.access_hash
-							media.id.file_reference = document.file_reference
+							val media = TLRPC.TLInputMediaDocument()
 
-							if (media.id.file_reference == null) {
-								media.id.file_reference = ByteArray(0)
+							media.id = TLRPC.TLInputDocument().also {
+								it.id = document.id
+								it.accessHash = document.accessHash
+								it.fileReference = document.fileReference ?: ByteArray(0)
 							}
 
 							if (params != null && params.containsKey("query")) {
@@ -5201,7 +5090,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							if (document.thumbs.isNotEmpty()) {
 								val photoSize = document.thumbs[0]
 
-								if (photoSize !is TL_photoStrippedSize) {
+								if (photoSize !is TLRPC.TLPhotoStrippedSize) {
 									delayedMessage.photoSize = photoSize
 									delayedMessage.locationParent = document
 								}
@@ -5209,29 +5098,27 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						}
 					}
 					else if (type == 8) {
-						val uploadedDocument = TL_inputMediaUploadedDocument()
-						uploadedDocument.mime_type = document!!.mime_type
-						uploadedDocument.attributes = document.attributes
+						val uploadedDocument = TLRPC.TLInputMediaUploadedDocument()
+						uploadedDocument.mimeType = document!!.mimeType
+						uploadedDocument.attributes.addAll(document.attributes)
 
 						if (ttl != 0) {
-							uploadedDocument.ttl_seconds = ttl
-							newMsg.ttl = uploadedDocument.ttl_seconds
+							uploadedDocument.ttlSeconds = ttl
+							newMsg.ttl = uploadedDocument.ttlSeconds
 							uploadedDocument.flags = uploadedDocument.flags or 2
 						}
 
-						if (document.access_hash == 0L) {
+						if (document.accessHash == 0L) {
 							inputMedia = uploadedDocument
 							performMediaUpload = true
 						}
 						else {
-							val media = TL_inputMediaDocument()
-							media.id = TL_inputDocument()
-							media.id.id = document.id
-							media.id.access_hash = document.access_hash
-							media.id.file_reference = document.file_reference
+							val media = TLRPC.TLInputMediaDocument()
 
-							if (media.id.file_reference == null) {
-								media.id.file_reference = ByteArray(0)
+							media.id = TLRPC.TLInputDocument().also {
+								it.id = document.id
+								it.accessHash = document.accessHash
+								it.fileReference = document.fileReference ?: ByteArray(0)
 							}
 
 							if (params != null && params.containsKey("query")) {
@@ -5251,7 +5138,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						delayedMessage.scheduled = scheduleDate != 0
 					}
 					else if (type == 10) {
-						val inputMediaPoll = TL_inputMediaPoll()
+						val inputMediaPoll = TLRPC.TLInputMediaPoll()
 						inputMediaPoll.poll = poll!!.poll
 
 						if (params != null && params.containsKey("answers")) {
@@ -5259,23 +5146,23 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 							if (answers.isNotEmpty()) {
 								for (answer in answers) {
-									inputMediaPoll.correct_answers.add(byteArrayOf(answer))
+									inputMediaPoll.correctAnswers.add(byteArrayOf(answer))
 								}
 
 								inputMediaPoll.flags = inputMediaPoll.flags or 1
 							}
 						}
 
-						if (poll.results != null && !TextUtils.isEmpty(poll.results.solution)) {
-							inputMediaPoll.solution = poll.results.solution
-							inputMediaPoll.solution_entities = poll.results.solution_entities
+						if (poll.results != null && !TextUtils.isEmpty(poll.results?.solution)) {
+							inputMediaPoll.solution = poll.results?.solution
+							inputMediaPoll.solutionEntities.addAll(poll.results!!.solutionEntities)
 							inputMediaPoll.flags = inputMediaPoll.flags or 2
 						}
 
 						inputMedia = inputMediaPoll
 					}
 					else if (type == 11) {
-						val inputMediaDice = TL_inputMediaDice()
+						val inputMediaDice = TLRPC.TLInputMediaDice()
 						inputMediaDice.emoticon = message
 						inputMedia = inputMediaDice
 					}
@@ -5283,31 +5170,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val reqSend: TLObject?
 
 					if (groupId != 0L) {
-						var request: TL_messages_sendMultiMedia? = null
+						var request: TLRPC.TLMessagesSendMultiMedia? = null
 
 						if (delayedMessage?.sendRequest != null) {
-							request = delayedMessage.sendRequest as? TL_messages_sendMultiMedia
+							request = delayedMessage.sendRequest as? TLRPC.TLMessagesSendMultiMedia
 						}
 
 						if (request == null) {
-							request = TL_messages_sendMultiMedia()
+							request = TLRPC.TLMessagesSendMultiMedia()
 							request.peer = sendToPeer
 							request.silent = newMsg.silent
-							request.is_media_sale = isMediaSale
-							request.media_sale_hash = mediaSaleHash
 
-							if (isMediaSale) {
-								newMsg.is_media_sale = true
-								newMsg.noforwards = true
-							}
-
-							if (newMsg.reply_to != null && newMsg.reply_to?.reply_to_msg_id != 0) {
+							if (newMsg.replyTo != null && newMsg.replyTo?.replyToMsgId != 0) {
 								request.flags = request.flags or 1
-								request.reply_to_msg_id = newMsg.reply_to?.reply_to_msg_id ?: 0
+								request.replyToMsgId = newMsg.replyTo?.replyToMsgId ?: 0
 							}
 
 							if (scheduleDate != 0) {
-								request.schedule_date = scheduleDate
+								request.scheduleDate = scheduleDate
 								request.flags = request.flags or 1024
 							}
 
@@ -5323,59 +5203,50 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						delayedMessage?.messages?.add(newMsg)
 						delayedMessage?.originalPaths?.add(originalPath)
 
-						val inputSingleMedia = TL_inputSingleMedia()
-						inputSingleMedia.random_id = newMsg.random_id
+						val inputSingleMedia = TLRPC.TLInputSingleMedia()
+						inputSingleMedia.randomId = newMsg.randomId
 						inputSingleMedia.media = inputMedia
 						inputSingleMedia.message = caption
 
 						if (!entities.isNullOrEmpty()) {
-							inputSingleMedia.entities = ArrayList(entities)
+							inputSingleMedia.entities.addAll(entities)
 							inputSingleMedia.flags = inputSingleMedia.flags or 1
 						}
 
-						request.multi_media.add(inputSingleMedia)
+						request.multiMedia.add(inputSingleMedia)
 						reqSend = request
 					}
 					else {
-						val request = TL_messages_sendMedia()
+						val request = TLRPC.TLMessagesSendMedia()
 						request.peer = sendToPeer
 						request.silent = newMsg.silent
-						request.media_sale_hash = mediaSaleHash
-						request.is_media_sale = isMediaSale
 
-						if (isMediaSale) {
-							newMsg.is_media_sale = true
-							newMsg.noforwards = true
-
-							request.noforwards = true
-						}
-
-						if (newMsg.reply_to != null && newMsg.reply_to?.reply_to_msg_id != 0) {
+						if (newMsg.replyTo != null && newMsg.replyTo?.replyToMsgId != 0) {
 							request.flags = request.flags or 1
-							request.reply_to_msg_id = newMsg.reply_to?.reply_to_msg_id ?: 0
+							request.replyToMsgId = newMsg.replyTo?.replyToMsgId ?: 0
 						}
 
-						request.random_id = newMsg.random_id
+						request.randomId = newMsg.randomId
 
-						if (newMsg.from_id != null) {
-							request.send_as = messagesController.getInputPeer(newMsg.from_id)
+						if (newMsg.fromId != null) {
+							request.sendAs = messagesController.getInputPeer(newMsg.fromId)
 						}
 
 						request.media = inputMedia
 						request.message = caption
 
 						if (!entities.isNullOrEmpty()) {
-							request.entities = ArrayList(entities)
+							request.entities.addAll(ArrayList(entities))
 							request.flags = request.flags or 8
 						}
 
 						if (scheduleDate != 0) {
-							request.schedule_date = scheduleDate
+							request.scheduleDate = scheduleDate
 							request.flags = request.flags or 1024
 						}
 
 						if (updateStickersOrder) {
-							request.update_stickersets_order = true
+							request.updateStickersetsOrder = true
 						}
 
 						if (delayedMessage != null) {
@@ -5386,7 +5257,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 //						if (updateStickersOrder) {
 //                            if (MessageObject.getStickerSetId(document) != -1) {
-//                                TLRPC.TL_updateMoveStickerSetToTop update = new TLRPC.TL_updateMoveStickerSetToTop();
+//                                TLRPC.TLRPC.TLUpdateMoveStickerSetToTop update = new TLRPC.TLRPC.TLUpdateMoveStickerSetToTop();
 //                                update.masks = false;
 //                                update.emojis = false;
 //                                update.stickerset = MessageObject.getStickerSetId(document);
@@ -5444,385 +5315,386 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 				else {
-					val reqSend: TL_decryptedMessage
-
-					if (AndroidUtilities.getPeerLayerVersion(encryptedChat.layer) >= 73) {
-						reqSend = TL_decryptedMessage()
-
-						if (groupId != 0L) {
-							reqSend.grouped_id = groupId
-							reqSend.flags = reqSend.flags or 131072
-						}
-					}
-					else {
-						reqSend = TL_decryptedMessage_layer45()
-					}
-
-					reqSend.ttl = newMsg.ttl
-
-					if (!entities.isNullOrEmpty()) {
-						reqSend.entities = ArrayList(entities)
-						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
-					}
-
-					if (newMsg.reply_to != null && newMsg.reply_to?.reply_to_random_id != 0L) {
-						reqSend.reply_to_random_id = newMsg.reply_to?.reply_to_random_id ?: 0
-						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_REPLY
-					}
-
-					reqSend.silent = newMsg.silent
-					reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_MEDIA
-
-					if (params != null && params["bot_name"] != null) {
-						reqSend.via_bot_name = params["bot_name"]
-						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_BOT_ID
-					}
-
-					reqSend.random_id = newMsg.random_id
-					reqSend.message = ""
-
-					if (type == 1) {
-						if (location is TL_messageMediaVenue) {
-							reqSend.media = TL_decryptedMessageMediaVenue()
-							reqSend.media.address = location.address
-							reqSend.media.title = location.title
-							reqSend.media.provider = location.provider
-							reqSend.media.venue_id = location.venue_id
-						}
-						else {
-							reqSend.media = TL_decryptedMessageMediaGeoPoint()
-						}
-
-						reqSend.media.lat = location!!.geo.lat
-						reqSend.media._long = location.geo._long
-
-						secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
-					}
-					else if (type == 2 || type == 9 && photo != null) {
-						val small = photo!!.sizes[0]
-						val big = photo.sizes[photo.sizes.size - 1]
-
-						ImageLoader.fillPhotoSizeWithBytes(small)
-
-						reqSend.media = TL_decryptedMessageMediaPhoto()
-						reqSend.media.caption = caption
-
-						if (small.bytes != null) {
-							(reqSend.media as TL_decryptedMessageMediaPhoto).thumb = small.bytes
-						}
-						else {
-							(reqSend.media as TL_decryptedMessageMediaPhoto).thumb = ByteArray(0)
-						}
-
-						reqSend.media.thumb_h = small.h
-						reqSend.media.thumb_w = small.w
-						reqSend.media.w = big.w
-						reqSend.media.h = big.h
-						reqSend.media.size = big.size.toLong()
-
-						if (big.location.key == null || groupId != 0L) {
-							if (delayedMessage == null) {
-								delayedMessage = DelayedMessage(peer)
-								delayedMessage.encryptedChat = encryptedChat
-								delayedMessage.type = 0
-								delayedMessage.originalPath = originalPath
-								delayedMessage.sendEncryptedRequest = reqSend
-								delayedMessage.obj = newMsgObj
-
-								if (params != null && params.containsKey("parentObject")) {
-									delayedMessage.parentObject = params["parentObject"]
-								}
-								else {
-									delayedMessage.parentObject = parentObject
-								}
-
-								delayedMessage.performMediaUpload = true
-								delayedMessage.scheduled = scheduleDate != 0
-							}
-
-							if (!path.isNullOrEmpty() && path.startsWith("http")) {
-								delayedMessage.httpLocation = path
-							}
-							else {
-								delayedMessage.photoSize = photo.sizes[photo.sizes.size - 1]
-								delayedMessage.locationParent = photo
-							}
-
-							if (groupId == 0L) {
-								performSendDelayedMessage(delayedMessage)
-							}
-						}
-						else {
-							val encryptedFile = TL_inputEncryptedFile()
-							encryptedFile.id = big.location.volume_id
-							encryptedFile.access_hash = big.location.secret
-
-							reqSend.media.key = big.location.key
-							reqSend.media.iv = big.location.iv
-
-							secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, encryptedFile, null, newMsgObj)
-						}
-					}
-					else if (type == 3) {
-						val thumb = getThumbForSecretChat(document!!.thumbs)
-
-						ImageLoader.fillPhotoSizeWithBytes(thumb)
-
-						if (MessageObject.isNewGifDocument(document) || MessageObject.isRoundVideoDocument(document)) {
-							reqSend.media = TL_decryptedMessageMediaDocument()
-							reqSend.media.attributes = document.attributes
-
-							if (thumb?.bytes != null) {
-								(reqSend.media as TL_decryptedMessageMediaDocument).thumb = thumb.bytes
-							}
-							else {
-								(reqSend.media as TL_decryptedMessageMediaDocument).thumb = ByteArray(0)
-							}
-						}
-						else {
-							reqSend.media = TL_decryptedMessageMediaVideo()
-
-							if (thumb?.bytes != null) {
-								(reqSend.media as TL_decryptedMessageMediaVideo).thumb = thumb.bytes
-							}
-							else {
-								(reqSend.media as TL_decryptedMessageMediaVideo).thumb = ByteArray(0)
-							}
-						}
-
-						reqSend.media.caption = caption
-						reqSend.media.mime_type = "video/mp4"
-						reqSend.media.size = document.size
-
-						for (attribute in document.attributes) {
-							if (attribute is TL_documentAttributeVideo) {
-								reqSend.media.w = attribute.w
-								reqSend.media.h = attribute.h
-								reqSend.media.duration = attribute.duration
-								break
-							}
-						}
-
-						reqSend.media.thumb_h = thumb!!.h
-						reqSend.media.thumb_w = thumb.w
-
-						if (document.key == null || groupId != 0L) {
-							if (delayedMessage == null) {
-								delayedMessage = DelayedMessage(peer)
-								delayedMessage.encryptedChat = encryptedChat
-								delayedMessage.type = 1
-								delayedMessage.sendEncryptedRequest = reqSend
-								delayedMessage.originalPath = originalPath
-								delayedMessage.obj = newMsgObj
-
-								if (params != null && params.containsKey("parentObject")) {
-									delayedMessage.parentObject = params["parentObject"]
-								}
-								else {
-									delayedMessage.parentObject = parentObject
-								}
-
-								delayedMessage.performMediaUpload = true
-								delayedMessage.scheduled = scheduleDate != 0
-							}
-
-							delayedMessage.videoEditedInfo = videoEditedInfo
-
-							if (groupId == 0L) {
-								performSendDelayedMessage(delayedMessage)
-							}
-						}
-						else {
-							val encryptedFile = TL_inputEncryptedFile()
-							encryptedFile.id = document.id
-							encryptedFile.access_hash = document.access_hash
-
-							reqSend.media.key = document.key
-							reqSend.media.iv = document.iv
-
-							secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, encryptedFile, null, newMsgObj)
-						}
-					}
-					else if (type == 6) {
-						reqSend.media = TL_decryptedMessageMediaContact()
-						// reqSend.media.phone_number = user.phone;
-						reqSend.media.first_name = user!!.first_name
-						reqSend.media.last_name = user.last_name
-						reqSend.media.user_id = user.id
-
-						secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
-					}
-					else if (type == 7 || type == 9 && document != null) {
-						if (document!!.access_hash != 0L && (MessageObject.isStickerDocument(document) || MessageObject.isAnimatedStickerDocument(document, true))) {
-							reqSend.media = TL_decryptedMessageMediaExternalDocument()
-							reqSend.media.id = document.id
-							reqSend.media.date = document.date
-							reqSend.media.access_hash = document.access_hash
-							reqSend.media.mime_type = document.mime_type
-							reqSend.media.size = document.size
-							reqSend.media.dc_id = document.dc_id
-							reqSend.media.attributes = document.attributes
-
-							val thumb = getThumbForSecretChat(document.thumbs)
-
-							if (thumb != null) {
-								(reqSend.media as TL_decryptedMessageMediaExternalDocument).thumb = thumb
-							}
-							else {
-								(reqSend.media as TL_decryptedMessageMediaExternalDocument).thumb = TL_photoSizeEmpty()
-								(reqSend.media as TL_decryptedMessageMediaExternalDocument).thumb.type = "s"
-							}
-
-							if (delayedMessage != null && delayedMessage.type == 5) {
-								delayedMessage.sendEncryptedRequest = reqSend
-								delayedMessage.obj = newMsgObj
-								performSendDelayedMessage(delayedMessage)
-							}
-							else {
-								secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
-							}
-						}
-						else {
-							reqSend.media = TL_decryptedMessageMediaDocument()
-							reqSend.media.attributes = document.attributes
-							reqSend.media.caption = caption
-
-							val thumb = getThumbForSecretChat(document.thumbs)
-
-							if (thumb != null) {
-								ImageLoader.fillPhotoSizeWithBytes(thumb)
-
-								(reqSend.media as TL_decryptedMessageMediaDocument).thumb = thumb.bytes
-
-								reqSend.media.thumb_h = thumb.h
-								reqSend.media.thumb_w = thumb.w
-							}
-							else {
-								(reqSend.media as TL_decryptedMessageMediaDocument).thumb = ByteArray(0)
-
-								reqSend.media.thumb_h = 0
-								reqSend.media.thumb_w = 0
-							}
-
-							reqSend.media.size = document.size
-							reqSend.media.mime_type = document.mime_type
-
-							if (document.key == null || groupId != 0L) {
-								if (delayedMessage == null) {
-									delayedMessage = DelayedMessage(peer)
-									delayedMessage.encryptedChat = encryptedChat
-									delayedMessage.type = 2
-									delayedMessage.sendEncryptedRequest = reqSend
-									delayedMessage.originalPath = originalPath
-									delayedMessage.obj = newMsgObj
-
-									if (params != null && params.containsKey("parentObject")) {
-										delayedMessage.parentObject = params["parentObject"]
-									}
-									else {
-										delayedMessage.parentObject = parentObject
-									}
-
-									delayedMessage.performMediaUpload = true
-									delayedMessage.scheduled = scheduleDate != 0
-								}
-
-								if (!path.isNullOrEmpty() && path.startsWith("http")) {
-									delayedMessage.httpLocation = path
-								}
-
-								if (groupId == 0L) {
-									performSendDelayedMessage(delayedMessage)
-								}
-							}
-							else {
-								val encryptedFile = TL_inputEncryptedFile()
-								encryptedFile.id = document.id
-								encryptedFile.access_hash = document.access_hash
-
-								reqSend.media.key = document.key
-								reqSend.media.iv = document.iv
-
-								secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, encryptedFile, null, newMsgObj)
-							}
-						}
-					}
-					else if (type == 8) {
-						delayedMessage = DelayedMessage(peer)
-						delayedMessage.encryptedChat = encryptedChat
-						delayedMessage.sendEncryptedRequest = reqSend
-						delayedMessage.obj = newMsgObj
-						delayedMessage.type = 3
-						delayedMessage.parentObject = parentObject
-						delayedMessage.performMediaUpload = true
-						delayedMessage.scheduled = scheduleDate != 0
-
-						reqSend.media = TL_decryptedMessageMediaDocument()
-						reqSend.media.attributes = document!!.attributes
-						reqSend.media.caption = caption
-
-						val thumb = getThumbForSecretChat(document.thumbs)
-
-						if (thumb != null) {
-							ImageLoader.fillPhotoSizeWithBytes(thumb)
-							(reqSend.media as TL_decryptedMessageMediaDocument).thumb = thumb.bytes
-							reqSend.media.thumb_h = thumb.h
-							reqSend.media.thumb_w = thumb.w
-						}
-						else {
-							(reqSend.media as TL_decryptedMessageMediaDocument).thumb = ByteArray(0)
-							reqSend.media.thumb_h = 0
-							reqSend.media.thumb_w = 0
-						}
-
-						reqSend.media.mime_type = document.mime_type
-						reqSend.media.size = document.size
-
-						delayedMessage.originalPath = originalPath
-
-						performSendDelayedMessage(delayedMessage)
-					}
-
-					if (groupId != 0L) {
-						val request: TL_messages_sendEncryptedMultiMedia?
-
-						if (delayedMessage!!.sendEncryptedRequest != null) {
-							request = delayedMessage.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?
-						}
-						else {
-							request = TL_messages_sendEncryptedMultiMedia()
-							delayedMessage.sendEncryptedRequest = request
-						}
-
-						delayedMessage.messageObjects!!.add(newMsgObj)
-						delayedMessage.messages!!.add(newMsg)
-						delayedMessage.originalPaths!!.add(originalPath!!)
-						delayedMessage.performMediaUpload = true
-
-						request!!.messages.add(reqSend)
-
-						val encryptedFile = TL_inputEncryptedFile()
-						encryptedFile.id = (if (type == 3 || type == 7) 1 else 0).toLong()
-
-						request.files.add(encryptedFile)
-
-						performSendDelayedMessage(delayedMessage)
-					}
-
-					if (retryMessageObject == null) {
-						mediaDataController.cleanDraft(peer, replyToTopMsg?.id ?: 0, false)
-					}
+					// MARK: uncomment to enable secret chats
+//					val reqSend: TLRPC.TLDecryptedMessage
+//
+//					if (AndroidUtilities.getPeerLayerVersion(encryptedChat.layer) >= 73) {
+//						reqSend = TLRPC.TLDecryptedMessage()
+//
+//						if (groupId != 0L) {
+//							reqSend.grouped_id = groupId
+//							reqSend.flags = reqSend.flags or 131072
+//						}
+//					}
+//					else {
+//						reqSend = TLRPC.TLDecryptedMessage_layer45()
+//					}
+//
+//					reqSend.ttl = newMsg.ttl
+//
+//					if (!entities.isNullOrEmpty()) {
+//						reqSend.entities = ArrayList(entities)
+//						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
+//					}
+//
+//					if (newMsg.replyTo != null && newMsg.replyTo?.replyToRandomId != 0L) {
+//						reqSend.replyToRandomId = newMsg.replyTo?.replyToRandomId ?: 0
+//						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_REPLY
+//					}
+//
+//					reqSend.silent = newMsg.silent
+//					reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_MEDIA
+//
+//					if (params != null && params["bot_name"] != null) {
+//						reqSend.viaBotName = params["bot_name"]
+//						reqSend.flags = reqSend.flags or TLRPC.MESSAGE_FLAG_HAS_BOT_ID
+//					}
+//
+//					reqSend.randomId = newMsg.randomId
+//					reqSend.message = ""
+//
+//					if (type == 1) {
+//						if (location is TLRPC.TLMessageMediaVenue) {
+//							reqSend.media = TLRPC.TLDecryptedMessageMediaVenue()
+//							reqSend.media.address = location.address
+//							reqSend.media.title = location.title
+//							reqSend.media.provider = location.provider
+//							reqSend.media.venue_id = location.venue_id
+//						}
+//						else {
+//							reqSend.media = TLRPC.TLDecryptedMessageMediaGeoPoint()
+//						}
+//
+//						reqSend.media.lat = location!!.geo.lat
+//						reqSend.media._long = location.geo._long
+//
+//						secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
+//					}
+//					else if (type == 2 || type == 9 && photo != null) {
+//						val small = photo!!.sizes[0]
+//						val big = photo.sizes[photo.sizes.size - 1]
+//
+//						ImageLoader.fillPhotoSizeWithBytes(small)
+//
+//						reqSend.media = TLRPC.TLDecryptedMessageMediaPhoto()
+//						reqSend.media.caption = caption
+//
+//						if (small.bytes != null) {
+//							(reqSend.media as TLRPC.TLDecryptedMessageMediaPhoto).thumb = small.bytes
+//						}
+//						else {
+//							(reqSend.media as TLRPC.TLDecryptedMessageMediaPhoto).thumb = ByteArray(0)
+//						}
+//
+//						reqSend.media.thumb_h = small.h
+//						reqSend.media.thumb_w = small.w
+//						reqSend.media.w = big.w
+//						reqSend.media.h = big.h
+//						reqSend.media.size = big.size.toLong()
+//
+//						if (big.location.key == null || groupId != 0L) {
+//							if (delayedMessage == null) {
+//								delayedMessage = DelayedMessage(peer)
+//								delayedMessage.encryptedChat = encryptedChat
+//								delayedMessage.type = 0
+//								delayedMessage.originalPath = originalPath
+//								delayedMessage.sendEncryptedRequest = reqSend
+//								delayedMessage.obj = newMsgObj
+//
+//								if (params != null && params.containsKey("parentObject")) {
+//									delayedMessage.parentObject = params["parentObject"]
+//								}
+//								else {
+//									delayedMessage.parentObject = parentObject
+//								}
+//
+//								delayedMessage.performMediaUpload = true
+//								delayedMessage.scheduled = scheduleDate != 0
+//							}
+//
+//							if (!path.isNullOrEmpty() && path.startsWith("http")) {
+//								delayedMessage.httpLocation = path
+//							}
+//							else {
+//								delayedMessage.photoSize = photo.sizes[photo.sizes.size - 1]
+//								delayedMessage.locationParent = photo
+//							}
+//
+//							if (groupId == 0L) {
+//								performSendDelayedMessage(delayedMessage)
+//							}
+//						}
+//						else {
+//							val encryptedFile = TLRPC.TLInputEncryptedFile()
+//							encryptedFile.id = big.location.volumeId
+//							encryptedFile.accessHash = big.location.secret
+//
+//							reqSend.media.key = big.location.key
+//							reqSend.media.iv = big.location.iv
+//
+//							secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, encryptedFile, null, newMsgObj)
+//						}
+//					}
+//					else if (type == 3) {
+//						val thumb = getThumbForSecretChat(document!!.thumbs)
+//
+//						ImageLoader.fillPhotoSizeWithBytes(thumb)
+//
+//						if (MessageObject.isNewGifDocument(document) || MessageObject.isRoundVideoDocument(document)) {
+//							reqSend.media = TLRPC.TLDecryptedMessageMediaDocument()
+//							reqSend.media.attributes = document.attributes
+//
+//							if (thumb?.bytes != null) {
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaDocument).thumb = thumb.bytes
+//							}
+//							else {
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaDocument).thumb = ByteArray(0)
+//							}
+//						}
+//						else {
+//							reqSend.media = TLRPC.TLDecryptedMessageMediaVideo()
+//
+//							if (thumb?.bytes != null) {
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaVideo).thumb = thumb.bytes
+//							}
+//							else {
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaVideo).thumb = ByteArray(0)
+//							}
+//						}
+//
+//						reqSend.media.caption = caption
+//						reqSend.media.mimeType = "video/mp4"
+//						reqSend.media.size = document.size
+//
+//						for (attribute in document.attributes) {
+//							if (attribute is TLRPC.TLDocumentAttributeVideo) {
+//								reqSend.media.w = attribute.w
+//								reqSend.media.h = attribute.h
+//								reqSend.media.duration = attribute.duration
+//								break
+//							}
+//						}
+//
+//						reqSend.media.thumb_h = thumb!!.h
+//						reqSend.media.thumb_w = thumb.w
+//
+//						if (document.key == null || groupId != 0L) {
+//							if (delayedMessage == null) {
+//								delayedMessage = DelayedMessage(peer)
+//								delayedMessage.encryptedChat = encryptedChat
+//								delayedMessage.type = 1
+//								delayedMessage.sendEncryptedRequest = reqSend
+//								delayedMessage.originalPath = originalPath
+//								delayedMessage.obj = newMsgObj
+//
+//								if (params != null && params.containsKey("parentObject")) {
+//									delayedMessage.parentObject = params["parentObject"]
+//								}
+//								else {
+//									delayedMessage.parentObject = parentObject
+//								}
+//
+//								delayedMessage.performMediaUpload = true
+//								delayedMessage.scheduled = scheduleDate != 0
+//							}
+//
+//							delayedMessage.videoEditedInfo = videoEditedInfo
+//
+//							if (groupId == 0L) {
+//								performSendDelayedMessage(delayedMessage)
+//							}
+//						}
+//						else {
+//							val encryptedFile = TLRPC.TLInputEncryptedFile()
+//							encryptedFile.id = document.id
+//							encryptedFile.accessHash = document.accessHash
+//
+//							reqSend.media.key = document.key
+//							reqSend.media.iv = document.iv
+//
+//							secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, encryptedFile, null, newMsgObj)
+//						}
+//					}
+//					else if (type == 6) {
+//						reqSend.media = TLRPC.TLDecryptedMessageMediaContact()
+//						// reqSend.media.phoneNumber = user.phone;
+//						reqSend.media.firstName = user!!.firstName
+//						reqSend.media.lastName = user.lastName
+//						reqSend.media.userId = user.id
+//
+//						secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
+//					}
+//					else if (type == 7 || type == 9 && document != null) {
+//						if (document!!.accessHash != 0L && (MessageObject.isStickerDocument(document) || MessageObject.isAnimatedStickerDocument(document, true))) {
+//							reqSend.media = TLRPC.TLDecryptedMessageMediaExternalDocument()
+//							reqSend.media.id = document.id
+//							reqSend.media.date = document.date
+//							reqSend.media.accessHash = document.accessHash
+//							reqSend.media.mimeType = document.mimeType
+//							reqSend.media.size = document.size
+//							reqSend.media.dcId = document.dcId
+//							reqSend.media.attributes = document.attributes
+//
+//							val thumb = getThumbForSecretChat(document.thumbs)
+//
+//							if (thumb != null) {
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaExternalDocument).thumb = thumb
+//							}
+//							else {
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaExternalDocument).thumb = TLRPC.TLPhotoSizeEmpty()
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaExternalDocument).thumb.type = "s"
+//							}
+//
+//							if (delayedMessage != null && delayedMessage.type == 5) {
+//								delayedMessage.sendEncryptedRequest = reqSend
+//								delayedMessage.obj = newMsgObj
+//								performSendDelayedMessage(delayedMessage)
+//							}
+//							else {
+//								secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, null, null, newMsgObj)
+//							}
+//						}
+//						else {
+//							reqSend.media = TLRPC.TLDecryptedMessageMediaDocument()
+//							reqSend.media.attributes = document.attributes
+//							reqSend.media.caption = caption
+//
+//							val thumb = getThumbForSecretChat(document.thumbs)
+//
+//							if (thumb != null) {
+//								ImageLoader.fillPhotoSizeWithBytes(thumb)
+//
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaDocument).thumb = thumb.bytes
+//
+//								reqSend.media.thumb_h = thumb.h
+//								reqSend.media.thumb_w = thumb.w
+//							}
+//							else {
+//								(reqSend.media as TLRPC.TLDecryptedMessageMediaDocument).thumb = ByteArray(0)
+//
+//								reqSend.media.thumb_h = 0
+//								reqSend.media.thumb_w = 0
+//							}
+//
+//							reqSend.media.size = document.size
+//							reqSend.media.mimeType = document.mimeType
+//
+//							if (document.key == null || groupId != 0L) {
+//								if (delayedMessage == null) {
+//									delayedMessage = DelayedMessage(peer)
+//									delayedMessage.encryptedChat = encryptedChat
+//									delayedMessage.type = 2
+//									delayedMessage.sendEncryptedRequest = reqSend
+//									delayedMessage.originalPath = originalPath
+//									delayedMessage.obj = newMsgObj
+//
+//									if (params != null && params.containsKey("parentObject")) {
+//										delayedMessage.parentObject = params["parentObject"]
+//									}
+//									else {
+//										delayedMessage.parentObject = parentObject
+//									}
+//
+//									delayedMessage.performMediaUpload = true
+//									delayedMessage.scheduled = scheduleDate != 0
+//								}
+//
+//								if (!path.isNullOrEmpty() && path.startsWith("http")) {
+//									delayedMessage.httpLocation = path
+//								}
+//
+//								if (groupId == 0L) {
+//									performSendDelayedMessage(delayedMessage)
+//								}
+//							}
+//							else {
+//								val encryptedFile = TLRPC.TLInputEncryptedFile()
+//								encryptedFile.id = document.id
+//								encryptedFile.accessHash = document.accessHash
+//
+//								reqSend.media.key = document.key
+//								reqSend.media.iv = document.iv
+//
+//								secretChatHelper.performSendEncryptedRequest(reqSend, newMsgObj.messageOwner, encryptedChat, encryptedFile, null, newMsgObj)
+//							}
+//						}
+//					}
+//					else if (type == 8) {
+//						delayedMessage = DelayedMessage(peer)
+//						delayedMessage.encryptedChat = encryptedChat
+//						delayedMessage.sendEncryptedRequest = reqSend
+//						delayedMessage.obj = newMsgObj
+//						delayedMessage.type = 3
+//						delayedMessage.parentObject = parentObject
+//						delayedMessage.performMediaUpload = true
+//						delayedMessage.scheduled = scheduleDate != 0
+//
+//						reqSend.media = TLRPC.TLDecryptedMessageMediaDocument()
+//						reqSend.media.attributes = document!!.attributes
+//						reqSend.media.caption = caption
+//
+//						val thumb = getThumbForSecretChat(document.thumbs)
+//
+//						if (thumb != null) {
+//							ImageLoader.fillPhotoSizeWithBytes(thumb)
+//							(reqSend.media as TLRPC.TLDecryptedMessageMediaDocument).thumb = thumb.bytes
+//							reqSend.media.thumb_h = thumb.h
+//							reqSend.media.thumb_w = thumb.w
+//						}
+//						else {
+//							(reqSend.media as TLRPC.TLDecryptedMessageMediaDocument).thumb = ByteArray(0)
+//							reqSend.media.thumb_h = 0
+//							reqSend.media.thumb_w = 0
+//						}
+//
+//						reqSend.media.mimeType = document.mimeType
+//						reqSend.media.size = document.size
+//
+//						delayedMessage.originalPath = originalPath
+//
+//						performSendDelayedMessage(delayedMessage)
+//					}
+//
+//					if (groupId != 0L) {
+//						val request: TLRPC.TLMessagesSendEncryptedMultiMedia?
+//
+//						if (delayedMessage!!.sendEncryptedRequest != null) {
+//							request = delayedMessage.sendEncryptedRequest as TLRPC.TLMessagesSendEncryptedMultiMedia?
+//						}
+//						else {
+//							request = TLRPC.TLMessagesSendEncryptedMultiMedia()
+//							delayedMessage.sendEncryptedRequest = request
+//						}
+//
+//						delayedMessage.messageObjects!!.add(newMsgObj)
+//						delayedMessage.messages!!.add(newMsg)
+//						delayedMessage.originalPaths!!.add(originalPath!!)
+//						delayedMessage.performMediaUpload = true
+//
+//						request!!.messages.add(reqSend)
+//
+//						val encryptedFile = TLRPC.TLInputEncryptedFile()
+//						encryptedFile.id = (if (type == 3 || type == 7) 1 else 0).toLong()
+//
+//						request.files.add(encryptedFile)
+//
+//						performSendDelayedMessage(delayedMessage)
+//					}
+//
+//					if (retryMessageObject == null) {
+//						mediaDataController.cleanDraft(peer, replyToTopMsg?.id ?: 0, false)
+//					}
 				}
 			}
 			else if (type == 4) {
-				val reqSend = TL_messages_forwardMessages()
-				reqSend.to_peer = sendToPeer
-				reqSend.with_my_score = retryMessageObject!!.messageOwner!!.with_my_score
+				val reqSend = TLRPC.TLMessagesForwardMessages()
+				reqSend.toPeer = sendToPeer
+				// reqSend.withMyScore = retryMessageObject!!.messageOwner!!.withMyScore
 
 				if (params != null && params.containsKey("fwd_id")) {
 					val fwdId = Utilities.parseInt(params["fwd_id"])
 
-					reqSend.drop_author = true
+					reqSend.dropAuthor = true
 
 					val peerId = Utilities.parseLong(params["fwd_peer"])
 
@@ -5830,75 +5702,78 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						val chat = messagesController.getChat(-peerId)
 
 						if (ChatObject.isChannel(chat)) {
-							reqSend.from_peer = TL_inputPeerChannel()
-							reqSend.from_peer.channel_id = chat.id
-							reqSend.from_peer.access_hash = chat.access_hash
+							reqSend.fromPeer = TLRPC.TLInputPeerChannel().also {
+								it.channelId = chat.id
+								it.accessHash = chat.accessHash
+							}
 						}
 						else {
-							reqSend.from_peer = TL_inputPeerEmpty()
+							reqSend.fromPeer = TLRPC.TLInputPeerEmpty()
 						}
 					}
 					else {
-						reqSend.from_peer = TL_inputPeerEmpty()
+						reqSend.fromPeer = TLRPC.TLInputPeerEmpty()
 					}
 
 					reqSend.id.add(fwdId)
 				}
 				else {
-					reqSend.from_peer = TL_inputPeerEmpty()
+					reqSend.fromPeer = TLRPC.TLInputPeerEmpty()
 				}
 
 				reqSend.silent = newMsg.silent
 
 				if (scheduleDate != 0) {
-					reqSend.schedule_date = scheduleDate
+					reqSend.scheduleDate = scheduleDate
 					reqSend.flags = reqSend.flags or 1024
 				}
 
-				reqSend.random_id.add(newMsg.random_id)
+				reqSend.randomId.add(newMsg.randomId)
 
-				if (retryMessageObject.id >= 0) {
-					reqSend.id.add(retryMessageObject.id)
-				}
-				else {
-					if (retryMessageObject.messageOwner?.fwd_msg_id != 0) {
-						reqSend.id.add(retryMessageObject.messageOwner!!.fwd_msg_id)
+				if (retryMessageObject != null) {
+					if (retryMessageObject.id >= 0) {
+						reqSend.id.add(retryMessageObject.id)
 					}
-					else if (retryMessageObject.messageOwner?.fwd_from != null) {
-						reqSend.id.add(retryMessageObject.messageOwner?.fwd_from?.channel_post ?: 0)
+					else {
+						if (retryMessageObject.messageOwner?.fwdMsgId != 0) {
+							reqSend.id.add(retryMessageObject.messageOwner!!.fwdMsgId)
+						}
+						else if (retryMessageObject.messageOwner?.fwdFrom != null) {
+							reqSend.id.add(retryMessageObject.messageOwner?.fwdFrom?.channelPost ?: 0)
+						}
 					}
 				}
 
 				performSendMessageRequest(reqSend, newMsgObj, null, null, parentObject, scheduleDate != 0)
 			}
 			else if (type == 9) {
-				val reqSend = TL_messages_sendInlineBotResult()
+				val reqSend = TLRPC.TLMessagesSendInlineBotResult()
 				reqSend.peer = sendToPeer
-				reqSend.random_id = newMsg.random_id
+				reqSend.randomId = newMsg.randomId
 
-				if (newMsg.from_id != null) {
-					reqSend.send_as = messagesController.getInputPeer(newMsg.from_id)
+				if (newMsg.fromId != null) {
+					reqSend.sendAs = messagesController.getInputPeer(newMsg.fromId)
 				}
 
-				reqSend.hide_via = !params!!.containsKey("bot")
+				reqSend.hideVia = !params!!.containsKey("bot")
 
-				if (newMsg.reply_to != null && newMsg.reply_to?.reply_to_msg_id != 0) {
+				if (newMsg.replyTo != null && newMsg.replyTo?.replyToMsgId != 0) {
 					reqSend.flags = reqSend.flags or 1
-					reqSend.reply_to_msg_id = newMsg.reply_to?.reply_to_msg_id ?: 0
+					reqSend.replyToMsgId = newMsg.replyTo?.replyToMsgId ?: 0
 				}
 
 				reqSend.silent = newMsg.silent
 
 				if (scheduleDate != 0) {
-					reqSend.schedule_date = scheduleDate
+					reqSend.scheduleDate = scheduleDate
 					reqSend.flags = reqSend.flags or 1024
 				}
 
-				reqSend.query_id = Utilities.parseLong(params["query_id"])
+				reqSend.queryId = Utilities.parseLong(params["query_id"])
 				reqSend.id = params["id"]
 
 				if (retryMessageObject == null) {
-					reqSend.clear_draft = true
+					reqSend.clearDraft = true
 					mediaDataController.cleanDraft(peer, replyToTopMsg?.id ?: 0, false)
 				}
 
@@ -5910,51 +5785,51 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			messagesStorage.markMessageAsSendError(newMsg, scheduleDate != 0)
 
-			newMsgObj?.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+			newMsgObj?.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 
 			notificationCenter.postNotificationName(NotificationCenter.messageSendError, newMsg!!.id)
 			processSentMessage(newMsg.id)
 		}
 	}
 
-	private fun getThumbForSecretChat(arrayList: ArrayList<PhotoSize?>?): PhotoSize? {
-		if (arrayList.isNullOrEmpty()) {
-			return null
-		}
-
-		var a = 0
-		val n = arrayList.size
-
-		while (a < n) {
-			val size = arrayList[a]
-
-			if (size == null || size is TL_photoStrippedSize || size is TL_photoPathSize || size is TL_photoSizeEmpty || size.location == null) {
-				a++
-				continue
-			}
-
-			val photoSize: TL_photoSize = TL_photoSize_layer127()
-			photoSize.type = size.type
-			photoSize.w = size.w
-			photoSize.h = size.h
-			photoSize.size = size.size
-			photoSize.bytes = size.bytes
-
-			if (photoSize.bytes == null) {
-				photoSize.bytes = ByteArray(0)
-			}
-
-			photoSize.location = TL_fileLocation_layer82()
-			photoSize.location.dc_id = size.location.dc_id
-			photoSize.location.volume_id = size.location.volume_id
-			photoSize.location.local_id = size.location.local_id
-			photoSize.location.secret = size.location.secret
-
-			return photoSize
-		}
-
-		return null
-	}
+//	private fun getThumbForSecretChat(arrayList: ArrayList<PhotoSize?>?): PhotoSize? {
+//		if (arrayList.isNullOrEmpty()) {
+//			return null
+//		}
+//
+//		var a = 0
+//		val n = arrayList.size
+//
+//		while (a < n) {
+//			val size = arrayList[a]
+//
+//			if (size == null || size is TLRPC.TLPhotoStrippedSize || size is TLRPC.TLPhotoPathSize || size is TLRPC.TLPhotoSizeEmpty || size.location == null) {
+//				a++
+//				continue
+//			}
+//
+//			val photoSize = TLRPC.TLPhotoSizeLayer127()
+//			photoSize.type = size.type
+//			photoSize.w = size.w
+//			photoSize.h = size.h
+//			photoSize.size = size.size
+//			photoSize.bytes = size.bytes
+//
+//			if (photoSize.bytes == null) {
+//				photoSize.bytes = ByteArray(0)
+//			}
+//
+//			photoSize.location = TL_fileLocation_layer82()
+//			photoSize.location.dc_id = size.location.dc_id
+//			photoSize.location.volume_id = size.location.volume_id
+//			photoSize.location.local_id = size.location.local_id
+//			photoSize.location.secret = size.location.secret
+//
+//			return photoSize
+//		}
+//
+//		return null
+//	}
 
 	private fun performSendDelayedMessage(message: DelayedMessage?, index: Int = -1) {
 		@Suppress("NAME_SHADOWING") var index = index
@@ -5974,7 +5849,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				else {
 					var location = FileLoader.getInstance(currentAccount).getPathToAttach(message.photoSize).toString()
 
-					if (message.sendEncryptedRequest != null && message.photoSize!!.location.dc_id != 0) {
+					if (message.sendEncryptedRequest != null && message.photoSize?.location?.dcId != 0) {
 						var file = File(location)
 
 						if (!file.exists()) {
@@ -6013,28 +5888,29 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			else {
 				if (message.videoEditedInfo != null) {
 					if (message.videoEditedInfo?.file != null) {
-						val media = (message.sendRequest as? TL_messages_sendMedia)?.media ?: (message.sendRequest as? TL_messages_editMessage)?.media
+						val media = (message.sendRequest as? TLRPC.TLMessagesSendMedia)?.media ?: (message.sendRequest as? TLRPC.TLMessagesEditMessage)?.media
 						media?.file = message.videoEditedInfo?.file
 
 						message.videoEditedInfo?.file = null
 					}
-					else if (message.videoEditedInfo?.encryptedFile != null) {
-						val decryptedMessage = message.sendEncryptedRequest as? TL_decryptedMessage
-						decryptedMessage!!.media.size = message.videoEditedInfo!!.estimatedSize
-						decryptedMessage.media.key = message.videoEditedInfo!!.key
-						decryptedMessage.media.iv = message.videoEditedInfo!!.iv
-						secretChatHelper.performSendEncryptedRequest(decryptedMessage, message.obj!!.messageOwner, message.encryptedChat, message.videoEditedInfo!!.encryptedFile, message.originalPath, message.obj)
-						message.videoEditedInfo!!.encryptedFile = null
-						return
-					}
+					// MARK: uncomment to enable secret chats
+//					else if (message.videoEditedInfo?.encryptedFile != null) {
+//						val decryptedMessage = message.sendEncryptedRequest as? TLRPC.TLDecryptedMessage
+//						decryptedMessage!!.media.size = message.videoEditedInfo!!.estimatedSize
+//						decryptedMessage.media.key = message.videoEditedInfo!!.key
+//						decryptedMessage.media.iv = message.videoEditedInfo!!.iv
+//						secretChatHelper.performSendEncryptedRequest(decryptedMessage, message.obj!!.messageOwner, message.encryptedChat, message.videoEditedInfo!!.encryptedFile, message.originalPath, message.obj)
+//						message.videoEditedInfo!!.encryptedFile = null
+//						return
+//					}
 				}
 
 				if (message.sendRequest != null) {
-					val media = if (message.sendRequest is TL_messages_sendMedia) {
-						(message.sendRequest as TL_messages_sendMedia?)!!.media
+					val media = if (message.sendRequest is TLRPC.TLMessagesSendMedia) {
+						(message.sendRequest as TLRPC.TLMessagesSendMedia?)!!.media
 					}
 					else {
-						(message.sendRequest as TL_messages_editMessage?)!!.media
+						(message.sendRequest as TLRPC.TLMessagesEditMessage?)!!.media
 					}
 
 					if (media?.file == null) {
@@ -6057,7 +5933,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						putToUploadingMessages(message.obj)
 					}
 					else {
-						val location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + message.photoSize!!.location.volume_id + "_" + message.photoSize!!.location.local_id + ".jpg"
+						val location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + message.photoSize?.location?.volumeId + "_" + message.photoSize?.location?.localId + ".jpg"
 						putToDelayedMessages(location, message)
 						fileLoader.uploadFile(location, encrypted = false, small = true, type = ConnectionsManager.FileTypePhoto)
 						putToUploadingMessages(message.obj)
@@ -6071,7 +5947,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + document?.id + ".mp4"
 					}
 
-					if (message.sendEncryptedRequest != null && document?.dc_id != 0) {
+					if (message.sendEncryptedRequest != null && document?.dcId != 0) {
 						val file = File(location)
 
 						if (!file.exists()) {
@@ -6101,11 +5977,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 			else {
 				if (message.sendRequest != null) {
-					val media = if (message.sendRequest is TL_messages_sendMedia) {
-						(message.sendRequest as TL_messages_sendMedia?)!!.media
+					val media = if (message.sendRequest is TLRPC.TLMessagesSendMedia) {
+						(message.sendRequest as TLRPC.TLMessagesSendMedia?)!!.media
 					}
 					else {
-						(message.sendRequest as TL_messages_editMessage?)!!.media
+						(message.sendRequest as TLRPC.TLMessagesEditMessage?)!!.media
 					}
 
 					if (media?.file == null) {
@@ -6117,8 +5993,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 						putToUploadingMessages(message.obj)
 					}
-					else if (media.thumb == null && message.photoSize != null && message.photoSize !is TL_photoStrippedSize) {
-						val location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + message.photoSize!!.location.volume_id + "_" + message.photoSize!!.location.local_id + ".jpg"
+					else if (media.thumb == null && message.photoSize != null && message.photoSize !is TLRPC.TLPhotoStrippedSize) {
+						val location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + message.photoSize?.location?.volumeId + "_" + message.photoSize?.location?.localId + ".jpg"
 						putToDelayedMessages(location, message)
 						fileLoader.uploadFile(location, encrypted = false, small = true, type = ConnectionsManager.FileTypePhoto)
 						putToUploadingMessages(message.obj)
@@ -6128,7 +6004,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val location = message.obj?.messageOwner?.attachPath
 					val document = message.obj?.document
 
-					if (location != null && message.sendEncryptedRequest != null && document?.dc_id != 0) {
+					if (location != null && message.sendEncryptedRequest != null && document?.dcId != 0) {
 						val file = File(location)
 
 						if (!file.exists()) {
@@ -6191,14 +6067,18 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						}
 
 						if (message.sendRequest != null) {
-							val request = message.sendRequest as? TL_messages_sendMultiMedia
-							val media = request!!.multi_media[index].media
+							val request = message.sendRequest as? TLRPC.TLMessagesSendMultiMedia
+							val media = request!!.multiMedia[index].media
 
-							if (media.file == null) {
+							if (media?.file == null) {
 								putToDelayedMessages(documentLocation, message)
 
 								message.extraHashMap!![messageObject] = documentLocation
-								message.extraHashMap!![documentLocation] = media
+
+								if (media != null) {
+									message.extraHashMap!![documentLocation] = media
+								}
+
 								message.extraHashMap!![documentLocation + "_i"] = messageObject
 
 								if (message.photoSize?.location != null) {
@@ -6215,11 +6095,12 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								putToUploadingMessages(messageObject)
 							}
 							else if (message.photoSize != null) {
-								val location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + message.photoSize!!.location.volume_id + "_" + message.photoSize!!.location.local_id + ".jpg"
+								val location = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + message.photoSize?.location?.volumeId + "_" + message.photoSize?.location?.localId + ".jpg"
 								putToDelayedMessages(location, message)
 
 								message.extraHashMap!![location + "_o"] = documentLocation
 								message.extraHashMap!![messageObject] = location
+
 								message.extraHashMap!![location] = media
 
 								fileLoader.uploadFile(location, encrypted = false, small = true, type = ConnectionsManager.FileTypePhoto)
@@ -6227,28 +6108,29 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								putToUploadingMessages(messageObject)
 							}
 						}
-						else {
-							val request = message.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?
-
-							putToDelayedMessages(documentLocation, message)
-
-							message.extraHashMap!![messageObject] = documentLocation
-							message.extraHashMap!![documentLocation] = request!!.files[index]
-							message.extraHashMap!![documentLocation + "_i"] = messageObject
-
-							if (message.photoSize?.location != null) {
-								message.extraHashMap!![documentLocation + "_t"] = message.photoSize!!
-							}
-
-							if (messageObject.videoEditedInfo?.needConvert() == true) {
-								fileLoader.uploadFile(documentLocation, encrypted = true, small = false, estimatedSize = document?.size ?: 0, type = ConnectionsManager.FileTypeVideo, forceSmallFile = false)
-							}
-							else {
-								fileLoader.uploadFile(documentLocation, encrypted = true, small = false, type = ConnectionsManager.FileTypeVideo)
-							}
-
-							putToUploadingMessages(messageObject)
-						}
+						// MARK: uncomment to enable secret chats
+//						else {
+//							val request = message.sendEncryptedRequest as TLRPC.TLMessagesSendEncryptedMultiMedia?
+//
+//							putToDelayedMessages(documentLocation, message)
+//
+//							message.extraHashMap!![messageObject] = documentLocation
+//							message.extraHashMap!![documentLocation] = request!!.files[index]
+//							message.extraHashMap!![documentLocation + "_i"] = messageObject
+//
+//							if (message.photoSize?.location != null) {
+//								message.extraHashMap!![documentLocation + "_t"] = message.photoSize!!
+//							}
+//
+//							if (messageObject.videoEditedInfo?.needConvert() == true) {
+//								fileLoader.uploadFile(documentLocation, encrypted = true, small = false, estimatedSize = document?.size ?: 0, type = ConnectionsManager.FileTypeVideo, forceSmallFile = false)
+//							}
+//							else {
+//								fileLoader.uploadFile(documentLocation, encrypted = true, small = false, type = ConnectionsManager.FileTypeVideo)
+//							}
+//
+//							putToUploadingMessages(messageObject)
+//						}
 					}
 
 					message.videoEditedInfo = null
@@ -6264,19 +6146,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 					else {
 						val inputMedia = if (message.sendRequest != null) {
-							val request = message.sendRequest as TL_messages_sendMultiMedia?
-							request!!.multi_media[index].media
+							val request = message.sendRequest as? TLRPC.TLMessagesSendMultiMedia
+							request?.multiMedia?.get(index)?.media
 						}
 						else {
-							val request = message.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?
-							request!!.files[index]
+							null
+							// MARK: uncomment to enable secret chats
+//							val request = message.sendEncryptedRequest as? TLRPC.TLMessagesSendEncryptedMultiMedia
+//							request?.files?.get(index)
 						}
 
 						val location = FileLoader.getInstance(currentAccount).getPathToAttach(message.photoSize).toString()
 
 						putToDelayedMessages(location, message)
 
-						message.extraHashMap!![location] = inputMedia
+						if (inputMedia != null) {
+							message.extraHashMap!![location] = inputMedia
+						}
+
 						message.extraHashMap!![messageObject] = location
 
 						fileLoader.uploadFile(location, message.sendEncryptedRequest != null, true, ConnectionsManager.FileTypePhoto)
@@ -6298,7 +6185,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		else if (message?.type == 5) {
 			val key = "stickerset_" + message.obj!!.id
 
-			val req = TL_messages_getStickerSet()
+			val req = TLRPC.TLMessagesGetStickerSet()
 			req.stickerset = message.parentObject as InputStickerSet?
 
 			connectionsManager.sendRequest(req) { response, _ ->
@@ -6306,11 +6193,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					var found = false
 
 					if (response != null) {
-						val set = response as TL_messages_stickerSet
+						val set = response as? TLRPC.TLMessagesStickerSet
 						mediaDataController.storeTempStickerSet(set)
-						val attributeSticker = message.locationParent as TL_documentAttributeSticker_layer55?
-						attributeSticker!!.stickerset = TL_inputStickerSetShortName()
-						attributeSticker.stickerset.short_name = set.set.short_name
+
+						val attributeSticker = message.locationParent as? TLRPC.TLDocumentAttributeSticker
+
+						attributeSticker?.stickerset = TLRPC.TLInputStickerSetShortName().also {
+							it.shortName = set?.set?.shortName
+						}
+
 						found = true
 					}
 
@@ -6321,7 +6212,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							messagesStorage.replaceMessageIfExists(arrayList[0].obj!!.messageOwner, null, null, false)
 						}
 
-						secretChatHelper.performSendEncryptedRequest(message.sendEncryptedRequest as DecryptedMessage?, message.obj!!.messageOwner, message.encryptedChat, null, null, message.obj)
+						// MARK: uncomment to enable secret chats
+						// secretChatHelper.performSendEncryptedRequest(message.sendEncryptedRequest as DecryptedMessage?, message.obj!!.messageOwner, message.encryptedChat, null, null, message.obj)
 					}
 				}
 			}
@@ -6332,19 +6224,19 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 	private fun uploadMultiMedia(message: DelayedMessage?, inputMedia: InputMedia?, inputEncryptedFile: InputEncryptedFile?, key: String?) {
 		if (inputMedia != null) {
-			val multiMedia = message!!.sendRequest as? TL_messages_sendMultiMedia
+			val multiMedia = message!!.sendRequest as? TLRPC.TLMessagesSendMultiMedia
 
-			for (a in multiMedia!!.multi_media.indices) {
-				if (multiMedia.multi_media[a].media === inputMedia) {
+			for (a in multiMedia!!.multiMedia.indices) {
+				if (multiMedia.multiMedia[a].media === inputMedia) {
 					putToSendingMessages(message.messages!![a], message.scheduled)
 					notificationCenter.postNotificationName(NotificationCenter.fileUploadProgressChanged, key, -1L, -1L, false)
 					break
 				}
 			}
 
-			val req = TL_messages_uploadMedia()
+			val req = TLRPC.TLMessagesUploadMedia()
 			req.media = inputMedia
-			req.peer = (message.sendRequest as TL_messages_sendMultiMedia?)!!.peer
+			req.peer = (message.sendRequest as TLRPC.TLMessagesSendMultiMedia?)!!.peer
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
@@ -6353,41 +6245,49 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					if (response != null) {
 						val messageMedia = response as MessageMedia
 
-						if (inputMedia is TL_inputMediaUploadedPhoto && messageMedia is TL_messageMediaPhoto) {
-							val inputMediaPhoto = TL_inputMediaPhoto()
-							inputMediaPhoto.id = TL_inputPhoto()
-							inputMediaPhoto.id.id = messageMedia.photo.id
-							inputMediaPhoto.id.access_hash = messageMedia.photo.access_hash
-							inputMediaPhoto.id.file_reference = messageMedia.photo.file_reference
+						if (inputMedia is TLRPC.TLInputMediaUploadedPhoto && messageMedia is TLRPC.TLMessageMediaPhoto) {
+							val inputMediaPhoto = TLRPC.TLInputMediaPhoto()
+
+							inputMediaPhoto.id = TLRPC.TLInputPhoto().also {
+								it.id = messageMedia.photo?.id ?: 0
+								it.accessHash = messageMedia.photo?.accessHash ?: 0
+								it.fileReference = messageMedia.photo?.fileReference
+							}
 
 							newInputMedia = inputMediaPhoto
 
 							FileLog.d("set uploaded photo")
 						}
-						else if (inputMedia is TL_inputMediaUploadedDocument && messageMedia is TL_messageMediaDocument) {
-							val inputMediaDocument = TL_inputMediaDocument()
-							inputMediaDocument.id = TL_inputDocument()
-							inputMediaDocument.id.id = messageMedia.document.id
-							inputMediaDocument.id.access_hash = messageMedia.document.access_hash
-							inputMediaDocument.id.file_reference = messageMedia.document.file_reference
+						else if (inputMedia is TLRPC.TLInputMediaUploadedDocument && messageMedia is TLRPC.TLMessageMediaDocument) {
+							val document = messageMedia.document as? TLRPC.TLDocument
 
-							newInputMedia = inputMediaDocument
+							if (document != null) {
+								val inputMediaDocument = TLRPC.TLInputMediaDocument()
 
-							FileLog.d("set uploaded document")
+								inputMediaDocument.id = TLRPC.TLInputDocument().also {
+									it.id = document.id
+									it.accessHash = document.accessHash
+									it.fileReference = document.fileReference
+								}
+
+								newInputMedia = inputMediaDocument
+
+								FileLog.d("set uploaded document")
+							}
 						}
 					}
 
 					if (newInputMedia != null) {
-						if (inputMedia.ttl_seconds != 0) {
-							newInputMedia.ttl_seconds = inputMedia.ttl_seconds
+						if (inputMedia.ttlSeconds != 0) {
+							newInputMedia.ttlSeconds = inputMedia.ttlSeconds
 							newInputMedia.flags = newInputMedia.flags or 1
 						}
 
-						val req1 = message.sendRequest as? TL_messages_sendMultiMedia
+						val req1 = message.sendRequest as? TLRPC.TLMessagesSendMultiMedia
 
-						for (a in req1!!.multi_media.indices) {
-							if (req1.multi_media[a].media === inputMedia) {
-								req1.multi_media[a].media = newInputMedia
+						for (a in req1!!.multiMedia.indices) {
+							if (req1.multiMedia[a].media === inputMedia) {
+								req1.multiMedia[a].media = newInputMedia
 								break
 							}
 						}
@@ -6400,19 +6300,20 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 			}
 		}
-		else if (inputEncryptedFile != null) {
-			val multiMedia = message!!.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?
-
-			for (a in multiMedia!!.files.indices) {
-				if (multiMedia.files[a] === inputEncryptedFile) {
-					putToSendingMessages(message.messages!![a], message.scheduled)
-					notificationCenter.postNotificationName(NotificationCenter.fileUploadProgressChanged, key, -1L, -1L, false)
-					break
-				}
-			}
-
-			sendReadyToSendGroup(message, add = false, check = true)
-		}
+		// MARK: uncomment to enable secret chats
+//		else if (inputEncryptedFile != null) {
+//			val multiMedia = message!!.sendEncryptedRequest as TLRPC.TLMessagesSendEncryptedMultiMedia?
+//
+//			for (a in multiMedia!!.files.indices) {
+//				if (multiMedia.files[a] === inputEncryptedFile) {
+//					putToSendingMessages(message.messages!![a], message.scheduled)
+//					notificationCenter.postNotificationName(NotificationCenter.fileUploadProgressChanged, key, -1L, -1L, false)
+//					break
+//				}
+//			}
+//
+//			sendReadyToSendGroup(message, add = false, check = true)
+//		}
 	}
 
 	private fun sendReadyToSendGroup(message: DelayedMessage?, add: Boolean, check: Boolean) {
@@ -6448,13 +6349,13 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			FileLog.d("add message")
 		}
 
-		if (message.sendRequest is TL_messages_sendMultiMedia) {
-			val request = message.sendRequest as TL_messages_sendMultiMedia?
+		if (message.sendRequest is TLRPC.TLMessagesSendMultiMedia) {
+			val request = message.sendRequest as TLRPC.TLMessagesSendMultiMedia?
 
-			for (a in request!!.multi_media.indices) {
-				val inputMedia = request.multi_media[a].media
+			for (a in request!!.multiMedia.indices) {
+				val inputMedia = request.multiMedia[a].media
 
-				if (inputMedia is TL_inputMediaUploadedPhoto || inputMedia is TL_inputMediaUploadedDocument) {
+				if (inputMedia is TLRPC.TLInputMediaUploadedPhoto || inputMedia is TLRPC.TLInputMediaUploadedDocument) {
 					FileLog.d("multi media not ready")
 					return
 				}
@@ -6477,22 +6378,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 		}
 		else {
-			val request = message.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?
-
-			for (a in request!!.files.indices) {
-				val inputMedia = request.files[a]
-
-				if (inputMedia is TL_inputEncryptedFile) {
-					return
-				}
-			}
+			// MARK: uncomment to enable secret chats
+//			val request = message.sendEncryptedRequest as TLRPC.TLMessagesSendEncryptedMultiMedia?
+//
+//			for (a in request!!.files.indices) {
+//				val inputMedia = request.files[a]
+//
+//				if (inputMedia is TLRPC.TLInputEncryptedFile) {
+//					return
+//				}
+//			}
 		}
 
-		if (message.sendRequest is TL_messages_sendMultiMedia) {
-			performSendMessageRequestMulti(message.sendRequest as? TL_messages_sendMultiMedia, message.messageObjects, message.originalPaths, message.parentObjects, message, message.scheduled)
+		if (message.sendRequest is TLRPC.TLMessagesSendMultiMedia) {
+			performSendMessageRequestMulti(message.sendRequest as? TLRPC.TLMessagesSendMultiMedia, message.messageObjects, message.originalPaths, message.parentObjects, message, message.scheduled)
 		}
 		else {
-			secretChatHelper.performSendEncryptedRequest(message.sendEncryptedRequest as TL_messages_sendEncryptedMultiMedia?, message)
+			// MARK: uncomment to enable secret chats
+			// secretChatHelper.performSendEncryptedRequest(message.sendEncryptedRequest as TLRPC.TLMessagesSendEncryptedMultiMedia?, message)
 		}
 
 		message.sendDelayedRequests()
@@ -6539,7 +6442,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (!scheduled && !contains) {
 				val did = MessageObject.getDialogId(message)
 
-				sendingMessagesIdDialogs.put(did, sendingMessagesIdDialogs[did, 0] + 1)
+				sendingMessagesIdDialogs.put(did, sendingMessagesIdDialogs.get(did, 0) + 1)
 
 				if (notify) {
 					notificationCenter.postNotificationName(NotificationCenter.sendingMessagesChanged)
@@ -6588,18 +6491,18 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun getSendingMessageId(did: Long): Int {
-		for (a in 0 until sendingMessages.size()) {
+		for (a in 0 until sendingMessages.size) {
 			val message = sendingMessages.valueAt(a)
 
-			if (message.dialog_id == did) {
+			if (message.dialogId == did) {
 				return message.id
 			}
 		}
 
-		for (a in 0 until uploadMessages.size()) {
+		for (a in 0 until uploadMessages.size) {
 			val message = uploadMessages.valueAt(a)
 
-			if (message.dialog_id == did) {
+			if (message.dialogId == did) {
 				return message.id
 			}
 		}
@@ -6619,7 +6522,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		if (!contains) {
 			val did = MessageObject.getDialogId(message)
-			uploadingMessagesIdDialogs.put(did, uploadingMessagesIdDialogs[did, 0] + 1)
+			uploadingMessagesIdDialogs.put(did, uploadingMessagesIdDialogs.get(did, 0) + 1)
 			notificationCenter.postNotificationName(NotificationCenter.sendingMessagesChanged)
 		}
 	}
@@ -6657,14 +6560,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 	}
 
 	fun isSendingMessageIdDialog(did: Long): Boolean {
-		return sendingMessagesIdDialogs[did, 0] > 0
+		return sendingMessagesIdDialogs.get(did, 0) > 0
 	}
 
 	fun isUploadingMessageIdDialog(did: Long): Boolean {
-		return uploadingMessagesIdDialogs[did, 0] > 0
+		return uploadingMessagesIdDialogs.get(did, 0) > 0
 	}
 
-	fun performSendMessageRequestMulti(req: TL_messages_sendMultiMedia?, msgObjs: List<MessageObject>?, originalPaths: List<String?>?, parentObjects: List<Any?>?, delayedMessage: DelayedMessage?, scheduled: Boolean) {
+	fun performSendMessageRequestMulti(req: TLRPC.TLMessagesSendMultiMedia?, msgObjs: List<MessageObject>?, originalPaths: List<String?>?, parentObjects: List<Any?>?, delayedMessage: DelayedMessage?, scheduled: Boolean) {
 		if (req == null) {
 			return
 		}
@@ -6694,7 +6597,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					AndroidUtilities.runOnUIThread {
 						var hasEmptyFile = false
 						@Suppress("NAME_SHADOWING") var a = 0
-						@Suppress("NAME_SHADOWING") val size = req.multi_media.size
+						@Suppress("NAME_SHADOWING") val size = req.multiMedia.size
 
 						while (a < size) {
 							if (delayedMessage.parentObjects!![a] == null) {
@@ -6704,12 +6607,12 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 							removeFromSendingMessages(msgObjs[a].id, scheduled)
 
-							val request = req.multi_media[a]
+							val request = req.multiMedia[a]
 
-							if (request.media is TL_inputMediaPhoto) {
+							if (request.media is TLRPC.TLInputMediaPhoto) {
 								request.media = delayedMessage.inputMedias!![a]
 							}
-							else if (request.media is TL_inputMediaDocument) {
+							else if (request.media is TLRPC.TLInputMediaDocument) {
 								request.media = delayedMessage.inputMedias!![a]
 							}
 
@@ -6718,7 +6621,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							delayedMessage.photoSize = delayedMessage.locations!![a]
 							delayedMessage.performMediaUpload = true
 
-							if (request.media.file == null || delayedMessage.photoSize != null) {
+							if (request.media?.file == null || delayedMessage.photoSize != null) {
 								hasEmptyFile = true
 							}
 
@@ -6731,7 +6634,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							for (i in msgObjs.indices) {
 								val newMsgObj = msgObjs[i].messageOwner!!
 								messagesStorage.markMessageAsSendError(newMsgObj, scheduled)
-								newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+								newMsgObj.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 								notificationCenter.postNotificationName(NotificationCenter.messageSendError, newMsgObj.id)
 								processSentMessage(newMsgObj.id)
 								removeFromSendingMessages(newMsgObj.id, scheduled)
@@ -6751,23 +6654,23 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val newIds = LongSparseArray<Int>()
 					val updates = response as Updates
 					val updatesArr = response.updates
-					var channelReplies: LongSparseArray<SparseArray<MessageReplies>>? = null
+					var channelReplies: LongSparseArray<SparseArray<TLRPC.TLMessageReplies>>? = null
 
 					@Suppress("NAME_SHADOWING") var a = 0
 
 					while (a < updatesArr.size) {
 						when (val update = updatesArr[a]) {
-							is TL_updateMessageID -> {
-								newIds.put(update.random_id, update.id)
+							is TLRPC.TLUpdateMessageID -> {
+								newIds.put(update.randomId, update.id)
 								updatesArr.removeAt(a)
 								a--
 							}
 
-							is TL_updateNewMessage -> {
-								newMessages.put(update.message.id, update.message)
+							is TLRPC.TLUpdateNewMessage -> {
+								newMessages.put(update.message!!.id, update.message)
 
 								Utilities.stageQueue.postRunnable {
-									messagesController.processNewDifferenceParams(-1, update.pts, -1, update.pts_count)
+									messagesController.processNewDifferenceParams(-1, update.pts, -1, update.ptsCount)
 								}
 
 								updatesArr.removeAt(a)
@@ -6775,11 +6678,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								a--
 							}
 
-							is TL_updateNewChannelMessage -> {
+							is TLRPC.TLUpdateNewChannelMessage -> {
 								val channelId = MessagesController.getUpdateChannelId(update)
 								val chat = messagesController.getChat(channelId)
 
-								if ((chat == null || chat.megagroup) && update.message.reply_to != null && (update.message.reply_to?.reply_to_top_id != 0 || update.message.reply_to?.reply_to_msg_id != 0)) {
+								if ((chat == null || chat.megagroup) && update.message?.replyTo != null && (update.message?.replyTo?.replyToTopId != 0 || update.message?.replyTo?.replyToMsgId != 0)) {
 									if (channelReplies == null) {
 										channelReplies = LongSparseArray()
 									}
@@ -6792,25 +6695,25 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 										channelReplies.put(did, replies)
 									}
 
-									val id = (if (update.message.reply_to?.reply_to_top_id != 0) update.message.reply_to?.reply_to_top_id else update.message.reply_to?.reply_to_msg_id) ?: 0
+									val id = (if (update.message?.replyTo?.replyToTopId != 0) update.message?.replyTo?.replyToTopId else update.message?.replyTo?.replyToMsgId) ?: 0
 									var messageReplies = replies[id]
 
 									if (messageReplies == null) {
-										messageReplies = TL_messageReplies()
+										messageReplies = TLRPC.TLMessageReplies()
 										replies.put(id, messageReplies)
 									}
 
-									if (update.message.from_id != null) {
-										messageReplies.recent_repliers.add(0, update.message.from_id)
+									update.message?.fromId?.let {
+										messageReplies.recentRepliers.add(0, it)
 									}
 
 									messageReplies.replies++
 								}
 
-								newMessages.put(update.message.id, update.message)
+								newMessages.put(update.message!!.id, update.message)
 
 								Utilities.stageQueue.postRunnable {
-									messagesController.processNewChannelDifferenceParams(update.pts, update.pts_count, update.message.peer_id?.channel_id ?: 0)
+									messagesController.processNewChannelDifferenceParams(update.pts, update.ptsCount, update.message?.peerId?.channelId ?: 0)
 								}
 
 								updatesArr.removeAt(a)
@@ -6818,8 +6721,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								a--
 							}
 
-							is TL_updateNewScheduledMessage -> {
-								newMessages.put(update.message.id, update.message)
+							is TLRPC.TLUpdateNewScheduledMessage -> {
+								newMessages.put(update.message!!.id, update.message)
 								updatesArr.removeAt(a)
 								a--
 							}
@@ -6842,7 +6745,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						// val attachPath = newMsgObj.attachPath
 						val groupedId: Long
 						val existFlags: Int
-						val id = newIds[newMsgObj.random_id]
+						val id = newIds[newMsgObj.randomId]
 
 						if (id != null) {
 							val message = newMessages[id]
@@ -6853,21 +6756,21 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								sentMessages.add(message)
 
 								if (message.flags and 33554432 != 0) {
-									msgObj.messageOwner?.ttl_period = message.ttl_period
+									msgObj.messageOwner?.ttlPeriod = message.ttlPeriod
 									msgObj.messageOwner?.flags = msgObj.messageOwner!!.flags or 33554432
 								}
 
 								updateMediaPaths(msgObj, message, message.id, originalPath, false)
 								existFlags = msgObj.mediaExistanceFlags
 								newMsgObj.id = message.id
-								groupedId = message.realGroupId
+								groupedId = message.groupedId
 
 								if (!scheduled) {
-									var value = messagesController.dialogs_read_outbox_max[message.dialog_id]
+									var value = messagesController.dialogs_read_outbox_max[message.dialogId]
 
 									if (value == null) {
-										value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-										messagesController.dialogs_read_outbox_max[message.dialog_id] = value
+										value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+										messagesController.dialogs_read_outbox_max[message.dialogId] = value
 									}
 
 									message.unread = value < message.id
@@ -6886,17 +6789,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						if (!isSentError) {
 							statsController.incrementSentItemsCount(ApplicationLoader.currentNetworkType, StatsController.TYPE_MESSAGES, 1)
 
-							newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
+							newMsgObj.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
 
-							notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialog_id, groupedId, existFlags, scheduled)
+							notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialogId, groupedId, existFlags, scheduled)
 
 							messagesStorage.storageQueue.postRunnable {
-								messagesStorage.updateMessageStateAndId(newMsgObj.random_id, MessageObject.getPeerId(newMsgObj.peer_id), oldId, newMsgObj.id, 0, false, if (scheduled) 1 else 0)
+								messagesStorage.updateMessageStateAndId(newMsgObj.randomId, MessageObject.getPeerId(newMsgObj.peerId), oldId, newMsgObj.id, 0, false, if (scheduled) 1 else 0)
 								messagesStorage.putMessages(sentMessages, true, false, false, 0, scheduled)
 
 								AndroidUtilities.runOnUIThread {
-									mediaDataController.increasePeerRating(newMsgObj.dialog_id)
-									notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialog_id, groupedId, existFlags, scheduled)
+									mediaDataController.increasePeerRating(newMsgObj.dialogId)
+									notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialogId, groupedId, existFlags, scheduled)
 									processSentMessage(oldId)
 									removeFromSendingMessages(oldId, scheduled)
 								}
@@ -6917,7 +6820,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					for (i in msgObjs.indices) {
 						val newMsgObj = msgObjs[i].messageOwner!!
 						messagesStorage.markMessageAsSendError(newMsgObj, scheduled)
-						newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+						newMsgObj.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 						notificationCenter.postNotificationName(NotificationCenter.messageSendError, newMsgObj.id)
 						processSentMessage(newMsgObj.id)
 						removeFromSendingMessages(newMsgObj.id, scheduled)
@@ -6969,7 +6872,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return
 		}
 
-		if (req !is TL_messages_editMessage) {
+		if (req !is TLRPC.TLMessagesEditMessage) {
 			if (check) {
 				val maxDelayedMessage = findMaxDelayedMessageForMessageId(msgObj!!.id, msgObj.dialogId)
 
@@ -6985,11 +6888,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 		}
 
-		val newMsgObj = msgObj!!.messageOwner
+		val newMsgObj = msgObj!!.messageOwner!!
 		putToSendingMessages(newMsgObj, scheduled)
 
-		newMsgObj?.reqId = connectionsManager.sendRequest(req, { response, error ->
-			if (error != null && (req is TL_messages_sendMedia || req is TL_messages_editMessage) && FileRefController.isFileRefError(error.text)) {
+		newMsgObj.reqId = connectionsManager.sendRequest(req, { response, error ->
+			if (error != null && (req is TLRPC.TLMessagesSendMedia || req is TLRPC.TLMessagesEditMessage) && FileRefController.isFileRefError(error.text)) {
 				if (parentObject != null) {
 					fileRefController.requestReference(parentObject, req, msgObj, originalPath, parentMessage, check, delayedMessage, scheduled)
 					return@sendRequest
@@ -6998,19 +6901,19 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					AndroidUtilities.runOnUIThread {
 						removeFromSendingMessages(newMsgObj.id, scheduled)
 
-						if (req is TL_messages_sendMedia) {
-							if (req.media is TL_inputMediaPhoto) {
+						if (req is TLRPC.TLMessagesSendMedia) {
+							if (req.media is TLRPC.TLInputMediaPhoto) {
 								req.media = delayedMessage.inputUploadMedia
 							}
-							else if (req.media is TL_inputMediaDocument) {
+							else if (req.media is TLRPC.TLInputMediaDocument) {
 								req.media = delayedMessage.inputUploadMedia
 							}
 						}
-						else if (req is TL_messages_editMessage) {
-							if (req.media is TL_inputMediaPhoto) {
+						else if (req is TLRPC.TLMessagesEditMessage) {
+							if (req.media is TLRPC.TLInputMediaPhoto) {
 								req.media = delayedMessage.inputUploadMedia
 							}
-							else if (req.media is TL_inputMediaDocument) {
+							else if (req.media is TLRPC.TLInputMediaDocument) {
 								req.media = delayedMessage.inputUploadMedia
 							}
 						}
@@ -7024,7 +6927,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 			}
 
-			if (req is TL_messages_editMessage) {
+			if (req is TLRPC.TLMessagesEditMessage) {
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
 						val attachPath = newMsgObj.attachPath
@@ -7035,15 +6938,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						for (a in updatesArr.indices) {
 							val update = updatesArr[a]
 
-							if (update is TL_updateEditMessage) {
+							if (update is TLRPC.TLUpdateEditMessage) {
 								message = update.message
 								break
 							}
-							else if (update is TL_updateEditChannelMessage) {
+							else if (update is TLRPC.TLUpdateEditChannelMessage) {
 								message = update.message
 								break
 							}
-							else if (update is TL_updateNewScheduledMessage) {
+							else if (update is TLRPC.TLUpdateNewScheduledMessage) {
 								message = update.message
 								break
 							}
@@ -7091,19 +6994,19 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						val existFlags: Int
 						val scheduledOnline = newMsgObj.date == 0x7FFFFFFE
 
-						if (response is TL_updateShortSentMessage) {
+						if (response is TLRPC.TLUpdateShortSentMessage) {
 							updateMediaPaths(msgObj, null, response.id, null, false)
 
 							existFlags = msgObj.mediaExistanceFlags
 
 							newMsgObj.id = response.id
-							newMsgObj.local_id = newMsgObj.id
+							newMsgObj.localId = newMsgObj.id
 							newMsgObj.date = response.date
 							newMsgObj.entities = response.entities
 							newMsgObj.out = response.out
 
 							if (response.flags and 33554432 != 0) {
-								newMsgObj.ttl_period = response.ttl_period
+								newMsgObj.ttlPeriod = response.ttlPeriod
 								newMsgObj.flags = newMsgObj.flags or 33554432
 							}
 
@@ -7113,29 +7016,29 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								ImageLoader.saveMessageThumbs(newMsgObj)
 							}
 
-							if ((response.media is TL_messageMediaGame || response.media is TL_messageMediaInvoice) && !TextUtils.isEmpty(response.message)) {
+							if ((response.media is TLRPC.TLMessageMediaGame || response.media is TLRPC.TLMessageMediaInvoice) && !TextUtils.isEmpty(response.message)) {
 								newMsgObj.message = response.message
 							}
 
-							if (newMsgObj.entities.isNotEmpty()) {
+							if (!newMsgObj.entities.isNullOrEmpty()) {
 								newMsgObj.flags = newMsgObj.flags or TLRPC.MESSAGE_FLAG_HAS_ENTITIES
 							}
 
 							currentSchedule = false
 
 							if (!currentSchedule) {
-								var value = messagesController.dialogs_read_outbox_max[newMsgObj.dialog_id]
+								var value = messagesController.dialogs_read_outbox_max[newMsgObj.dialogId]
 
 								if (value == null) {
-									value = messagesStorage.getDialogReadMax(newMsgObj.out, newMsgObj.dialog_id)
-									messagesController.dialogs_read_outbox_max[newMsgObj.dialog_id] = value
+									value = messagesStorage.getDialogReadMax(newMsgObj.out, newMsgObj.dialogId)
+									messagesController.dialogs_read_outbox_max[newMsgObj.dialogId] = value
 								}
 
 								newMsgObj.unread = value < newMsgObj.id
 							}
 
 							Utilities.stageQueue.postRunnable {
-								messagesController.processNewDifferenceParams(-1, response.pts, response.date, response.pts_count)
+								messagesController.processNewDifferenceParams(-1, response.pts, response.date, response.ptsCount)
 							}
 
 							sentMessages.add(newMsgObj)
@@ -7143,29 +7046,29 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						else if (response is Updates) {
 							val updatesArr = response.updates
 							var message: Message? = null
-							var channelReplies: LongSparseArray<SparseArray<MessageReplies>>? = null
+							var channelReplies: LongSparseArray<SparseArray<TLRPC.TLMessageReplies>>? = null
 
 							for (a in updatesArr.indices) {
 								val update = updatesArr[a]
 
-								if (update is TL_updateNewMessage) {
-									sentMessages.add(update.message.also {
+								if (update is TLRPC.TLUpdateNewMessage) {
+									sentMessages.add(update.message!!.also {
 										message = it
 									})
 
 									Utilities.stageQueue.postRunnable {
-										messagesController.processNewDifferenceParams(-1, update.pts, -1, update.pts_count)
+										messagesController.processNewDifferenceParams(-1, update.pts, -1, update.ptsCount)
 									}
 
 									updatesArr.removeAt(a)
 
 									break
 								}
-								else if (update is TL_updateNewChannelMessage) {
+								else if (update is TLRPC.TLUpdateNewChannelMessage) {
 									val channelId = MessagesController.getUpdateChannelId(update)
 									val chat = messagesController.getChat(channelId)
 
-									if ((chat == null || chat.megagroup) && update.message.reply_to != null && (update.message.reply_to?.reply_to_top_id != 0 || update.message.reply_to?.reply_to_msg_id != 0)) {
+									if ((chat == null || chat.megagroup) && update.message?.replyTo != null && (update.message?.replyTo?.replyToTopId != 0 || update.message?.replyTo?.replyToMsgId != 0)) {
 										channelReplies = LongSparseArray()
 
 										val did = MessageObject.getDialogId(update.message)
@@ -7176,35 +7079,35 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 											channelReplies.put(did, replies)
 										}
 
-										val id = (if (update.message.reply_to?.reply_to_top_id != 0) update.message.reply_to?.reply_to_top_id else update.message.reply_to?.reply_to_msg_id) ?: 0
+										val id = (if (update.message?.replyTo?.replyToTopId != 0) update.message?.replyTo?.replyToTopId else update.message?.replyTo?.replyToMsgId) ?: 0
 										var messageReplies = replies[id]
 
 										if (messageReplies == null) {
-											messageReplies = TL_messageReplies()
+											messageReplies = TLRPC.TLMessageReplies()
 											replies.put(id, messageReplies)
 										}
 
-										if (update.message.from_id != null) {
-											messageReplies.recent_repliers.add(0, update.message.from_id)
+										update.message?.fromId?.let {
+											messageReplies.recentRepliers.add(0, it)
 										}
 
 										messageReplies.replies++
 									}
 
-									sentMessages.add(update.message.also {
+									sentMessages.add(update.message!!.also {
 										message = it
 									})
 
 									Utilities.stageQueue.postRunnable {
-										messagesController.processNewChannelDifferenceParams(update.pts, update.pts_count, update.message.peer_id?.channel_id ?: 0)
+										messagesController.processNewChannelDifferenceParams(update.pts, update.ptsCount, update.message?.peerId?.channelId ?: 0)
 									}
 
 									updatesArr.removeAt(a)
 
 									break
 								}
-								else if (update is TL_updateNewScheduledMessage) {
-									sentMessages.add(update.message.also { message = it })
+								else if (update is TLRPC.TLUpdateNewScheduledMessage) {
+									sentMessages.add(update.message!!.also { message = it })
 									updatesArr.removeAt(a)
 									break
 								}
@@ -7218,35 +7121,35 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							if (message != null) {
 								MessageObject.getDialogId(message)
 
-								if (scheduledOnline && message.date != 0x7FFFFFFE) {
+								if (scheduledOnline && message!!.date != 0x7FFFFFFE) {
 									currentSchedule = false
 								}
 
 								ImageLoader.saveMessageThumbs(message)
 
 								if (!currentSchedule) {
-									var value = messagesController.dialogs_read_outbox_max[message.dialog_id]
+									var value = messagesController.dialogs_read_outbox_max[message!!.dialogId]
 
 									if (value == null) {
-										value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-										messagesController.dialogs_read_outbox_max[message.dialog_id] = value
+										value = messagesStorage.getDialogReadMax(message!!.out, message!!.dialogId)
+										messagesController.dialogs_read_outbox_max[message!!.dialogId] = value
 									}
 
-									message.unread = value < message.id
+									message!!.unread = value < message!!.id
 								}
 
-								msgObj.messageOwner?.post_author = message.post_author
+								msgObj.messageOwner?.postAuthor = message?.postAuthor
 
-								if (message.flags and 33554432 != 0) {
-									msgObj.messageOwner?.ttl_period = message.ttl_period
+								if (message!!.flags and 33554432 != 0) {
+									msgObj.messageOwner?.ttlPeriod = message!!.ttlPeriod
 									msgObj.messageOwner?.flags = msgObj.messageOwner!!.flags or 33554432
 								}
 
-								msgObj.messageOwner?.entities = message.entities
+								msgObj.messageOwner?.entities = message?.entities
 
-								updateMediaPaths(msgObj, message, message.id, originalPath, false)
+								updateMediaPaths(msgObj, message, message!!.id, originalPath, false)
 								existFlags = msgObj.mediaExistanceFlags
-								newMsgObj.id = message.id
+								newMsgObj.id = message!!.id
 							}
 							else {
 								isSentError = true
@@ -7261,23 +7164,23 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							existFlags = 0
 						}
 
-						if (MessageObject.isLiveLocationMessage(newMsgObj) && newMsgObj.via_bot_id == 0L && TextUtils.isEmpty(newMsgObj.via_bot_name)) {
+						if (MessageObject.isLiveLocationMessage(newMsgObj) && newMsgObj.viaBotId == 0L) { // MARK: uncomment to enable secret chats:  && TextUtils.isEmpty(newMsgObj.viaBotName)) {
 							locationController.addSharingLocation(newMsgObj)
 						}
 
 						if (!isSentError) {
 							statsController.incrementSentItemsCount(ApplicationLoader.currentNetworkType, StatsController.TYPE_MESSAGES, 1)
-							newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
+							newMsgObj.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
 
 							if (scheduled && !currentSchedule) {
-								messagesController.deleteMessages(listOf(oldId), null, null, newMsgObj.dialog_id, forAll = false, scheduled = true)
+								messagesController.deleteMessages(listOf(oldId), null, null, newMsgObj.dialogId, forAll = false, scheduled = true)
 
 								messagesStorage.storageQueue.postRunnable {
 									messagesStorage.putMessages(sentMessages, true, false, false, 0, false)
 
 									AndroidUtilities.runOnUIThread {
-										messagesController.updateInterfaceWithMessages(newMsgObj.dialog_id, listOf(MessageObject(msgObj.currentAccount, msgObj.messageOwner!!, generateLayout = true, checkMediaExists = true)), false)
-										mediaDataController.increasePeerRating(newMsgObj.dialog_id)
+										messagesController.updateInterfaceWithMessages(newMsgObj.dialogId, listOf(MessageObject(msgObj.currentAccount, msgObj.messageOwner!!, generateLayout = true, checkMediaExists = true)), false)
+										mediaDataController.increasePeerRating(newMsgObj.dialogId)
 										processSentMessage(oldId)
 										removeFromSendingMessages(oldId, true)
 									}
@@ -7288,15 +7191,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								}
 							}
 							else {
-								notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialog_id, 0L, existFlags, scheduled)
+								notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialogId, 0L, existFlags, scheduled)
 
 								messagesStorage.storageQueue.postRunnable {
-									messagesStorage.updateMessageStateAndId(newMsgObj.random_id, MessageObject.getPeerId(newMsgObj.peer_id), oldId, newMsgObj.id, 0, false, if (scheduled) 1 else 0)
+									messagesStorage.updateMessageStateAndId(newMsgObj.randomId, MessageObject.getPeerId(newMsgObj.peerId), oldId, newMsgObj.id, 0, false, if (scheduled) 1 else 0)
 									messagesStorage.putMessages(sentMessages, true, false, false, 0, scheduled)
 
 									AndroidUtilities.runOnUIThread {
-										mediaDataController.increasePeerRating(newMsgObj.dialog_id)
-										notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialog_id, 0L, existFlags, scheduled)
+										mediaDataController.increasePeerRating(newMsgObj.dialogId)
+										notificationCenter.postNotificationName(NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, newMsgObj, newMsgObj.dialogId, 0L, existFlags, scheduled)
 										processSentMessage(oldId)
 										removeFromSendingMessages(oldId, scheduled)
 									}
@@ -7315,7 +7218,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					if (isSentError) {
 						messagesStorage.markMessageAsSendError(newMsgObj, scheduled)
-						newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+						newMsgObj.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 						notificationCenter.postNotificationName(NotificationCenter.messageSendError, newMsgObj.id)
 						processSentMessage(newMsgObj.id)
 
@@ -7327,20 +7230,16 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 
 					if (error?.text?.lowercase()?.contains("blocked") == true) {
-						newMsgObj.dialog_id.let {
-							notificationCenter.postNotificationName(NotificationCenter.chatIsBlocked, abs(it), NotificationCenter.ERROR_CHAT_BLOCKED)
-						}
+						notificationCenter.postNotificationName(NotificationCenter.chatIsBlocked, abs(newMsgObj.dialogId), NotificationCenter.ERROR_CHAT_BLOCKED)
 					}
 				}
 			}
 		}, {
-			val msgId = newMsgObj.id
-
 			AndroidUtilities.runOnUIThread {
-				newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
-				notificationCenter.postNotificationName(NotificationCenter.messageReceivedByAck, msgId)
+				newMsgObj.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
+				notificationCenter.postNotificationName(NotificationCenter.messageReceivedByAck, newMsgObj.id)
 			}
-		}, ConnectionsManager.RequestFlagCanCompress or ConnectionsManager.RequestFlagInvokeAfter or if (req is TL_messages_sendMessage) ConnectionsManager.RequestFlagNeedQuickAck else 0)
+		}, ConnectionsManager.RequestFlagCanCompress or ConnectionsManager.RequestFlagInvokeAfter or if (req is TLRPC.TLMessagesSendMessage) ConnectionsManager.RequestFlagNeedQuickAck else 0)
 
 		parentMessage?.sendDelayedRequests()
 	}
@@ -7353,12 +7252,12 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			var strippedOld: PhotoSize? = null
 			var photoObject: TLObject? = null
 
-			if (newMsgObj.isLiveLocation && sentMessage!!.media is TL_messageMediaGeoLive) {
+			if (newMsgObj.isLiveLocation && sentMessage?.media is TLRPC.TLMessageMediaGeoLive) {
 				newMsg.media?.period = sentMessage.media?.period ?: 0
 			}
 			else if (newMsgObj.isDice) {
-				val mediaDice = newMsg.media as TL_messageMediaDice
-				val mediaDiceNew = sentMessage!!.media as TL_messageMediaDice
+				val mediaDice = newMsg.media as TLRPC.TLMessageMediaDice
+				val mediaDiceNew = sentMessage!!.media as TLRPC.TLMessageMediaDice
 				mediaDice.value = mediaDiceNew.value
 			}
 			else if (newMsg.media?.photo != null) {
@@ -7412,7 +7311,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 			}
 
-			if (strippedNew is TL_photoStrippedSize && strippedOld is TL_photoStrippedSize) {
+			if (strippedNew is TLRPC.TLPhotoStrippedSize && strippedOld is TLRPC.TLPhotoStrippedSize) {
 				val oldKey = "stripped" + FileRefController.getKeyForParentObject(newMsgObj)
 
 				val newKey = if (sentMessage != null) {
@@ -7432,76 +7331,89 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			return
 		}
 
-		if (sentMessage.media is TL_messageMediaPhoto && sentMessage.media?.photo != null && newMsg?.media is TL_messageMediaPhoto && newMsg.media?.photo != null) {
-			if (sentMessage.media?.ttl_seconds == 0 && !newMsgObj.scheduled) {
-				messagesStorage.putSentFile(originalPath, sentMessage.media?.photo, 0, "sent_" + sentMessage.peer_id?.channel_id + "_" + sentMessage.id)
+		val sentMessageMedia = sentMessage.media
+
+		if (sentMessageMedia is TLRPC.TLMessageMediaPhoto && sentMessageMedia.photo != null && newMsg?.media is TLRPC.TLMessageMediaPhoto && newMsg.media?.photo != null) {
+			if (sentMessageMedia.ttlSeconds == 0 && !newMsgObj.scheduled) {
+				messagesStorage.putSentFile(originalPath, sentMessageMedia.photo, 0, "sent_" + sentMessage.peerId?.channelId + "_" + sentMessage.id)
 			}
 
-			if (newMsg.media?.photo?.sizes?.size == 1 && newMsg.media?.photo?.sizes?.get(0)?.location is TL_fileLocationUnavailable) {
-				newMsg.media?.photo?.sizes = sentMessage.media!!.photo.sizes
+			if (newMsg.media?.photo?.sizes?.size == 1 && newMsg.media?.photo?.sizes?.get(0)?.location is TLRPC.TLFileLocationUnavailable) {
+				newMsg.media?.photo?.sizes?.let { szs ->
+					szs.clear()
+
+					sentMessageMedia.photo?.sizes?.let {
+						szs.addAll(it)
+					}
+				}
 			}
 			else {
-				for (b in newMsg.media!!.photo.sizes.indices) {
-					val size2 = newMsg.media!!.photo.sizes[b]
+				val photoSizes = newMsg.media?.photo?.sizes
 
-					if (size2?.location == null || size2.type == null) {
-						continue
-					}
+				if (photoSizes != null) {
+					for (b in photoSizes.indices) {
+						val size2 = photoSizes[b]
 
-					var found = false
-
-					for (a in sentMessage.media!!.photo.sizes.indices) {
-						val size = sentMessage.media!!.photo.sizes[a]
-
-						if (size?.location == null || size is TL_photoSizeEmpty || size.type == null) {
+						if (size2.location == null || size2.type == null) {
 							continue
 						}
 
-						if (size2.location?.volume_id == Int.MIN_VALUE.toLong() && size.type == size2.type || size.w == size2.w && size.h == size2.h) {
-							found = true
-							val fileName = size2.location.volume_id.toString() + "_" + size2.location.local_id
-							val fileName2 = size.location.volume_id.toString() + "_" + size.location.local_id
+						var found = false
+						val sentPhotoSizes = sentMessageMedia.photo?.sizes
 
-							if (fileName == fileName2) {
-								break
+						if (!sentPhotoSizes.isNullOrEmpty()) {
+							for (size in sentPhotoSizes) {
+								if (size.location == null || size is TLRPC.TLPhotoSizeEmpty || size.type == null) {
+									continue
+								}
+
+								if (size2.location?.volumeId == Int.MIN_VALUE.toLong() && size.type == size2.type || size.w == size2.w && size.h == size2.h) {
+									found = true
+									val fileName = size2.location?.volumeId?.toString() + "_" + size2.location?.localId
+									val fileName2 = size.location?.volumeId?.toString() + "_" + size.location?.localId
+
+									if (fileName == fileName2) {
+										break
+									}
+
+									val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), "$fileName.jpg")
+
+									val cacheFile2 = if (sentMessageMedia.ttlSeconds == 0 && (sentMessageMedia.photo?.sizes?.size == 1 || size.w > 90 || size.h > 90)) {
+										FileLoader.getInstance(currentAccount).getPathToAttach(size)
+									}
+									else {
+										File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), "$fileName2.jpg")
+									}
+
+									cacheFile.renameTo(cacheFile2)
+
+									ImageLocation.getForPhoto(size, sentMessageMedia.photo)?.let {
+										ImageLoader.getInstance().replaceImageInCache(fileName, fileName2, it, post)
+									}
+
+									size2.location = size.location
+									size2.size = size.size
+
+									break
+								}
 							}
+						}
 
+						if (!found) {
+							val fileName = size2.location?.volumeId?.toString() + "_" + size2.location?.localId
 							val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), "$fileName.jpg")
 
-							val cacheFile2 = if (sentMessage.media?.ttl_seconds == 0 && (sentMessage.media?.photo?.sizes?.size == 1 || size.w > 90 || size.h > 90)) {
-								FileLoader.getInstance(currentAccount).getPathToAttach(size)
-							}
-							else {
-								File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), "$fileName2.jpg")
-							}
+							cacheFile.delete()
 
-							cacheFile.renameTo(cacheFile2)
+							if ("s" == size2.type && strippedNew != null) {
+								newMsg.media?.photo?.sizes?.set(b, strippedNew)
 
-							ImageLocation.getForPhoto(size, sentMessage.media?.photo)?.let {
-								ImageLoader.getInstance().replaceImageInCache(fileName, fileName2, it, post)
-							}
+								val location = ImageLocation.getForPhoto(strippedNew, sentMessageMedia.photo)
+								val key = location?.getKey(sentMessage, null, false)
 
-							size2.location = size.location
-							size2.size = size.size
-
-							break
-						}
-					}
-
-					if (!found) {
-						val fileName = size2.location.volume_id.toString() + "_" + size2.location.local_id
-						val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), "$fileName.jpg")
-
-						cacheFile.delete()
-
-						if ("s" == size2.type && strippedNew != null) {
-							newMsg.media?.photo?.sizes?.set(b, strippedNew)
-
-							val location = ImageLocation.getForPhoto(strippedNew, sentMessage.media?.photo)
-							val key = location?.getKey(sentMessage, null, false)
-
-							if (location != null && key != null) {
-								ImageLoader.getInstance().replaceImageInCache(fileName, key, location, post)
+								if (location != null && key != null) {
+									ImageLoader.getInstance().replaceImageInCache(fileName, key, location, post)
+								}
 							}
 						}
 					}
@@ -7512,33 +7424,33 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			sentMessage.attachPath = newMsg.attachPath
 
-			newMsg.media!!.photo.id = sentMessage.media!!.photo.id
-			newMsg.media!!.photo.dc_id = sentMessage.media!!.photo.dc_id
-			newMsg.media!!.photo.access_hash = sentMessage.media!!.photo.access_hash
+			newMsg.media?.photo?.id = sentMessageMedia.photo?.id ?: 0
+			newMsg.media?.photo?.dcId = sentMessageMedia.photo?.dcId ?: 0
+			newMsg.media?.photo?.accessHash = sentMessageMedia.photo?.accessHash ?: 0
 		}
-		else if (sentMessage.media is TL_messageMediaDocument && sentMessage.media?.document != null && newMsg?.media is TL_messageMediaDocument && newMsg.media?.document != null) {
-			if (sentMessage.media!!.ttl_seconds == 0 && (newMsgObj.videoEditedInfo == null || newMsgObj.videoEditedInfo?.mediaEntities == null && newMsgObj.videoEditedInfo?.paintPath.isNullOrEmpty() && newMsgObj.videoEditedInfo?.cropState == null)) {
+		else if (sentMessageMedia is TLRPC.TLMessageMediaDocument && sentMessageMedia.document != null && newMsg?.media is TLRPC.TLMessageMediaDocument && newMsg.media?.document != null) {
+			if (sentMessageMedia.ttlSeconds == 0 && (newMsgObj.videoEditedInfo == null || newMsgObj.videoEditedInfo?.mediaEntities == null && newMsgObj.videoEditedInfo?.paintPath.isNullOrEmpty() && newMsgObj.videoEditedInfo?.cropState == null)) {
 				val isVideo = MessageObject.isVideoMessage(sentMessage)
 
-				if ((isVideo || MessageObject.isGifMessage(sentMessage)) && MessageObject.isGifDocument(sentMessage.media?.document) == MessageObject.isGifDocument(newMsg.media?.document)) {
+				if ((isVideo || MessageObject.isGifMessage(sentMessage)) && MessageObject.isGifDocument(sentMessageMedia.document) == MessageObject.isGifDocument(newMsg.media?.document)) {
 					if (!newMsgObj.scheduled) {
-						messagesStorage.putSentFile(originalPath, sentMessage.media?.document, 2, "sent_" + sentMessage.peer_id?.channel_id + "_" + sentMessage.id)
+						messagesStorage.putSentFile(originalPath, sentMessageMedia.document, 2, "sent_" + sentMessage.peerId?.channelId + "_" + sentMessage.id)
 					}
 					if (isVideo) {
 						sentMessage.attachPath = newMsg.attachPath
 					}
 				}
 				else if (!MessageObject.isVoiceMessage(sentMessage) && !MessageObject.isRoundVideoMessage(sentMessage) && !newMsgObj.scheduled) {
-					messagesStorage.putSentFile(originalPath, sentMessage.media?.document, 1, "sent_" + sentMessage.peer_id?.channel_id + "_" + sentMessage.id)
+					messagesStorage.putSentFile(originalPath, sentMessageMedia.document, 1, "sent_" + sentMessage.peerId?.channelId + "_" + sentMessage.id)
 				}
 			}
 
 			val size2 = FileLoader.getClosestPhotoSizeWithSize(newMsg.media?.document?.thumbs, 320)
-			val size = FileLoader.getClosestPhotoSizeWithSize(sentMessage.media?.document?.thumbs, 320)
+			val size = FileLoader.getClosestPhotoSizeWithSize(sentMessageMedia.document?.thumbs, 320)
 
-			if (size2?.location != null && size2.location.volume_id == Int.MIN_VALUE.toLong() && size != null && size.location != null && size !is TL_photoSizeEmpty && size2 !is TL_photoSizeEmpty) {
-				val fileName = size2.location.volume_id.toString() + "_" + size2.location.local_id
-				val fileName2 = size.location.volume_id.toString() + "_" + size.location.local_id
+			if (size2?.location != null && size2.location?.volumeId == Int.MIN_VALUE.toLong() && size != null && size.location != null && size !is TLRPC.TLPhotoSizeEmpty && size2 !is TLRPC.TLPhotoSizeEmpty) {
+				val fileName = size2.location?.volumeId?.toString() + "_" + size2.location?.localId
+				val fileName2 = size.location?.volumeId?.toString() + "_" + size.location?.localId
 
 				if (fileName != fileName2) {
 					val cacheFile = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), "$fileName.jpg")
@@ -7546,7 +7458,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					cacheFile.renameTo(cacheFile2)
 
-					ImageLocation.getForDocument(size, sentMessage.media?.document)?.let {
+					ImageLocation.getForDocument(size, sentMessageMedia.document)?.let {
 						ImageLoader.getInstance().replaceImageInCache(fileName, fileName2, it, post)
 					}
 
@@ -7557,44 +7469,58 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			else if (size != null && size2 != null && MessageObject.isStickerMessage(sentMessage) && size2.location != null) {
 				size.location = size2.location
 			}
-			else if (size2 == null || size2.location is TL_fileLocationUnavailable || size2 is TL_photoSizeEmpty) {
-				newMsg.media?.document?.thumbs = sentMessage.media?.document?.thumbs
-			}
+			else if (size2 == null || size2.location is TLRPC.TLFileLocationUnavailable || size2 is TLRPC.TLPhotoSizeEmpty) {
+				(newMsg.media?.document as? TLRPC.TLDocument)?.thumbs?.let {
+					it.clear()
 
-			newMsg.media?.document?.dc_id = sentMessage.media!!.document.dc_id
-			newMsg.media?.document?.id = sentMessage.media!!.document.id
-			newMsg.media?.document?.access_hash = sentMessage.media!!.document.access_hash
-
-			var oldWaveform: ByteArray? = null
-
-			for (a in newMsg.media!!.document.attributes.indices) {
-				val attribute = newMsg.media!!.document.attributes[a]
-
-				if (attribute is TL_documentAttributeAudio) {
-					oldWaveform = attribute.waveform
-					break
-				}
-			}
-
-			newMsg.media!!.document.attributes = sentMessage.media!!.document.attributes
-
-			if (oldWaveform != null) {
-				for (a in newMsg.media!!.document.attributes.indices) {
-					val attribute = newMsg.media!!.document.attributes[a]
-
-					if (attribute is TL_documentAttributeAudio) {
-						attribute.waveform = oldWaveform
-						attribute.flags = attribute.flags or 4
+					sentMessageMedia.document?.thumbs?.let { thumbs ->
+						it.addAll(thumbs)
 					}
 				}
 			}
 
-			newMsg.media!!.document.size = sentMessage.media!!.document.size
-			newMsg.media!!.document.mime_type = sentMessage.media!!.document.mime_type
+			newMsg.media?.document?.dcId = sentMessageMedia.document?.dcId ?: 0
+			newMsg.media?.document?.id = sentMessageMedia.document?.id ?: 0
+			newMsg.media?.document?.accessHash = sentMessageMedia.document?.accessHash ?: 0
+
+			var oldWaveform: ByteArray? = null
+
+			val attributes = (newMsg.media?.document as? TLRPC.TLDocument)?.attributes
+
+			if (!attributes.isNullOrEmpty()) {
+				for (attribute in attributes) {
+					if (attribute is TLRPC.TLDocumentAttributeAudio) {
+						oldWaveform = attribute.waveform
+						break
+					}
+				}
+			}
+
+			attributes?.clear()
+
+			(sentMessageMedia.document as? TLRPC.TLDocument)?.attributes?.let {
+				attributes?.addAll(it)
+			}
+
+			if (oldWaveform != null) {
+				@Suppress("NAME_SHADOWING") val attributes = (newMsg.media?.document as? TLRPC.TLDocument)?.attributes
+
+				if (!attributes.isNullOrEmpty()) {
+					for (attribute in attributes) {
+						if (attribute is TLRPC.TLDocumentAttributeAudio) {
+							attribute.waveform = oldWaveform
+							attribute.flags = attribute.flags or 4
+						}
+					}
+				}
+			}
+
+			newMsg.media?.document?.size = sentMessageMedia.document?.size ?: 0
+			newMsg.media?.document?.mimeType = sentMessageMedia.document?.mimeType
 
 			if (sentMessage.flags and TLRPC.MESSAGE_FLAG_FWD == 0 && MessageObject.isOut(sentMessage)) {
-				if (MessageObject.isNewGifDocument(sentMessage.media!!.document)) {
-					val save = if (MessageObject.isDocumentHasAttachedStickers(sentMessage.media?.document)) {
+				if (MessageObject.isNewGifDocument(sentMessageMedia.document)) {
+					val save = if (MessageObject.isDocumentHasAttachedStickers(sentMessageMedia.document)) {
 						messagesController.saveGifsWithStickers
 					}
 					else {
@@ -7602,11 +7528,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 
 					if (save) {
-						mediaDataController.addRecentGif(sentMessage.media?.document, sentMessage.date, true)
+						mediaDataController.addRecentGif(sentMessageMedia.document, sentMessage.date, true)
 					}
 				}
-				else if (MessageObject.isStickerDocument(sentMessage.media?.document) || MessageObject.isAnimatedStickerDocument(sentMessage.media?.document, true)) {
-					sentMessage.media?.document?.let {
+				else if (MessageObject.isStickerDocument(sentMessageMedia.document) || MessageObject.isAnimatedStickerDocument(sentMessageMedia.document, true)) {
+					sentMessageMedia.document?.let {
 						mediaDataController.addRecentSticker(MediaDataController.TYPE_IMAGE, sentMessage, it, sentMessage.date, false)
 					}
 				}
@@ -7614,7 +7540,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			if (newMsg.attachPath != null && newMsg.attachPath!!.startsWith(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE)!!.absolutePath)) {
 				val cacheFile = File(newMsg.attachPath!!)
-				val cacheFile2 = FileLoader.getInstance(currentAccount).getPathToAttach(sentMessage.media?.document, sentMessage.media?.ttl_seconds != 0)
+				val cacheFile2 = FileLoader.getInstance(currentAccount).getPathToAttach(sentMessageMedia.document, sentMessageMedia.ttlSeconds != 0)
 
 				if (!cacheFile.renameTo(cacheFile2)) {
 					if (cacheFile.exists()) {
@@ -7648,31 +7574,34 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				sentMessage.message = newMsg.message
 			}
 		}
-		else if (sentMessage.media is TL_messageMediaContact && newMsg?.media is TL_messageMediaContact) {
-			newMsg.media = sentMessage.media
+		else if (sentMessageMedia is TLRPC.TLMessageMediaContact && newMsg?.media is TLRPC.TLMessageMediaContact) {
+			newMsg.media = sentMessageMedia
 		}
-		else if (sentMessage.media is TL_messageMediaWebPage) {
-			newMsg?.media = sentMessage.media
+		else if (sentMessageMedia is TLRPC.TLMessageMediaWebPage) {
+			newMsg?.media = sentMessageMedia
 		}
-		else if (sentMessage.media is TL_messageMediaGeo) {
-			sentMessage.media?.geo?.lat = newMsg?.media?.geo?.lat ?: 0.0
-			sentMessage.media?.geo?._long = newMsg?.media?.geo?._long ?: 0.0
+		else if (sentMessageMedia is TLRPC.TLMessageMediaGeo) {
+			val sentGeo = sentMessageMedia.geo as? TLRPC.TLGeoPoint
+			val newMsgGeo = newMsg?.media?.geo as? TLRPC.TLGeoPoint
+
+			sentGeo?.lat = newMsgGeo?.lat ?: 0.0
+			sentGeo?.lon = newMsgGeo?.lon ?: 0.0
 		}
-		else if (sentMessage.media is TL_messageMediaGame || sentMessage.media is TL_messageMediaInvoice) {
-			newMsg?.media = sentMessage.media
+		else if (sentMessageMedia is TLRPC.TLMessageMediaGame || sentMessageMedia is TLRPC.TLMessageMediaInvoice) {
+			newMsg?.media = sentMessageMedia
 
 			if (!sentMessage.message.isNullOrEmpty()) {
 				newMsg?.entities = sentMessage.entities
 				newMsg?.message = sentMessage.message
 			}
 
-			if (sentMessage.reply_markup != null) {
-				newMsg?.reply_markup = sentMessage.reply_markup
-				newMsg?.flags = newMsg.flags or TLRPC.MESSAGE_FLAG_HAS_MARKUP
+			if (sentMessage.replyMarkup != null) {
+				newMsg?.replyMarkup = sentMessage.replyMarkup
+				newMsg?.flags = newMsg!!.flags or TLRPC.MESSAGE_FLAG_HAS_MARKUP
 			}
 		}
-		else if (sentMessage.media is TL_messageMediaPoll) {
-			newMsg?.media = sentMessage.media
+		else if (sentMessageMedia is TLRPC.TLMessageMediaPoll) {
+			newMsg?.media = sentMessageMedia
 		}
 	}
 
@@ -7691,7 +7620,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		arrayList.add(message)
 	}
 
-	fun getDelayedMessages(location: String?): ArrayList<DelayedMessage>? {
+	fun getDelayedMessages(location: String?): List<DelayedMessage>? {
 		if (location == null) {
 			return null
 		}
@@ -7728,7 +7657,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				val groupId = messageObject.groupId
 
 				if (groupId != 0L && messageObject.messageOwner?.params != null && !messageObject.messageOwner!!.params!!.containsKey("final")) {
-					if (a == n - 1 || messages[a + 1].realGroupId != groupId) {
+					if (a == n - 1 || messages[a + 1].groupedId != groupId) {
 						messageObject.messageOwner!!.params!!["final"] = "1"
 					}
 				}
@@ -7950,11 +7879,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		}).start()
 	}
 
-	fun generatePhotoSizes(path: String?, imageUri: Uri?): TL_photo? {
+	fun generatePhotoSizes(path: String?, imageUri: Uri?): TLRPC.TLPhoto? {
 		return generatePhotoSizes(null, path, imageUri)
 	}
 
-	private fun generatePhotoSizes(photo: TL_photo?, path: String?, imageUri: Uri?): TL_photo? {
+	private fun generatePhotoSizes(photo: TLRPC.TLPhoto?, path: String?, imageUri: Uri?): TLRPC.TLPhoto? {
 		@Suppress("NAME_SHADOWING") var photo = photo
 
 		var bitmap = ImageLoader.loadBitmap(path, imageUri, AndroidUtilities.getPhotoSize().toFloat(), AndroidUtilities.getPhotoSize().toFloat(), true)
@@ -7985,12 +7914,13 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			userConfig.saveConfig(false)
 
 			if (photo == null) {
-				photo = TL_photo()
+				photo = TLRPC.TLPhoto()
 			}
 
 			photo.date = connectionsManager.currentTime
-			photo.sizes = sizes
-			photo.file_reference = ByteArray(0)
+			photo.sizes.clear()
+			photo.sizes.addAll(sizes)
+			photo.fileReference = ByteArray(0)
 			photo
 		}
 	}
@@ -8057,7 +7987,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		private const val ERROR_TYPE_UNSUPPORTED = 1
 		private const val ERROR_TYPE_FILE_TOO_LARGE = 2
 
-		private fun prepareSendingDocumentInternal(accountInstance: AccountInstance, path: String?, originalPath: String?, uri: Uri?, mime: String?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: List<MessageEntity>?, editingMessageObject: MessageObject?, groupId: LongArray?, isGroupFinal: Boolean, forceDocument: Boolean, notify: Boolean, scheduleDate: Int, docType: Array<Int?>?, isMediaSale: Boolean, mediaSaleHash: String?): Int {
+		private fun prepareSendingDocumentInternal(accountInstance: AccountInstance, path: String?, originalPath: String?, uri: Uri?, mime: String?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: List<MessageEntity>?, editingMessageObject: MessageObject?, groupId: LongArray?, isGroupFinal: Boolean, forceDocument: Boolean, notify: Boolean, scheduleDate: Int, docType: Array<Int?>?): Int {
 			@Suppress("NAME_SHADOWING") var path = path
 			@Suppress("NAME_SHADOWING") var originalPath = originalPath
 
@@ -8074,7 +8004,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			val myMime = MimeTypeMap.getSingleton()
-			var attributeAudio: TL_documentAttributeAudio? = null
+			var attributeAudio: TLRPC.TLDocumentAttributeAudio? = null
 			var extension: String? = null
 
 			if (uri != null && path == null) {
@@ -8135,7 +8065,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 			}
 
-			val extL = ext.lowercase(Locale.getDefault())
+			val extL = ext.lowercase()
 			var permormer: String? = null
 			var title: String? = null
 			var isVoice = false
@@ -8177,7 +8107,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			if (duration != 0) {
-				attributeAudio = TL_documentAttributeAudio()
+				attributeAudio = TLRPC.TLDocumentAttributeAudio()
 				attributeAudio.duration = duration
 				attributeAudio.title = title
 				attributeAudio.performer = permormer
@@ -8213,22 +8143,22 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 			}
 
-			var document: TL_document? = null
+			var document: TLRPC.TLDocument? = null
 			var parentObject: String? = null
 
 			if (!sendNew && !isEncrypted) {
 				var sentData = accountInstance.messagesStorage.getSentFile(originalPath, if (!isEncrypted) 1 else 4)
 
-				if (sentData != null && sentData[0] is TL_document) {
-					document = sentData[0] as TL_document
+				if (sentData != null && sentData[0] is TLRPC.TLDocument) {
+					document = sentData[0] as TLRPC.TLDocument
 					parentObject = sentData[1] as String
 				}
 
 				if (document == null && path != originalPath && !isEncrypted) {
 					sentData = accountInstance.messagesStorage.getSentFile(path + f.length(), if (!isEncrypted) 1 else 4)
 
-					if (sentData != null && sentData[0] is TL_document) {
-						document = sentData[0] as TL_document
+					if (sentData != null && sentData[0] is TLRPC.TLDocument) {
+						document = sentData[0] as TLRPC.TLDocument
 						parentObject = sentData[1] as String
 					}
 				}
@@ -8237,17 +8167,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			if (document == null) {
-				document = TL_document()
+				document = TLRPC.TLDocument()
 				document.id = 0
 				document.date = accountInstance.connectionsManager.currentTime
 
-				val fileName = TL_documentAttributeFilename()
-				fileName.file_name = name
+				val fileName = TLRPC.TLDocumentAttributeFilename()
+				fileName.fileName = name
 
-				document.file_reference = ByteArray(0)
+				document.fileReference = ByteArray(0)
 				document.attributes.add(fileName)
 				document.size = f.length()
-				document.dc_id = 0
+				document.dcId = 0
 
 				if (attributeAudio != null) {
 					document.attributes.add(attributeAudio)
@@ -8255,36 +8185,36 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 				if (ext.isNotEmpty()) {
 					when (extL) {
-						"webp" -> document.mime_type = "image/webp"
-						"opus" -> document.mime_type = "audio/opus"
-						"mp3" -> document.mime_type = "audio/mpeg"
-						"m4a" -> document.mime_type = "audio/m4a"
-						"ogg" -> document.mime_type = "audio/ogg"
-						"flac" -> document.mime_type = "audio/flac"
+						"webp" -> document.mimeType = "image/webp"
+						"opus" -> document.mimeType = "audio/opus"
+						"mp3" -> document.mimeType = "audio/mpeg"
+						"m4a" -> document.mimeType = "audio/m4a"
+						"ogg" -> document.mimeType = "audio/ogg"
+						"flac" -> document.mimeType = "audio/flac"
 						else -> {
 							val mimeType = myMime.getMimeTypeFromExtension(extL)
 
 							if (mimeType != null) {
-								document.mime_type = mimeType
+								document.mimeType = mimeType
 							}
 							else {
-								document.mime_type = "application/octet-stream"
+								document.mimeType = "application/octet-stream"
 							}
 						}
 					}
 				}
 				else {
-					document.mime_type = "application/octet-stream"
+					document.mimeType = "application/octet-stream"
 				}
 
-				if (!forceDocument && document.mime_type == "image/gif" && (editingMessageObject == null || editingMessageObject.groupIdForUse == 0L)) {
+				if (!forceDocument && document.mimeType == "image/gif" && (editingMessageObject == null || editingMessageObject.groupIdForUse == 0L)) {
 					try {
 						val bitmap = ImageLoader.loadBitmap(f.absolutePath, null, 90f, 90f, true)
 
 						if (bitmap != null) {
-							fileName.file_name = "animation.gif"
+							fileName.fileName = "animation.gif"
 
-							document.attributes.add(TL_documentAttributeAnimated())
+							document.attributes.add(TLRPC.TLDocumentAttributeAnimated())
 
 							val thumb = ImageLoader.scaleAndSaveImage(bitmap, 90f, 90f, 55, isEncrypted)
 
@@ -8301,7 +8231,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 				}
 
-				if (document.mime_type == "image/webp" && editingMessageObject == null) {
+				if (document.mimeType == "image/webp" && editingMessageObject == null) {
 					val bmOptions = BitmapFactory.Options()
 
 					try {
@@ -8316,24 +8246,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 
 					if (bmOptions.outWidth != 0 && bmOptions.outHeight != 0 && bmOptions.outWidth <= 800 && bmOptions.outHeight <= 800) {
-						val attributeSticker = TL_documentAttributeSticker()
+						val attributeSticker = TLRPC.TLDocumentAttributeSticker()
 						attributeSticker.alt = ""
-						attributeSticker.stickerset = TL_inputStickerSetEmpty()
+						attributeSticker.stickerset = TLRPC.TLInputStickerSetEmpty()
 
 						document.attributes.add(attributeSticker)
 
-						val attributeImageSize = TL_documentAttributeImageSize()
+						val attributeImageSize = TLRPC.TLDocumentAttributeImageSize()
 						attributeImageSize.w = bmOptions.outWidth
 						attributeImageSize.h = bmOptions.outHeight
 
 						document.attributes.add(attributeImageSize)
 					}
 				}
-				else if (document.mime_type?.startsWith("image/") == true && editingMessageObject == null) {
+				else if (document.mimeType?.startsWith("image/") == true && editingMessageObject == null) {
 					val (width, height) = getImageDimensions(path)
 
 					if (width != 0 && height != 0) {
-						val attributeImageSize = TL_documentAttributeImageSize()
+						val attributeImageSize = TLRPC.TLDocumentAttributeImageSize()
 						attributeImageSize.w = width
 						attributeImageSize.h = height
 
@@ -8343,7 +8273,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 
 			val captionFinal = caption?.toString() ?: ""
-			val documentFinal: TL_document = document
+			val documentFinal: TLRPC.TLDocument = document
 			val pathFinal = path
 			val parentFinal = parentObject
 			val params = HashMap<String, String>()
@@ -8366,11 +8296,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			if (docType != null) {
 				prevType = docType[0]
 
-				if (document.mime_type != null && document.mime_type.lowercase(Locale.getDefault()).startsWith("image/webp")) {
+				if (document.mimeType?.lowercase()?.startsWith("image/webp") == true) {
 					docType[0] = -1
 					isSticker = true
 				}
-				else if (document.mime_type != null && (document.mime_type.lowercase(Locale.getDefault()).startsWith("image/") || document.mime_type.lowercase(Locale.getDefault()).startsWith("video/mp4")) || MessageObject.canPreviewDocument(document)) {
+				else if ((document.mimeType?.lowercase()?.startsWith("image/") == true || document.mimeType?.lowercase()?.startsWith("video/mp4") == true) || MessageObject.canPreviewDocument(document)) {
 					docType[0] = 1
 				}
 				else if (attributeAudio != null) {
@@ -8401,7 +8331,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					accountInstance.sendMessagesHelper.editMessage(editingMessageObject, null, null, documentFinal, pathFinal, params, false, parentFinal)
 				}
 				else {
-					accountInstance.sendMessagesHelper.sendMessage(documentFinal, null, pathFinal, dialogId, replyToMsg, replyToTopMsg, captionFinal, entities, null, params, notify, scheduleDate, 0, parentFinal, null, false, isMediaSale, mediaSaleHash)
+					accountInstance.sendMessagesHelper.sendMessage(documentFinal, null, pathFinal, dialogId, replyToMsg, replyToTopMsg, captionFinal, entities, null, params, notify, scheduleDate, 0, parentFinal, null, false)
 				}
 			}
 
@@ -8428,7 +8358,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		@JvmStatic
 		@UiThread
-		fun prepareSendingDocument(accountInstance: AccountInstance, path: String?, originalPath: String?, uri: Uri?, caption: String?, mine: String?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, inputContent: InputContentInfoCompat?, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
+		fun prepareSendingDocument(accountInstance: AccountInstance, path: String?, originalPath: String?, uri: Uri?, caption: String?, mine: String?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, inputContent: InputContentInfoCompat?, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int) {
 			if ((path == null || originalPath == null) && uri == null) {
 				return
 			}
@@ -8447,12 +8377,12 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				originalPaths.add(originalPath)
 			}
 
-			prepareSendingDocuments(accountInstance, paths, originalPaths, uris, caption, mine, dialogId, replyToMsg, replyToTopMsg, inputContent, editingMessageObject, notify, scheduleDate, isMediaSale, mediaSaleHash)
+			prepareSendingDocuments(accountInstance, paths, originalPaths, uris, caption, mine, dialogId, replyToMsg, replyToTopMsg, inputContent, editingMessageObject, notify, scheduleDate)
 		}
 
 		@JvmStatic
 		@UiThread
-		fun prepareSendingAudioDocuments(accountInstance: AccountInstance, messageObjects: ArrayList<MessageObject>?, caption: CharSequence?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
+		fun prepareSendingAudioDocuments(accountInstance: AccountInstance, messageObjects: ArrayList<MessageObject>?, caption: CharSequence?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int) {
 			Thread(Runnable {
 				val count = messageObjects?.size ?: return@Runnable
 				var groupId: Long = 0
@@ -8473,21 +8403,21 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						originalPath += "audio" + f.length()
 					}
 
-					var document: TL_document? = null
+					var document: TLRPC.TLDocument? = null
 					var parentObject: String? = null
 
 					if (!isEncrypted) {
 						val sentData = accountInstance.messagesStorage.getSentFile(originalPath, 1)
 
-						if (sentData != null && sentData[0] is TL_document) {
-							document = sentData[0] as TL_document
+						if (sentData != null && sentData[0] is TLRPC.TLDocument) {
+							document = sentData[0] as TLRPC.TLDocument
 							parentObject = sentData[1] as String
 							ensureMediaThumbExists(accountInstance, false, document, originalPath, null, 0)
 						}
 					}
 
 					if (document == null) {
-						document = messageObject.messageOwner?.media?.document as? TL_document
+						document = messageObject.messageOwner?.media?.document as? TLRPC.TLDocument
 					}
 
 					if (isEncrypted) {
@@ -8522,7 +8452,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							accountInstance.sendMessagesHelper.editMessage(editingMessageObject, null, null, documentFinal, messageObject.messageOwner?.attachPath, params, false, parentFinal)
 						}
 						else {
-							accountInstance.sendMessagesHelper.sendMessage(documentFinal, null, messageObject.messageOwner?.attachPath, dialogId, replyToMsg, replyToTopMsg, captionFinal, entities, null, params, notify, scheduleDate, 0, parentFinal, null, false, isMediaSale, mediaSaleHash)
+							accountInstance.sendMessagesHelper.sendMessage(documentFinal, null, messageObject.messageOwner?.attachPath, dialogId, replyToMsg, replyToTopMsg, captionFinal, entities, null, params, notify, scheduleDate, 0, parentFinal, null, false)
 						}
 					}
 				}
@@ -8539,7 +8469,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val prevMessage = message.messageObjects!![message.messageObjects!!.size - 1]
 					message.finalGroupMessage = prevMessage.id
 					prevMessage.messageOwner?.params!!["final"] = "1"
-					val messagesRes = TL_messages_messages()
+					val messagesRes = TLRPC.TLMessagesMessages()
 					messagesRes.messages.add(prevMessage.messageOwner!!)
 					accountInstance.messagesStorage.putMessages(messagesRes, message.peer, -2, 0, false, scheduleDate != 0)
 					instance.sendReadyToSendGroup(message, add = true, check = true)
@@ -8549,7 +8479,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		@JvmStatic
 		@UiThread
-		fun prepareSendingDocuments(accountInstance: AccountInstance, paths: List<String>?, originalPaths: List<String?>?, uris: List<Uri>?, caption: String?, mime: String?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, inputContent: InputContentInfoCompat?, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
+		fun prepareSendingDocuments(accountInstance: AccountInstance, paths: List<String>?, originalPaths: List<String?>?, uris: List<Uri>?, caption: String?, mime: String?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, inputContent: InputContentInfoCompat?, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int) {
 			if (paths == null && originalPaths == null && uris == null || paths != null && originalPaths != null && paths.size != originalPaths.size) {
 				return
 			}
@@ -8580,7 +8510,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 						val prevGroupId = groupId[0]
 
-						error = prepareSendingDocumentInternal(accountInstance, paths[a], originalPaths?.get(a), null, mime, dialogId, replyToMsg, replyToTopMsg, captionFinal, null, editingMessageObject, groupId, mediaCount == 10 || a == count - 1, inputContent == null, notify, scheduleDate, docType, isMediaSale, mediaSaleHash)
+						error = prepareSendingDocumentInternal(accountInstance, paths[a], originalPaths?.get(a), null, mime, dialogId, replyToMsg, replyToTopMsg, captionFinal, null, editingMessageObject, groupId, mediaCount == 10 || a == count - 1, inputContent == null, notify, scheduleDate, docType)
 
 						if (prevGroupId != groupId[0] || groupId[0] == -1L) {
 							mediaCount = 1
@@ -8610,7 +8540,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 						val prevGroupId = groupId[0]
 
-						error = prepareSendingDocumentInternal(accountInstance, null, null, uris[a], mime, dialogId, replyToMsg, replyToTopMsg, captionFinal, null, editingMessageObject, groupId, mediaCount == 10 || a == count - 1, inputContent == null, notify, scheduleDate, docType, isMediaSale, mediaSaleHash)
+						error = prepareSendingDocumentInternal(accountInstance, null, null, uris[a], mime, dialogId, replyToMsg, replyToTopMsg, captionFinal, null, editingMessageObject, groupId, mediaCount == 10 || a == count - 1, inputContent == null, notify, scheduleDate, docType)
 
 						if (prevGroupId != groupId[0] || groupId[0] == -1L) {
 							mediaCount = 1
@@ -8644,13 +8574,13 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		@JvmStatic
 		@UiThread
-		fun prepareSendingPhoto(accountInstance: AccountInstance, imageFilePath: String?, imageUri: Uri?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: ArrayList<MessageEntity>?, stickers: List<InputDocument>?, inputContent: InputContentInfoCompat?, ttl: Int, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, isMediaSale: Boolean, mediaSaleHash: String?) {
-			prepareSendingPhoto(accountInstance, imageFilePath, null, imageUri, dialogId, replyToMsg, replyToTopMsg, caption, entities, stickers, inputContent, ttl, editingMessageObject, null, notify, scheduleDate, false, isMediaSale, mediaSaleHash)
+		fun prepareSendingPhoto(accountInstance: AccountInstance, imageFilePath: String?, imageUri: Uri?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: ArrayList<MessageEntity>?, stickers: List<InputDocument>?, inputContent: InputContentInfoCompat?, ttl: Int, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int) {
+			prepareSendingPhoto(accountInstance, imageFilePath, null, imageUri, dialogId, replyToMsg, replyToTopMsg, caption, entities, stickers, inputContent, ttl, editingMessageObject, null, notify, scheduleDate, false)
 		}
 
 		@JvmStatic
 		@UiThread
-		fun prepareSendingPhoto(accountInstance: AccountInstance, imageFilePath: String?, thumbFilePath: String?, imageUri: Uri?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: List<MessageEntity>?, stickers: List<InputDocument>?, inputContent: InputContentInfoCompat?, ttl: Int, editingMessageObject: MessageObject?, videoEditedInfo: VideoEditedInfo?, notify: Boolean, scheduleDate: Int, forceDocument: Boolean, isMediaSale: Boolean, mediaSaleHash: String?) {
+		fun prepareSendingPhoto(accountInstance: AccountInstance, imageFilePath: String?, thumbFilePath: String?, imageUri: Uri?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: List<MessageEntity>?, stickers: List<InputDocument>?, inputContent: InputContentInfoCompat?, ttl: Int, editingMessageObject: MessageObject?, videoEditedInfo: VideoEditedInfo?, notify: Boolean, scheduleDate: Int, forceDocument: Boolean) {
 			val info = SendingMediaInfo()
 			info.path = imageFilePath
 			info.thumbPath = thumbFilePath
@@ -8673,7 +8603,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 			infos.add(info)
 
-			prepareSendingMedia(accountInstance, infos, dialogId, replyToMsg, replyToTopMsg, inputContent, forceDocument, false, editingMessageObject, notify, scheduleDate, false, isMediaSale, mediaSaleHash)
+			prepareSendingMedia(accountInstance, infos, dialogId, replyToMsg, replyToTopMsg, inputContent, forceDocument, false, editingMessageObject, notify, scheduleDate, false)
 		}
 
 		@JvmStatic
@@ -8683,109 +8613,109 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				return
 			}
 
-			if (result.send_message is TL_botInlineMessageMediaAuto) {
+			if (result.sendMessage is TLRPC.TLBotInlineMessageMediaAuto) {
 				Thread(Runnable {
 					val isEncrypted = DialogObject.isEncryptedDialog(dialogId)
 					var finalPath: String? = null
-					var document: TL_document? = null
-					var photo: TL_photo? = null
-					var game: TL_game? = null
+					var document: TLRPC.TLDocument? = null
+					var photo: TLRPC.TLPhoto? = null
+					var game: TLRPC.TLGame? = null
 
 					if ("game" == result.type) {
 						if (isEncrypted) {
 							return@Runnable   //doesn't work in secret chats for now
 						}
 
-						game = TL_game()
+						game = TLRPC.TLGame()
 						game.title = result.title
 						game.description = result.description
-						game.short_name = result.id
-						game.photo = result.photo
+						game.shortName = result.id
+						game.photo = (result as? TLRPC.TLBotInlineMediaResult)?.photo
 
 						if (game.photo == null) {
-							game.photo = TL_photoEmpty()
+							game.photo = TLRPC.TLPhotoEmpty()
 						}
 
-						if (result.document is TL_document) {
+						if (result.document is TLRPC.TLDocument) {
 							game.document = result.document
 							game.flags = game.flags or 1
 						}
 					}
-					else if (result is TL_botInlineMediaResult) {
+					else if (result is TLRPC.TLBotInlineMediaResult) {
 						if (result.document != null) {
-							if (result.document is TL_document) {
-								document = result.document as TL_document
+							if (result.document is TLRPC.TLDocument) {
+								document = result.document as TLRPC.TLDocument
 							}
 						}
 						else if (result.photo != null) {
-							if (result.photo is TL_photo) {
-								photo = result.photo as TL_photo
+							if (result.photo is TLRPC.TLPhoto) {
+								photo = result.photo as TLRPC.TLPhoto
 							}
 						}
 					}
 					else if (result.content != null) {
-						var ext = ImageLoader.getHttpUrlExtension(result.content.url, null)
+						var ext = ImageLoader.getHttpUrlExtension(result.content?.url, null)
 
 						ext = if (TextUtils.isEmpty(ext)) {
-							FileLoader.getExtensionByMimeType(result.content.mime_type)
+							FileLoader.getExtensionByMimeType(result.content?.mimeType)
 						}
 						else {
 							".$ext"
 						}
 
-						var f = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.content.url) + ext)
+						var f = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.content?.url) + ext)
 
 						finalPath = if (f.exists()) {
 							f.absolutePath
 						}
 						else {
-							result.content.url
+							result.content?.url
 						}
 
 						when (result.type) {
 							"audio", "voice", "file", "video", "sticker", "gif" -> {
-								document = TL_document()
+								document = TLRPC.TLDocument()
 								document.id = 0
 								document.size = 0
-								document.dc_id = 0
-								document.mime_type = result.content.mime_type
-								document.file_reference = ByteArray(0)
+								document.dcId = 0
+								document.mimeType = result.content?.mimeType
+								document.fileReference = ByteArray(0)
 								document.date = accountInstance.connectionsManager.currentTime
 
-								val fileName = TL_documentAttributeFilename()
+								val fileName = TLRPC.TLDocumentAttributeFilename()
 
 								document.attributes.add(fileName)
 
 								when (result.type) {
 									"gif" -> {
-										fileName.file_name = "animation.gif"
+										fileName.fileName = "animation.gif"
 
-										if (finalPath.endsWith("mp4")) {
-											document.mime_type = "video/mp4"
-											document.attributes.add(TL_documentAttributeAnimated())
+										if (finalPath?.endsWith("mp4") == true) {
+											document.mimeType = "video/mp4"
+											document.attributes.add(TLRPC.TLDocumentAttributeAnimated())
 										}
 										else {
-											document.mime_type = "image/gif"
+											document.mimeType = "image/gif"
 										}
 
 										try {
 											val side = if (isEncrypted) 90 else 320
 											var bitmap: Bitmap?
 
-											if (finalPath.endsWith("mp4")) {
+											if (finalPath?.endsWith("mp4") == true) {
 												bitmap = createVideoThumbnail(finalPath, MediaStore.Video.Thumbnails.MINI_KIND)
 
-												if (bitmap == null && result.thumb is TL_webDocument && "video/mp4" == result.thumb.mime_type) {
-													ext = ImageLoader.getHttpUrlExtension(result.thumb.url, null)
+												if (bitmap == null && result.thumb is TLRPC.TLWebDocument && "video/mp4" == result.thumb?.mimeType) {
+													ext = ImageLoader.getHttpUrlExtension(result.thumb?.url, null)
 
 													ext = if (TextUtils.isEmpty(ext)) {
-														FileLoader.getExtensionByMimeType(result.thumb.mime_type)
+														FileLoader.getExtensionByMimeType(result.thumb?.mimeType)
 													}
 													else {
 														".$ext"
 													}
 
-													f = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.thumb.url) + ext)
+													f = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.thumb?.url) + ext)
 
 													bitmap = createVideoThumbnail(f.absolutePath, MediaStore.Video.Thumbnails.MINI_KIND)
 												}
@@ -8811,15 +8741,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									}
 
 									"voice" -> {
-										val audio = TL_documentAttributeAudio()
+										val audio = TLRPC.TLDocumentAttributeAudio()
 										audio.duration = MessageObject.getInlineResultDuration(result)
 										audio.voice = true
-										fileName.file_name = "audio.ogg"
+										fileName.fileName = "audio.ogg"
 										document.attributes.add(audio)
 									}
 
 									"audio" -> {
-										val audio = TL_documentAttributeAudio()
+										val audio = TLRPC.TLDocumentAttributeAudio()
 										audio.duration = MessageObject.getInlineResultDuration(result)
 										audio.title = result.title
 										audio.flags = audio.flags or 1
@@ -8829,38 +8759,38 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 											audio.flags = audio.flags or 2
 										}
 
-										fileName.file_name = "audio.mp3"
+										fileName.fileName = "audio.mp3"
 
 										document.attributes.add(audio)
 									}
 
 									"file" -> {
-										val idx = result.content.mime_type.lastIndexOf('/')
+										val idx = result.content?.mimeType?.lastIndexOf('/') ?: -1
 
 										if (idx != -1) {
-											fileName.file_name = "file." + result.content.mime_type.substring(idx + 1)
+											fileName.fileName = "file." + result.content?.mimeType?.substring(idx + 1)
 										}
 										else {
-											fileName.file_name = "file"
+											fileName.fileName = "file"
 										}
 									}
 
 									"video" -> {
-										fileName.file_name = "video.mp4"
+										fileName.fileName = "video.mp4"
 
-										val attributeVideo = TL_documentAttributeVideo()
+										val attributeVideo = TLRPC.TLDocumentAttributeVideo()
 										val wh = MessageObject.getInlineResultWidthAndHeight(result)
 
 										attributeVideo.w = wh[0]
 										attributeVideo.h = wh[1]
 										attributeVideo.duration = MessageObject.getInlineResultDuration(result)
-										attributeVideo.supports_streaming = true
+										attributeVideo.supportsStreaming = true
 
 										document.attributes.add(attributeVideo)
 
 										try {
 											if (result.thumb != null) {
-												val thumbPath = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.thumb.url) + "." + ImageLoader.getHttpUrlExtension(result.thumb.url, "jpg")).absolutePath
+												val thumbPath = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.thumb?.url) + "." + ImageLoader.getHttpUrlExtension(result.thumb?.url, "jpg")).absolutePath
 												val bitmap = ImageLoader.loadBitmap(thumbPath, null, 90f, 90f, true)
 
 												if (bitmap != null) {
@@ -8881,13 +8811,13 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									}
 
 									"sticker" -> {
-										val attributeSticker = TL_documentAttributeSticker()
+										val attributeSticker = TLRPC.TLDocumentAttributeSticker()
 										attributeSticker.alt = ""
-										attributeSticker.stickerset = TL_inputStickerSetEmpty()
+										attributeSticker.stickerset = TLRPC.TLInputStickerSetEmpty()
 
 										document.attributes.add(attributeSticker)
 
-										val attributeImageSize = TL_documentAttributeImageSize()
+										val attributeImageSize = TLRPC.TLDocumentAttributeImageSize()
 										val wh = MessageObject.getInlineResultWidthAndHeight(result)
 
 										attributeImageSize.w = wh[0]
@@ -8895,11 +8825,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 										document.attributes.add(attributeImageSize)
 
-										fileName.file_name = "sticker.webp"
+										fileName.fileName = "sticker.webp"
 
 										try {
 											if (result.thumb != null) {
-												val thumbPath = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.thumb.url) + "." + ImageLoader.getHttpUrlExtension(result.thumb.url, "webp")).absolutePath
+												val thumbPath = File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), Utilities.MD5(result.thumb?.url) + "." + ImageLoader.getHttpUrlExtension(result.thumb?.url, "webp")).absolutePath
 												val bitmap = ImageLoader.loadBitmap(thumbPath, null, 90f, 90f, true)
 
 												if (bitmap != null) {
@@ -8920,22 +8850,22 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									}
 								}
 
-								if (fileName.file_name == null) {
-									fileName.file_name = "file"
+								if (fileName.fileName == null) {
+									fileName.fileName = "file"
 								}
 
-								if (document.mime_type == null) {
-									document.mime_type = "application/octet-stream"
+								if (document.mimeType == null) {
+									document.mimeType = "application/octet-stream"
 								}
 
 								if (document.thumbs.isEmpty()) {
-									val thumb: PhotoSize = TL_photoSize()
+									val thumb: PhotoSize = TLRPC.TLPhotoSize()
 									val wh = MessageObject.getInlineResultWidthAndHeight(result)
 
 									thumb.w = wh[0]
 									thumb.h = wh[1]
 									thumb.size = 0
-									thumb.location = TL_fileLocationUnavailable()
+									thumb.location = TLRPC.TLFileLocationUnavailable()
 									thumb.type = "x"
 
 									document.thumbs.add(thumb)
@@ -8949,17 +8879,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								}
 
 								if (photo == null) {
-									photo = TL_photo()
+									photo = TLRPC.TLPhoto()
 									photo.date = accountInstance.connectionsManager.currentTime
-									photo.file_reference = ByteArray(0)
+									photo.fileReference = ByteArray(0)
 
-									val photoSize = TL_photoSize()
+									val photoSize = TLRPC.TLPhotoSize()
 									val wh = MessageObject.getInlineResultWidthAndHeight(result)
 
 									photoSize.w = wh[0]
 									photoSize.h = wh[1]
 									photoSize.size = 1
-									photoSize.location = TL_fileLocationUnavailable()
+									photoSize.location = TLRPC.TLFileLocationUnavailable()
 									photoSize.type = "x"
 
 									photo.sizes.add(photoSize)
@@ -8973,8 +8903,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					val finalPhoto = photo
 					val finalGame = game
 
-					if (params != null && result.content != null) {
-						params["originalPath"] = result.content.url
+					if (params != null) {
+						result.content?.url?.let {
+							params["originalPath"] = it
+						}
 					}
 
 					val precachedThumb = arrayOfNulls<Bitmap>(1)
@@ -8994,7 +8926,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					val sendToPeer = if (!DialogObject.isEncryptedDialog(dialogId)) accountInstance.messagesController.getInputPeer(dialogId) else null
 
-					if (sendToPeer != null && sendToPeer.user_id != 0L && accountInstance.messagesController.getUserFull(sendToPeer.user_id) != null && accountInstance.messagesController.getUserFull(sendToPeer.user_id)?.voice_messages_forbidden == true && document != null) {
+					if (sendToPeer != null && sendToPeer.userId != 0L && accountInstance.messagesController.getUserFull(sendToPeer.userId) != null && accountInstance.messagesController.getUserFull(sendToPeer.userId)?.voiceMessagesForbidden == true && document != null) {
 						if (MessageObject.isVoiceDocument(finalDocument)) {
 							AndroidUtilities.runOnUIThread {
 								AlertsCreator.showSendMediaAlert(7, fragment)
@@ -9012,95 +8944,97 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					AndroidUtilities.runOnUIThread {
 						if (finalDocument != null) {
 							if (precachedThumb[0] != null && precachedKey[0] != null) {
-								ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, precachedThumb[0]), precachedKey[0], false)
+								ImageLoader.getInstance().putImageToCache(precachedThumb[0]?.toDrawable(ApplicationLoader.applicationContext.resources), precachedKey[0], false)
 							}
 
-							accountInstance.sendMessagesHelper.sendMessage(finalDocument, null, finalPathFinal, dialogId, replyToMsg, replyToTopMsg, result.send_message.message, result.send_message.entities, result.send_message.reply_markup, params, notify, scheduleDate, 0, result, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+							accountInstance.sendMessagesHelper.sendMessage(finalDocument, null, finalPathFinal, dialogId, replyToMsg, replyToTopMsg, result.sendMessage?.message, result.sendMessage?.entities, result.sendMessage?.replyMarkup, params, notify, scheduleDate, 0, result, null, updateStickersOrder = false)
 						}
 						else if (finalPhoto != null) {
-							accountInstance.sendMessagesHelper.sendMessage(finalPhoto, if (result.content != null) result.content.url else null, dialogId, replyToMsg, replyToTopMsg, result.send_message.message, result.send_message.entities, result.send_message.reply_markup, params, notify, scheduleDate, 0, result, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+							accountInstance.sendMessagesHelper.sendMessage(finalPhoto, result.content?.url, dialogId, replyToMsg, replyToTopMsg, result.sendMessage?.message, result.sendMessage?.entities, result.sendMessage?.replyMarkup, params, notify, scheduleDate, 0, result, updateStickersOrder = false)
 						}
 						else if (finalGame != null) {
-							accountInstance.sendMessagesHelper.sendMessage(finalGame, dialogId, result.send_message.reply_markup, params, notify, scheduleDate, false, null)
+							accountInstance.sendMessagesHelper.sendMessage(finalGame, dialogId, result.sendMessage?.replyMarkup, params, notify, scheduleDate)
 						}
 					}
 				}).start()
 			}
-			else if (result.send_message is TL_botInlineMessageText) {
+			else if (result.sendMessage is TLRPC.TLBotInlineMessageText) {
 				var webPage: WebPage? = null
+				val resultSendMessage = result.sendMessage as TLRPC.TLBotInlineMessageText
 
 				if (DialogObject.isEncryptedDialog(dialogId)) {
-					for (a in result.send_message.entities.indices) {
-						val entity = result.send_message.entities[a]
+					for (a in resultSendMessage.entities.indices) {
+						val entity = resultSendMessage.entities[a]
 
-						if (entity is TL_messageEntityUrl) {
-							webPage = TL_webPagePending()
-							webPage.url = result.send_message.message.substring(entity.offset, entity.offset + entity.length)
+						if (entity is TLRPC.TLMessageEntityUrl) {
+							webPage = TLRPC.TLWebPagePending()
+							webPage.url = resultSendMessage.message?.substring(entity.offset, entity.offset + entity.length)
 							break
 						}
 					}
 				}
 
-				accountInstance.sendMessagesHelper.sendMessage(result.send_message.message, dialogId, replyToMsg, replyToTopMsg, webPage, !result.send_message.no_webpage, result.send_message.entities, result.send_message.reply_markup, params, notify, scheduleDate, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+				accountInstance.sendMessagesHelper.sendMessage(resultSendMessage.message, dialogId, replyToMsg, replyToTopMsg, webPage, !resultSendMessage.noWebpage, resultSendMessage.entities, resultSendMessage.replyMarkup, params, notify, scheduleDate, null, updateStickersOrder = false)
 			}
-			else if (result.send_message is TL_botInlineMessageMediaVenue) {
-				val venue = TL_messageMediaVenue()
-				venue.geo = result.send_message.geo
-				venue.address = result.send_message.address
-				venue.title = result.send_message.title
-				venue.provider = result.send_message.provider
-				venue.venue_id = result.send_message.venue_id
-				venue.venue_id = result.send_message.venue_type
-				venue.venue_type = venue.venue_id
+			else if (result.sendMessage is TLRPC.TLBotInlineMessageMediaVenue) {
+				val resultSendMessage = result.sendMessage as TLRPC.TLBotInlineMessageMediaVenue
 
-				if (venue.venue_type == null) {
-					venue.venue_type = ""
-				}
+				val venue = TLRPC.TLMessageMediaVenue()
+				venue.geo = resultSendMessage.geo
+				venue.address = resultSendMessage.address
+				venue.title = resultSendMessage.title
+				venue.provider = resultSendMessage.provider
+				venue.venueId = resultSendMessage.venueId
+				venue.venueType = resultSendMessage.venueType ?: ""
 
-				accountInstance.sendMessagesHelper.sendMessage(venue, dialogId, replyToMsg, replyToTopMsg, result.send_message.reply_markup, params, notify, scheduleDate, false, null)
+				accountInstance.sendMessagesHelper.sendMessage(venue, dialogId, replyToMsg, replyToTopMsg, resultSendMessage.replyMarkup, params, notify, scheduleDate)
 			}
-			else if (result.send_message is TL_botInlineMessageMediaGeo) {
-				if (result.send_message.period != 0 || result.send_message.proximity_notification_radius != 0) {
-					val location = TL_messageMediaGeoLive()
-					location.period = if (result.send_message.period != 0) result.send_message.period else 900
-					location.geo = result.send_message.geo
-					location.heading = result.send_message.heading
-					location.proximity_notification_radius = result.send_message.proximity_notification_radius
+			else if (result.sendMessage is TLRPC.TLBotInlineMessageMediaGeo) {
+				val resultSendMessage = result.sendMessage as TLRPC.TLBotInlineMessageMediaGeo
 
-					accountInstance.sendMessagesHelper.sendMessage(location, dialogId, replyToMsg, replyToTopMsg, result.send_message.reply_markup, params, notify, scheduleDate, false, null)
+				if (resultSendMessage.period != 0 || resultSendMessage.proximityNotificationRadius != 0) {
+					val location = TLRPC.TLMessageMediaGeoLive()
+					location.period = if (resultSendMessage.period != 0) resultSendMessage.period else 900
+					location.geo = resultSendMessage.geo
+					location.heading = resultSendMessage.heading
+					location.proximityNotificationRadius = resultSendMessage.proximityNotificationRadius
+
+					accountInstance.sendMessagesHelper.sendMessage(location, dialogId, replyToMsg, replyToTopMsg, resultSendMessage.replyMarkup, params, notify, scheduleDate)
 				}
 				else {
-					val location = TL_messageMediaGeo()
-					location.geo = result.send_message.geo
-					location.heading = result.send_message.heading
+					val location = TLRPC.TLMessageMediaGeo()
+					location.geo = resultSendMessage.geo
+					// location.heading = resultSendMessage.heading
 
-					accountInstance.sendMessagesHelper.sendMessage(location, dialogId, replyToMsg, replyToTopMsg, result.send_message.reply_markup, params, notify, scheduleDate, false, null)
+					accountInstance.sendMessagesHelper.sendMessage(location, dialogId, replyToMsg, replyToTopMsg, resultSendMessage.replyMarkup, params, notify, scheduleDate)
 				}
 			}
-			else if (result.send_message is TL_botInlineMessageMediaContact) {
-				val user: User = TL_user()
-				user.first_name = result.send_message.first_name
-				user.last_name = result.send_message.last_name
-				user.username = result.send_message.phone_number
+			else if (result.sendMessage is TLRPC.TLBotInlineMessageMediaContact) {
+				val resultSendMessage = result.sendMessage as TLRPC.TLBotInlineMessageMediaContact
 
-				val reason = TL_restrictionReason()
-				reason.text = result.send_message.vcard
+				val user = TLRPC.TLUser()
+				user.firstName = resultSendMessage.firstName
+				user.lastName = resultSendMessage.lastName
+				user.username = resultSendMessage.phoneNumber
+
+				val reason = TLRPC.TLRestrictionReason()
+				reason.text = resultSendMessage.vcard
 				reason.platform = ""
 				reason.reason = ""
 
-				user.restriction_reason.add(reason)
+				user.restrictionReason.add(reason)
 
-				accountInstance.sendMessagesHelper.sendMessage(user, dialogId, replyToMsg, replyToTopMsg, result.send_message.reply_markup, params, notify, scheduleDate, false, null)
+				accountInstance.sendMessagesHelper.sendMessage(user, dialogId, replyToMsg, replyToTopMsg, resultSendMessage.replyMarkup, params, notify, scheduleDate)
 			}
-			else if (result.send_message is TL_botInlineMessageMediaInvoice) {
+			else if (result.sendMessage is TLRPC.TLBotInlineMessageMediaInvoice) {
 				if (DialogObject.isEncryptedDialog(dialogId)) {
 					return  //doesn't work in secret chats for now
 				}
 
-				val invoice = result.send_message as TL_botInlineMessageMediaInvoice
+				val invoice = result.sendMessage as TLRPC.TLBotInlineMessageMediaInvoice
 
-				val messageMediaInvoice = TL_messageMediaInvoice()
-				messageMediaInvoice.shipping_address_requested = invoice.shipping_address_requested
+				val messageMediaInvoice = TLRPC.TLMessageMediaInvoice()
+				messageMediaInvoice.shippingAddressRequested = invoice.shippingAddressRequested
 				messageMediaInvoice.test = invoice.test
 				messageMediaInvoice.title = invoice.title
 				messageMediaInvoice.description = invoice.description
@@ -9111,10 +9045,10 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 
 				messageMediaInvoice.currency = invoice.currency
-				messageMediaInvoice.total_amount = invoice.total_amount
-				messageMediaInvoice.start_param = ""
+				messageMediaInvoice.totalAmount = invoice.totalAmount
+				messageMediaInvoice.startParam = ""
 
-				accountInstance.sendMessagesHelper.sendMessage(messageMediaInvoice, dialogId, replyToMsg, replyToTopMsg, result.send_message.reply_markup, params, notify, scheduleDate, false, null)
+				accountInstance.sendMessagesHelper.sendMessage(messageMediaInvoice, dialogId, replyToMsg, replyToTopMsg, result.sendMessage?.replyMarkup, params, notify, scheduleDate)
 			}
 		}
 
@@ -9151,7 +9085,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 							for (a in 0 until count) {
 								val mess = textFinal.substring(a * 4096, min((a + 1) * 4096, textFinal.length))
-								accountInstance.sendMessagesHelper.sendMessage(mess, dialogId, null, null, null, true, null, null, null, notify, scheduleDate, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+								accountInstance.sendMessagesHelper.sendMessage(mess, dialogId, null, null, null, true, null, null, null, notify, scheduleDate, null, updateStickersOrder = false)
 							}
 						}
 					}
@@ -9160,11 +9094,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 		}
 
 		fun ensureMediaThumbExists(accountInstance: AccountInstance, isEncrypted: Boolean, `object`: TLObject?, path: String?, uri: Uri?, startTime: Long) {
-			if (`object` is TL_photo) {
+			if (`object` is TLRPC.TLPhoto) {
 				val smallExists: Boolean
 				val smallSize = FileLoader.getClosestPhotoSizeWithSize(`object`.sizes, 90)
 
-				smallExists = if (smallSize is TL_photoStrippedSize || smallSize is TL_photoPathSize) {
+				smallExists = if (smallSize is TLRPC.TLPhotoStrippedSize || smallSize is TLRPC.TLPhotoPathSize) {
 					true
 				}
 				else {
@@ -9184,7 +9118,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					}
 
 					if (!bigExists) {
-						val size = ImageLoader.scaleAndSaveImage(bigSize, bitmap, Bitmap.CompressFormat.JPEG, true, AndroidUtilities.getPhotoSize().toFloat(), AndroidUtilities.getPhotoSize().toFloat(), 80, false, 101, 101, false)
+						val size = ImageLoader.scaleAndSaveImage(bigSize, bitmap, Bitmap.CompressFormat.JPEG, AndroidUtilities.getPhotoSize().toFloat(), AndroidUtilities.getPhotoSize().toFloat(), 80, false, 101, 101, false)
 
 						if (size !== bigSize) {
 							`object`.sizes.add(0, size)
@@ -9202,11 +9136,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					bitmap?.recycle()
 				}
 			}
-			else if (`object` is TL_document) {
+			else if (`object` is TLRPC.TLDocument) {
 				if ((MessageObject.isVideoDocument(`object`) || MessageObject.isNewGifDocument(`object`)) && MessageObject.isDocumentHasThumb(`object`)) {
 					val photoSize = FileLoader.getClosestPhotoSizeWithSize(`object`.thumbs, 320)
 
-					if (photoSize is TL_photoStrippedSize || photoSize is TL_photoPathSize) {
+					if (photoSize is TLRPC.TLPhotoStrippedSize || photoSize is TLRPC.TLPhotoPathSize) {
 						return
 					}
 
@@ -9268,7 +9202,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 				}
 			}
 
-			return String.format(Locale.US, if (blur) "%d_%d@%d_%d_b" else "%d_%d@%d_%d", photoSize.location.volume_id, photoSize.location.local_id, (point.x / AndroidUtilities.density).toInt(), (point.y / AndroidUtilities.density).toInt())
+			return String.format(Locale.US, if (blur) "%d_%d@%d_%d_b" else "%d_%d@%d_%d", photoSize.location?.volumeId, photoSize.location?.localId, (point.x / AndroidUtilities.density).toInt(), (point.y / AndroidUtilities.density).toInt())
 		}
 
 		fun shouldSendWebPAsSticker(path: String?, uri: Uri?): Boolean {
@@ -9301,7 +9235,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		@JvmStatic
 		@UiThread
-		fun prepareSendingMedia(accountInstance: AccountInstance, media: List<SendingMediaInfo>, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, inputContent: InputContentInfoCompat?, forceDocument: Boolean, groupMedia: Boolean, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, updateStickersOrder: Boolean, isMediaSale: Boolean, mediaSaleHash: String?) {
+		fun prepareSendingMedia(accountInstance: AccountInstance, media: List<SendingMediaInfo>, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, inputContent: InputContentInfoCompat?, forceDocument: Boolean, groupMedia: Boolean, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, updateStickersOrder: Boolean) {
 			@Suppress("NAME_SHADOWING") var groupMedia = groupMedia
 
 			if (media.isEmpty()) {
@@ -9374,21 +9308,21 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								originalPath = null
 							}
 
-							var photo: TL_photo? = null
+							var photo: TLRPC.TLPhoto? = null
 							var parentObject: String? = null
 
 							if (!isEncrypted && info.ttl == 0) {
 								var sentData = accountInstance.messagesStorage.getSentFile(originalPath, if (!isEncrypted) 0 else 3)
 
-								if (sentData != null && sentData[0] is TL_photo) {
-									photo = sentData[0] as TL_photo
+								if (sentData != null && sentData[0] is TLRPC.TLPhoto) {
+									photo = sentData[0] as TLRPC.TLPhoto
 									parentObject = sentData[1] as String
 								}
 								if (photo == null && info.uri != null) {
 									sentData = accountInstance.messagesStorage.getSentFile(AndroidUtilities.getPath(info.uri), if (!isEncrypted) 0 else 3)
 
-									if (sentData != null && sentData[0] is TL_photo) {
-										photo = sentData[0] as TL_photo
+									if (sentData != null && sentData[0] is TLRPC.TLPhoto) {
+										photo = sentData[0] as TLRPC.TLPhoto
 										parentObject = sentData[1] as String
 									}
 								}
@@ -9448,18 +9382,18 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					if (info.searchImage != null && info.videoEditedInfo == null) {
 						if (info.searchImage!!.type == 1) {
 							val params = HashMap<String, String>()
-							var document: TL_document? = null
+							var document: TLRPC.TLDocument? = null
 							val parentObject: String? = null
 							var cacheFile: File?
 
-							if (info.searchImage!!.document is TL_document) {
-								document = info.searchImage!!.document as TL_document
+							if (info.searchImage!!.document is TLRPC.TLDocument) {
+								document = info.searchImage!!.document as TLRPC.TLDocument
 								cacheFile = FileLoader.getInstance(accountInstance.currentAccount).getPathToAttach(document, true)
 							}
 							else {/*if (!isEncrypted) {
                                 Object[] sentData = getMessagesStorage().getSentFile(info.searchImage.imageUrl, !isEncrypted ? 1 : 4);
-                                if (sentData != null && sentData[0] instanceof TLRPC.TL_document) {
-                                    document = (TLRPC.TL_document) sentData[0];
+                                if (sentData != null && sentData[0] instanceof TLRPC.TLRPC.TLDocument) {
+                                    document = (TLRPC.TLRPC.TLDocument) sentData[0];
                                     parentObject = (String) sentData[1];
                                 }
                             }*/
@@ -9470,24 +9404,24 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							if (document == null) {
 								var thumbFile: File? = null
 
-								document = TL_document()
+								document = TLRPC.TLDocument()
 								document.id = 0
-								document.file_reference = ByteArray(0)
+								document.fileReference = ByteArray(0)
 								document.date = accountInstance.connectionsManager.currentTime
 
-								val fileName = TL_documentAttributeFilename()
-								fileName.file_name = "animation.gif"
+								val fileName = TLRPC.TLDocumentAttributeFilename()
+								fileName.fileName = "animation.gif"
 
 								document.attributes.add(fileName)
 								document.size = info.searchImage!!.size.toLong()
-								document.dc_id = 0
+								document.dcId = 0
 
 								if (!forceDocument && cacheFile.toString().endsWith("mp4")) {
-									document.mime_type = "video/mp4"
-									document.attributes.add(TL_documentAttributeAnimated())
+									document.mimeType = "video/mp4"
+									document.attributes.add(TLRPC.TLDocumentAttributeAnimated())
 								}
 								else {
-									document.mime_type = "image/gif"
+									document.mimeType = "image/gif"
 								}
 
 								if (cacheFile.exists()) {
@@ -9535,11 +9469,11 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								}
 
 								if (document.thumbs.isEmpty()) {
-									val thumb = TL_photoSize()
+									val thumb = TLRPC.TLPhotoSize()
 									thumb.w = info.searchImage!!.width
 									thumb.h = info.searchImage!!.height
 									thumb.size = 0
-									thumb.location = TL_fileLocationUnavailable()
+									thumb.location = TLRPC.TLFileLocationUnavailable()
 									thumb.type = "x"
 
 									document.thumbs.add(thumb)
@@ -9547,7 +9481,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								}
 							}
 
-							val documentFinal: TL_document = document
+							val documentFinal: TLRPC.TLDocument = document
 							// val originalPathFinal = info.searchImage!!.imageUrl
 							val pathFinal = cacheFile?.toString() ?: info.searchImage!!.imageUrl
 
@@ -9564,22 +9498,22 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									accountInstance.sendMessagesHelper.editMessage(editingMessageObject, null, null, documentFinal, pathFinal, params, false, parentObject)
 								}
 								else {
-									accountInstance.sendMessagesHelper.sendMessage(documentFinal, null, pathFinal, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, 0, parentObject, null, false, isMediaSale, mediaSaleHash)
+									accountInstance.sendMessagesHelper.sendMessage(documentFinal, null, pathFinal, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, 0, parentObject, null, false)
 								}
 							}
 						}
 						else {
 							var needDownloadHttp = true
-							var photo: TL_photo? = null
+							var photo: TLRPC.TLPhoto? = null
 							val parentObject: String? = null
 
-							if (info.searchImage!!.photo is TL_photo) {
-								photo = info.searchImage!!.photo as TL_photo
+							if (info.searchImage!!.photo is TLRPC.TLPhoto) {
+								photo = info.searchImage!!.photo as TLRPC.TLPhoto
 							}
 //							else {
 //								if (!isEncrypted && info.ttl == 0) {/*Object[] sentData = getMessagesStorage().getSentFile(info.searchImage.imageUrl, !isEncrypted ? 0 : 3);
 //                                if (sentData != null) {
-//                                    photo = (TLRPC.TL_photo) sentData[0];
+//                                    photo = (TLRPC.TLRPC.TLPhoto) sentData[0];
 //                                    parentObject = (String) sentData[1];
 //                                    ensureMediaThumbExists(currentAccount, photo, );
 //                                }*/
@@ -9607,15 +9541,15 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									}
 
 									if (photo == null) {
-										photo = TL_photo()
+										photo = TLRPC.TLPhoto()
 										photo.date = accountInstance.connectionsManager.currentTime
-										photo.file_reference = ByteArray(0)
+										photo.fileReference = ByteArray(0)
 
-										val photoSize = TL_photoSize()
+										val photoSize = TLRPC.TLPhotoSize()
 										photoSize.w = info.searchImage!!.width
 										photoSize.h = info.searchImage!!.height
 										photoSize.size = 0
-										photoSize.location = TL_fileLocationUnavailable()
+										photoSize.location = TLRPC.TLFileLocationUnavailable()
 										photoSize.type = "x"
 
 										photo.sizes.add(photoSize)
@@ -9623,7 +9557,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								}
 							}
 
-							val photoFinal: TL_photo = photo
+							val photoFinal: TLRPC.TLPhoto = photo
 							val needDownloadHttpFinal = needDownloadHttp
 							val params = HashMap<String, String>()
 							if (info.searchImage!!.imageUrl != null) {
@@ -9645,7 +9579,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									accountInstance.sendMessagesHelper.editMessage(editingMessageObject, photoFinal, null, null, if (needDownloadHttpFinal) info.searchImage!!.imageUrl else null, params, false, parentObject)
 								}
 								else {
-									accountInstance.sendMessagesHelper.sendMessage(photoFinal, if (needDownloadHttpFinal) info.searchImage!!.imageUrl else null, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, info.ttl, parentObject, false, isMediaSale, mediaSaleHash)
+									accountInstance.sendMessagesHelper.sendMessage(photoFinal, if (needDownloadHttpFinal) info.searchImage!!.imageUrl else null, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, info.ttl, parentObject, false)
 								}
 							}
 						}
@@ -9671,7 +9605,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 							if (!forceDocument && (videoEditedInfo != null || info.path!!.endsWith("mp4"))) {
 								if (info.path == null && info.searchImage != null) {
-									if (info.searchImage!!.photo is TL_photo) {
+									if (info.searchImage!!.photo is TLRPC.TLPhoto) {
 										info.path = FileLoader.getInstance(accountInstance.currentAccount).getPathToAttach(info.searchImage!!.photo, true).absolutePath
 									}
 									else {
@@ -9699,14 +9633,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									startTime = if (videoEditedInfo.startTime >= 0) videoEditedInfo.startTime else 0
 								}
 
-								var document: TL_document? = null
+								var document: TLRPC.TLDocument? = null
 								var parentObject: String? = null
 
 								if (!isEncrypted && info.ttl == 0 && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) {
 									val sentData = accountInstance.messagesStorage.getSentFile(originalPath, if (!isEncrypted) 2 else 5)
 
-									if (sentData != null && sentData[0] is TL_document) {
-										document = sentData[0] as TL_document
+									if (sentData != null && sentData[0] is TLRPC.TLDocument) {
+										document = sentData[0] as TLRPC.TLDocument
 										parentObject = sentData[1] as String
 										ensureMediaThumbExists(accountInstance, isEncrypted, document, info.path, null, startTime)
 									}
@@ -9738,14 +9672,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 										size = ImageLoader.scaleAndSaveImage(thumb, side.toFloat(), side.toFloat(), if (side > 90) 80 else 55, isEncrypted)
 										thumbKey = getKeyForPhotoSize(accountInstance, size, null, blur = true, forceCache = false)
 
-										val fileName = size?.location?.volume_id?.toString() + "_" + size?.location?.local_id + ".jpg"
+										val fileName = size?.location?.volumeId?.toString() + "_" + size?.location?.localId + ".jpg"
 										val fileDir = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE)
 
 										localPath = File(fileDir, fileName).absolutePath
 									}
 
-									document = TL_document()
-									document.file_reference = ByteArray(0)
+									document = TLRPC.TLDocument()
+									document.fileReference = ByteArray(0)
 									document.localPath = localPath
 
 									if (size != null) {
@@ -9753,18 +9687,18 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 										document.flags = document.flags or 1
 									}
 
-									document.mime_type = "video/mp4"
+									document.mimeType = "video/mp4"
 
 									accountInstance.userConfig.saveConfig(false)
 
-									var attributeVideo: TL_documentAttributeVideo
+									var attributeVideo: TLRPC.TLDocumentAttributeVideo
 
 									if (isEncrypted) {
-										attributeVideo = TL_documentAttributeVideo()
+										attributeVideo = TLRPC.TLDocumentAttributeVideo()
 									}
 									else {
-										attributeVideo = TL_documentAttributeVideo()
-										attributeVideo.supports_streaming = true
+										attributeVideo = TLRPC.TLDocumentAttributeVideo()
+										attributeVideo.supportsStreaming = true
 									}
 
 									document.attributes.add(attributeVideo)
@@ -9818,8 +9752,8 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									}
 								}
 								if (videoEditedInfo != null && videoEditedInfo.muted) {
-									if (document.attributes.find { it is TL_documentAttributeAnimated } == null) {
-										document.attributes.add(TL_documentAttributeAnimated())
+									if (document.attributes.find { it is TLRPC.TLDocumentAttributeAnimated } == null) {
+										document.attributes.add(TLRPC.TLDocumentAttributeAnimated())
 									}
 								}
 
@@ -9832,7 +9766,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									path = cacheFile.absolutePath
 								}
 
-								val videoFinal: TL_document = document
+								val videoFinal: TLRPC.TLDocument = document
 								val parentFinal = parentObject
 								val finalPath = path
 								val params = HashMap<String, String>()
@@ -9856,7 +9790,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								}
 
 								if (!isEncrypted && info.masks != null && info.masks!!.isNotEmpty()) {
-									document.attributes.add(TL_documentAttributeHasStickers())
+									document.attributes.add(TLRPC.TLDocumentAttributeHasStickers())
 
 									val serializedData = SerializedData(4 + info.masks!!.size * 20)
 									serializedData.writeInt32(info.masks!!.size)
@@ -9872,14 +9806,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 								AndroidUtilities.runOnUIThread {
 									if (thumbFinal != null && thumbKeyFinal != null) {
-										ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, thumbFinal), thumbKeyFinal, false)
+										ImageLoader.getInstance().putImageToCache(thumbFinal.toDrawable(ApplicationLoader.applicationContext.resources), thumbKeyFinal, false)
 									}
 
 									if (editingMessageObject != null) {
 										accountInstance.sendMessagesHelper.editMessage(editingMessageObject, null, videoEditedInfo, videoFinal, finalPath, params, false, parentFinal)
 									}
 									else {
-										accountInstance.sendMessagesHelper.sendMessage(videoFinal, videoEditedInfo, finalPath, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, info.ttl, parentFinal, null, false, isMediaSale, mediaSaleHash)
+										accountInstance.sendMessagesHelper.sendMessage(videoFinal, videoEditedInfo, finalPath, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, info.ttl, parentFinal, null, false)
 									}
 								}
 							}
@@ -9997,7 +9931,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									originalPath = null
 								}
 
-								var photo: TL_photo? = null
+								var photo: TLRPC.TLPhoto? = null
 								var parentObject: String? = null
 
 								if (workers != null) {
@@ -10022,16 +9956,16 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 									if (!isEncrypted && info.ttl == 0) {
 										var sentData = accountInstance.messagesStorage.getSentFile(originalPath, if (!isEncrypted) 0 else 3)
 
-										if (sentData != null && sentData[0] is TL_photo) {
-											photo = sentData[0] as TL_photo
+										if (sentData != null && sentData[0] is TLRPC.TLPhoto) {
+											photo = sentData[0] as TLRPC.TLPhoto
 											parentObject = sentData[1] as String
 										}
 
 										if (photo == null && info.uri != null) {
 											sentData = accountInstance.messagesStorage.getSentFile(AndroidUtilities.getPath(info.uri), if (!isEncrypted) 0 else 3)
 
-											if (sentData != null && sentData[0] is TL_photo) {
-												photo = sentData[0] as TL_photo
+											if (sentData != null && sentData[0] is TLRPC.TLPhoto) {
+												photo = sentData[0] as TLRPC.TLPhoto
 												parentObject = sentData[1] as String
 											}
 										}
@@ -10051,13 +9985,13 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 								}
 
 								if (photo != null) {
-									val photoFinal: TL_photo = photo
+									val photoFinal: TLRPC.TLPhoto = photo
 									val parentFinal = parentObject
 									val params = HashMap<String, String>()
 									val bitmapFinal = arrayOfNulls<Bitmap>(1)
 									val keyFinal = arrayOfNulls<String>(1)
 
-									if (info.masks != null && !info.masks!!.isEmpty().also { photo.has_stickers = it }) {
+									if (info.masks != null && !info.masks!!.isEmpty().also { photo.hasStickers = it }) {
 										val serializedData = SerializedData(4 + info.masks!!.size * 20)
 
 										serializedData.writeInt32(info.masks!!.size)
@@ -10103,14 +10037,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 									AndroidUtilities.runOnUIThread {
 										if (bitmapFinal[0] != null && keyFinal[0] != null) {
-											ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, bitmapFinal[0]), keyFinal[0], false)
+											ImageLoader.getInstance().putImageToCache(bitmapFinal[0]?.toDrawable(ApplicationLoader.applicationContext.resources), keyFinal[0], false)
 										}
 
 										if (editingMessageObject != null) {
 											accountInstance.sendMessagesHelper.editMessage(editingMessageObject, photoFinal, null, null, null, params, false, parentFinal)
 										}
 										else {
-											accountInstance.sendMessagesHelper.sendMessage(photoFinal, null, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, info.ttl, parentFinal, updateStickersOrder, isMediaSale, mediaSaleHash)
+											accountInstance.sendMessagesHelper.sendMessage(photoFinal, null, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, null, params, notify, scheduleDate, info.ttl, parentFinal, updateStickersOrder)
 										}
 									}
 								}
@@ -10152,7 +10086,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 						mediaCount++
 
-						val error = prepareSendingDocumentInternal(accountInstance, sendAsDocuments[a], sendAsDocumentsOriginal!![a], sendAsDocumentsUri!![a], extension, dialogId, replyToMsg, replyToTopMsg, sendAsDocumentsCaptions!![a], sendAsDocumentsEntities!![a], editingMessageObject, groupId2, mediaCount == 10 || a == documentsCount - 1, forceDocument, notify, scheduleDate, null, isMediaSale, mediaSaleHash)
+						val error = prepareSendingDocumentInternal(accountInstance, sendAsDocuments[a], sendAsDocumentsOriginal!![a], sendAsDocumentsUri!![a], extension, dialogId, replyToMsg, replyToTopMsg, sendAsDocumentsCaptions!![a], sendAsDocumentsEntities!![a], editingMessageObject, groupId2, mediaCount == 10 || a == documentsCount - 1, forceDocument, notify, scheduleDate, null)
 
 						handleError(error, accountInstance)
 					}
@@ -10162,7 +10096,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 			}
 		}
 
-		private fun fillVideoAttribute(videoPath: String, attributeVideo: TL_documentAttributeVideo, videoEditedInfo: VideoEditedInfo?) {
+		private fun fillVideoAttribute(videoPath: String, attributeVideo: TLRPC.TLDocumentAttributeVideo, videoEditedInfo: VideoEditedInfo?) {
 			var infoObtained = false
 
 			runCatching {
@@ -10243,7 +10177,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 					w = (w.toFloat() / scale).toInt()
 					h = (h.toFloat() / scale).toInt()
 
-					bitmap = Bitmap.createScaledBitmap(bitmap, w, h, true)
+					bitmap = bitmap.scale(w, h)
 				}
 			}
 			return bitmap
@@ -10385,7 +10319,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 		@JvmStatic
 		@UiThread
-		fun prepareSendingVideo(accountInstance: AccountInstance, videoPath: String?, info: VideoEditedInfo?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: List<MessageEntity>?, ttl: Int, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, forceDocument: Boolean, isMediaSale: Boolean, mediaSaleHash: String?) {
+		fun prepareSendingVideo(accountInstance: AccountInstance, videoPath: String?, info: VideoEditedInfo?, dialogId: Long, replyToMsg: MessageObject?, replyToTopMsg: MessageObject?, caption: CharSequence?, entities: List<MessageEntity>?, ttl: Int, editingMessageObject: MessageObject?, notify: Boolean, scheduleDate: Int, forceDocument: Boolean) {
 			if (videoPath.isNullOrEmpty()) {
 				return
 			}
@@ -10416,14 +10350,14 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						startTime = if (videoEditedInfo.startTime >= 0) videoEditedInfo.startTime else 0
 					}
 
-					var document: TL_document? = null
+					var document: TLRPC.TLDocument? = null
 					var parentObject: String? = null
 
 					if (!isEncrypted && ttl == 0 && (videoEditedInfo == null || videoEditedInfo.filterState == null && videoEditedInfo.paintPath == null && videoEditedInfo.mediaEntities == null && videoEditedInfo.cropState == null)) {
 						val sentData = accountInstance.messagesStorage.getSentFile(originalPath, 2)
 
-						if (sentData != null && sentData[0] is TL_document) {
-							document = sentData[0] as TL_document
+						if (sentData != null && sentData[0] is TLRPC.TLDocument) {
+							document = sentData[0] as TLRPC.TLDocument
 							parentObject = sentData[1] as String
 							ensureMediaThumbExists(accountInstance, false, document, videoPath, null, startTime)
 						}
@@ -10442,17 +10376,17 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						if (thumb != null && size != null) {
 							if (isRound) {
 								if (isEncrypted) {
-									thumb = Bitmap.createScaledBitmap(thumb, 90, 90, true)
+									thumb = thumb.scale(90, 90)
 
 									Utilities.blurBitmap(thumb, 7, 1, thumb.width, thumb.height, thumb.rowBytes)
 									Utilities.blurBitmap(thumb, 7, 1, thumb.width, thumb.height, thumb.rowBytes)
 									Utilities.blurBitmap(thumb, 7, 1, thumb.width, thumb.height, thumb.rowBytes)
 
-									thumbKey = String.format(size.location.volume_id.toString() + "_" + size.location.local_id + "@%d_%d_b2", (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt(), (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt())
+									thumbKey = String.format(size.location?.volumeId?.toString() + "_" + size.location?.localId + "@%d_%d_b2", (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt(), (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt())
 								}
 								else {
 									Utilities.blurBitmap(thumb, 3, 1, thumb.width, thumb.height, thumb.rowBytes)
-									thumbKey = String.format(size.location.volume_id.toString() + "_" + size.location.local_id + "@%d_%d_b", (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt(), (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt())
+									thumbKey = String.format(size.location?.volumeId?.toString() + "_" + size.location?.localId + "@%d_%d_b", (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt(), (AndroidUtilities.roundMessageSize / AndroidUtilities.density).toInt())
 								}
 							}
 							else {
@@ -10460,37 +10394,37 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 							}
 						}
 
-						document = TL_document()
+						document = TLRPC.TLDocument()
 
 						if (size != null) {
 							document.thumbs.add(size)
 							document.flags = document.flags or 1
 						}
 
-						document.file_reference = ByteArray(0)
-						document.mime_type = "video/mp4"
+						document.fileReference = ByteArray(0)
+						document.mimeType = "video/mp4"
 
 						accountInstance.userConfig.saveConfig(false)
 
-						val attributeVideo: TL_documentAttributeVideo
+						val attributeVideo: TLRPC.TLDocumentAttributeVideo
 
 						if (isEncrypted) {
 							val encryptedChatId = DialogObject.getEncryptedChatId(dialogId)
 							accountInstance.messagesController.getEncryptedChat(encryptedChatId) ?: return@Runnable
-							attributeVideo = TL_documentAttributeVideo()
+							attributeVideo = TLRPC.TLDocumentAttributeVideo()
 						}
 						else {
-							attributeVideo = TL_documentAttributeVideo()
-							attributeVideo.supports_streaming = true
+							attributeVideo = TLRPC.TLDocumentAttributeVideo()
+							attributeVideo.supportsStreaming = true
 						}
 
-						attributeVideo.round_message = isRound
+						attributeVideo.roundMessage = isRound
 
 						document.attributes.add(attributeVideo)
 
 						if (videoEditedInfo != null && videoEditedInfo.needConvert()) {
 							if (videoEditedInfo.muted) {
-								document.attributes.add(TL_documentAttributeAnimated())
+								document.attributes.add(TLRPC.TLDocumentAttributeAnimated())
 
 								fillVideoAttribute(videoPath, attributeVideo, videoEditedInfo)
 
@@ -10544,7 +10478,7 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 						path = cacheFile.absolutePath
 					}
 
-					val videoFinal: TL_document = document
+					val videoFinal: TLRPC.TLDocument = document
 					val parentFinal = parentObject
 					val finalPath = path
 					val params = HashMap<String, String>()
@@ -10560,19 +10494,19 @@ class SendMessagesHelper(instance: Int) : BaseController(instance), Notification
 
 					AndroidUtilities.runOnUIThread {
 						if (thumbFinal != null && thumbKeyFinal != null) {
-							ImageLoader.getInstance().putImageToCache(BitmapDrawable(ApplicationLoader.applicationContext.resources, thumbFinal), thumbKeyFinal, false)
+							ImageLoader.getInstance().putImageToCache(thumbFinal.toDrawable(ApplicationLoader.applicationContext.resources), thumbKeyFinal, false)
 						}
 
 						if (editingMessageObject != null) {
 							accountInstance.sendMessagesHelper.editMessage(editingMessageObject, null, videoEditedInfo, videoFinal, finalPath, params, false, parentFinal)
 						}
 						else {
-							accountInstance.sendMessagesHelper.sendMessage(videoFinal, videoEditedInfo, finalPath, dialogId, replyToMsg, replyToTopMsg, captionFinal, entities, null, params, notify, scheduleDate, ttl, parentFinal, null, false, isMediaSale, mediaSaleHash)
+							accountInstance.sendMessagesHelper.sendMessage(videoFinal, videoEditedInfo, finalPath, dialogId, replyToMsg, replyToTopMsg, captionFinal, entities, null, params, notify, scheduleDate, ttl, parentFinal, null, false)
 						}
 					}
 				}
 				else {
-					prepareSendingDocumentInternal(accountInstance, videoPath, videoPath, null, null, dialogId, replyToMsg, replyToTopMsg, caption, entities, editingMessageObject, null, false, forceDocument, notify, scheduleDate, null, isMediaSale, mediaSaleHash)
+					prepareSendingDocumentInternal(accountInstance, videoPath, videoPath, null, null, dialogId, replyToMsg, replyToTopMsg, caption, entities, editingMessageObject, null, false, forceDocument, notify, scheduleDate, null)
 				}
 			}).start()
 		}

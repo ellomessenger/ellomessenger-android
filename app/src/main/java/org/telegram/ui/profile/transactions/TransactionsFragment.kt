@@ -1,3 +1,10 @@
+/*
+ * This is the source code of Ello for Android.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikita Denin, Ello 2023.
+ */
 package org.telegram.ui.profile.transactions
 
 import android.content.Context
@@ -33,6 +40,7 @@ class TransactionsFragment : BaseFragment() {
 					ActionBar.BACK_BUTTON -> {
 						finishFragment()
 					}
+
 					filterItem -> {
 						presentFragment(FilterTransactionsFragment())
 					}

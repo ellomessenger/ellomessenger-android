@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -64,8 +64,7 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -322,10 +321,9 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 			@Override
 			public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
 				Context ctx = getContext();
-				if (!(ctx instanceof Activity)) {
+				if (!(ctx instanceof Activity activity)) {
 					return false;
 				}
-				Activity activity = (Activity)ctx;
 
 				if (mFilePathCallback != null) {
 					mFilePathCallback.onReceiveValue(null);
@@ -656,9 +654,7 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 			return;
 		}
 
-		if (getParent() instanceof ChatAttachAlertBotWebViewLayout.WebViewSwipeContainer) {
-			ChatAttachAlertBotWebViewLayout.WebViewSwipeContainer swipeContainer = (ChatAttachAlertBotWebViewLayout.WebViewSwipeContainer)getParent();
-
+		if (getParent() instanceof ChatAttachAlertBotWebViewLayout.WebViewSwipeContainer swipeContainer) {
 			if (isStable) {
 				lastExpanded = swipeContainer.getSwipeOffsetY() == -swipeContainer.getOffsetY() + swipeContainer.getTopActionBarOffsetY();
 			}
@@ -672,13 +668,13 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 				notifyEvent("viewport_changed", data);
 			}
 			catch (JSONException e) {
-				e.printStackTrace();
+				FileLog.e(e);
 			}
 		}
 	}
 
 	@Override
-	protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+	protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 		if (child == flickerView) {
 			if (isFlickeringCenter) {
 				canvas.save();
@@ -723,7 +719,8 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 
 	public void loadFlickerAndSettingsItem(int currentAccount, long botId, ActionBarMenuSubItem settingsItem) {
 		User user = MessagesController.getInstance(currentAccount).getUser(botId);
-		if (user.username != null && Objects.equals(user.username, DURGER_KING_USERNAME)) {
+
+		if (user != null && user.username != null && Objects.equals(user.username, DURGER_KING_USERNAME)) {
 			flickerView.setVisibility(VISIBLE);
 			flickerView.setAlpha(1f);
 			flickerView.setImageDrawable(SvgHelper.getDrawable(R.raw.durgerking_placeholder, getColor(Theme.key_windowBackgroundGray)));
@@ -731,9 +728,9 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 			return;
 		}
 
-		TLRPC.TL_attachMenuBot cachedBot = null;
-		for (TLRPC.TL_attachMenuBot bot : MediaDataController.getInstance(currentAccount).getAttachMenuBots().bots) {
-			if (bot.bot_id == botId) {
+		TLRPC.TLAttachMenuBot cachedBot = null;
+		for (TLRPC.TLAttachMenuBot bot : MediaDataController.getInstance(currentAccount).getAttachMenuBots().bots) {
+			if (bot.botId == botId) {
 				cachedBot = bot;
 				break;
 			}
@@ -741,7 +738,7 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 
 		if (cachedBot != null) {
 			boolean center = false;
-			TLRPC.TL_attachMenuBotIcon botIcon = MediaDataController.getPlaceholderStaticAttachMenuBotIcon(cachedBot);
+			TLRPC.TLAttachMenuBotIcon botIcon = MediaDataController.getPlaceholderStaticAttachMenuBotIcon(cachedBot);
 			if (botIcon == null) {
 				botIcon = MediaDataController.getStaticAttachMenuBotIcon(cachedBot);
 				center = true;
@@ -754,18 +751,18 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 			}
 
 			if (settingsItem != null) {
-				settingsItem.setVisibility(cachedBot.has_settings ? VISIBLE : GONE);
+				settingsItem.setVisibility(cachedBot.hasSettings ? VISIBLE : GONE);
 			}
 		}
 		else {
-			TLRPC.TL_messages_getAttachMenuBot req = new TLRPC.TL_messages_getAttachMenuBot();
+			TLRPC.TLMessagesGetAttachMenuBot req = new TLRPC.TLMessagesGetAttachMenuBot();
 			req.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-				if (response instanceof TLRPC.TL_attachMenuBotsBot) {
-					TLRPC.TL_attachMenuBot bot = ((TLRPC.TL_attachMenuBotsBot)response).bot;
+				if (response instanceof TLRPC.TLAttachMenuBotsBot) {
+					TLRPC.TLAttachMenuBot bot = ((TLRPC.TLAttachMenuBotsBot)response).bot;
 
 					boolean center = false;
-					TLRPC.TL_attachMenuBotIcon botIcon = MediaDataController.getPlaceholderStaticAttachMenuBotIcon(bot);
+					TLRPC.TLAttachMenuBotIcon botIcon = MediaDataController.getPlaceholderStaticAttachMenuBotIcon(bot);
 					if (botIcon == null) {
 						botIcon = MediaDataController.getStaticAttachMenuBotIcon(bot);
 						center = true;
@@ -777,8 +774,8 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 						setupFlickerParams(center);
 					}
 
-					if (settingsItem != null) {
-						settingsItem.setVisibility(bot.has_settings ? VISIBLE : GONE);
+					if (bot != null && settingsItem != null) {
+						settingsItem.setVisibility(bot.hasSettings ? VISIBLE : GONE);
 					}
 				}
 				else if (settingsItem != null) {
@@ -974,7 +971,7 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 					}
 
 					AtomicBoolean notifiedClose = new AtomicBoolean();
-					if (buttonsList.size() >= 1) {
+					if (!buttonsList.isEmpty()) {
 						PopupButton btn = buttonsList.get(0);
 						builder.setPositiveButton(btn.text, (dialog, which) -> {
 							dialog.dismiss();
@@ -1024,7 +1021,7 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 					});
 
 					currentDialog = builder.show();
-					if (buttonsList.size() >= 1) {
+					if (!buttonsList.isEmpty()) {
 						PopupButton btn = buttonsList.get(0);
 						if (btn.textColorKey != null) {
 							TextView textView = (TextView)currentDialog.getButton(AlertDialog.BUTTON_POSITIVE);
@@ -1223,37 +1220,6 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 				}
 				break;
 			}
-			case "web_app_open_invoice": {
-				try {
-					JSONObject jsonData = new JSONObject(eventData);
-					String slug = jsonData.optString("slug");
-
-					if (currentPaymentSlug != null) {
-						onInvoiceStatusUpdate(slug, "cancelled", true);
-						break;
-					}
-
-					currentPaymentSlug = slug;
-
-					TLRPC.TL_payments_getPaymentForm req = new TLRPC.TL_payments_getPaymentForm();
-					TLRPC.TL_inputInvoiceSlug invoiceSlug = new TLRPC.TL_inputInvoiceSlug();
-					invoiceSlug.slug = slug;
-					req.invoice = invoiceSlug;
-
-					ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-						if (error != null) {
-							onInvoiceStatusUpdate(slug, "failed");
-						}
-						else {
-							delegate.onWebAppOpenInvoice(slug, response);
-						}
-					}));
-				}
-				catch (JSONException e) {
-					FileLog.e(e);
-				}
-				break;
-			}
 			case "web_app_expand": {
 				delegate.onWebAppExpand();
 				break;
@@ -1381,14 +1347,6 @@ public class BotWebViewContainer extends FrameLayout implements NotificationCent
 		 * Called when WebView requests to expand viewport
 		 */
 		void onWebAppExpand();
-
-		/**
-		 * Called when web app attempts to open invoice
-		 *
-		 * @param slug     Invoice slug for the form
-		 * @param response Payment request response
-		 */
-		void onWebAppOpenInvoice(String slug, TLObject response);
 
 		/**
 		 * Setups main button

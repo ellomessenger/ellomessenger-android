@@ -48,8 +48,6 @@ uint32_t messengerPort = 0;
 std::string datacenterPublicKey;
 std::string serverPublicKey;
 unsigned long long serverPublicKeyFingerprint = 0LL;
-extern jclass jclass_ConnectionsManager;
-extern jmethodID jclass_ConnectionsManager_onConnectionRetriesDepleted;
 #endif
 
 static bool done = false;
@@ -691,7 +689,7 @@ void ConnectionsManager::onConnectionClosed(Connection *connection, int reason) 
         if (datacenter->getDatacenterId() == currentDatacenterId) {
             sendingPing = false;
 
-            if (!connection->isSuspended() && connection->canReconnect() && (proxyAddress.empty() || connection->hasTlsHashMismatch())) {
+            if (!connection->isSuspended() && (proxyAddress.empty() || connection->hasTlsHashMismatch())) {
                 if (reason == 2) {
                     disconnectTimeoutAmount += (int32_t) connection->getTimeout();
                 }
@@ -710,7 +708,7 @@ void ConnectionsManager::onConnectionClosed(Connection *connection, int reason) 
                 }
 
                 if (disconnectTimeoutAmount >= maxTimeout) {
-                    if (!connection->hasUsefulData() && connection->canReconnect()) {
+                    if (!connection->hasUsefulData()) {
                         if (LOGS_ENABLED) DEBUG_D("start requesting new address and port due to timeout reach");
 
                         requestingSecondAddressByTlsHashMismatch = connection->hasTlsHashMismatch();
@@ -1052,20 +1050,6 @@ bool ConnectionsManager::hasPendingRequestsForConnection(Connection *connection)
     }
     if (LOGS_ENABLED) DEBUG_E("connection(%p) return true", connection);
     return true;
-}
-
-std::vector<Request *> ConnectionsManager::getRequestsForConnection(Connection *connection) {
-    std::vector<Request *> requests;
-
-    for (auto &runningRequest: runningRequests) {
-        Request *request = runningRequest.get();
-
-        if (request->connectionToken == connection->getConnectionToken()) {
-            requests.push_back(request);
-        }
-    }
-
-    return requests;
 }
 
 TLObject *ConnectionsManager::getRequestWithMessageId(int64_t messageId) {
@@ -2546,15 +2530,21 @@ void ConnectionsManager::processRequestQueue(uint32_t connectionTypes, uint32_t 
                     }
                     allDc.push_back(datacenter.first);
                 }
-                uint8_t index;
-                RAND_bytes(&index, 1);
-                datacenterId = allDc[index % allDc.size()];
-                if (dynamic_cast<TL_help_getConfig *>(request->rawRequest)) {
-                    updatingDcStartTime = currentTime;
-                    request->datacenterId = datacenterId;
+                if (!allDc.empty()) {
+                    uint8_t index;
+                    RAND_bytes(&index, 1);
+                    datacenterId = allDc[index % allDc.size()];
+                    if (dynamic_cast<TL_help_getConfig *>(request->rawRequest)) {
+                        updatingDcStartTime = currentTime;
+                        request->datacenterId = datacenterId;
+                    }
+                    else {
+                        currentDatacenterId = datacenterId;
+                    }
                 }
                 else {
-                    currentDatacenterId = datacenterId;
+                    // No alternative datacenters available; keep current one to avoid division by zero
+                    // and allow the request to retry on the same DC.
                 }
             }
         }
@@ -3597,14 +3587,6 @@ void ConnectionsManager::resumeNetwork(bool partial) {
 
         if (!networkPaused) {
             for (auto &datacenter: datacenters) {
-                auto connections = datacenter.second->getAllConnections();
-
-                for (auto &connection: connections) {
-                    connection->resetAllRetries();
-                }
-            }
-
-            for (auto &datacenter: datacenters) {
                 if (datacenter.second->isHandshaking(false)) {
                     datacenter.second->createGenericConnection()->connect();
                 }
@@ -3616,7 +3598,7 @@ void ConnectionsManager::resumeNetwork(bool partial) {
     });
 }
 
-void ConnectionsManager::pauseNetwork(bool connectionsRetriesDepleted) {
+void ConnectionsManager::pauseNetwork() {
     if (lastPauseTime != 0) {
         return;
     }
@@ -3625,10 +3607,6 @@ void ConnectionsManager::pauseNetwork(bool connectionsRetriesDepleted) {
     lastSystemPauseTime = getCurrentTime();
 
     saveConfig();
-
-    if (connectionsRetriesDepleted) {
-        jniEnv[instanceNum]->CallStaticVoidMethod(jclass_ConnectionsManager, jclass_ConnectionsManager_onConnectionRetriesDepleted, instanceNum);
-    }
 }
 
 void ConnectionsManager::setNetworkAvailable(bool value, int32_t type, bool slow) {

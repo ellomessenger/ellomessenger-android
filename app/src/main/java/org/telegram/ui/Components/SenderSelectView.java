@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -23,10 +23,10 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserObject;
-import org.telegram.tgnet.tlrpc.ChatInvite;
-import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.ChatInvite;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.Theme;
 
 import androidx.annotation.NonNull;

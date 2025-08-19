@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -33,17 +33,19 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.TLRPC.TL_channels_checkUsername
-import org.telegram.tgnet.TLRPC.TL_channels_getAdminedPublicChannels
-import org.telegram.tgnet.TLRPC.TL_channels_updateUsername
-import org.telegram.tgnet.TLRPC.TL_chatInviteExported
-import org.telegram.tgnet.TLRPC.TL_inputChannelEmpty
-import org.telegram.tgnet.TLRPC.TL_messages_chats
-import org.telegram.tgnet.TLRPC.TL_messages_exportChatInvite
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.TLBoolTrue
+import org.telegram.tgnet.TLRPC.TLChannelsCheckUsername
+import org.telegram.tgnet.TLRPC.TLChannelsGetAdminedPublicChannels
+import org.telegram.tgnet.TLRPC.TLChannelsUpdateUsername
+import org.telegram.tgnet.TLRPC.TLChatInviteExported
+import org.telegram.tgnet.TLRPC.TLInputChannelEmpty
+import org.telegram.tgnet.TLRPC.TLMessagesChats
+import org.telegram.tgnet.TLRPC.TLMessagesExportChatInvite
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.link
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -64,7 +66,6 @@ import org.telegram.ui.Components.InviteLinkBottomSheet
 import org.telegram.ui.Components.JoinToSendSettingsView
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.LinkActionView
-import org.telegram.ui.Components.LinkActionView.LinkActionType
 import org.telegram.ui.Components.Premium.LimitReachedBottomSheet
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -116,7 +117,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 	private var checkRunnable: Runnable? = null
 	private var lastNameAvailable = false
 	private var loadingInvite = false
-	private var invite: TL_chatInviteExported? = null
+	private var invite: TLRPC.ExportedChatInvite? = null
 	private var ignoreTextChanges = false
 	private var inviteLinkBottomSheet: InviteLinkBottomSheet? = null
 
@@ -147,9 +148,9 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 		isSaveRestricted = currentChat!!.noforwards
 
 		if (isForcePublic && currentChat?.username.isNullOrEmpty() || isPrivate && currentChat?.creator == true) {
-			val req = TL_channels_checkUsername()
+			val req = TLChannelsCheckUsername()
 			req.username = "1"
-			req.channel = TL_inputChannelEmpty()
+			req.channel = TLInputChannelEmpty()
 
 			connectionsManager.sendRequest(req) { _, error ->
 				AndroidUtilities.runOnUIThread {
@@ -195,7 +196,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 			}
 		}
 
-		invite = info.exported_invite
+		invite = info.exportedInvite
 
 		permanentLinkView?.setLink(invite?.link)
 		permanentLinkView?.loadUsers(invite, chatId)
@@ -254,10 +255,10 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 			actionBar?.setTitle(context.getString(R.string.TypeLocationGroup))
 		}
 		else if (isChannel) {
-			actionBar?.setTitle(context.getString(R.string.ChannelSettingsTitle))
+			actionBar?.setTitle(context.getString(R.string.ChannelTypeHeader))
 		}
 		else {
-			actionBar?.setTitle(context.getString(R.string.GroupSettingsTitle))
+			actionBar?.setTitle(context.getString(R.string.GroupType))
 		}
 
 		linearLayoutTypeContainer = LinearLayout(context)
@@ -304,7 +305,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 
 		if (isChannel) {
 			if (ChatObject.isPaidChannel(currentChat)) {
-				radioButtonCell1?.setTextAndValue(if (ChatObject.isSubscriptionChannel(currentChat)) context.getString(R.string.subscription_channel) else context.getString(R.string.online_course), context.getString(R.string.info_settings_subscription_channel), divider = false, checked = true)
+				radioButtonCell1?.setTextAndValue(if (ChatObject.isSubscriptionChannel(currentChat)) context.getString(R.string.subscription_channel) else context.getString(R.string.masterclass), if (ChatObject.isMasterclass(currentChat)) context.getString(R.string.info_settings_masterclass) else context.getString(R.string.info_settings_subscription_channel), divider = false, checked = true)
 				radioButtonCell2?.gone()
 			}
 			else {
@@ -433,12 +434,12 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 
 		linkContainer?.addView(privateContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 
-		val type = if (ChatObject.isChannel(currentChat)) {
-			LinkActionType.CHANNEL
-		}
-		else {
-			LinkActionType.GROUP
-		}
+//		val type = if (ChatObject.isChannel(currentChat)) {
+//			LinkActionType.CHANNEL
+//		}
+//		else {
+//			LinkActionType.GROUP
+//		}
 
 		permanentLinkView = LinkActionView(context, this, null, true)
 
@@ -460,7 +461,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 			}
 
 			override fun showUsersForPermanentLink() {
-				inviteLinkBottomSheet = InviteLinkBottomSheet(context, invite, info, usersMap, this@ChatEditTypeActivity, chatId, true, ChatObject.isChannel(currentChat))
+				inviteLinkBottomSheet = InviteLinkBottomSheet(context, invite as? TLChatInviteExported, info, usersMap, this@ChatEditTypeActivity, chatId, true, ChatObject.isChannel(currentChat))
 				inviteLinkBottomSheet?.show()
 			}
 		}
@@ -510,7 +511,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 		linearLayout?.addView(manageLinksInfoCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 
 		joinContainer = JoinToSendSettingsView(context, currentChat)
-		joinContainer?.showJoinToSend(info != null && info?.linked_chat_id != 0L)
+		joinContainer?.showJoinToSend(info != null && info?.linkedChatId != 0L)
 
 		linearLayout?.addView(joinContainer)
 
@@ -585,7 +586,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 
 			if (chatFull.id == chatId) {
 				info = chatFull
-				invite = chatFull.exported_invite
+				invite = chatFull.exportedInvite
 				updatePrivatePublic()
 			}
 		}
@@ -595,8 +596,8 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 		info = chatFull
 
 		if (chatFull != null) {
-			if (chatFull.exported_invite != null) {
-				invite = chatFull.exported_invite
+			if (chatFull.exportedInvite != null) {
+				invite = chatFull.exportedInvite
 			}
 			else {
 				generateLink(false)
@@ -681,7 +682,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 
 		updatePrivatePublic()
 
-		val req = TL_channels_getAdminedPublicChannels()
+		val req = TLChannelsGetAdminedPublicChannels()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
@@ -696,7 +697,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 
 					administeredChannelCells.clear()
 
-					val res = response as TL_messages_chats
+					val res = response as TLMessagesChats
 
 					for (a in res.chats.indices) {
 						val administeredChannelCell = AdministeredChannelCell(parentActivity, false, 0) { view: View ->
@@ -716,12 +717,12 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 							builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
 
 							builder.setPositiveButton(parentActivity.getString(R.string.RevokeButton)) { _, _ ->
-								val req1 = TL_channels_updateUsername()
+								val req1 = TLChannelsUpdateUsername()
 								req1.channel = MessagesController.getInputChannel(channel)
 								req1.username = ""
 
 								connectionsManager.sendRequest(req1, { response1, _ ->
-									if (response1 is TL_boolTrue) {
+									if (response1 is TLBoolTrue) {
 										AndroidUtilities.runOnUIThread {
 											canCreatePublic = true
 
@@ -809,7 +810,13 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 			loadingAdministeredCell?.gone()
 
 			if (isChannel) {
-				typeInfoCell?.setText(if (isPrivate) context.getString(R.string.ChannelPrivateLinkHelp) else context.getString(R.string.ChannelUsernameHelp))
+				val description = if (ChatObject.isMasterclass(currentChat)) {
+					context.getString(R.string.masterclass_type_description)
+				}
+				else {
+					context.getString(R.string.ChannelUsernameHelp)
+				}
+				typeInfoCell?.setText(if (isPrivate) context.getString(R.string.ChannelPrivateLinkHelp) else description)
 				headerCell?.setText(if (isPrivate) context.getString(R.string.ChannelInviteLinkTitle) else context.getString(R.string.ChannelLinkTitle))
 			}
 			else {
@@ -844,7 +851,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 		usernameTextView?.clearFocus()
 
 		joinContainer?.gone()
-		joinContainer?.showJoinToSend(info != null && info?.linked_chat_id != 0L)
+		joinContainer?.showJoinToSend(info != null && info?.linkedChatId != 0L)
 
 		checkDoneButton()
 	}
@@ -941,7 +948,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 		lastCheckName = name
 
 		checkRunnable = Runnable {
-			val req = TL_channels_checkUsername()
+			val req = TLChannelsCheckUsername()
 			req.username = name
 			req.channel = messagesController.getInputChannel(chatId)
 
@@ -950,7 +957,7 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 					checkReqId = 0
 
 					if (lastCheckName != null && lastCheckName == name) {
-						if (error == null && response is TL_boolTrue) {
+						if (error == null && response is TLBoolTrue) {
 							checkTextView?.setText(LocaleController.formatString("LinkAvailable", R.string.LinkAvailable))
 							checkTextView?.setTextColor(context.getColor(R.color.green))
 							lastNameAvailable = true
@@ -981,16 +988,16 @@ class ChatEditTypeActivity(private var chatId: Long, private val isForcePublic: 
 	private fun generateLink(newRequest: Boolean) {
 		loadingInvite = true
 
-		val req = TL_messages_exportChatInvite()
-		req.legacy_revoke_permanent = true
+		val req = TLMessagesExportChatInvite()
+		req.legacyRevokePermanent = true
 		req.peer = messagesController.getInputPeer(-chatId)
 
-		val reqId = connectionsManager.sendRequest(req) { response, error ->
+		val reqId = connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (error == null) {
-					invite = response as TL_chatInviteExported?
+				if (response is TLChatInviteExported) {
+					invite = response
 
-					info?.exported_invite = invite
+					info?.exportedInvite = invite
 
 					if (newRequest) {
 						val parentActivity = parentActivity ?: return@runOnUIThread

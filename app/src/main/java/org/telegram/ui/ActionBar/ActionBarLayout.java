@@ -497,7 +497,7 @@ public class ActionBarLayout extends FrameLayout {
 		layoutParams.topMargin = layoutParams.rightMargin = layoutParams.leftMargin = 0;
 
 		if (bottomNavigationPanel != null && lastFragment.shouldShowBottomNavigationPanel()) {
-			layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.height);
+			layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.HEIGHT);
 
 			ViewGroup panelParent = (ViewGroup)bottomNavigationPanel.getParent();
 
@@ -1017,7 +1017,7 @@ public class ActionBarLayout extends FrameLayout {
 			layoutParams.topMargin = layoutParams.rightMargin = layoutParams.leftMargin = 0;
 
 			if (bottomNavigationPanel != null && fragment.shouldShowBottomNavigationPanel()) {
-				layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.height);
+				layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.HEIGHT);
 
 				ViewGroup panelParent = (ViewGroup)bottomNavigationPanel.getParent();
 
@@ -1442,7 +1442,7 @@ public class ActionBarLayout extends FrameLayout {
 				layoutParams.topMargin = layoutParams.rightMargin = layoutParams.leftMargin = 0;
 
 				if (bottomNavigationPanel != null && previousFragment.shouldShowBottomNavigationPanel()) {
-					layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.height);
+					layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.HEIGHT);
 
 					ViewGroup panelParent = (ViewGroup)bottomNavigationPanel.getParent();
 
@@ -1648,7 +1648,7 @@ public class ActionBarLayout extends FrameLayout {
 		layoutParams.topMargin = layoutParams.rightMargin = layoutParams.leftMargin = 0;
 
 		if (bottomNavigationPanel != null && previousFragment.shouldShowBottomNavigationPanel()) {
-			layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.height);
+			layoutParams.bottomMargin = AndroidUtilities.dp(BottomNavigationPanel.HEIGHT);
 
 			ViewGroup panelParent = (ViewGroup)bottomNavigationPanel.getParent();
 
@@ -1726,6 +1726,42 @@ public class ActionBarLayout extends FrameLayout {
 			BaseFragment fragment = fragmentsStack.get(startIndex + 1);
 			removeFragmentFromStackInternal(fragment);
 		}
+	}
+
+	@Nullable
+	public BaseFragment getTopFragmentOfClass(Class<? extends BaseFragment> fragment) {
+		if (fragmentsStack.isEmpty()) {
+			return null;
+		}
+
+		for (int i = fragmentsStack.size() - 1; i >= 0; i--) {
+			BaseFragment baseFragment = fragmentsStack.get(i);
+
+			if (baseFragment.getClass() == fragment) {
+				return baseFragment;
+			}
+		}
+
+		return null;
+	}
+
+	@Nullable
+	public BaseFragment popToTopFragmentOfClass(Class<? extends BaseFragment> fragment) {
+		if (fragmentsStack.isEmpty()) {
+			return null;
+		}
+
+		while (!fragmentsStack.isEmpty()) {
+			BaseFragment baseFragment = fragmentsStack.get(fragmentsStack.size() - 1);
+
+			if (baseFragment.getClass() == fragment) {
+				return baseFragment;
+			}
+
+			closeLastFragment(false, true);
+		}
+
+		return null;
 	}
 
 	/**

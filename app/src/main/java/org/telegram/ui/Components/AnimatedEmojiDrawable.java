@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.graphics.Canvas;
@@ -36,12 +44,13 @@ import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.NativeByteBuffer;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.Vector;
+import org.telegram.tgnet.Vector;
 import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -50,7 +59,6 @@ import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 
 public class AnimatedEmojiDrawable extends Drawable {
-
 	public static final int CACHE_TYPE_MESSAGES = 0;
 	public static final int CACHE_TYPE_MESSAGES_LARGE = 1;
 	public static final int CACHE_TYPE_KEYBOARD = 2;
@@ -61,7 +69,6 @@ public class AnimatedEmojiDrawable extends Drawable {
 	public static final int CACHE_TYPE_EMOJI_STATUS = 7;
 	public static final int STANDARD_LOTTIE_FRAME = 8;
 	public static final int CACHE_TYPE_ALERT_EMOJI_STATUS = 9;
-
 	private static HashMap<Integer, HashMap<Long, AnimatedEmojiDrawable>> globalEmojiCache;
 
 	@NonNull
@@ -207,7 +214,7 @@ public class AnimatedEmojiDrawable extends Drawable {
 					while (cursor.next()) {
 						NativeByteBuffer byteBuffer = cursor.byteBufferValue(0);
 						try {
-							TLRPC.Document document = TLRPC.Document.TLdeserialize(byteBuffer, byteBuffer.readInt32(true), true);
+							TLRPC.Document document = TLRPC.Document.deserialize(byteBuffer, byteBuffer.readInt32(true), true);
 							if (document != null && document.id != 0) {
 								documents.add(document);
 								loadFromServerIds.remove(document.id);
@@ -235,18 +242,17 @@ public class AnimatedEmojiDrawable extends Drawable {
 			});
 		}
 
-		private void loadFromServer(ArrayList<Long> loadFromServerIds) {
-			final TLRPC.TL_messages_getCustomEmojiDocuments req = new TLRPC.TL_messages_getCustomEmojiDocuments();
-			req.document_id = loadFromServerIds;
+		private void loadFromServer(List<Long> loadFromServerIds) {
+			final var req = new TLRPC.TLMessagesGetCustomEmojiDocuments();
+			req.documentId.addAll(loadFromServerIds);
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
 				HashSet<Long> loadedFromServer = new HashSet<>(loadFromServerIds);
 				if (res instanceof Vector) {
-					ArrayList<Object> objects = ((Vector)res).objects;
+					var objects = ((Vector)res).objects;
 					putToStorage(objects);
 					processDocuments(objects);
 					for (int i = 0; i < objects.size(); i++) {
-						if (objects.get(i) instanceof TLRPC.Document) {
-							TLRPC.Document document = (TLRPC.Document)objects.get(i);
+						if (objects.get(i) instanceof TLRPC.Document document) {
 							loadedFromServer.remove(document.id);
 						}
 					}
@@ -258,14 +264,13 @@ public class AnimatedEmojiDrawable extends Drawable {
 			}));
 		}
 
-		private void putToStorage(ArrayList<Object> objects) {
+		private void putToStorage(List<Object> objects) {
 			MessagesStorage.getInstance(currentAccount).getStorageQueue().postRunnable(() -> {
 				SQLiteDatabase database = MessagesStorage.getInstance(currentAccount).getDatabase();
 				try {
 					SQLitePreparedStatement state = database.executeFast("REPLACE INTO animated_emoji VALUES(?, ?)");
 					for (int i = 0; i < objects.size(); i++) {
-						if (objects.get(i) instanceof TLRPC.Document) {
-							TLRPC.Document document = (TLRPC.Document)objects.get(i);
+						if (objects.get(i) instanceof TLRPC.Document document) {
 							NativeByteBuffer data = null;
 							try {
 								data = new NativeByteBuffer(document.getObjectSize());
@@ -276,7 +281,7 @@ public class AnimatedEmojiDrawable extends Drawable {
 								state.step();
 							}
 							catch (Exception e) {
-								e.printStackTrace();
+								FileLog.e(e);
 							}
 							if (data != null) {
 								data.reuse();
@@ -291,11 +296,10 @@ public class AnimatedEmojiDrawable extends Drawable {
 			});
 		}
 
-		public void processDocuments(ArrayList<?> documents) {
+		public void processDocuments(List<?> documents) {
 			checkThread();
 			for (int i = 0; i < documents.size(); ++i) {
-				if (documents.get(i) instanceof TLRPC.Document) {
-					TLRPC.Document document = (TLRPC.Document)documents.get(i);
+				if (documents.get(i) instanceof TLRPC.Document document) {
 					if (emojiDocumentsCache == null) {
 						emojiDocumentsCache = new HashMap<>();
 					}
@@ -428,37 +432,42 @@ public class AnimatedEmojiDrawable extends Drawable {
 			filter += "firstframe";
 		}
 
-		ImageLocation mediaLocation;
-		String mediaFilter;
+		ImageLocation mediaLocation = null;
+		String mediaFilter = null;
 		Drawable thumbDrawable = null;
-		TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90);
-		if ("video/webm".equals(document.mime_type)) {
-			mediaLocation = ImageLocation.getForDocument(document);
-			mediaFilter = filter + "_" + ImageLoader.AUTOPLAY_FILTER;
-			SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(document.thumbs, ResourcesCompat.getColor(ApplicationLoader.applicationContext.getResources(), R.color.dark_gray, null), 0.2f);
-			thumbDrawable = svgThumb;
-		}
-		else if ("application/x-tgsticker".equals(document.mime_type)) {
-			String probableCacheKey = (cacheType != 0 ? cacheType + "_" : "") + documentId + "@" + filter;
-			if (SharedConfig.getDevicePerformanceClass() != SharedConfig.PERFORMANCE_CLASS_LOW || (cacheType == CACHE_TYPE_KEYBOARD || !ImageLoader.getInstance().hasLottieMemCache(probableCacheKey))) {
-				SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(document.thumbs, ResourcesCompat.getColor(ApplicationLoader.applicationContext.getResources(), R.color.dark_gray, null), 0.2f);
+
+		TLRPC.PhotoSize thumb = null;
+
+		if (document instanceof TLRPC.TLDocument doc) {
+			thumb = FileLoader.getClosestPhotoSizeWithSize(doc.thumbs, 90);
+
+			if ("video/webm".equals(doc.mimeType)) {
+				mediaLocation = ImageLocation.getForDocument(document);
+				mediaFilter = filter + "_" + ImageLoader.AUTOPLAY_FILTER;
+				thumbDrawable = DocumentObject.getSvgThumb(doc.thumbs, ResourcesCompat.getColor(ApplicationLoader.applicationContext.getResources(), R.color.dark_gray, null), 0.2f);
+			}
+			else if ("application/x-tgsticker".equals(doc.mimeType)) {
+				String probableCacheKey = (cacheType != 0 ? cacheType + "_" : "") + documentId + "@" + filter;
+				if (SharedConfig.getDevicePerformanceClass() != SharedConfig.PERFORMANCE_CLASS_LOW || (cacheType == CACHE_TYPE_KEYBOARD || !ImageLoader.getInstance().hasLottieMemCache(probableCacheKey))) {
+					SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(doc.thumbs, ResourcesCompat.getColor(ApplicationLoader.applicationContext.getResources(), R.color.dark_gray, null), 0.2f);
+					if (svgThumb != null && MessageObject.isAnimatedStickerDocument(document, true)) {
+						svgThumb.overrideWidthAndHeight(512, 512);
+					}
+					thumbDrawable = svgThumb;
+				}
+				mediaLocation = ImageLocation.getForDocument(document);
+				mediaFilter = filter;
+			}
+			else {
+				SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(doc.thumbs, ResourcesCompat.getColor(ApplicationLoader.applicationContext.getResources(), R.color.dark_gray, null), 0.2f);
 				if (svgThumb != null && MessageObject.isAnimatedStickerDocument(document, true)) {
 					svgThumb.overrideWidthAndHeight(512, 512);
 				}
 				thumbDrawable = svgThumb;
+				mediaFilter = filter;
 			}
-			mediaLocation = ImageLocation.getForDocument(document);
-			mediaFilter = filter;
 		}
-		else {
-			SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(document.thumbs, ResourcesCompat.getColor(ApplicationLoader.applicationContext.getResources(), R.color.dark_gray, null), 0.2f);
-			if (svgThumb != null && MessageObject.isAnimatedStickerDocument(document, true)) {
-				svgThumb.overrideWidthAndHeight(512, 512);
-			}
-			thumbDrawable = svgThumb;
-			mediaLocation = null;
-			mediaFilter = filter;
-		}
+
 		if (onlyStaticPreview) {
 			mediaLocation = null;
 		}
@@ -639,7 +648,7 @@ public class AnimatedEmojiDrawable extends Drawable {
 		if (imageReceiver == null) {
 			return;
 		}
-		boolean attach = (views != null && views.size() > 0) || (holders != null && holders.size() > 0);
+		boolean attach = (views != null && !views.isEmpty()) || (holders != null && !holders.isEmpty());
 		if (attach != attached) {
 			attached = attach;
 			if (attached) {
@@ -666,7 +675,7 @@ public class AnimatedEmojiDrawable extends Drawable {
 		}
 		if (document != null) {
 			TLRPC.InputStickerSet set = MessageObject.getInputStickerSet(document);
-			return canOverrideColorCached = (set instanceof TLRPC.TL_inputStickerSetEmojiDefaultStatuses || set instanceof TLRPC.TL_inputStickerSetID && (set.id == 773947703670341676L || set.id == 2964141614563343L));
+			return canOverrideColorCached = (set instanceof TLRPC.TLInputStickerSetEmojiDefaultStatuses || set instanceof TLRPC.TLInputStickerSetID setId && (setId.id == 773947703670341676L || setId.id == 2964141614563343L));
 		}
 		return false;
 	}
@@ -813,8 +822,7 @@ public class AnimatedEmojiDrawable extends Drawable {
 		}
 
 		public void play() {
-			if (getDrawable() instanceof AnimatedEmojiDrawable) {
-				AnimatedEmojiDrawable drawable = (AnimatedEmojiDrawable)getDrawable();
+			if (getDrawable() instanceof AnimatedEmojiDrawable drawable) {
 				ImageReceiver imageReceiver = drawable.getImageReceiver();
 				if (imageReceiver != null) {
 					if (drawable.cacheType == CACHE_TYPE_EMOJI_STATUS || drawable.cacheType == CACHE_TYPE_ALERT_EMOJI_STATUS) {

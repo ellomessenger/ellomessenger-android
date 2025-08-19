@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.messenger;
 
 import android.content.BroadcastReceiver;
@@ -13,16 +13,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.widget.Toast;
 
-import org.telegram.messenger.R;
-
 public class CustomTabsCopyReceiver extends BroadcastReceiver {
-
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        String url = intent.getDataString();
-        if (url != null) {
-            AndroidUtilities.addToClipboard(url);
-            Toast.makeText(context, LocaleController.getString("LinkCopied", R.string.LinkCopied), Toast.LENGTH_SHORT).show();
-        }
-    }
+	@Override
+	public void onReceive(Context context, Intent intent) {
+		String url = intent.getDataString();
+		if (url != null) {
+			AndroidUtilities.addToClipboard(url);
+			Toast.makeText(context, context.getString(R.string.LinkCopied), Toast.LENGTH_SHORT).show();
+		}
+	}
 }

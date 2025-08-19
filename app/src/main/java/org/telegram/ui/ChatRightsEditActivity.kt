@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -44,15 +44,16 @@ import org.telegram.messenger.utils.vibrate
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.InputCheckPasswordSRP
-import org.telegram.tgnet.TLRPC.TL_account_getPassword
-import org.telegram.tgnet.TLRPC.TL_channels_editCreator
-import org.telegram.tgnet.TLRPC.TL_chatAdminRights
-import org.telegram.tgnet.TLRPC.TL_inputChannel
-import org.telegram.tgnet.TLRPC.TL_inputChannelEmpty
-import org.telegram.tgnet.TLRPC.TL_inputCheckPasswordEmpty
-import org.telegram.tgnet.TLRPC.account_Password
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.TLAccountGetPassword
+import org.telegram.tgnet.TLRPC.TLAccountPassword
+import org.telegram.tgnet.TLRPC.TLChannelsEditCreator
+import org.telegram.tgnet.TLRPC.TLChatAdminRights
+import org.telegram.tgnet.TLRPC.TLChatBannedRights
+import org.telegram.tgnet.TLRPC.TLInputChannel
+import org.telegram.tgnet.TLRPC.TLInputChannelEmpty
+import org.telegram.tgnet.TLRPC.TLInputCheckPasswordEmpty
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -82,7 +83,7 @@ import kotlin.math.abs
 import kotlin.math.min
 
 @SuppressLint("NotifyDataSetChanged")
-open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL_chatAdminRights?, rightsBannedDefault: TL_chatBannedRights?, rightsBanned: TL_chatBannedRights?, rank: String?, type: Int, edit: Boolean, addingNew: Boolean, addingNewBotHash: String?) : BaseFragment() {
+open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TLChatAdminRights?, rightsBannedDefault: TLChatBannedRights?, rightsBanned: TLChatBannedRights?, rank: String?, type: Int, edit: Boolean, addingNew: Boolean, addingNewBotHash: String?) : BaseFragment() {
 	private val currentUser: User?
 	private val currentType: Int
 	private val canEdit: Boolean
@@ -101,10 +102,10 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 	private var asAdminT = 0f
 	private var asAdmin = false
 	private var initialAsAdmin = false
-	private var adminRights: TL_chatAdminRights? = null
-	private var myAdminRights: TL_chatAdminRights? = null
-	private var bannedRights: TL_chatBannedRights? = null
-	private var defaultBannedRights: TL_chatBannedRights? = null
+	private var adminRights: TLChatAdminRights? = null
+	private var myAdminRights: TLChatAdminRights? = null
+	private var bannedRights: TLChatBannedRights? = null
+	private var defaultBannedRights: TLChatBannedRights? = null
 	private var currentBannedRights = ""
 	private var currentRank: String?
 	private var rowCount = 0
@@ -163,7 +164,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 		currentChat?.let {
 			isChannel = ChatObject.isChannel(it) && !it.megagroup
-			myAdminRights = it.admin_rights
+			myAdminRights = it.adminRights
 		}
 
 		if (myAdminRights == null) {
@@ -175,22 +176,22 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 				val userFull = messagesController.getUserFull(userId)
 
 				if (userFull != null) {
-					val botDefaultRights = if (isChannel) userFull.bot_broadcast_admin_rights else userFull.bot_group_admin_rights
+					val botDefaultRights = if (isChannel) userFull.botBroadcastAdminRights else userFull.botGroupAdminRights
 
 					if (botDefaultRights != null) {
 						if (rightsAdmin == null) {
 							rightsAdmin = botDefaultRights
 						}
 						else {
-							rightsAdmin.ban_users = rightsAdmin.ban_users || botDefaultRights.ban_users
-							rightsAdmin.add_admins = rightsAdmin.add_admins || botDefaultRights.add_admins
-							rightsAdmin.post_messages = rightsAdmin.post_messages || botDefaultRights.post_messages
-							rightsAdmin.pin_messages = rightsAdmin.pin_messages || botDefaultRights.pin_messages
-							rightsAdmin.delete_messages = rightsAdmin.delete_messages || botDefaultRights.delete_messages
-							rightsAdmin.change_info = rightsAdmin.change_info || botDefaultRights.change_info
+							rightsAdmin.banUsers = rightsAdmin.banUsers || botDefaultRights.banUsers
+							rightsAdmin.addAdmins = rightsAdmin.addAdmins || botDefaultRights.addAdmins
+							rightsAdmin.postMessages = rightsAdmin.postMessages || botDefaultRights.postMessages
+							rightsAdmin.pinMessages = rightsAdmin.pinMessages || botDefaultRights.pinMessages
+							rightsAdmin.deleteMessages = rightsAdmin.deleteMessages || botDefaultRights.deleteMessages
+							rightsAdmin.changeInfo = rightsAdmin.changeInfo || botDefaultRights.changeInfo
 							rightsAdmin.anonymous = rightsAdmin.anonymous || botDefaultRights.anonymous
-							rightsAdmin.edit_messages = rightsAdmin.edit_messages || botDefaultRights.edit_messages
-							rightsAdmin.manage_call = rightsAdmin.manage_call || botDefaultRights.manage_call
+							rightsAdmin.editMessages = rightsAdmin.editMessages || botDefaultRights.editMessages
+							rightsAdmin.manageCall = rightsAdmin.manageCall || botDefaultRights.manageCall
 							rightsAdmin.other = rightsAdmin.other || botDefaultRights.other
 						}
 					}
@@ -207,15 +208,15 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 					initialIsSet = false
 				}
 				else {
-					adminRights = TL_chatAdminRights()
-					adminRights?.change_info = myAdminRights!!.change_info
-					adminRights?.post_messages = myAdminRights!!.post_messages
-					adminRights?.edit_messages = myAdminRights!!.edit_messages
-					adminRights?.delete_messages = myAdminRights!!.delete_messages
-					adminRights?.manage_call = myAdminRights!!.manage_call
-					adminRights?.ban_users = myAdminRights!!.ban_users
-					adminRights?.invite_users = myAdminRights!!.invite_users
-					adminRights?.pin_messages = myAdminRights!!.pin_messages
+					adminRights = TLChatAdminRights()
+					adminRights?.changeInfo = myAdminRights!!.changeInfo
+					adminRights?.postMessages = myAdminRights!!.postMessages
+					adminRights?.editMessages = myAdminRights!!.editMessages
+					adminRights?.deleteMessages = myAdminRights!!.deleteMessages
+					adminRights?.manageCall = myAdminRights!!.manageCall
+					adminRights?.banUsers = myAdminRights!!.banUsers
+					adminRights?.inviteUsers = myAdminRights!!.inviteUsers
+					adminRights?.pinMessages = myAdminRights!!.pinMessages
 					adminRights?.other = myAdminRights!!.other
 
 					initialIsSet = false
@@ -224,20 +225,20 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 			else {
 				initialAsAdmin = true
 
-				adminRights = TL_chatAdminRights()
-				adminRights?.change_info = rightsAdmin.change_info
-				adminRights?.post_messages = rightsAdmin.post_messages
-				adminRights?.edit_messages = rightsAdmin.edit_messages
-				adminRights?.delete_messages = rightsAdmin.delete_messages
-				adminRights?.manage_call = rightsAdmin.manage_call
-				adminRights?.ban_users = rightsAdmin.ban_users
-				adminRights?.invite_users = rightsAdmin.invite_users
-				adminRights?.pin_messages = rightsAdmin.pin_messages
-				adminRights?.add_admins = rightsAdmin.add_admins
+				adminRights = TLChatAdminRights()
+				adminRights?.changeInfo = rightsAdmin.changeInfo
+				adminRights?.postMessages = rightsAdmin.postMessages
+				adminRights?.editMessages = rightsAdmin.editMessages
+				adminRights?.deleteMessages = rightsAdmin.deleteMessages
+				adminRights?.manageCall = rightsAdmin.manageCall
+				adminRights?.banUsers = rightsAdmin.banUsers
+				adminRights?.inviteUsers = rightsAdmin.inviteUsers
+				adminRights?.pinMessages = rightsAdmin.pinMessages
+				adminRights?.addAdmins = rightsAdmin.addAdmins
 				adminRights?.anonymous = rightsAdmin.anonymous
 				adminRights?.other = rightsAdmin.other
 
-				initialIsSet = adminRights!!.change_info || adminRights!!.post_messages || adminRights!!.edit_messages || adminRights!!.delete_messages || adminRights!!.ban_users || adminRights!!.invite_users || adminRights!!.pin_messages || adminRights!!.add_admins || adminRights!!.manage_call || adminRights!!.anonymous || adminRights!!.other
+				initialIsSet = adminRights!!.changeInfo || adminRights!!.postMessages || adminRights!!.editMessages || adminRights!!.deleteMessages || adminRights!!.banUsers || adminRights!!.inviteUsers || adminRights!!.pinMessages || adminRights!!.addAdmins || adminRights!!.manageCall || adminRights!!.anonymous || adminRights!!.other
 
 				if (type == TYPE_ADD_BOT) {
 					asAdmin = isChannel || initialIsSet
@@ -247,134 +248,134 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 			}
 
 			currentChat?.let {
-				defaultBannedRights = it.default_banned_rights
+				defaultBannedRights = it.defaultBannedRights
 			}
 
 			if (defaultBannedRights == null) {
-				defaultBannedRights = TL_chatBannedRights()
-				defaultBannedRights?.pin_messages = true
-				defaultBannedRights?.change_info = defaultBannedRights!!.pin_messages
-				defaultBannedRights?.invite_users = defaultBannedRights!!.change_info
-				defaultBannedRights?.send_polls = defaultBannedRights!!.invite_users
-				defaultBannedRights?.send_inline = defaultBannedRights!!.send_polls
-				defaultBannedRights?.send_games = defaultBannedRights!!.send_inline
-				defaultBannedRights?.send_gifs = defaultBannedRights!!.send_games
-				defaultBannedRights?.send_stickers = defaultBannedRights!!.send_gifs
-				defaultBannedRights?.embed_links = defaultBannedRights!!.send_stickers
-				defaultBannedRights?.send_messages = defaultBannedRights!!.embed_links
-				defaultBannedRights?.send_media = defaultBannedRights!!.send_messages
-				defaultBannedRights?.view_messages = defaultBannedRights!!.send_media
+				defaultBannedRights = TLChatBannedRights()
+				defaultBannedRights?.pinMessages = true
+				defaultBannedRights?.changeInfo = defaultBannedRights!!.pinMessages
+				defaultBannedRights?.inviteUsers = defaultBannedRights!!.changeInfo
+				defaultBannedRights?.sendPolls = defaultBannedRights!!.inviteUsers
+				defaultBannedRights?.sendInline = defaultBannedRights!!.sendPolls
+				defaultBannedRights?.sendGames = defaultBannedRights!!.sendInline
+				defaultBannedRights?.sendGifs = defaultBannedRights!!.sendGames
+				defaultBannedRights?.sendStickers = defaultBannedRights!!.sendGifs
+				defaultBannedRights?.embedLinks = defaultBannedRights!!.sendStickers
+				defaultBannedRights?.sendMessages = defaultBannedRights!!.embedLinks
+				defaultBannedRights?.sendMedia = defaultBannedRights!!.sendMessages
+				defaultBannedRights?.viewMessages = defaultBannedRights!!.sendMedia
 			}
 
-			if (defaultBannedRights?.change_info != true) {
-				adminRights?.change_info = true
+			if (defaultBannedRights?.changeInfo != true) {
+				adminRights?.changeInfo = true
 			}
 
-			if (defaultBannedRights?.pin_messages != true) {
-				adminRights?.pin_messages = true
+			if (defaultBannedRights?.pinMessages != true) {
+				adminRights?.pinMessages = true
 			}
 		}
 		else if (type == TYPE_BANNED) {
 			defaultBannedRights = rightsBannedDefault
 
 			if (defaultBannedRights == null) {
-				defaultBannedRights = TL_chatBannedRights()
-				defaultBannedRights?.pin_messages = false
-				defaultBannedRights?.change_info = defaultBannedRights!!.pin_messages
-				defaultBannedRights?.invite_users = defaultBannedRights!!.change_info
-				defaultBannedRights?.send_polls = defaultBannedRights!!.invite_users
-				defaultBannedRights?.send_inline = defaultBannedRights!!.send_polls
-				defaultBannedRights?.send_games = defaultBannedRights!!.send_inline
-				defaultBannedRights?.send_gifs = defaultBannedRights!!.send_games
-				defaultBannedRights?.send_stickers = defaultBannedRights!!.send_gifs
-				defaultBannedRights?.embed_links = defaultBannedRights!!.send_stickers
-				defaultBannedRights?.send_messages = defaultBannedRights!!.embed_links
-				defaultBannedRights?.send_media = defaultBannedRights!!.send_messages
-				defaultBannedRights?.view_messages = defaultBannedRights!!.send_media
+				defaultBannedRights = TLChatBannedRights()
+				defaultBannedRights?.pinMessages = false
+				defaultBannedRights?.changeInfo = defaultBannedRights!!.pinMessages
+				defaultBannedRights?.inviteUsers = defaultBannedRights!!.changeInfo
+				defaultBannedRights?.sendPolls = defaultBannedRights!!.inviteUsers
+				defaultBannedRights?.sendInline = defaultBannedRights!!.sendPolls
+				defaultBannedRights?.sendGames = defaultBannedRights!!.sendInline
+				defaultBannedRights?.sendGifs = defaultBannedRights!!.sendGames
+				defaultBannedRights?.sendStickers = defaultBannedRights!!.sendGifs
+				defaultBannedRights?.embedLinks = defaultBannedRights!!.sendStickers
+				defaultBannedRights?.sendMessages = defaultBannedRights!!.embedLinks
+				defaultBannedRights?.sendMedia = defaultBannedRights!!.sendMessages
+				defaultBannedRights?.viewMessages = defaultBannedRights!!.sendMedia
 			}
 
-			bannedRights = TL_chatBannedRights()
+			bannedRights = TLChatBannedRights()
 
 			if (rightsBanned == null) {
-				bannedRights!!.pin_messages = false
-				bannedRights!!.change_info = bannedRights!!.pin_messages
-				bannedRights!!.invite_users = bannedRights!!.change_info
-				bannedRights!!.send_polls = bannedRights!!.invite_users
-				bannedRights!!.send_inline = bannedRights!!.send_polls
-				bannedRights!!.send_games = bannedRights!!.send_inline
-				bannedRights!!.send_gifs = bannedRights!!.send_games
-				bannedRights!!.send_stickers = bannedRights!!.send_gifs
-				bannedRights!!.embed_links = bannedRights!!.send_stickers
-				bannedRights!!.send_messages = bannedRights!!.embed_links
-				bannedRights!!.send_media = bannedRights!!.send_messages
-				bannedRights!!.view_messages = bannedRights!!.send_media
+				bannedRights!!.pinMessages = false
+				bannedRights!!.changeInfo = bannedRights!!.pinMessages
+				bannedRights!!.inviteUsers = bannedRights!!.changeInfo
+				bannedRights!!.sendPolls = bannedRights!!.inviteUsers
+				bannedRights!!.sendInline = bannedRights!!.sendPolls
+				bannedRights!!.sendGames = bannedRights!!.sendInline
+				bannedRights!!.sendGifs = bannedRights!!.sendGames
+				bannedRights!!.sendStickers = bannedRights!!.sendGifs
+				bannedRights!!.embedLinks = bannedRights!!.sendStickers
+				bannedRights!!.sendMessages = bannedRights!!.embedLinks
+				bannedRights!!.sendMedia = bannedRights!!.sendMessages
+				bannedRights!!.viewMessages = bannedRights!!.sendMedia
 			}
 			else {
-				bannedRights!!.view_messages = rightsBanned.view_messages
-				bannedRights!!.send_messages = rightsBanned.send_messages
-				bannedRights!!.send_media = rightsBanned.send_media
-				bannedRights!!.send_stickers = rightsBanned.send_stickers
-				bannedRights!!.send_gifs = rightsBanned.send_gifs
-				bannedRights!!.send_games = rightsBanned.send_games
-				bannedRights!!.send_inline = rightsBanned.send_inline
-				bannedRights!!.embed_links = rightsBanned.embed_links
-				bannedRights!!.send_polls = rightsBanned.send_polls
-				bannedRights!!.invite_users = rightsBanned.invite_users
-				bannedRights!!.change_info = rightsBanned.change_info
-				bannedRights!!.pin_messages = rightsBanned.pin_messages
-				bannedRights!!.until_date = rightsBanned.until_date
+				bannedRights!!.viewMessages = rightsBanned.viewMessages
+				bannedRights!!.sendMessages = rightsBanned.sendMessages
+				bannedRights!!.sendMedia = rightsBanned.sendMedia
+				bannedRights!!.sendStickers = rightsBanned.sendStickers
+				bannedRights!!.sendGifs = rightsBanned.sendGifs
+				bannedRights!!.sendGames = rightsBanned.sendGames
+				bannedRights!!.sendInline = rightsBanned.sendInline
+				bannedRights!!.embedLinks = rightsBanned.embedLinks
+				bannedRights!!.sendPolls = rightsBanned.sendPolls
+				bannedRights!!.inviteUsers = rightsBanned.inviteUsers
+				bannedRights!!.changeInfo = rightsBanned.changeInfo
+				bannedRights!!.pinMessages = rightsBanned.pinMessages
+				bannedRights!!.untilDate = rightsBanned.untilDate
 			}
 
-			if (defaultBannedRights!!.view_messages) {
-				bannedRights!!.view_messages = true
+			if (defaultBannedRights!!.viewMessages) {
+				bannedRights!!.viewMessages = true
 			}
 
-			if (defaultBannedRights!!.send_messages) {
-				bannedRights!!.send_messages = true
+			if (defaultBannedRights!!.sendMessages) {
+				bannedRights!!.sendMessages = true
 			}
 
-			if (defaultBannedRights!!.send_media) {
-				bannedRights!!.send_media = true
+			if (defaultBannedRights!!.sendMedia) {
+				bannedRights!!.sendMedia = true
 			}
 
-			if (defaultBannedRights!!.send_stickers) {
-				bannedRights!!.send_stickers = true
+			if (defaultBannedRights!!.sendStickers) {
+				bannedRights!!.sendStickers = true
 			}
 
-			if (defaultBannedRights!!.send_gifs) {
-				bannedRights!!.send_gifs = true
+			if (defaultBannedRights!!.sendGifs) {
+				bannedRights!!.sendGifs = true
 			}
 
-			if (defaultBannedRights!!.send_games) {
-				bannedRights!!.send_games = true
+			if (defaultBannedRights!!.sendGames) {
+				bannedRights!!.sendGames = true
 			}
 
-			if (defaultBannedRights!!.send_inline) {
-				bannedRights!!.send_inline = true
+			if (defaultBannedRights!!.sendInline) {
+				bannedRights!!.sendInline = true
 			}
 
-			if (defaultBannedRights!!.embed_links) {
-				bannedRights!!.embed_links = true
+			if (defaultBannedRights!!.embedLinks) {
+				bannedRights!!.embedLinks = true
 			}
 
-			if (defaultBannedRights!!.send_polls) {
-				bannedRights!!.send_polls = true
+			if (defaultBannedRights!!.sendPolls) {
+				bannedRights!!.sendPolls = true
 			}
 
-			if (defaultBannedRights!!.invite_users) {
-				bannedRights!!.invite_users = true
+			if (defaultBannedRights!!.inviteUsers) {
+				bannedRights!!.inviteUsers = true
 			}
 
-			if (defaultBannedRights!!.change_info) {
-				bannedRights!!.change_info = true
+			if (defaultBannedRights!!.changeInfo) {
+				bannedRights!!.changeInfo = true
 			}
 
-			if (defaultBannedRights!!.pin_messages) {
-				bannedRights!!.pin_messages = true
+			if (defaultBannedRights!!.pinMessages) {
+				bannedRights!!.pinMessages = true
 			}
 
 			currentBannedRights = ChatObject.getBannedRightsString(bannedRights)
-			initialIsSet = rightsBanned == null || !rightsBanned.view_messages
+			initialIsSet = rightsBanned == null || !rightsBanned.viewMessages
 		}
 
 		updateRows(false)
@@ -517,25 +518,25 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 			}
 			else if (position == removeAdminRow) {
 				if (currentType == TYPE_ADMIN) {
-					messagesController.setUserAdminRole(chatId, currentUser, TL_chatAdminRights(), currentRank, isChannel, getFragmentForAlert(0), isAddingNew, false, null, null)
+					messagesController.setUserAdminRole(chatId, currentUser, TLChatAdminRights(), currentRank, isChannel, getFragmentForAlert(0), isAddingNew, false, null, null)
 					delegate?.didSetRights(0, adminRights, bannedRights, currentRank)
 					finishFragment()
 				}
 				else if (currentType == TYPE_BANNED) {
-					bannedRights = TL_chatBannedRights()
-					bannedRights!!.view_messages = true
-					bannedRights!!.send_media = true
-					bannedRights!!.send_messages = true
-					bannedRights!!.send_stickers = true
-					bannedRights!!.send_gifs = true
-					bannedRights!!.send_games = true
-					bannedRights!!.send_inline = true
-					bannedRights!!.embed_links = true
-					bannedRights!!.pin_messages = true
-					bannedRights!!.send_polls = true
-					bannedRights!!.invite_users = true
-					bannedRights!!.change_info = true
-					bannedRights!!.until_date = 0
+					bannedRights = TLChatBannedRights()
+					bannedRights!!.viewMessages = true
+					bannedRights!!.sendMedia = true
+					bannedRights!!.sendMessages = true
+					bannedRights!!.sendStickers = true
+					bannedRights!!.sendGifs = true
+					bannedRights!!.sendGames = true
+					bannedRights!!.sendInline = true
+					bannedRights!!.embedLinks = true
+					bannedRights!!.pinMessages = true
+					bannedRights!!.sendPolls = true
+					bannedRights!!.inviteUsers = true
+					bannedRights!!.changeInfo = true
+					bannedRights!!.untilDate = 0
 
 					onDonePressed()
 				}
@@ -587,22 +588,22 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 					buttons[a].setOnClickListener { v2: View ->
 						when (v2.tag as Int) {
 							0 -> {
-								bannedRights?.until_date = 0
+								bannedRights?.untilDate = 0
 								listViewAdapter?.notifyItemChanged(untilDateRow)
 							}
 
 							1 -> {
-								bannedRights?.until_date = connectionsManager.currentTime + 60 * 60 * 24
+								bannedRights?.untilDate = connectionsManager.currentTime + 60 * 60 * 24
 								listViewAdapter?.notifyItemChanged(untilDateRow)
 							}
 
 							2 -> {
-								bannedRights?.until_date = connectionsManager.currentTime + 60 * 60 * 24 * 7
+								bannedRights?.untilDate = connectionsManager.currentTime + 60 * 60 * 24 * 7
 								listViewAdapter?.notifyItemChanged(untilDateRow)
 							}
 
 							3 -> {
-								bannedRights?.until_date = connectionsManager.currentTime + 60 * 60 * 24 * 30
+								bannedRights?.untilDate = connectionsManager.currentTime + 60 * 60 * 24 * 30
 								listViewAdapter?.notifyItemChanged(untilDateRow)
 							}
 
@@ -621,7 +622,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 										try {
 											val dialog13 = TimePickerDialog(parentActivity, { _, hourOfDay, minute ->
-												bannedRights?.until_date = time + hourOfDay * 3600 + minute * 60
+												bannedRights?.untilDate = time + hourOfDay * 3600 + minute * 60
 												listViewAdapter?.notifyItemChanged(untilDateRow)
 											}, 0, 0, true)
 
@@ -695,7 +696,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 					return@setOnItemClickListener
 				}
 				if (!view.isEnabled) {
-					if ((currentType == TYPE_ADD_BOT || currentType == TYPE_ADMIN) && (position == changeInfoRow && defaultBannedRights != null && defaultBannedRights?.change_info != true || position == pinMessagesRow && defaultBannedRights != null && defaultBannedRights?.pin_messages != true)) {
+					if ((currentType == TYPE_ADD_BOT || currentType == TYPE_ADMIN) && (position == changeInfoRow && defaultBannedRights != null && defaultBannedRights?.changeInfo != true || position == pinMessagesRow && defaultBannedRights != null && defaultBannedRights?.pinMessages != true)) {
 						AlertDialog.Builder(context).setTitle(context.getString(R.string.UserRestrictionsCantModify)).setMessage(context.getString(R.string.UserRestrictionsCantModifyEnabled)).setPositiveButton(context.getString(R.string.OK), null).create().show()
 					}
 
@@ -715,60 +716,60 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 				}
 				else if (position == changeInfoRow) {
 					if (currentType == TYPE_ADMIN || currentType == TYPE_ADD_BOT) {
-						adminRights!!.change_info = !adminRights!!.change_info
-						value = adminRights!!.change_info
+						adminRights!!.changeInfo = !adminRights!!.changeInfo
+						value = adminRights!!.changeInfo
 					}
 					else {
-						bannedRights!!.change_info = !bannedRights!!.change_info
-						value = bannedRights!!.change_info
+						bannedRights!!.changeInfo = !bannedRights!!.changeInfo
+						value = bannedRights!!.changeInfo
 					}
 				}
 				else if (position == postMessagesRow) {
-					adminRights!!.post_messages = !adminRights!!.post_messages
-					value = adminRights!!.post_messages
+					adminRights!!.postMessages = !adminRights!!.postMessages
+					value = adminRights!!.postMessages
 				}
 				else if (position == editMessagesRow) {
-					adminRights!!.edit_messages = !adminRights!!.edit_messages
-					value = adminRights!!.edit_messages
+					adminRights!!.editMessages = !adminRights!!.editMessages
+					value = adminRights!!.editMessages
 				}
 				else if (position == deleteMessagesRow) {
-					adminRights!!.delete_messages = !adminRights!!.delete_messages
-					value = adminRights!!.delete_messages
+					adminRights!!.deleteMessages = !adminRights!!.deleteMessages
+					value = adminRights!!.deleteMessages
 				}
 				else if (position == addAdminsRow) {
-					adminRights!!.add_admins = !adminRights!!.add_admins
-					value = adminRights!!.add_admins
+					adminRights!!.addAdmins = !adminRights!!.addAdmins
+					value = adminRights!!.addAdmins
 				}
 				else if (position == anonymousRow) {
 					adminRights!!.anonymous = !adminRights!!.anonymous
 					value = adminRights!!.anonymous
 				}
 				else if (position == banUsersRow) {
-					adminRights!!.ban_users = !adminRights!!.ban_users
-					value = adminRights!!.ban_users
+					adminRights!!.banUsers = !adminRights!!.banUsers
+					value = adminRights!!.banUsers
 				}
 				else if (position == startVoiceChatRow) {
-					adminRights!!.manage_call = !adminRights!!.manage_call
-					value = adminRights!!.manage_call
+					adminRights!!.manageCall = !adminRights!!.manageCall
+					value = adminRights!!.manageCall
 				}
 				else if (position == addUsersRow) {
 					if (currentType == TYPE_ADMIN || currentType == TYPE_ADD_BOT) {
-						adminRights!!.invite_users = !adminRights!!.invite_users
-						value = adminRights!!.invite_users
+						adminRights!!.inviteUsers = !adminRights!!.inviteUsers
+						value = adminRights!!.inviteUsers
 					}
 					else {
-						bannedRights!!.invite_users = !bannedRights!!.invite_users
-						value = bannedRights!!.invite_users
+						bannedRights!!.inviteUsers = !bannedRights!!.inviteUsers
+						value = bannedRights!!.inviteUsers
 					}
 				}
 				else if (position == pinMessagesRow) {
 					if (currentType == TYPE_ADMIN || currentType == TYPE_ADD_BOT) {
-						adminRights!!.pin_messages = !adminRights!!.pin_messages
-						value = adminRights!!.pin_messages
+						adminRights!!.pinMessages = !adminRights!!.pinMessages
+						value = adminRights!!.pinMessages
 					}
 					else {
-						bannedRights!!.pin_messages = !bannedRights!!.pin_messages
-						value = bannedRights!!.pin_messages
+						bannedRights!!.pinMessages = !bannedRights!!.pinMessages
+						value = bannedRights!!.pinMessages
 					}
 				}
 				else if (currentType == TYPE_BANNED && bannedRights != null) {
@@ -776,37 +777,37 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 					when (position) {
 						sendMessagesRow -> {
-							bannedRights!!.send_messages = !bannedRights!!.send_messages
-							value = bannedRights!!.send_messages
+							bannedRights!!.sendMessages = !bannedRights!!.sendMessages
+							value = bannedRights!!.sendMessages
 						}
 
 						sendMediaRow -> {
-							bannedRights!!.send_media = !bannedRights!!.send_media
-							value = bannedRights!!.send_media
+							bannedRights!!.sendMedia = !bannedRights!!.sendMedia
+							value = bannedRights!!.sendMedia
 						}
 
 						sendStickersRow -> {
-							bannedRights!!.send_inline = !bannedRights!!.send_stickers
-							bannedRights!!.send_gifs = bannedRights!!.send_inline
-							bannedRights!!.send_games = bannedRights!!.send_gifs
-							bannedRights!!.send_stickers = bannedRights!!.send_games
-							value = bannedRights!!.send_stickers
+							bannedRights!!.sendInline = !bannedRights!!.sendStickers
+							bannedRights!!.sendGifs = bannedRights!!.sendInline
+							bannedRights!!.sendGames = bannedRights!!.sendGifs
+							bannedRights!!.sendStickers = bannedRights!!.sendGames
+							value = bannedRights!!.sendStickers
 						}
 
 						embedLinksRow -> {
-							bannedRights!!.embed_links = !bannedRights!!.embed_links
-							value = bannedRights!!.embed_links
+							bannedRights!!.embedLinks = !bannedRights!!.embedLinks
+							value = bannedRights!!.embedLinks
 						}
 
 						sendPollsRow -> {
-							bannedRights!!.send_polls = !bannedRights!!.send_polls
-							value = bannedRights!!.send_polls
+							bannedRights!!.sendPolls = !bannedRights!!.sendPolls
+							value = bannedRights!!.sendPolls
 						}
 					}
 
 					if (disabled) {
-						if (bannedRights!!.view_messages && !bannedRights!!.send_messages) {
-							bannedRights!!.send_messages = true
+						if (bannedRights!!.viewMessages && !bannedRights!!.sendMessages) {
+							bannedRights!!.sendMessages = true
 
 							val holder = listView?.findViewHolderForAdapterPosition(sendMessagesRow)
 
@@ -815,8 +816,8 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 							}
 						}
 
-						if ((bannedRights!!.view_messages || bannedRights!!.send_messages) && !bannedRights!!.send_media) {
-							bannedRights!!.send_media = true
+						if ((bannedRights!!.viewMessages || bannedRights!!.sendMessages) && !bannedRights!!.sendMedia) {
+							bannedRights!!.sendMedia = true
 
 							val holder = listView?.findViewHolderForAdapterPosition(sendMediaRow)
 
@@ -825,8 +826,8 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 							}
 						}
 
-						if ((bannedRights!!.view_messages || bannedRights!!.send_messages) && !bannedRights!!.send_polls) {
-							bannedRights!!.send_polls = true
+						if ((bannedRights!!.viewMessages || bannedRights!!.sendMessages) && !bannedRights!!.sendPolls) {
+							bannedRights!!.sendPolls = true
 
 							val holder = listView?.findViewHolderForAdapterPosition(sendPollsRow)
 
@@ -835,11 +836,11 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 							}
 						}
 
-						if ((bannedRights!!.view_messages || bannedRights!!.send_messages) && !bannedRights!!.send_stickers) {
-							bannedRights!!.send_inline = true
-							bannedRights!!.send_gifs = bannedRights!!.send_inline
-							bannedRights!!.send_games = bannedRights!!.send_gifs
-							bannedRights!!.send_stickers = bannedRights!!.send_games
+						if ((bannedRights!!.viewMessages || bannedRights!!.sendMessages) && !bannedRights!!.sendStickers) {
+							bannedRights!!.sendInline = true
+							bannedRights!!.sendGifs = bannedRights!!.sendInline
+							bannedRights!!.sendGames = bannedRights!!.sendGifs
+							bannedRights!!.sendStickers = bannedRights!!.sendGames
 
 							val holder = listView?.findViewHolderForAdapterPosition(sendStickersRow)
 
@@ -848,8 +849,8 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 							}
 						}
 
-						if ((bannedRights!!.view_messages || bannedRights!!.send_messages) && !bannedRights!!.embed_links) {
-							bannedRights!!.embed_links = true
+						if ((bannedRights!!.viewMessages || bannedRights!!.sendMessages) && !bannedRights!!.embedLinks) {
+							bannedRights!!.embedLinks = true
 
 							val holder = listView?.findViewHolderForAdapterPosition(embedLinksRow)
 
@@ -859,12 +860,12 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 						}
 					}
 					else {
-						if ((!bannedRights!!.send_messages || !bannedRights!!.embed_links || !bannedRights!!.send_inline || !bannedRights!!.send_media || !bannedRights!!.send_polls) && bannedRights!!.view_messages) {
-							bannedRights!!.view_messages = false
+						if ((!bannedRights!!.sendMessages || !bannedRights!!.embedLinks || !bannedRights!!.sendInline || !bannedRights!!.sendMedia || !bannedRights!!.sendPolls) && bannedRights!!.viewMessages) {
+							bannedRights!!.viewMessages = false
 						}
 
-						if ((!bannedRights!!.embed_links || !bannedRights!!.send_inline || !bannedRights!!.send_media || !bannedRights!!.send_polls) && bannedRights!!.send_messages) {
-							bannedRights!!.send_messages = false
+						if ((!bannedRights!!.embedLinks || !bannedRights!!.sendInline || !bannedRights!!.sendMedia || !bannedRights!!.sendPolls) && bannedRights!!.sendMessages) {
+							bannedRights!!.sendMessages = false
 
 							val holder = listView?.findViewHolderForAdapterPosition(sendMessagesRow)
 
@@ -895,17 +896,17 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 	private val isDefaultAdminRights: Boolean
 		get() {
 			val adminRights = adminRights ?: return false
-			return adminRights.change_info && adminRights.delete_messages && adminRights.ban_users && adminRights.invite_users && adminRights.pin_messages && adminRights.manage_call && !adminRights.add_admins && !adminRights.anonymous || !adminRights.change_info && !adminRights.delete_messages && !adminRights.ban_users && !adminRights.invite_users && !adminRights.pin_messages && !adminRights.manage_call && !adminRights.add_admins && !adminRights.anonymous
+			return adminRights.changeInfo && adminRights.deleteMessages && adminRights.banUsers && adminRights.inviteUsers && adminRights.pinMessages && adminRights.manageCall && !adminRights.addAdmins && !adminRights.anonymous || !adminRights.changeInfo && !adminRights.deleteMessages && !adminRights.banUsers && !adminRights.inviteUsers && !adminRights.pinMessages && !adminRights.manageCall && !adminRights.addAdmins && !adminRights.anonymous
 		}
 
 	private fun hasAllAdminRights(): Boolean {
 		val adminRights = adminRights ?: return false
 
 		return if (isChannel) {
-			adminRights.change_info && adminRights.post_messages && adminRights.edit_messages && adminRights.delete_messages && adminRights.invite_users && adminRights.add_admins && adminRights.manage_call
+			adminRights.changeInfo && adminRights.postMessages && adminRights.editMessages && adminRights.deleteMessages && adminRights.inviteUsers && adminRights.addAdmins && adminRights.manageCall
 		}
 		else {
-			adminRights.change_info && adminRights.delete_messages && adminRights.ban_users && adminRights.invite_users && adminRights.pin_messages && adminRights.add_admins && adminRights.manage_call
+			adminRights.changeInfo && adminRights.deleteMessages && adminRights.banUsers && adminRights.inviteUsers && adminRights.pinMessages && adminRights.addAdmins && adminRights.manageCall
 		}
 	}
 
@@ -924,19 +925,20 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 			return
 		}
 
-		val req = TL_channels_editCreator()
+		val req = TLChannelsEditCreator()
 
 		if (ChatObject.isChannel(currentChat)) {
-			req.channel = TL_inputChannel()
-			req.channel.channel_id = currentChat!!.id
-			req.channel.access_hash = currentChat!!.access_hash
+			req.channel = TLInputChannel().also {
+				it.channelId = currentChat!!.id
+				it.accessHash = currentChat!!.accessHash
+			}
 		}
 		else {
-			req.channel = TL_inputChannelEmpty()
+			req.channel = TLInputChannelEmpty()
 		}
 
-		req.password = srp ?: TL_inputCheckPasswordEmpty()
-		req.user_id = messagesController.getInputUser(currentUser)
+		req.password = srp ?: TLInputCheckPasswordEmpty()
+		req.userId = messagesController.getInputUser(currentUser)
 
 		connectionsManager.sendRequest(req, { response, error ->
 			FileLog.d("Transfer response is $response")
@@ -1052,16 +1054,14 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 						showDialog(builder.create())
 					}
 					else if ("SRP_ID_INVALID" == error.text) {
-						val getPasswordReq = TL_account_getPassword()
+						val getPasswordReq = TLAccountGetPassword()
 
-						connectionsManager.sendRequest(getPasswordReq, { response2, error2 ->
+						connectionsManager.sendRequest(getPasswordReq, { response2, _ ->
 							AndroidUtilities.runOnUIThread {
-								if (error2 == null) {
-									val currentPassword = response2 as? account_Password
+								if (response2 is TLAccountPassword) {
+									passwordFragment?.setCurrentPasswordInfo(null, response2)
 
-									passwordFragment?.setCurrentPasswordInfo(null, currentPassword)
-
-									TwoStepVerificationActivity.initPasswordNewAlgo(currentPassword)
+									TwoStepVerificationActivity.initPasswordNewAlgo(response2)
 
 									initTransferClean(passwordFragment?.newSrpPassword, passwordFragment)
 								}
@@ -1316,15 +1316,15 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 			}
 
 			if (isChannel) {
-				adminRights!!.ban_users = false
-				adminRights!!.pin_messages = adminRights!!.ban_users
+				adminRights!!.banUsers = false
+				adminRights!!.pinMessages = adminRights!!.banUsers
 			}
 			else {
-				adminRights!!.edit_messages = false
-				adminRights!!.post_messages = adminRights!!.edit_messages
+				adminRights!!.editMessages = false
+				adminRights!!.postMessages = adminRights!!.editMessages
 			}
 
-			adminRights!!.other = !adminRights!!.change_info && !adminRights!!.post_messages && !adminRights!!.edit_messages && !adminRights!!.delete_messages && !adminRights!!.ban_users && !adminRights!!.invite_users && !adminRights!!.pin_messages && !adminRights!!.add_admins && !adminRights!!.anonymous && !adminRights!!.manage_call
+			adminRights!!.other = !adminRights!!.changeInfo && !adminRights!!.postMessages && !adminRights!!.editMessages && !adminRights!!.deleteMessages && !adminRights!!.banUsers && !adminRights!!.inviteUsers && !adminRights!!.pinMessages && !adminRights!!.addAdmins && !adminRights!!.anonymous && !adminRights!!.manageCall
 		}
 
 		var finishFragment = true
@@ -1336,7 +1336,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 				messagesController.setUserAdminRole(chatId, currentUser, adminRights, currentRank, isChannel, this, isAddingNew, false, null, {
 					if (delegate != null) {
-						delegate?.didSetRights(if (adminRights!!.change_info || adminRights!!.post_messages || adminRights!!.edit_messages || adminRights!!.delete_messages || adminRights!!.ban_users || adminRights!!.invite_users || adminRights!!.pin_messages || adminRights!!.add_admins || adminRights!!.anonymous || adminRights!!.manage_call || adminRights!!.other) 1 else 0, adminRights, bannedRights, currentRank)
+						delegate?.didSetRights(if (adminRights!!.changeInfo || adminRights!!.postMessages || adminRights!!.editMessages || adminRights!!.deleteMessages || adminRights!!.banUsers || adminRights!!.inviteUsers || adminRights!!.pinMessages || adminRights!!.addAdmins || adminRights!!.anonymous || adminRights!!.manageCall || adminRights!!.other) 1 else 0, adminRights, bannedRights, currentRank)
 						finishFragment()
 					}
 				}) {
@@ -1350,11 +1350,11 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 				val rights: Int
 
-				if (bannedRights!!.send_messages || bannedRights!!.send_stickers || bannedRights!!.embed_links || bannedRights!!.send_media || bannedRights!!.send_gifs || bannedRights!!.send_games || bannedRights!!.send_inline) {
+				if (bannedRights!!.sendMessages || bannedRights!!.sendStickers || bannedRights!!.embedLinks || bannedRights!!.sendMedia || bannedRights!!.sendGifs || bannedRights!!.sendGames || bannedRights!!.sendInline) {
 					rights = 1
 				}
 				else {
-					bannedRights!!.until_date = 0
+					bannedRights!!.untilDate = 0
 					rights = 2
 				}
 
@@ -1397,10 +1397,10 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 							if (BulletinFactory.canShowBulletin(chatActivity)) {
 								if (isAddingNew && asAdmin) {
-									BulletinFactory.createAddedAsAdminBulletin(chatActivity, currentUser?.first_name).show()
+									BulletinFactory.createAddedAsAdminBulletin(chatActivity, currentUser?.firstName).show()
 								}
 								else if (!isAddingNew && !initialAsAdmin && asAdmin) {
-									BulletinFactory.createPromoteToAdminBulletin(chatActivity, currentUser?.first_name).show()
+									BulletinFactory.createPromoteToAdminBulletin(chatActivity, currentUser?.firstName).show()
 								}
 							}
 						}
@@ -1527,7 +1527,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 			if (child is TextCheckCell2) {
 				if (!asAdmin) {
-					if (childPosition == changeInfoRow && !defaultBannedRights!!.change_info || childPosition == pinMessagesRow && !defaultBannedRights!!.pin_messages) {
+					if (childPosition == changeInfoRow && !defaultBannedRights!!.changeInfo || childPosition == pinMessagesRow && !defaultBannedRights!!.pinMessages) {
 						child.isChecked = true
 						child.setEnabled(value = false, animated = false)
 					}
@@ -1543,52 +1543,52 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 					when (childPosition) {
 						manageRow -> {
 							childValue = true
-							childEnabled = myAdminRights!!.add_admins || currentChat != null && currentChat!!.creator
+							childEnabled = myAdminRights!!.addAdmins || currentChat != null && currentChat!!.creator
 						}
 
 						changeInfoRow -> {
-							childValue = adminRights!!.change_info
-							childEnabled = myAdminRights!!.change_info && defaultBannedRights!!.change_info
+							childValue = adminRights!!.changeInfo
+							childEnabled = myAdminRights!!.changeInfo && defaultBannedRights!!.changeInfo
 						}
 
 						postMessagesRow -> {
-							childValue = adminRights!!.post_messages
-							childEnabled = myAdminRights!!.post_messages
+							childValue = adminRights!!.postMessages
+							childEnabled = myAdminRights!!.postMessages
 						}
 
 						editMessagesRow -> {
-							childValue = adminRights!!.edit_messages
-							childEnabled = myAdminRights!!.edit_messages
+							childValue = adminRights!!.editMessages
+							childEnabled = myAdminRights!!.editMessages
 						}
 
 						deleteMessagesRow -> {
-							childValue = adminRights!!.delete_messages
-							childEnabled = myAdminRights!!.delete_messages
+							childValue = adminRights!!.deleteMessages
+							childEnabled = myAdminRights!!.deleteMessages
 						}
 
 						banUsersRow -> {
-							childValue = adminRights!!.ban_users
-							childEnabled = myAdminRights!!.ban_users
+							childValue = adminRights!!.banUsers
+							childEnabled = myAdminRights!!.banUsers
 						}
 
 						addUsersRow -> {
-							childValue = adminRights!!.invite_users
-							childEnabled = myAdminRights!!.invite_users
+							childValue = adminRights!!.inviteUsers
+							childEnabled = myAdminRights!!.inviteUsers
 						}
 
 						pinMessagesRow -> {
-							childValue = adminRights!!.pin_messages
-							childEnabled = myAdminRights!!.pin_messages && defaultBannedRights!!.pin_messages
+							childValue = adminRights!!.pinMessages
+							childEnabled = myAdminRights!!.pinMessages && defaultBannedRights!!.pinMessages
 						}
 
 						startVoiceChatRow -> {
-							childValue = adminRights!!.manage_call
-							childEnabled = myAdminRights!!.manage_call
+							childValue = adminRights!!.manageCall
+							childEnabled = myAdminRights!!.manageCall
 						}
 
 						addAdminsRow -> {
-							childValue = adminRights!!.add_admins
-							childEnabled = myAdminRights!!.add_admins
+							childValue = adminRights!!.addAdmins
+							childEnabled = myAdminRights!!.addAdmins
 						}
 
 						anonymousRow -> {
@@ -1629,7 +1629,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 	}
 
 	interface ChatRightsEditActivityDelegate {
-		fun didSetRights(rights: Int, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?)
+		fun didSetRights(rights: Int, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?)
 		fun didChangeOwner(user: User)
 	}
 
@@ -1698,7 +1698,7 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 				val position = holder.adapterPosition
 
 				if (position == manageRow) {
-					return myAdminRights!!.add_admins || currentChat.creator
+					return myAdminRights!!.addAdmins || currentChat.creator
 				}
 				else {
 					if (currentType == TYPE_ADD_BOT && !asAdmin) {
@@ -1707,27 +1707,27 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 					when (position) {
 						changeInfoRow -> {
-							return myAdminRights!!.change_info && (defaultBannedRights == null || defaultBannedRights?.change_info == true)
+							return myAdminRights!!.changeInfo && (defaultBannedRights == null || defaultBannedRights?.changeInfo == true)
 						}
 
 						postMessagesRow -> {
-							return myAdminRights!!.post_messages
+							return myAdminRights!!.postMessages
 						}
 
 						editMessagesRow -> {
-							return myAdminRights!!.edit_messages
+							return myAdminRights!!.editMessages
 						}
 
 						deleteMessagesRow -> {
-							return myAdminRights!!.delete_messages
+							return myAdminRights!!.deleteMessages
 						}
 
 						startVoiceChatRow -> {
-							return myAdminRights!!.manage_call
+							return myAdminRights!!.manageCall
 						}
 
 						addAdminsRow -> {
-							return myAdminRights!!.add_admins
+							return myAdminRights!!.addAdmins
 						}
 
 						anonymousRow -> {
@@ -1735,15 +1735,15 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 						}
 
 						banUsersRow -> {
-							return myAdminRights!!.ban_users
+							return myAdminRights!!.banUsers
 						}
 
 						addUsersRow -> {
-							return myAdminRights!!.invite_users
+							return myAdminRights!!.inviteUsers
 						}
 
 						pinMessagesRow -> {
-							return myAdminRights!!.pin_messages && (defaultBannedRights == null || defaultBannedRights?.pin_messages == true)
+							return myAdminRights!!.pinMessages && (defaultBannedRights == null || defaultBannedRights?.pinMessages == true)
 						}
 					}
 				}
@@ -1946,57 +1946,57 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 
 					if (position == manageRow) {
 						checkCell.setTextAndCheck(mContext.getString(R.string.ManageGroup), asAdmin, true)
-						checkCell.setIcon(if (myAdminRights!!.add_admins || isCreator) 0 else R.drawable.permission_locked)
+						checkCell.setIcon(if (myAdminRights!!.addAdmins || isCreator) 0 else R.drawable.permission_locked)
 					}
 					else if (position == changeInfoRow) {
 						if (currentType == TYPE_ADMIN || currentType == TYPE_ADD_BOT) {
 							if (isChannel) {
-								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminChangeChannelInfo), asAdminValue && adminRights!!.change_info || !defaultBannedRights!!.change_info, true)
+								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminChangeChannelInfo), asAdminValue && adminRights!!.changeInfo || !defaultBannedRights!!.changeInfo, true)
 							}
 							else {
-								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminChangeGroupInfo), asAdminValue && adminRights!!.change_info || !defaultBannedRights!!.change_info, true)
+								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminChangeGroupInfo), asAdminValue && adminRights!!.changeInfo || !defaultBannedRights!!.changeInfo, true)
 							}
 
 							if (currentType == TYPE_ADD_BOT) {
-								checkCell.setIcon(if (myAdminRights!!.change_info || isCreator) 0 else R.drawable.permission_locked)
+								checkCell.setIcon(if (myAdminRights!!.changeInfo || isCreator) 0 else R.drawable.permission_locked)
 							}
 						}
 						else if (currentType == TYPE_BANNED) {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsChangeInfo), !bannedRights!!.change_info && !defaultBannedRights!!.change_info, false)
-							checkCell.setIcon(if (defaultBannedRights!!.change_info) R.drawable.permission_locked else 0)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsChangeInfo), !bannedRights!!.changeInfo && !defaultBannedRights!!.changeInfo, false)
+							checkCell.setIcon(if (defaultBannedRights!!.changeInfo) R.drawable.permission_locked else 0)
 						}
 					}
 					else if (position == postMessagesRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminPostMessages), asAdminValue && adminRights!!.post_messages, true)
+						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminPostMessages), asAdminValue && adminRights!!.postMessages, true)
 
 						if (currentType == TYPE_ADD_BOT) {
-							checkCell.setIcon(if (myAdminRights!!.post_messages || isCreator) 0 else R.drawable.permission_locked)
+							checkCell.setIcon(if (myAdminRights!!.postMessages || isCreator) 0 else R.drawable.permission_locked)
 						}
 					}
 					else if (position == editMessagesRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminEditMessages), asAdminValue && adminRights!!.edit_messages, true)
+						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminEditMessages), asAdminValue && adminRights!!.editMessages, true)
 
 						if (currentType == TYPE_ADD_BOT) {
-							checkCell.setIcon(if (myAdminRights!!.edit_messages || isCreator) 0 else R.drawable.permission_locked)
+							checkCell.setIcon(if (myAdminRights!!.editMessages || isCreator) 0 else R.drawable.permission_locked)
 						}
 					}
 					else if (position == deleteMessagesRow) {
 						if (isChannel) {
-							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminDeleteMessages), asAdminValue && adminRights!!.delete_messages, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminDeleteMessages), asAdminValue && adminRights!!.deleteMessages, true)
 						}
 						else {
-							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminGroupDeleteMessages), asAdminValue && adminRights!!.delete_messages, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminGroupDeleteMessages), asAdminValue && adminRights!!.deleteMessages, true)
 						}
 
 						if (currentType == TYPE_ADD_BOT) {
-							checkCell.setIcon(if (myAdminRights!!.delete_messages || isCreator) 0 else R.drawable.permission_locked)
+							checkCell.setIcon(if (myAdminRights!!.deleteMessages || isCreator) 0 else R.drawable.permission_locked)
 						}
 					}
 					else if (position == addAdminsRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddAdmins), asAdminValue && adminRights!!.add_admins, anonymousRow != -1)
+						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddAdmins), asAdminValue && adminRights!!.addAdmins, anonymousRow != -1)
 
 						if (currentType == TYPE_ADD_BOT) {
-							checkCell.setIcon(if (myAdminRights!!.add_admins || isCreator) 0 else R.drawable.permission_locked)
+							checkCell.setIcon(if (myAdminRights!!.addAdmins || isCreator) 0 else R.drawable.permission_locked)
 						}
 					}
 					else if (position == anonymousRow) {
@@ -2007,69 +2007,69 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 						}
 					}
 					else if (position == banUsersRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminBanUsers), asAdminValue && adminRights!!.ban_users, true)
+						checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminBanUsers), asAdminValue && adminRights!!.banUsers, true)
 
 						if (currentType == TYPE_ADD_BOT) {
-							checkCell.setIcon(if (myAdminRights!!.ban_users || isCreator) 0 else R.drawable.permission_locked)
+							checkCell.setIcon(if (myAdminRights!!.banUsers || isCreator) 0 else R.drawable.permission_locked)
 						}
 					}
 					else if (position == startVoiceChatRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.StartVoipChatPermission), asAdminValue && adminRights!!.manage_call, true)
+						checkCell.setTextAndCheck(mContext.getString(R.string.StartVoipChatPermission), asAdminValue && adminRights!!.manageCall, true)
 
 						if (currentType == TYPE_ADD_BOT) {
-							checkCell.setIcon(if (myAdminRights!!.manage_call || isCreator) 0 else R.drawable.permission_locked)
+							checkCell.setIcon(if (myAdminRights!!.manageCall || isCreator) 0 else R.drawable.permission_locked)
 						}
 					}
 					else if (position == addUsersRow) {
 						if (currentType == TYPE_ADMIN) {
 							if (ChatObject.isActionBannedByDefault(currentChat, ChatObject.ACTION_INVITE)) {
-								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddUsers), adminRights!!.invite_users, true)
+								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddUsers), adminRights!!.inviteUsers, true)
 							}
 							else {
-								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddUsersViaLink), adminRights!!.invite_users, true)
+								checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddUsersViaLink), adminRights!!.inviteUsers, true)
 							}
 						}
 						else if (currentType == TYPE_BANNED) {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsInviteUsers), !bannedRights!!.invite_users && !defaultBannedRights!!.invite_users, true)
-							checkCell.setIcon(if (defaultBannedRights!!.invite_users) R.drawable.permission_locked else 0)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsInviteUsers), !bannedRights!!.inviteUsers && !defaultBannedRights!!.inviteUsers, true)
+							checkCell.setIcon(if (defaultBannedRights!!.inviteUsers) R.drawable.permission_locked else 0)
 						}
 						else if (currentType == TYPE_ADD_BOT) {
-							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddUsersViaLink), asAdminValue && adminRights!!.invite_users, true)
-							checkCell.setIcon(if (myAdminRights!!.invite_users || isCreator) 0 else R.drawable.permission_locked)
+							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminAddUsersViaLink), asAdminValue && adminRights!!.inviteUsers, true)
+							checkCell.setIcon(if (myAdminRights!!.inviteUsers || isCreator) 0 else R.drawable.permission_locked)
 						}
 					}
 					else if (position == pinMessagesRow) {
 						if (currentType == TYPE_ADMIN || currentType == TYPE_ADD_BOT) {
-							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminPinMessages), asAdminValue && adminRights!!.pin_messages || !defaultBannedRights!!.pin_messages, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.EditAdminPinMessages), asAdminValue && adminRights!!.pinMessages || !defaultBannedRights!!.pinMessages, true)
 
 							if (currentType == TYPE_ADD_BOT) {
-								checkCell.setIcon(if (myAdminRights!!.pin_messages || isCreator) 0 else R.drawable.permission_locked)
+								checkCell.setIcon(if (myAdminRights!!.pinMessages || isCreator) 0 else R.drawable.permission_locked)
 							}
 						}
 						else if (currentType == TYPE_BANNED) {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsPinMessages), !bannedRights!!.pin_messages && !defaultBannedRights!!.pin_messages, true)
-							checkCell.setIcon(if (defaultBannedRights!!.pin_messages) R.drawable.permission_locked else 0)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsPinMessages), !bannedRights!!.pinMessages && !defaultBannedRights!!.pinMessages, true)
+							checkCell.setIcon(if (defaultBannedRights!!.pinMessages) R.drawable.permission_locked else 0)
 						}
 					}
 					else if (position == sendMessagesRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSend), !bannedRights!!.send_messages && !defaultBannedRights!!.send_messages, true)
-						checkCell.setIcon(if (defaultBannedRights!!.send_messages) R.drawable.permission_locked else 0)
+						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSend), !bannedRights!!.sendMessages && !defaultBannedRights!!.sendMessages, true)
+						checkCell.setIcon(if (defaultBannedRights!!.sendMessages) R.drawable.permission_locked else 0)
 					}
 					else if (position == sendMediaRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendMedia), !bannedRights!!.send_media && !defaultBannedRights!!.send_media, true)
-						checkCell.setIcon(if (defaultBannedRights!!.send_media) R.drawable.permission_locked else 0)
+						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendMedia), !bannedRights!!.sendMedia && !defaultBannedRights!!.sendMedia, true)
+						checkCell.setIcon(if (defaultBannedRights!!.sendMedia) R.drawable.permission_locked else 0)
 					}
 					else if (position == sendStickersRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendStickers), !bannedRights!!.send_stickers && !defaultBannedRights!!.send_stickers, true)
-						checkCell.setIcon(if (defaultBannedRights!!.send_stickers) R.drawable.permission_locked else 0)
+						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendStickers), !bannedRights!!.sendStickers && !defaultBannedRights!!.sendStickers, true)
+						checkCell.setIcon(if (defaultBannedRights!!.sendStickers) R.drawable.permission_locked else 0)
 					}
 					else if (position == embedLinksRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsEmbedLinks), !bannedRights!!.embed_links && !defaultBannedRights!!.embed_links, true)
-						checkCell.setIcon(if (defaultBannedRights!!.embed_links) R.drawable.permission_locked else 0)
+						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsEmbedLinks), !bannedRights!!.embedLinks && !defaultBannedRights!!.embedLinks, true)
+						checkCell.setIcon(if (defaultBannedRights!!.embedLinks) R.drawable.permission_locked else 0)
 					}
 					else if (position == sendPollsRow) {
-						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendPolls), !bannedRights!!.send_polls && !defaultBannedRights!!.send_polls, true)
-						checkCell.setIcon(if (defaultBannedRights!!.send_polls) R.drawable.permission_locked else 0)
+						checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendPolls), !bannedRights!!.sendPolls && !defaultBannedRights!!.sendPolls, true)
+						checkCell.setIcon(if (defaultBannedRights!!.sendPolls) R.drawable.permission_locked else 0)
 					}
 
 					if (currentType == TYPE_ADD_BOT) {
@@ -2077,10 +2077,10 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 					}
 					else {
 						if (position == sendMediaRow || position == sendStickersRow || position == embedLinksRow || position == sendPollsRow) {
-							checkCell.isEnabled = !bannedRights!!.send_messages && !bannedRights!!.view_messages && !defaultBannedRights!!.send_messages && !defaultBannedRights!!.view_messages
+							checkCell.isEnabled = !bannedRights!!.sendMessages && !bannedRights!!.viewMessages && !defaultBannedRights!!.sendMessages && !defaultBannedRights!!.viewMessages
 						}
 						else if (position == sendMessagesRow) {
-							checkCell.isEnabled = !bannedRights!!.view_messages && !defaultBannedRights!!.view_messages
+							checkCell.isEnabled = !bannedRights!!.viewMessages && !defaultBannedRights!!.viewMessages
 						}
 					}
 				}
@@ -2118,11 +2118,11 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 					val detailCell = holder.itemView as TextDetailCell
 
 					if (position == untilDateRow) {
-						val value = if (bannedRights!!.until_date == 0 || abs(bannedRights!!.until_date - System.currentTimeMillis() / 1000) > 10 * 365 * 24 * 60 * 60) {
+						val value = if (bannedRights!!.untilDate == 0 || abs(bannedRights!!.untilDate - System.currentTimeMillis() / 1000) > 10 * 365 * 24 * 60 * 60) {
 							mContext.getString(R.string.UserRestrictionsUntilForever)
 						}
 						else {
-							LocaleController.formatDateForBan(bannedRights!!.until_date.toLong())
+							LocaleController.formatDateForBan(bannedRights!!.untilDate.toLong())
 						}
 
 						detailCell.setTextAndValue(mContext.getString(R.string.UserRestrictionsDuration), value, false)
@@ -2222,17 +2222,17 @@ open class ChatRightsEditActivity(userId: Long, channelId: Long, rightsAdmin: TL
 		private const val VIEW_TYPE_ADD_BOT_CELL = 8
 
 		@JvmStatic
-		fun emptyAdminRights(value: Boolean): TL_chatAdminRights {
-			val adminRights = TL_chatAdminRights()
-			adminRights.manage_call = value
-			adminRights.add_admins = adminRights.manage_call
-			adminRights.pin_messages = adminRights.add_admins
-			adminRights.invite_users = adminRights.pin_messages
-			adminRights.ban_users = adminRights.invite_users
-			adminRights.delete_messages = adminRights.ban_users
-			adminRights.edit_messages = adminRights.delete_messages
-			adminRights.post_messages = adminRights.edit_messages
-			adminRights.change_info = adminRights.post_messages
+		fun emptyAdminRights(value: Boolean): TLChatAdminRights {
+			val adminRights = TLChatAdminRights()
+			adminRights.manageCall = value
+			adminRights.addAdmins = adminRights.manageCall
+			adminRights.pinMessages = adminRights.addAdmins
+			adminRights.inviteUsers = adminRights.pinMessages
+			adminRights.banUsers = adminRights.inviteUsers
+			adminRights.deleteMessages = adminRights.banUsers
+			adminRights.editMessages = adminRights.deleteMessages
+			adminRights.postMessages = adminRights.editMessages
+			adminRights.changeInfo = adminRights.postMessages
 			return adminRights
 		}
 	}

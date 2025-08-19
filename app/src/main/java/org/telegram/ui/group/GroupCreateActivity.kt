@@ -4,9 +4,9 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Mykhailo Mykytyn, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.group
 
@@ -66,9 +66,14 @@ import org.telegram.messenger.Utilities
 import org.telegram.messenger.utils.dp
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.botNochats
+import org.telegram.tgnet.deleted
+import org.telegram.tgnet.isSelf
+import org.telegram.tgnet.migratedTo
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -787,7 +792,7 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 
 					if (`object` is User) {
 						if (addToGroup && `object`.bot) {
-							if (channelId == 0L && `object`.bot_nochats) {
+							if (channelId == 0L && `object`.botNochats) {
 								try {
 									BulletinFactory.of(this).createErrorBulletin(context.getString(R.string.BotCantJoinGroups)).show()
 								}
@@ -1070,7 +1075,7 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 					stringBuilder.append(", ")
 				}
 
-				stringBuilder.append("**").append(ContactsController.formatName(user.first_name, user.last_name)).append("**")
+				stringBuilder.append("**").append(ContactsController.formatName(user.firstName, user.lastName)).append("**")
 			}
 
 			val chat = messagesController.getChat(if (chatId != 0L) chatId else channelId)
@@ -1276,9 +1281,9 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 			val arrayList = contactsController.contacts
 
 			for (a in arrayList.indices) {
-				val user = messagesController.getUser(arrayList[a].user_id)
+				val user = messagesController.getUser(arrayList[a].userId)
 
-				if (user == null || user.self || user.deleted) {
+				if (user == null || user.isSelf || user.deleted) {
 					continue
 				}
 
@@ -1300,7 +1305,7 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 
 					val chat = messagesController.getChat(-dialog.id)
 
-					if (chat == null || chat.migrated_to != null || ChatObject.isChannel(chat) && !chat.megagroup) {
+					if (chat == null || chat.migratedTo != null || ChatObject.isChannel(chat) && !chat.megagroup) {
 						a++
 						continue
 					}
@@ -1313,11 +1318,11 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 				Collections.sort(contacts, object : Comparator<TLObject> {
 					private fun getName(`object`: TLObject): String {
 						return if (`object` is User) {
-							ContactsController.formatName(`object`.first_name, `object`.last_name)
+							ContactsController.formatName(`object`.firstName, `object`.lastName)
 						}
 						else {
 							val chat = `object` as TLRPC.Chat
-							chat.title
+							chat.title ?: ""
 						}
 					}
 
@@ -1334,7 +1339,7 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 					return true
 				}
 
-				override val excludeCallParticipants: LongSparseArray<TLRPC.TL_groupCallParticipant>?
+				override val excludeCallParticipants: LongSparseArray<TLRPC.TLGroupCallParticipant>?
 					get() = null
 
 				override val excludeUsers: LongSparseArray<User>?
@@ -1366,8 +1371,8 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 			val lastName: String?
 
 			if (`object` is User) {
-				firstName = `object`.first_name
-				lastName = `object`.last_name
+				firstName = `object`.firstName
+				lastName = `object`.lastName
 			}
 			else {
 				val chat = `object` as TLRPC.Chat
@@ -1772,12 +1777,12 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 								var username: String?
 
 								if (`object` is User) {
-									name = ContactsController.formatName(`object`.first_name, `object`.last_name).lowercase(Locale.getDefault())
+									name = ContactsController.formatName(`object`.firstName, `object`.lastName).lowercase(Locale.getDefault())
 									username = `object`.username
 								}
 								else {
 									val chat = `object` as TLRPC.Chat
-									name = chat.title
+									name = chat.title ?: ""
 									username = chat.username
 								}
 
@@ -1800,7 +1805,7 @@ class GroupCreateActivity(args: Bundle) : BaseFragment(args), NotificationCenter
 									if (found != 0) {
 										if (found == 1) {
 											if (`object` is User) {
-												resultArrayNames.add(AndroidUtilities.generateSearchName(`object`.first_name, `object`.last_name, q))
+												resultArrayNames.add(AndroidUtilities.generateSearchName(`object`.firstName, `object`.lastName, q))
 											}
 											else {
 												val chat = `object` as TLRPC.Chat

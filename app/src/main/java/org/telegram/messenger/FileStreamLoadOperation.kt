@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger
 
@@ -14,10 +14,10 @@ import com.google.android.exoplayer2.upstream.BaseDataSource
 import com.google.android.exoplayer2.upstream.DataSpec
 import com.google.android.exoplayer2.upstream.TransferListener
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAudio
-import org.telegram.tgnet.TLRPC.TL_documentAttributeFilename
-import org.telegram.tgnet.TLRPC.TL_documentAttributeVideo
+import org.telegram.tgnet.TLRPC.TLDocument
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeAudio
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeFilename
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeVideo
 import java.io.EOFException
 import java.io.IOException
 import java.io.RandomAccessFile
@@ -46,28 +46,28 @@ class FileStreamLoadOperation() : BaseDataSource(false), FileLoadOperationStream
 		currentAccount = Utilities.parseInt(uri?.getQueryParameter("account"))
 		parentObject = FileLoader.getInstance(currentAccount).getParentObject(Utilities.parseInt(uri?.getQueryParameter("rid")))
 
-		document = TL_document()
-		document?.access_hash = Utilities.parseLong(uri?.getQueryParameter("hash"))
-		document?.id = Utilities.parseLong(uri?.getQueryParameter("id"))
-		document?.size = Utilities.parseLong(uri?.getQueryParameter("size"))
-		document?.dc_id = Utilities.parseInt(uri?.getQueryParameter("dc"))
-		document?.mime_type = uri?.getQueryParameter("mime")
-		document?.file_reference = Utilities.hexToBytes(uri?.getQueryParameter("reference"))
+		val document = TLDocument().also { this.document = it }
+		document.accessHash = Utilities.parseLong(uri?.getQueryParameter("hash"))
+		document.id = Utilities.parseLong(uri?.getQueryParameter("id"))
+		document.size = Utilities.parseLong(uri?.getQueryParameter("size"))
+		document.dcId = Utilities.parseInt(uri?.getQueryParameter("dc"))
+		document.mimeType = uri?.getQueryParameter("mime")
+		document.fileReference = Utilities.hexToBytes(uri?.getQueryParameter("reference"))
 
-		val filename = TL_documentAttributeFilename()
-		filename.file_name = uri?.getQueryParameter("name")
+		val filename = TLDocumentAttributeFilename()
+		filename.fileName = uri?.getQueryParameter("name")
 
-		document?.attributes?.add(filename)
+		document.attributes.add(filename)
 
-		if (document?.mime_type?.startsWith("video") == true) {
-			document?.attributes?.add(TL_documentAttributeVideo())
+		if (document.mimeType?.startsWith("video") == true) {
+			document.attributes.add(TLDocumentAttributeVideo())
 		}
-		else if (document?.mime_type?.startsWith("audio") == true) {
-			document?.attributes?.add(TL_documentAttributeAudio())
+		else if (document.mimeType?.startsWith("audio") == true) {
+			document.attributes.add(TLDocumentAttributeAudio())
 		}
 
 		loadOperation = FileLoader.getInstance(currentAccount).loadStreamFile(this, document, null, parentObject, dataSpec.position.also { currentOffset = it }, false)
-		bytesRemaining = if (dataSpec.length == C.LENGTH_UNSET.toLong()) (document?.size ?: 0) - dataSpec.position else dataSpec.length
+		bytesRemaining = if (dataSpec.length == C.LENGTH_UNSET.toLong()) document.size - dataSpec.position else dataSpec.length
 
 		if (bytesRemaining < 0) {
 			throw EOFException()

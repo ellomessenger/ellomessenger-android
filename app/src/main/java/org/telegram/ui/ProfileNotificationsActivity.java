@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui;
 
@@ -40,9 +40,9 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -256,17 +256,19 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
 					if (notificationsEnabled) {
 						editor.putInt("notify2_" + dialogId, 0);
 						MessagesStorage.getInstance(currentAccount).setDialogFlags(dialogId, 0);
-						if (dialog != null) {
-							dialog.notify_settings = new TLRPC.TL_peerNotifySettings();
+
+						if (dialog instanceof TLRPC.TLDialog tlDialog) {
+							tlDialog.notifySettings = new TLRPC.TLPeerNotifySettings();
 						}
 					}
 					else {
 						editor.putInt("notify2_" + dialogId, 2);
 						NotificationsController.getInstance(currentAccount).removeNotificationsForDialog(dialogId);
 						MessagesStorage.getInstance(currentAccount).setDialogFlags(dialogId, 1);
-						if (dialog != null) {
-							dialog.notify_settings = new TLRPC.TL_peerNotifySettings();
-							dialog.notify_settings.mute_until = Integer.MAX_VALUE;
+
+						if (dialog instanceof TLRPC.TLDialog tlDialog) {
+							tlDialog.notifySettings = new TLRPC.TLPeerNotifySettings();
+							tlDialog.notifySettings.muteUntil = Integer.MAX_VALUE;
 						}
 					}
 
@@ -301,7 +303,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
 			User user = getMessagesController().getUser(dialogId);
 			if (user != null) {
 				avatarContainer.setUserAvatar(user);
-				avatarContainer.setTitle(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+				avatarContainer.setTitle(ContactsController.formatName(user.firstName, user.lastName));
 			}
 		}
 
@@ -702,23 +704,12 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
 			else if (holder.getAdapterPosition() == customResetRow) {
 				return true;
 			}
-			switch (holder.getItemViewType()) {
-				case VIEW_TYPE_TEXT_SETTINGS:
-				case VIEW_TYPE_TEXT_COLOR:
-				case VIEW_TYPE_RADIO: {
-					return notificationsEnabled;
-				}
-				case VIEW_TYPE_HEADER:
-				case VIEW_TYPE_INFO:
-				case VIEW_TYPE_USER:
-				case VIEW_TYPE_SHADOW: {
-					return false;
-				}
-				case VIEW_TYPE_TEXT_CHECK: {
-					return true;
-				}
-			}
-			return true;
+			return switch (holder.getItemViewType()) {
+				case VIEW_TYPE_TEXT_SETTINGS, VIEW_TYPE_TEXT_COLOR, VIEW_TYPE_RADIO -> notificationsEnabled;
+				case VIEW_TYPE_HEADER, VIEW_TYPE_INFO, VIEW_TYPE_USER, VIEW_TYPE_SHADOW -> false;
+				case VIEW_TYPE_TEXT_CHECK -> true;
+				default -> true;
+			};
 		}
 
 		@NonNull
@@ -799,7 +790,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
 									value = LocaleController.getString("CustomSound", R.string.CustomSound);
 								}
 								else {
-									value = NotificationsSoundActivity.trimTitle(document, document.file_name_fixed);
+									value = NotificationsSoundActivity.trimTitle(document, document.fileNameFixed);
 								}
 							}
 							else if (value.equals("NoSound")) {

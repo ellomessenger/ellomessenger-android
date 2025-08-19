@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -25,7 +25,6 @@ import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.EditBankRequisitesFragmentBinding
 import org.telegram.messenger.utils.gone
-import org.telegram.messenger.utils.toJson
 import org.telegram.messenger.utils.validateEmail
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
@@ -278,7 +277,7 @@ class EditBankRequisitesFragment(args: Bundle? = null) : BaseFragment(args) {
 		reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 			val context = context ?: return@sendRequest
 
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val data = response.readData<ElloRpc.WithdrawSendApproveCodeResponse>()
 
 				AndroidUtilities.runOnUIThread {
@@ -518,7 +517,7 @@ class EditBankRequisitesFragment(args: Bundle? = null) : BaseFragment(args) {
 		setControlsEnabled(false)
 
 		connectionsManager.sendRequest(request) { response, error ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val requisite = response.readData<ElloRpc.BankRequisite>()
 
 				when {
@@ -617,7 +616,7 @@ class EditBankRequisitesFragment(args: Bundle? = null) : BaseFragment(args) {
 		setControlsEnabled(false)
 
 		connectionsManager.sendRequest(request) { response, error ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val requisite = response.readData<ElloRpc.BankRequisite>()
 
 				if (requisite != null) {
@@ -625,14 +624,16 @@ class EditBankRequisitesFragment(args: Bundle? = null) : BaseFragment(args) {
 						Toast.makeText(context, R.string.requisite_edited, Toast.LENGTH_SHORT).show()
 						finishFragment()
 					}
-				} else {
+				}
+				else {
 					AndroidUtilities.runOnUIThread {
 						Toast.makeText(context, R.string.failed_to_edit_requisite, Toast.LENGTH_SHORT).show()
 						setControlsEnabled(true)
 					}
 				}
 
-			} else {
+			}
+			else {
 				AndroidUtilities.runOnUIThread {
 					val context = context ?: return@runOnUIThread
 					val errorMessage = error?.text

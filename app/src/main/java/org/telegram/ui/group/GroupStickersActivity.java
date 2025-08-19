@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.group;
 
@@ -29,6 +29,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -60,26 +61,20 @@ import androidx.recyclerview.widget.RecyclerView;
 
 public class GroupStickersActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 	private StickerEmptyView emptyView;
-
 	private RecyclerListView listView;
 	private ListAdapter listAdapter;
 	private SearchAdapter searchAdapter;
 	private LinearLayoutManager layoutManager;
-
 	private int selectedStickerSetIndex = -1;
-
-	private TLRPC.TL_messages_stickerSet selectedStickerSet;
+	private TLRPC.TLMessagesStickerSet selectedStickerSet;
 	private boolean removeStickerSet;
-
 	private TLRPC.ChatFull info;
 	private final long chatId;
-
 	private int infoRow;
 	private int headerRow;
 	private int stickersStartRow;
 	private int stickersEndRow;
 	private int rowCount;
-
 	private ActionBarMenuItem searchItem;
 	private boolean searching;
 
@@ -207,7 +202,7 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 			}
 
 			if (position >= stickersStartRow && position < stickersEndRow) {
-				TLRPC.TL_messages_stickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE).get(position - stickersStartRow);
+				TLRPC.TLMessagesStickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE).get(position - stickersStartRow);
 				onStickerSetClicked(view, stickerSet, false);
 			}
 		});
@@ -223,11 +218,11 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 		return fragmentView;
 	}
 
-	private void onStickerSetClicked(View view, TLRPC.TL_messages_stickerSet stickerSet, boolean remote) {
+	private void onStickerSetClicked(View view, TLRPC.TLMessagesStickerSet stickerSet, boolean remote) {
 		TLRPC.InputStickerSet inputStickerSet = null;
 		if (remote) {
-			TLRPC.TL_inputStickerSetShortName inputStickerSetShortName = new TLRPC.TL_inputStickerSetShortName();
-			inputStickerSetShortName.short_name = stickerSet.set.short_name;
+			TLRPC.TLInputStickerSetShortName inputStickerSetShortName = new TLRPC.TLInputStickerSetShortName();
+			inputStickerSetShortName.shortName = stickerSet.set.shortName;
 			inputStickerSet = inputStickerSetShortName;
 		}
 		StickersAlert stickersAlert = new StickersAlert(getParentActivity(), GroupStickersActivity.this, inputStickerSet, !remote ? stickerSet : null, null);
@@ -354,16 +349,19 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 		if (info == null || info.stickerset != null && selectedStickerSet != null && selectedStickerSet.set.id == info.stickerset.id || info.stickerset == null && selectedStickerSet == null) {
 			return;
 		}
-		TLRPC.TL_channels_setStickers req = new TLRPC.TL_channels_setStickers();
+		TLRPC.TLChannelsSetStickers req = new TLRPC.TLChannelsSetStickers();
 		req.channel = MessagesController.getInstance(currentAccount).getInputChannel(chatId);
 		if (removeStickerSet) {
-			req.stickerset = new TLRPC.TL_inputStickerSetEmpty();
+			req.stickerset = new TLRPC.TLInputStickerSetEmpty();
 		}
 		else {
 			MessagesController.getEmojiSettings(currentAccount).edit().remove("group_hide_stickers_" + info.id).commit();
-			req.stickerset = new TLRPC.TL_inputStickerSetID();
-			req.stickerset.id = selectedStickerSet.set.id;
-			req.stickerset.access_hash = selectedStickerSet.set.access_hash;
+
+			var stickerSetId = new TLRPC.TLInputStickerSetID();
+			stickerSetId.id = selectedStickerSet.set.id;
+			stickerSetId.accessHash = selectedStickerSet.set.accessHash;
+
+			req.stickerset = stickerSetId;
 		}
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 			if (error == null) {
@@ -395,7 +393,7 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 	}
 
 	private void updateSelectedStickerSetIndex() {
-		List<TLRPC.TL_messages_stickerSet> stickerSets = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE);
+		List<TLRPC.TLMessagesStickerSet> stickerSets = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE);
 		selectedStickerSetIndex = -1;
 
 		long selectedSet;
@@ -415,7 +413,7 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 
 		if (selectedSet != 0) {
 			for (int i = 0; i < stickerSets.size(); i++) {
-				TLRPC.TL_messages_stickerSet set = stickerSets.get(i);
+				TLRPC.TLMessagesStickerSet set = stickerSets.get(i);
 				if (set.set.id == selectedSet) {
 					selectedStickerSetIndex = i;
 					break;
@@ -427,7 +425,7 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 	@SuppressLint("NotifyDataSetChanged")
 	private void updateRows() {
 		rowCount = 0;
-		List<TLRPC.TL_messages_stickerSet> stickerSets = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE);
+		List<TLRPC.TLMessagesStickerSet> stickerSets = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE);
 		if (!stickerSets.isEmpty()) {
 			headerRow = rowCount++;
 			stickersStartRow = rowCount;
@@ -485,8 +483,8 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 		private final static int TYPE_STICKER_SET = 0, TYPE_MY_STICKERS_HEADER = 1;
 
 		private final Context mContext;
-		private List<TLRPC.TL_messages_stickerSet> searchEntries = new ArrayList<>();
-		private List<TLRPC.TL_messages_stickerSet> localSearchEntries = new ArrayList<>();
+		private List<TLRPC.TLMessagesStickerSet> searchEntries = new ArrayList<>();
+		private List<TLRPC.TLMessagesStickerSet> localSearchEntries = new ArrayList<>();
 
 		private Runnable lastCallback;
 		private String lastQuery;
@@ -500,7 +498,7 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 		@Override
 		public long getItemId(int position) {
 			if (getItemViewType(position) == TYPE_STICKER_SET) {
-				List<TLRPC.TL_messages_stickerSet> arrayList = position > searchEntries.size() ? localSearchEntries : searchEntries;
+				List<TLRPC.TLMessagesStickerSet> arrayList = position > searchEntries.size() ? localSearchEntries : searchEntries;
 				int row = position > searchEntries.size() ? position - searchEntries.size() - 1 : position;
 
 				return arrayList.get(row).set.id;
@@ -544,26 +542,26 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 			AndroidUtilities.runOnUIThread(lastCallback = () -> {
 				lastQuery = query;
 
-				TLRPC.TL_messages_searchStickerSets searchStickerSets = new TLRPC.TL_messages_searchStickerSets();
+				TLRPC.TLMessagesSearchStickerSets searchStickerSets = new TLRPC.TLMessagesSearchStickerSets();
 				searchStickerSets.q = query;
 				reqId = getConnectionsManager().sendRequest(searchStickerSets, (response, error) -> {
 					if (!Objects.equals(lastQuery, searchStickerSets.q)) {
 						return;
 					}
 
-					if (response instanceof TLRPC.TL_messages_foundStickerSets) {
-						List<TLRPC.TL_messages_stickerSet> newSearchEntries = new ArrayList<>();
-						TLRPC.TL_messages_foundStickerSets foundStickerSets = (TLRPC.TL_messages_foundStickerSets)response;
+					if (response instanceof TLRPC.TLMessagesFoundStickerSets) {
+						List<TLRPC.TLMessagesStickerSet> newSearchEntries = new ArrayList<>();
+						TLRPC.TLMessagesFoundStickerSets foundStickerSets = (TLRPC.TLMessagesFoundStickerSets)response;
 						for (TLRPC.StickerSetCovered stickerSetCovered : foundStickerSets.sets) {
-							TLRPC.TL_messages_stickerSet set = new TLRPC.TL_messages_stickerSet();
+							TLRPC.TLMessagesStickerSet set = new TLRPC.TLMessagesStickerSet();
 							set.set = stickerSetCovered.set;
-							set.documents = stickerSetCovered.covers;
+							set.documents.addAll(TLRPCExtensions.getCovers(stickerSetCovered));
 							newSearchEntries.add(set);
 						}
 						String lowQuery = query.toLowerCase(Locale.ROOT).trim();
-						List<TLRPC.TL_messages_stickerSet> newLocalEntries = new ArrayList<>();
-						for (TLRPC.TL_messages_stickerSet localSet : MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE)) {
-							if (localSet.set.short_name.toLowerCase(Locale.ROOT).contains(lowQuery) || localSet.set.title.toLowerCase(Locale.ROOT).contains(lowQuery)) {
+						List<TLRPC.TLMessagesStickerSet> newLocalEntries = new ArrayList<>();
+						for (TLRPC.TLMessagesStickerSet localSet : MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE)) {
+							if (localSet.set.shortName.toLowerCase(Locale.ROOT).contains(lowQuery) || localSet.set.title.toLowerCase(Locale.ROOT).contains(lowQuery)) {
 								newLocalEntries.add(localSet);
 							}
 						}
@@ -605,12 +603,12 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 		public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
 			if (getItemViewType(position) == TYPE_STICKER_SET) {
 				boolean local = position > searchEntries.size();
-				List<TLRPC.TL_messages_stickerSet> arrayList = local ? localSearchEntries : searchEntries;
+				List<TLRPC.TLMessagesStickerSet> arrayList = local ? localSearchEntries : searchEntries;
 				int row = local ? position - searchEntries.size() - 1 : position;
 				StickerSetCell cell = (StickerSetCell)holder.itemView;
-				TLRPC.TL_messages_stickerSet set = arrayList.get(row);
+				TLRPC.TLMessagesStickerSet set = arrayList.get(row);
 				cell.setStickersSet(set, row != arrayList.size() - 1, !local);
-				cell.setSearchQuery(set, lastQuery != null ? lastQuery.toLowerCase(Locale.ROOT) : "", getResourceProvider());
+				cell.setSearchQuery(set, lastQuery != null ? lastQuery.toLowerCase(Locale.ROOT) : "");
 				long id;
 				if (selectedStickerSet != null) {
 					id = selectedStickerSet.set.id;
@@ -660,10 +658,10 @@ public class GroupStickersActivity extends BaseFragment implements NotificationC
 		public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
 			switch (holder.getItemViewType()) {
 				case TYPE_STICKER_SET: {
-					List<TLRPC.TL_messages_stickerSet> arrayList = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE);
+					List<TLRPC.TLMessagesStickerSet> arrayList = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_IMAGE);
 					int row = position - stickersStartRow;
 					StickerSetCell cell = (StickerSetCell)holder.itemView;
-					TLRPC.TL_messages_stickerSet set = arrayList.get(row);
+					TLRPC.TLMessagesStickerSet set = arrayList.get(row);
 					cell.setStickersSet(arrayList.get(row), row != arrayList.size() - 1);
 					long id;
 					if (selectedStickerSet != null) {

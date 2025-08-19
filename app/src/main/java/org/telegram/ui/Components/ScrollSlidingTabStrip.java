@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
@@ -18,7 +18,6 @@ import android.graphics.Paint.Style;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.os.SystemClock;
 import android.transition.AutoTransition;
 import android.transition.Transition;
 import android.transition.TransitionManager;
@@ -46,12 +45,13 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.messageobject.MessageObject;
-import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 
 import java.util.HashMap;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
 public class ScrollSlidingTabStrip extends HorizontalScrollView {
@@ -87,23 +87,14 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 	private int tabCount;
 	private int currentPosition;
 	private final AnimatedFloat currentPositionAnimated = new AnimatedFloat(this, 350, CubicBezierInterpolator.EASE_OUT_QUINT);
-	private final RectF leftTabBounds = new RectF();
-	private final RectF rightTabBounds = new RectF();
 	private final RectF tabBounds = new RectF();
-	private boolean animateFromPosition;
-	private float startAnimationPosition;
-	private float positionAnimationProgress;
-	private long lastAnimationTime;
 	private final float touchSlop;
 	private final Paint rectPaint;
-	private int indicatorColor = 0xff666666;
 	private int underlineColor = 0x1a000000;
 	private int indicatorHeight;
 	private final GradientDrawable indicatorDrawable = new GradientDrawable();
 	private final int scrollOffset = AndroidUtilities.dp(StickerTabView.SMALL_WIDTH);
 	private int underlineHeight = AndroidUtilities.dp(2);
-	private final int dividerPadding = AndroidUtilities.dp(12);
-	private final int tabPadding = AndroidUtilities.dp(24);
 	private int lastScrollX = 0;
 	private boolean dragEnabled;
 	Runnable longClickRunnable = new Runnable() {
@@ -148,7 +139,7 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 		tabsContainer = new LinearLayout(context) {
 
 			@Override
-			protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+			protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 				if (child instanceof StickerTabView) {
 					((StickerTabView)child).updateExpandProgress(expandProgress);
 				}
@@ -201,7 +192,6 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 		futureTabsPositions.clear();
 		tabCount = 0;
 		currentPosition = 0;
-		animateFromPosition = false;
 	}
 
 	public void beginUpdate(boolean animated) {
@@ -223,7 +213,7 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 				}
 
 				@Override
-				public Animator createAnimator(ViewGroup sceneRoot, TransitionValues startValues, TransitionValues endValues) {
+				public Animator createAnimator(@NonNull ViewGroup sceneRoot, TransitionValues startValues, TransitionValues endValues) {
 					final ValueAnimator invalidateAnimator = ValueAnimator.ofFloat(0, 1);
 					invalidateAnimator.addUpdateListener(a -> invalidate());
 					return invalidateAnimator;
@@ -418,7 +408,7 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 		return tab;
 	}
 
-	public View addStickerTab(TLObject thumb, TLRPC.Document sticker, TLRPC.TL_messages_stickerSet parentObject) {
+	public View addStickerTab(TLObject thumb, TLRPC.Document sticker, TLRPC.TLMessagesStickerSet parentObject) {
 		String key = "set" + (parentObject == null ? sticker.id : parentObject.set.id);
 		final int position = tabCount++;
 
@@ -626,8 +616,7 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 
 		for (int a = start; a < end; a++) {
 			View child = tabsContainer.getChildAt(a);
-			if (child instanceof StickerTabView) {
-				StickerTabView tabView = (StickerTabView)child;
+			if (child instanceof StickerTabView tabView) {
 				if (tabView.type == StickerTabView.EMOJI_TYPE) {
 					Object thumb = tabView.getTag(R.id.parent_tag);
 					Object sticker = tabView.getTag(R.id.object_tag);
@@ -649,17 +638,21 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 					ImageLocation imageLocation;
 
 					if (object instanceof TLRPC.Document) {
-						TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(sticker.thumbs, 90);
+						TLRPC.PhotoSize thumb = null;
+
+						if (sticker instanceof TLRPC.TLDocument tlDocument) {
+							thumb = FileLoader.getClosestPhotoSizeWithSize(tlDocument.thumbs, 90);
+						}
+
 						if (!tabView.inited) {
 							tabView.svgThumb = DocumentObject.getSvgThumb((TLRPC.Document)object, ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), 0.2f);
 						}
 						imageLocation = ImageLocation.getForDocument(thumb, sticker);
 					}
-					else if (object instanceof TLRPC.PhotoSize) {
-						TLRPC.PhotoSize thumb = (TLRPC.PhotoSize)object;
+					else if (object instanceof TLRPC.PhotoSize thumb) {
 						int thumbVersion = 0;
-						if (parentObject instanceof TLRPC.TL_messages_stickerSet) {
-							thumbVersion = ((TLRPC.TL_messages_stickerSet)parentObject).set.thumb_version;
+						if (parentObject instanceof TLRPC.TLMessagesStickerSet) {
+							thumbVersion = ((TLRPC.TLMessagesStickerSet)parentObject).set.thumbVersion;
 						}
 						imageLocation = ImageLocation.getForSticker(thumb, sticker, thumbVersion);
 					}
@@ -700,8 +693,8 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 						imageView.setImage(imageLocation, null, "webp", svgThumb, parentObject);
 					}
 					String title = null;
-					if (parentObject instanceof TLRPC.TL_messages_stickerSet) {
-						title = ((TLRPC.TL_messages_stickerSet)parentObject).set.title;
+					if (parentObject instanceof TLRPC.TLMessagesStickerSet) {
+						title = ((TLRPC.TLMessagesStickerSet)parentObject).set.title;
 					}
 					tabView.textView.setText(title);
 				}
@@ -729,12 +722,11 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 	}
 
 	@Override
-	protected void dispatchDraw(Canvas canvas) {
+	protected void dispatchDraw(@NonNull Canvas canvas) {
 		final float dif = (stickerTabWidth - stickerTabExpandedWidth);
 		final float offset = expandOffset * (1f - expandProgress);
 		for (int i = 0; i < tabsContainer.getChildCount(); i++) {
-			if (tabsContainer.getChildAt(i) instanceof StickerTabView) {
-				StickerTabView stickerTabView = (StickerTabView)tabsContainer.getChildAt(i);
+			if (tabsContainer.getChildAt(i) instanceof StickerTabView stickerTabView) {
 				stickerTabView.animateIfPositionChanged(this);
 				if (animateToExpanded) {
 					stickerTabView.setTranslationX(dif * i * (1f - expandProgress) + offset + stickerTabView.dragOffset);
@@ -829,31 +821,16 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 		this.currentPosition = currentPosition;
 	}
 
-	public void cancelPositionAnimation() {
-		animateFromPosition = false;
-		positionAnimationProgress = 1.0f;
-	}
-
 	public void onPageScrolled(int position, int first) {
 		if (currentPosition == position) {
 			return;
 		}
 
-		View currentTab = tabsContainer.getChildAt(currentPosition);
-		if (currentTab != null) {
-			startAnimationPosition = currentTab.getLeft();
-			positionAnimationProgress = 0.0f;
-			animateFromPosition = true;
-			lastAnimationTime = SystemClock.elapsedRealtime();
-		}
-		else {
-			animateFromPosition = false;
-		}
 		currentPosition = position;
+
 		if (position >= tabsContainer.getChildCount()) {
 			return;
 		}
-		positionAnimationProgress = 0.0f;
 		for (int a = 0; a < tabsContainer.getChildCount(); a++) {
 			tabsContainer.getChildAt(a).setSelected(a == position);
 		}
@@ -880,7 +857,6 @@ public class ScrollSlidingTabStrip extends HorizontalScrollView {
 	}
 
 	public void setIndicatorColor(int value) {
-		indicatorColor = value;
 		invalidate();
 	}
 

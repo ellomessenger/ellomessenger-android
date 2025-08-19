@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -88,11 +88,12 @@ import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_account_clearRecentEmojiStatuses
-import org.telegram.tgnet.TLRPC.TL_emojiStatus
-import org.telegram.tgnet.TLRPC.TL_emojiStatusUntil
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetEmojiDefaultStatuses
-import org.telegram.tgnet.TLRPC.TL_stickerSetFullCovered
+import org.telegram.tgnet.*
+import org.telegram.tgnet.TLRPC.TLAccountClearRecentEmojiStatuses
+import org.telegram.tgnet.TLRPC.TLEmojiStatus
+import org.telegram.tgnet.TLRPC.TLEmojiStatusUntil
+import org.telegram.tgnet.TLRPC.TLInputStickerSetEmojiDefaultStatuses
+import org.telegram.tgnet.TLRPC.TLStickerSetFullCovered
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.ActionBarPopupWindow.ActionBarPopupWindowLayout
 import org.telegram.ui.ActionBar.AlertDialog
@@ -132,6 +133,14 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
+import androidx.core.graphics.withSave
+import androidx.core.view.isVisible
+import androidx.core.util.size
+import androidx.core.view.isNotEmpty
+import androidx.core.graphics.withTranslation
+import androidx.core.content.edit
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withScale
 
 open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseFragment: BaseFragment, context: Context, private val includeEmpty: Boolean, private val emojiX: Int? = null, private val type: Int = TYPE_EMOJI_STATUS, topPaddingDp: Int = 16) : FrameLayout(context), NotificationCenterDelegate {
 	private val durationScale = 1f
@@ -292,27 +301,25 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 					return
 				}
 
-				canvas.save()
+				canvas.withSave {
+					paint.setShadowLayer(AndroidUtilities.dp(2f).toFloat(), 0f, AndroidUtilities.dp(-0.66f).toFloat(), 0x1e000000)
+					paint.setColor(context.getColor(R.color.background))
+					paint.setAlpha((255 * alpha).toInt())
 
-				paint.setShadowLayer(AndroidUtilities.dp(2f).toFloat(), 0f, AndroidUtilities.dp(-0.66f).toFloat(), 0x1e000000)
-				paint.setColor(context.getColor(R.color.background))
-				paint.setAlpha((255 * alpha).toInt())
+					val px: Float = ((bubbleX ?: width) / 2f) + AndroidUtilities.dp(20f)
+					val w = (width - getPaddingLeft() - getPaddingRight()).toFloat()
+					val h = (height - paddingBottom - paddingTop).toFloat()
 
-				val px: Float = ((bubbleX ?: width) / 2f) + AndroidUtilities.dp(20f)
-				val w = (width - getPaddingLeft() - getPaddingRight()).toFloat()
-				val h = (height - paddingBottom - paddingTop).toFloat()
+					AndroidUtilities.rectTmp[getPaddingLeft() + (px - px * scaleX), paddingTop.toFloat(), getPaddingLeft() + px + (w - px) * scaleX] = paddingTop + h * scaleY
 
-				AndroidUtilities.rectTmp[getPaddingLeft() + (px - px * scaleX), paddingTop.toFloat(), getPaddingLeft() + px + (w - px) * scaleX] = paddingTop + h * scaleY
+					path.rewind()
+					path.addRoundRect(AndroidUtilities.rectTmp, AndroidUtilities.dp(12f).toFloat(), AndroidUtilities.dp(12f).toFloat(), Path.Direction.CW)
 
-				path.rewind()
-				path.addRoundRect(AndroidUtilities.rectTmp, AndroidUtilities.dp(12f).toFloat(), AndroidUtilities.dp(12f).toFloat(), Path.Direction.CW)
+					drawPath(path, paint)
+					clipPath(path)
 
-				canvas.drawPath(path, paint)
-				canvas.clipPath(path)
-
-				super.dispatchDraw(canvas)
-
-				canvas.restore()
+					super.dispatchDraw(this)
+				}
 			}
 		}
 
@@ -419,7 +426,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 				if (state == SCROLL_STATE_IDLE) {
 					smoothScrolling = false
 
-					if (searchRow != -1 && searchBox.visibility == VISIBLE && searchBox.translationY > -AndroidUtilities.dp(51f)) {
+					if (searchRow != -1 && searchBox.isVisible && searchBox.translationY > -AndroidUtilities.dp(51f)) {
 						this@SelectAnimatedEmojiDialog.scrollToPosition(if (searchBox.translationY > -AndroidUtilities.dp(16f)) 0 else 1, 0)
 					}
 				}
@@ -566,7 +573,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 						val reaction = MediaDataController.getInstance(currentAccount).reactionsMap[selectedReactionView?.reaction?.emojicon]
 
 						if (reaction != null) {
-							bigReactionImageReceiver.setImage(ImageLocation.getForDocument(reaction.select_animation), ReactionsUtils.SELECT_ANIMATION_FILTER, null, null, null, 0, "tgs", selectedReactionView?.reaction, 0)
+							bigReactionImageReceiver.setImage(ImageLocation.getForDocument(reaction.selectAnimation), ReactionsUtils.SELECT_ANIMATION_FILTER, null, null, null, 0, "tgs", selectedReactionView?.reaction, 0)
 						}
 					}
 					else {
@@ -592,10 +599,10 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 						override fun onEndPartly(date: Int?) {
 							incrementHintUse()
 
-							val status = TL_emojiStatus()
-							status.document_id = view.span!!.documentId
+							val status = TLEmojiStatus()
+							status.documentId = view.span!!.documentId
 
-							onEmojiSelected(view, status.document_id, view.span?.document, date)
+							onEmojiSelected(view, status.documentId, view.span?.document, date)
 
 							MediaDataController.getInstance(currentAccount).pushRecentEmojiStatus(status)
 						}
@@ -785,7 +792,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 		builder.setMessage(context.getString(R.string.ClearRecentEmojiStatusesText))
 
 		builder.setPositiveButton(context.getString(R.string.Clear).uppercase()) { _, _ ->
-			ConnectionsManager.getInstance(currentAccount).sendRequest(TL_account_clearRecentEmojiStatuses(), null)
+			ConnectionsManager.getInstance(currentAccount).sendRequest(TLAccountClearRecentEmojiStatuses(), null)
 			MediaDataController.getInstance(currentAccount).clearRecentEmojiStatuses()
 			updateRows(true)
 		}
@@ -843,7 +850,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			else {
 				val maxLen = layoutManager.spanCount * EXPAND_MAX_LINES
 
-				for (i in 0 until positionToSection.size()) {
+				for (i in 0 until positionToSection.size) {
 					val startPosition = positionToSection.keyAt(i)
 					val index = i - if (defaultStatuses.isEmpty()) 0 else 1
 					val pack = (if (index >= 0) packs[index] else null) ?: continue
@@ -865,7 +872,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			searchBox.animate().translationY(-AndroidUtilities.dp(4f).toFloat()).start()
 		}
 		else {
-			if (emojiGridView!!.childCount > 0) {
+			if (emojiGridView!!.isNotEmpty()) {
 				val first = emojiGridView!!.getChildAt(0)
 
 				if (emojiGridView!!.getChildAdapterPosition(first) == searchRow && "searchbox" == first.tag) {
@@ -895,41 +902,37 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 	override fun dispatchDraw(canvas: Canvas) {
 		val scrimDrawable = scrimDrawable
+
 		if (scrimDrawable != null && emojiX != null) {
 			val bounds = scrimDrawable.getBounds()
 			val scale = if (scrimDrawableParent == null) 1f else scrimDrawableParent!!.scaleY
 			val wasAlpha = scrimDrawable.alpha
 			val h = if (scrimDrawableParent == null) bounds.height() else scrimDrawableParent!!.height
 
-			canvas.save()
-			canvas.translate(0f, -translationY)
+			canvas.withTranslation(0f, -translationY) {
+				scrimDrawable.alpha = (wasAlpha * contentView.alpha.pow(.25f) * scrimAlpha).toInt()
 
-			scrimDrawable.alpha = (wasAlpha * contentView.alpha.pow(.25f) * scrimAlpha).toInt()
+				drawableToBounds[(bounds.centerX() - bounds.width() / 2f * scale - bounds.centerX() + emojiX + if (scale > 1f && scale < 1.5f) 2 else 0).toInt(), ((h - (h - bounds.bottom)) * scale - (if (scale > 1.5f) bounds.height() * .81f + 1 else 0f) - bounds.top - bounds.height() / 2f + AndroidUtilities.dp(topMarginDp.toFloat()) - bounds.height() * scale).toInt(), (bounds.centerX() + bounds.width() / 2f * scale - bounds.centerX() + emojiX + if (scale > 1f && scale < 1.5f) 2 else 0).toInt()] = ((h - (h - bounds.bottom)) * scale - (if (scale > 1.5f) bounds.height() * .81f + 1 else 0f) - bounds.top - bounds.height() / 2f + AndroidUtilities.dp(topMarginDp.toFloat())).toInt()
 
-			drawableToBounds[(bounds.centerX() - bounds.width() / 2f * scale - bounds.centerX() + emojiX + if (scale > 1f && scale < 1.5f) 2 else 0).toInt(), ((h - (h - bounds.bottom)) * scale - (if (scale > 1.5f) bounds.height() * .81f + 1 else 0f) - bounds.top - bounds.height() / 2f + AndroidUtilities.dp(topMarginDp.toFloat()) - bounds.height() * scale).toInt(), (bounds.centerX() + bounds.width() / 2f * scale - bounds.centerX() + emojiX + if (scale > 1f && scale < 1.5f) 2 else 0).toInt()] = ((h - (h - bounds.bottom)) * scale - (if (scale > 1.5f) bounds.height() * .81f + 1 else 0f) - bounds.top - bounds.height() / 2f + AndroidUtilities.dp(topMarginDp.toFloat())).toInt()
+				scrimDrawable.setBounds(drawableToBounds.left, drawableToBounds.top, (drawableToBounds.left + drawableToBounds.width() / scale).toInt(), (drawableToBounds.top + drawableToBounds.height() / scale).toInt())
 
-			scrimDrawable.setBounds(drawableToBounds.left, drawableToBounds.top, (drawableToBounds.left + drawableToBounds.width() / scale).toInt(), (drawableToBounds.top + drawableToBounds.height() / scale).toInt())
+				scale(scale, scale, drawableToBounds.left.toFloat(), drawableToBounds.top.toFloat())
 
-			canvas.scale(scale, scale, drawableToBounds.left.toFloat(), drawableToBounds.top.toFloat())
-
-			scrimDrawable.draw(canvas)
-			scrimDrawable.alpha = wasAlpha
-			scrimDrawable.bounds = bounds
-
-			canvas.restore()
+				scrimDrawable.draw(this)
+    			scrimDrawable.alpha = wasAlpha
+    			scrimDrawable.bounds = bounds
+			}
 		}
 
 		super.dispatchDraw(canvas)
+
 		if (emojiSelectView != null && emojiSelectRect != null && emojiSelectView?.drawable != null) {
-			canvas.save()
-			canvas.translate(0f, -translationY)
-
-			emojiSelectView?.drawable?.alpha = (255 * emojiSelectAlpha).toInt()
-			emojiSelectView?.drawable?.bounds = emojiSelectRect!!
-			emojiSelectView?.drawable?.colorFilter = PorterDuffColorFilter(ColorUtils.blendARGB(context.getColor(R.color.brand), scrimColor, 1f - scrimAlpha), PorterDuff.Mode.MULTIPLY)
-			emojiSelectView?.drawable?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(0f, -translationY) {
+				emojiSelectView?.drawable?.alpha = (255 * emojiSelectAlpha).toInt()
+				emojiSelectView?.drawable?.bounds = emojiSelectRect!!
+				emojiSelectView?.drawable?.colorFilter = PorterDuffColorFilter(ColorUtils.blendARGB(context.getColor(R.color.brand), scrimColor, 1f - scrimAlpha), PorterDuff.Mode.MULTIPLY)
+    			emojiSelectView?.drawable?.draw(this)
+			}
 		}
 	}
 
@@ -1096,9 +1099,9 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 		shuffledFeaturedSets.shuffle()
 
 		for (i in shuffledFeaturedSets.indices) {
-			val d = (shuffledFeaturedSets[i] as? TL_stickerSetFullCovered)?.documents
+			val d = (shuffledFeaturedSets[i] as? TLStickerSetFullCovered)?.documents
 
-			if (shuffledFeaturedSets[i] is TL_stickerSetFullCovered && d != null) {
+			if (shuffledFeaturedSets[i] is TLStickerSetFullCovered && d != null) {
 				val documents = ArrayList(d)
 
 				documents.shuffle()
@@ -1127,7 +1130,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			for (i in shuffledSets.indices) {
 				val d = shuffledSets[i].documents
 
-				if (shuffledSets[i] != null && d != null) {
+				if (shuffledSets[i] != null) {
 					val documents = ArrayList(d)
 
 					documents.shuffle()
@@ -1156,7 +1159,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			val thumbDrawable = getSvgThumb(document.thumbs, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 0.2f)
 			val thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90)
 
-			if ("video/webm" == document.mime_type) {
+			if ("video/webm" == document.mimeType) {
 				mediaLocation = ImageLocation.getForDocument(document)
 				mediaFilter = filter + "_" + ImageLoader.AUTOPLAY_FILTER
 
@@ -1198,7 +1201,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 		searchEmptyViewAnimator?.addListener(object : AnimatorListenerAdapter() {
 			override fun onAnimationEnd(animation: Animator) {
-				emojiSearchEmptyView.visibility = if (empty && emojiSearchGridView.visibility == VISIBLE) VISIBLE else GONE
+				emojiSearchEmptyView.visibility = if (empty && emojiSearchGridView.isVisible) VISIBLE else GONE
 				searchEmptyViewAnimator = null
 			}
 		})
@@ -1274,19 +1277,15 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 						var emoticon: String?
 
 						for (i in stickerSets.indices) {
-							if (stickerSets[i].documents != null) {
-								val documents = stickerSets[i].documents
+							val documents = stickerSets[i].documents
 
-								if (documents != null) {
-									for (j in documents.indices) {
-										emoticon = MessageObject.findAnimatedEmojiEmoticon(documents[j], null)
+							for (j in documents.indices) {
+								emoticon = MessageObject.findAnimatedEmojiEmoticon(documents[j], null)
 
-										val id = documents[j].id
+								val id = documents[j].id
 
-										if (emoticon != null && !documentIds.contains(id) && query.contains(emoticon.lowercase())) {
-											documentIds.add(id)
-										}
-									}
+								if (emoticon != null && !documentIds.contains(id) && query.contains(emoticon.lowercase())) {
+									documentIds.add(id)
 								}
 							}
 						}
@@ -1294,8 +1293,8 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 						val featuredStickerSets = MediaDataController.getInstance(currentAccount).featuredEmojiSets
 
 						for (i in featuredStickerSets.indices) {
-							if (featuredStickerSets[i] is TL_stickerSetFullCovered && (featuredStickerSets[i] as TL_stickerSetFullCovered).keywords != null) {
-								val documents = (featuredStickerSets[i] as TL_stickerSetFullCovered).documents
+							if (!(featuredStickerSets[i] as? TLStickerSetFullCovered)?.keywords.isNullOrEmpty()) {
+								val documents = (featuredStickerSets[i] as? TLStickerSetFullCovered)?.documents
 
 								if (documents != null) {
 									for (j in documents.indices) {
@@ -1415,12 +1414,10 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 		updateSearchBox()
 
-		if (searchBox.clear != null) {
-			val showed = searchBox.clear.alpha != 0f
+		val showed = searchBox.clear.alpha != 0f
 
-			if (searching != showed) {
-				searchBox.clear.animate().alpha(if (searching) 1.0f else 0.0f).setDuration(150).scaleX(if (searching) 1.0f else 0.1f).scaleY(if (searching) 1.0f else 0.1f).start()
-			}
+		if (searching != showed) {
+			searchBox.clear.animate().alpha(if (searching) 1.0f else 0.0f).setDuration(150).scaleX(if (searching) 1.0f else 0.1f).scaleY(if (searching) 1.0f else 0.1f).start()
 		}
 	}
 
@@ -1451,8 +1448,8 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			onEmojiSelected(view, null, null, null)
 		}
 		else {
-			val status = TL_emojiStatus()
-			status.document_id = span.getDocumentId()
+			val status = TLEmojiStatus()
+			status.documentId = span.getDocumentId()
 
 			val document = if (span.document == null) AnimatedEmojiDrawable.findDocument(currentAccount, span.documentId) else span.document
 
@@ -1478,11 +1475,12 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 		if (type == TYPE_SET_DEFAULT_REACTION) {
 			return
 		}
+
 		val key = "emoji" + (if (type == TYPE_EMOJI_STATUS) "status" else "reaction") + "usehint"
 		val value = MessagesController.getGlobalMainSettings().getInt(key, 0)
 
 		if (value <= 3) {
-			MessagesController.getGlobalMainSettings().edit().putInt(key, value + 1).commit()
+			MessagesController.getGlobalMainSettings().edit {putInt(key, value + 1) }
 		}
 	}
 
@@ -1495,7 +1493,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 	}
 
 	private fun updateRows(diff: Boolean) {
-		val mediaDataController = MediaDataController.getInstance(UserConfig.selectedAccount) ?: return
+		val mediaDataController = MediaDataController.getInstance(UserConfig.selectedAccount)
 		val installedEmojiPacks = ArrayList(mediaDataController.getStickerSets(MediaDataController.TYPE_EMOJIPACKS))
 		val featuredEmojiPacks = ArrayList(mediaDataController.featuredEmojiSets)
 		val prevRowHashCodes = ArrayList(rowHashCodes)
@@ -1583,7 +1581,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 		}
 		else if (type == TYPE_EMOJI_STATUS) {
 			val recentEmojiStatuses = MediaDataController.getInstance(currentAccount).recentEmojiStatuses
-			val defaultSet = MediaDataController.getInstance(currentAccount).getStickerSet(TL_inputStickerSetEmojiDefaultStatuses(), false)
+			val defaultSet = MediaDataController.getInstance(currentAccount).getStickerSet(TLInputStickerSetEmojiDefaultStatuses(), false)
 
 			if (defaultSet == null) {
 				defaultSetLoading = true
@@ -1597,7 +1595,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 				val defaultEmojiStatuses = MediaDataController.getInstance(currentAccount).defaultEmojiStatuses
 				val maxRecentLen = layoutManager!!.spanCount * (RECENT_MAX_LINES + 8)
 
-				if (defaultSet.documents != null && defaultSet.documents.isNotEmpty()) {
+				if (defaultSet.documents.isNotEmpty()) {
 					for (i in 0 until min((layoutManager!!.spanCount - 1).toDouble(), defaultSet.documents.size.toDouble()).toInt()) {
 						recent.add(AnimatedEmojiSpan(defaultSet.documents[i], null))
 
@@ -1609,11 +1607,11 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 				if (!recentEmojiStatuses.isNullOrEmpty()) {
 					for (emojiStatus in recentEmojiStatuses) {
-						val did = if (emojiStatus is TL_emojiStatus) {
-							emojiStatus.document_id
+						val did = if (emojiStatus is TLEmojiStatus) {
+							emojiStatus.documentId
 						}
-						else if (emojiStatus is TL_emojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt()) {
-							emojiStatus.document_id
+						else if (emojiStatus is TLEmojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt()) {
+							emojiStatus.documentId
 						}
 						else {
 							continue
@@ -1642,11 +1640,11 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 				if (!defaultEmojiStatuses.isNullOrEmpty()) {
 					for (emojiStatus in defaultEmojiStatuses) {
-						val did = if (emojiStatus is TL_emojiStatus) {
-							emojiStatus.document_id
+						val did = if (emojiStatus is TLEmojiStatus) {
+							emojiStatus.documentId
 						}
-						else if (emojiStatus is TL_emojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt()) {
-							emojiStatus.document_id
+						else if (emojiStatus is TLEmojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt()) {
+							emojiStatus.documentId
 						}
 						else {
 							continue
@@ -1702,13 +1700,13 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 		while (i < installedEmojiPacks.size) {
 			val set = installedEmojiPacks[i]
 
-			if (set?.set != null && set.set.emojis && !installedEmojiSets.contains(set.set.id)) {
+			if (set?.set != null && set.set!!.emojis && !installedEmojiSets.contains(set.set!!.id)) {
 				positionToSection.put(totalCount, packs.size)
 				sectionToPosition.put(packs.size, totalCount)
 
 				totalCount++
 
-				rowHashCodes.add(Objects.hash(9211, set.set.id))
+				rowHashCodes.add(Objects.hash(9211, set.set!!.id))
 
 				val pack = EmojiPack()
 				pack.installed = true
@@ -1738,11 +1736,11 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 		for (i in featuredEmojiPacks.indices) {
 			val set1 = featuredEmojiPacks[i]
 
-			if (set1 is TL_stickerSetFullCovered) {
+			if (set1 is TLStickerSetFullCovered) {
 				var foundDuplicate = false
 
 				for (j in packs.indices) {
-					if (packs[j].set.id == set1.set.id) {
+					if (packs[j].set.id == set1.set?.id) {
 						foundDuplicate = true
 						break
 					}
@@ -1757,10 +1755,10 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 				totalCount++
 
-				rowHashCodes.add(Objects.hash(9211, set1.set.id))
+				rowHashCodes.add(Objects.hash(9211, set1.set?.id))
 
 				val pack = EmojiPack()
-				pack.installed = installedEmojiSets.contains(set1.set.id)
+				pack.installed = installedEmojiSets.contains(set1.set?.id)
 				pack.featured = true
 				pack.free = !MessageObject.isPremiumEmojiPack(set1)
 				pack.set = set1.set
@@ -1775,7 +1773,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 						rowHashCodes.add(Objects.hash(3212, pack.documents[k].id))
 					}
 
-					rowHashCodes.add(Objects.hash(-5531, set1.set.id, pack.documents.size - maxlen + 1))
+					rowHashCodes.add(Objects.hash(-5531, set1.set?.id, pack.documents.size - maxlen + 1))
 					positionToExpand.put(totalCount - 1, packs.size)
 				}
 				else {
@@ -1789,7 +1787,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 				if (!pack.installed) {
 					positionToButton.put(totalCount, packs.size)
 					totalCount++
-					rowHashCodes.add(Objects.hash(3321, set1.set.id))
+					rowHashCodes.add(Objects.hash(3321, set1.set?.id))
 				}
 
 				packs.add(pack)
@@ -2238,26 +2236,23 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 			val pressedViewScale = 1 + 2 * pressedProgress
 
-			canvas.save()
-			canvas.translate(emojiGridView!!.x + selectedReactionView!!.x, emojiGridView!!.y + selectedReactionView!!.y)
+			canvas.withTranslation(emojiGridView!!.x + selectedReactionView!!.x, emojiGridView!!.y + selectedReactionView!!.y) {
+				paint.setColor(context.getColor(R.color.background))
 
-			paint.setColor(context.getColor(R.color.background))
+				drawRect(0f, 0f, selectedReactionView!!.measuredWidth.toFloat(), selectedReactionView!!.measuredHeight.toFloat(), paint)
+				scale(pressedViewScale, pressedViewScale, selectedReactionView!!.measuredWidth / 2f, selectedReactionView!!.measuredHeight.toFloat())
 
-			canvas.drawRect(0f, 0f, selectedReactionView!!.measuredWidth.toFloat(), selectedReactionView!!.measuredHeight.toFloat(), paint)
-			canvas.scale(pressedViewScale, pressedViewScale, selectedReactionView!!.measuredWidth / 2f, selectedReactionView!!.measuredHeight.toFloat())
+				var imageReceiver = if (selectedReactionView!!.isDefaultReaction) bigReactionImageReceiver else selectedReactionView!!.imageReceiverToDraw
 
-			var imageReceiver = if (selectedReactionView!!.isDefaultReaction) bigReactionImageReceiver else selectedReactionView!!.imageReceiverToDraw
+				if (bigReactionAnimatedEmoji != null && bigReactionAnimatedEmoji!!.imageReceiver != null && bigReactionAnimatedEmoji!!.imageReceiver.hasBitmapImage()) {
+					imageReceiver = bigReactionAnimatedEmoji!!.imageReceiver
+				}
 
-			if (bigReactionAnimatedEmoji != null && bigReactionAnimatedEmoji!!.imageReceiver != null && bigReactionAnimatedEmoji!!.imageReceiver.hasBitmapImage()) {
-				imageReceiver = bigReactionAnimatedEmoji!!.imageReceiver
+				if (imageReceiver != null) {
+					imageReceiver.setImageCoordinates(0f, 0f, selectedReactionView!!.measuredWidth.toFloat(), selectedReactionView!!.measuredHeight.toFloat())
+					imageReceiver.draw(this)
+				}
 			}
-
-			if (imageReceiver != null) {
-				imageReceiver.setImageCoordinates(0f, 0f, selectedReactionView!!.measuredWidth.toFloat(), selectedReactionView!!.measuredHeight.toFloat())
-				imageReceiver.draw(canvas)
-			}
-
-			canvas.restore()
 
 			view.invalidate()
 		}
@@ -2510,10 +2505,10 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 					val reaction = MediaDataController.getInstance(currentAccount).reactionsMap[currentReaction.emojicon]
 
 					if (reaction != null) {
-						val svgThumb = getSvgThumb(reaction.activate_animation, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 0.2f)
+						val svgThumb = getSvgThumb(reaction.activateAnimation, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 0.2f)
 
 						if (svgThumb != null) {
-							val image = ImageLocation.getForDocument(reaction.select_animation)
+							val image = ImageLocation.getForDocument(reaction.selectAnimation)
 
 							if (image != null) {
 								fallbackToEmoji = false
@@ -2818,10 +2813,10 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 					val reaction = MediaDataController.getInstance(currentAccount).reactionsMap[currentReaction.emojicon]
 
 					if (reaction != null) {
-						val svgThumb = getSvgThumb(reaction.activate_animation, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 0.2f)
+						val svgThumb = getSvgThumb(reaction.activateAnimation, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 0.2f)
 
 						if (svgThumb != null) {
-							val image = ImageLocation.getForDocument(reaction.select_animation)
+							val image = ImageLocation.getForDocument(reaction.selectAnimation)
 
 							if (image != null) {
 								fallbackToEmoji = false
@@ -2978,7 +2973,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 					selected = imageView.span != null && selectedDocumentIds.contains(imageView.span!!.getDocumentId())
 				}
 				else {
-					for (i in 0 until positionToSection.size()) {
+					for (i in 0 until positionToSection.size) {
 						val startPosition = positionToSection.keyAt(i)
 						val index = i - if (defaultStatuses.isEmpty()) 0 else 1
 						val pack = (if (index >= 0) packs[index] else null) ?: continue
@@ -3419,15 +3414,13 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			if (!selectorRect.isEmpty) {
 				selectorDrawable?.bounds = selectorRect
 
-				canvas.save()
-
-				selectorTransformer?.accept(canvas)
-				selectorDrawable?.draw(canvas)
-
-				canvas.restore()
+				canvas.withSave {
+					selectorTransformer?.accept(this)
+					selectorDrawable?.draw(this)
+				}
 			}
 
-			for (i in 0 until viewsGroupedByLines.size()) {
+			for (i in 0 until viewsGroupedByLines.size) {
 				val arrayList = viewsGroupedByLines.valueAt(i)
 				arrayList?.clear()
 				unusedArrays.add(arrayList)
@@ -3448,17 +3441,15 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 						val top = if (smoothScrolling) child.getY().toInt() else child.getTop()
 						var arrayList = viewsGroupedByLines[top]
 
-						canvas.save()
-						canvas.translate(child.x, child.y)
-
-						child.drawSelected(canvas)
-
-						canvas.restore()
+						canvas.withTranslation(child.x, child.y) {
+							child.drawSelected(this)
+						}
 
 						if (child.background != null) {
 							child.background.setBounds(child.x.toInt(), child.y.toInt(), child.x.toInt() + child.width, child.y.toInt() + child.height)
 
 							val wasAlpha = 255
+
 							child.background.alpha = (wasAlpha * child.alpha).toInt()
 							child.background.draw(canvas)
 							child.background.alpha = wasAlpha
@@ -3513,7 +3504,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 			val time = System.currentTimeMillis()
 
-			for (i in 0 until viewsGroupedByLines.size()) {
+			for (i in 0 until viewsGroupedByLines.size) {
 				val arrayList = viewsGroupedByLines.valueAt(i)
 				val firstView = arrayList!![0]
 				val position = getChildAdapterPosition(firstView)
@@ -3543,19 +3534,16 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 				drawable?.imageViewEmojis = arrayList
 
-				canvas.save()
-				canvas.translate(firstView.left.toFloat(), firstView.y /* + firstView.getPaddingTop()*/)
+				canvas.withTranslation(firstView.left.toFloat(), firstView.y /* + firstView.getPaddingTop()*/) {
+					drawable?.startOffset = firstView.left
 
-				drawable?.startOffset = firstView.left
+					val w = measuredWidth - firstView.left * 2
+					val h = firstView.measuredHeight
 
-				val w = measuredWidth - firstView.left * 2
-				val h = firstView.measuredHeight
-
-				if (w > 0 && h > 0) {
-					drawable?.draw(canvas, time, w, h, 1f)
+					if (w > 0 && h > 0) {
+						drawable?.draw(this, time, w, h, 1f)
+					}
 				}
-
-				canvas.restore()
 			}
 
 			for (i in lineDrawablesTmp.indices) {
@@ -3577,19 +3565,15 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 				if (child is ImageViewEmoji) {
 					child.premiumLockIconView?.let {
-						canvas.save()
-						canvas.translate((child.x + it.x).toInt().toFloat(), (child.y + it.y).toInt().toFloat())
-						it.draw(canvas)
-						canvas.restore()
+						canvas.withTranslation((child.x + it.x).toInt().toFloat(), (child.y + it.y).toInt().toFloat()) {
+							it.draw(this)
+						}
 					}
 				}
 				else if (child != null && child !== animateExpandFromButton) {
-					canvas.save()
-					canvas.translate(child.x.toInt().toFloat(), child.y.toInt().toFloat())
-
-					child.draw(canvas)
-
-					canvas.restore()
+					canvas.withTranslation(child.x.toInt().toFloat(), child.y.toInt().toFloat()) {
+    					child.draw(this)
+					}
 				}
 			}
 
@@ -3902,14 +3886,10 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 					imageView.skewIndex = i
 
 					if (scale != 1f || skewAlpha < 1) {
-						canvas.save()
-						canvas.scale(scale, scale, AndroidUtilities.rectTmp2.centerX().toFloat(), AndroidUtilities.rectTmp2.centerY().toFloat())
-
-						skew(canvas, i, imageView.height)
-
-						drawImage(canvas, drawable, imageView, alpha)
-
-						canvas.restore()
+						canvas.withScale(scale, scale, AndroidUtilities.rectTmp2.centerX().toFloat(), AndroidUtilities.rectTmp2.centerY().toFloat()) {
+							skew(this, i, imageView.height)
+							drawImage(this, drawable, imageView, alpha)
+						}
 					}
 					else {
 						drawImage(canvas, drawable, imageView, alpha)
@@ -4195,7 +4175,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 				val thumbDrawable = getSvgThumb(document.thumbs, ResourcesCompat.getColor(getContext().resources, R.color.dark_gray, null), 0.2f)
 				val thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90)
 
-				if ("video/webm" == document.mime_type) {
+				if ("video/webm" == document.mimeType) {
 					mediaLocation = ImageLocation.getForDocument(document)
 					mediaFilter = filter + "_" + ImageLoader.AUTOPLAY_FILTER
 					thumbDrawable?.overrideWidthAndHeight(512, 512)
@@ -4310,7 +4290,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			val parentView = parentActivity.window.decorView
 			val w = (parentView.measuredWidth / 12.0f).toInt()
 			val h = (parentView.measuredHeight / 12.0f).toInt()
-			val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+			val bitmap = createBitmap(w, h)
 
 			val canvas = Canvas(bitmap)
 			canvas.scale(1.0f / 12.0f, 1.0f / 12.0f)
@@ -4325,12 +4305,9 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 			if (parentDialogView != null) {
 				parentDialogView.getLocationOnScreen(tempLocation)
 
-				canvas.save()
-				canvas.translate(tempLocation[0].toFloat(), tempLocation[1].toFloat())
-
-				parentDialogView.draw(canvas)
-
-				canvas.restore()
+				canvas.withTranslation(tempLocation[0].toFloat(), tempLocation[1].toFloat()) {
+					parentDialogView.draw(this)
+				}
 			}
 
 			Utilities.stackBlurBitmap(bitmap, max(10.0, (max(w.toDouble(), h.toDouble()) / 180)).toInt())
@@ -4523,13 +4500,11 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 
 			override fun dispatchDraw(canvas: Canvas) {
 				if (blurBitmap != null && blurBitmapPaint != null) {
-					canvas.save()
-					canvas.scale(12f, 12f)
+					canvas.withScale(12f, 12f) {
+						blurBitmapPaint?.setAlpha((255 * showT).toInt())
 
-					blurBitmapPaint?.setAlpha((255 * showT).toInt())
-
-					canvas.drawBitmap(blurBitmap!!, 0f, 0f, blurBitmapPaint)
-					canvas.restore()
+						drawBitmap(blurBitmap!!, 0f, 0f, blurBitmapPaint)
+					}
 				}
 
 				super.dispatchDraw(canvas)
@@ -4642,7 +4617,7 @@ open class SelectAnimatedEmojiDialog @JvmOverloads constructor(private val baseF
 				it.checkStickers(MediaDataController.TYPE_EMOJIPACKS)
 				it.fetchEmojiStatuses(0, true)
 				it.checkReactions()
-				it.getStickerSet(TL_inputStickerSetEmojiDefaultStatuses(), false)
+				it.getStickerSet(TLInputStickerSetEmojiDefaultStatuses(), false)
 			}
 		}
 	}

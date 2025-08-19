@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui.Components;
 
 import android.graphics.Canvas;
@@ -29,17 +29,19 @@ import android.view.View;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.FileLog;
-import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.messageobject.MessageObject;
+import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 
 import androidx.core.graphics.ColorUtils;
 
 public class VideoPlayerSeekBar {
-
 	public interface SeekBarDelegate {
 		void onSeekBarDrag(float progress);
 
@@ -65,7 +67,7 @@ public class VideoPlayerSeekBar {
 	private int circleColor;
 	private int progressColor;
 	private int backgroundSelectedColor;
-	private RectF rect = new RectF();
+	private final RectF rect = new RectF();
 	private boolean selected;
 	private float animateFromBufferedProgress;
 	private boolean animateResetBuffering;
@@ -73,18 +75,15 @@ public class VideoPlayerSeekBar {
 	private float bufferedProgress;
 	private float currentRadius;
 	private long lastUpdateTime;
-	private View parentView;
-
-	private int lineHeight = AndroidUtilities.dp(4);
-	private int smallLineHeight = AndroidUtilities.dp(2);
-
+	private final View parentView;
+	private final int lineHeight = AndroidUtilities.dp(4);
+	private final int smallLineHeight = AndroidUtilities.dp(2);
 	private float transitionProgress;
 	private int horizontalPadding;
 	private int smallLineColor;
-
 	private int fromThumbX = 0;
 	private float animateThumbProgress = 1f;
-	private AnimatedFloat animateThumbLoopBackProgress;
+	private final AnimatedFloat animateThumbLoopBackProgress;
 	private float loopBackWasThumbX;
 
 	public VideoPlayerSeekBar(View parent) {
@@ -281,10 +280,16 @@ public class VideoPlayerSeekBar {
 		}
 		CharSequence text = messageObject.caption;
 		if (messageObject.isYouTubeVideo()) {
-			if (messageObject.youtubeDescription == null && messageObject.messageOwner.media.webpage.description != null) {
-				messageObject.youtubeDescription = SpannableString.valueOf(messageObject.messageOwner.media.webpage.description);
-				MessageObject.addUrlsByPattern(messageObject.isOut(), messageObject.youtubeDescription, false, 3, (int)videoDuration, false);
+			var media = TLRPCExtensions.getMedia(messageObject.messageOwner);
+			var webpage = TLRPCExtensions.getWebpage(media);
+
+			if (webpage instanceof TLRPC.TLWebPage tlWebPage) {
+				if (messageObject.youtubeDescription == null && tlWebPage.description != null) {
+					messageObject.youtubeDescription = SpannableString.valueOf(tlWebPage.description);
+					MessageObject.addUrlsByPattern(messageObject.isOut(), messageObject.youtubeDescription, false, 3, (int)videoDuration, false);
+				}
 			}
+
 			text = messageObject.youtubeDescription;
 		}
 		if (text == lastCaption && lastVideoDuration == videoDuration) {
@@ -292,7 +297,7 @@ public class VideoPlayerSeekBar {
 		}
 		lastCaption = text;
 		lastVideoDuration = videoDuration;
-		if (!(text instanceof Spanned)) {
+		if (!(text instanceof Spanned spanned)) {
 			timestamps = null;
 			currentTimestamp = -1;
 			timestampsAppearing = 0;
@@ -301,7 +306,6 @@ public class VideoPlayerSeekBar {
 			}
 			return;
 		}
-		Spanned spanned = (Spanned)text;
 		URLSpanNoUnderline[] links;
 		try {
 			links = spanned.getSpans(0, spanned.length(), URLSpanNoUnderline.class);
@@ -324,8 +328,7 @@ public class VideoPlayerSeekBar {
 			timestampLabelPaint.setColor(0xffffffff);
 			timestampLabelPaint.setTypeface(Theme.TYPEFACE_DEFAULT);
 		}
-		for (int i = 0; i < links.length; ++i) {
-			URLSpanNoUnderline link = links[i];
+		for (URLSpanNoUnderline link : links) {
 			if (link != null && link.getURL().startsWith("video?")) {
 				Integer seconds = Utilities.parseInt(link.getURL().substring(6));
 				if (seconds != null && seconds >= 0) {
@@ -337,17 +340,7 @@ public class VideoPlayerSeekBar {
 				}
 			}
 		}
-		Collections.sort(timestamps, (a, b) -> {
-			if (a.first > b.first) {
-				return 1;
-			}
-			else if (b.first > a.first) {
-				return -1;
-			}
-			else {
-				return 0;
-			}
-		});
+		Collections.sort(timestamps, Comparator.comparing(a -> a.first));
 	}
 
 	public void draw(Canvas canvas, View view) {
@@ -481,7 +474,6 @@ public class VideoPlayerSeekBar {
 	}
 
 	private float timestampsAppearing = 0;
-	private long lastTimestampsAppearingUpdate;
 	private final float TIMESTAMP_GAP = 1f;
 	private static float[] tmpRadii;
 	private static Path tmpPath;
@@ -492,7 +484,6 @@ public class VideoPlayerSeekBar {
 			canvas.drawRoundRect(rect, radius, radius, paint);
 		}
 		else {
-			float lineWidth = rect.bottom - rect.top;
 			float left = horizontalPadding + AndroidUtilities.lerp(thumbWidth / 2f, 0, transitionProgress);
 			float right = horizontalPadding + AndroidUtilities.lerp(width - thumbWidth / 2f, parentView.getWidth() - horizontalPadding * 2f, transitionProgress);
 			AndroidUtilities.rectTmp.set(rect);
@@ -521,7 +512,6 @@ public class VideoPlayerSeekBar {
 			if (end < 0) {
 				end = timestamps.size();
 			}
-			boolean first = true;
 			for (int i = start; i <= end; ++i) {
 				float from = i == start ? 0 : timestamps.get(i - 1).first;
 				float to = i == end ? 1 : timestamps.get(i).first;
@@ -568,7 +558,7 @@ public class VideoPlayerSeekBar {
 		}
 	}
 
-	private int currentTimestamp = -1, lastTimestamp = -1;
+	private int currentTimestamp = -1;
 	private StaticLayout[] timestampLabel;
 	private TextPaint timestampLabelPaint;
 	private float timestampChangeT = 1;
@@ -644,7 +634,6 @@ public class VideoPlayerSeekBar {
 			else if (timestampIndex > currentTimestamp) {
 				timestampChangeDirection = 1;
 			}
-			lastTimestamp = currentTimestamp;
 			currentTimestamp = timestampIndex;
 		}
 		if (timestampChangeT < 1f) {
@@ -658,7 +647,6 @@ public class VideoPlayerSeekBar {
 			long tx = Math.min(17, Math.abs(SystemClock.elapsedRealtime() - lastTimestampUpdate));
 			timestampsAppearing = Math.min(timestampsAppearing + tx / 200f, 1);
 			parentView.invalidate();
-			lastTimestampsAppearingUpdate = SystemClock.elapsedRealtime();
 		}
 		float changeT = CubicBezierInterpolator.DEFAULT.getInterpolation(timestampChangeT);
 

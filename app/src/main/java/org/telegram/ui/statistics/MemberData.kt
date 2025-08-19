@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.statistics
 
@@ -16,9 +16,11 @@ import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLChatChannelParticipant
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.bannedRights
+import org.telegram.tgnet.channelParticipant
+import org.telegram.tgnet.participants
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ChatActivity
@@ -27,7 +29,7 @@ import org.telegram.ui.Components.BulletinFactory
 import org.telegram.ui.ProfileActivity
 
 class MemberData {
-	var user: User? = null
+	var user: TLRPC.User? = null
 	var userId = 0L
 	var description: String? = null
 
@@ -49,28 +51,28 @@ class MemberData {
 	private fun onLongClick(chat: TLRPC.ChatFull, fragment: StatisticActivity, progressDialog: Array<AlertDialog?>, userIsPracticant: Boolean) {
 		MessagesController.getInstance(UserConfig.selectedAccount).putUser(user, false)
 
-		val items = ArrayList<String>()
-		val actions = ArrayList<Int>()
-		val icons = ArrayList<Int>()
-		var currentParticipant: TLRPC.TL_chatChannelParticipant? = null
-		var currentUser: TLRPC.TL_chatChannelParticipant? = null
+		val items = mutableListOf<String>()
+		val actions = mutableListOf<Int>()
+		val icons = mutableListOf<Int>()
+		var currentParticipant: TLRPC.ChatParticipant? = null
+		var currentUser: TLRPC.ChatParticipant? = null
 		val context = ApplicationLoader.applicationContext
 
-		if (userIsPracticant && chat.participants?.participants != null) {
-			val n = chat.participants.participants?.size ?: 0
+		if (userIsPracticant) {
+			val participants = chat.participants?.participants
 
-			for (i in 0 until n) {
-				val participant = chat.participants.participants[i]
-
-				if (participant.user_id == user?.id) {
-					if (participant is TLRPC.TL_chatChannelParticipant) {
-						currentParticipant = participant
+			if (participants != null) {
+				for (participant in participants) {
+					if (participant.userId == user?.id) {
+						if (participant is TLChatChannelParticipant) {
+							currentParticipant = participant
+						}
 					}
-				}
 
-				if (participant.user_id == UserConfig.getInstance(UserConfig.selectedAccount).clientUserId) {
-					if (participant is TLRPC.TL_chatChannelParticipant) {
-						currentUser = participant
+					if (participant.userId == UserConfig.getInstance(UserConfig.selectedAccount).clientUserId) {
+						if (participant is TLChatChannelParticipant) {
+							currentUser = participant
+						}
 					}
 				}
 			}
@@ -89,7 +91,7 @@ class MemberData {
 				progressDialog[0]?.showDelayed(300)
 			}
 
-			val request = TLRPC.TL_channels_getParticipant()
+			val request = TLRPC.TLChannelsGetParticipant()
 			request.channel = MessagesController.getInstance(UserConfig.selectedAccount).getInputChannel(chat.id)
 			request.participant = MessagesController.getInputPeer(user!!)
 
@@ -103,12 +105,12 @@ class MemberData {
 						return@runOnUIThread
 					}
 
-					if (error == null && response is TLRPC.TL_channels_channelParticipant) {
-						val chatChannelParticipant = TLRPC.TL_chatChannelParticipant()
+					if (error == null && response is TLRPC.TLChannelsChannelParticipant) {
+						val chatChannelParticipant = TLChatChannelParticipant()
 						chatChannelParticipant.channelParticipant = response.participant
-						chatChannelParticipant.user_id = user!!.id
+						chatChannelParticipant.userId = user?.id ?: 0
 
-						chat.participants.participants.add(0, chatChannelParticipant)
+						chat.participants?.participants?.add(0, chatChannelParticipant)
 
 						onLongClick(chat, fragment, progressDialog)
 					}
@@ -126,7 +128,7 @@ class MemberData {
 				progressDialog[0]?.showDelayed(300)
 			}
 
-			val request = TLRPC.TL_channels_getParticipant()
+			val request = TLRPC.TLChannelsGetParticipant()
 			request.channel = MessagesController.getInstance(UserConfig.selectedAccount).getInputChannel(chat.id)
 			request.participant = MessagesController.getInstance(UserConfig.selectedAccount).getInputPeer(UserConfig.getInstance(UserConfig.selectedAccount).clientUserId)
 
@@ -140,11 +142,12 @@ class MemberData {
 						return@runOnUIThread
 					}
 
-					if (error == null && response is TLRPC.TL_channels_channelParticipant) {
-						val chatChannelParticipant = TLRPC.TL_chatChannelParticipant()
+					if (error == null && response is TLRPC.TLChannelsChannelParticipant) {
+						val chatChannelParticipant = TLChatChannelParticipant()
 						chatChannelParticipant.channelParticipant = response.participant
-						chatChannelParticipant.user_id = UserConfig.getInstance(UserConfig.selectedAccount).clientUserId
-						chat.participants.participants.add(0, chatChannelParticipant)
+						chatChannelParticipant.userId = UserConfig.getInstance(UserConfig.selectedAccount).clientUserId
+
+						chat.participants?.participants?.add(0, chatChannelParticipant)
 
 						onLongClick(chat, fragment, progressDialog)
 					}
@@ -163,16 +166,16 @@ class MemberData {
 
 		var isAdmin = false
 
-		if (currentUser != null && currentParticipant != null && currentUser.user_id != currentParticipant.user_id) {
+		if (currentUser != null && currentParticipant != null && currentUser.userId != currentParticipant.userId) {
 			val channelParticipant = currentParticipant.channelParticipant
-			var canEditAdmin = currentUser.channelParticipant.admin_rights != null && currentUser.channelParticipant.admin_rights.add_admins
+			var canEditAdmin = currentUser.channelParticipant?.adminRights?.addAdmins == true
 
-			if (canEditAdmin && (channelParticipant is TLRPC.TL_channelParticipantCreator || channelParticipant is TLRPC.TL_channelParticipantAdmin && !channelParticipant.can_edit)) {
+			if (canEditAdmin && (channelParticipant is TLRPC.TLChannelParticipantCreator || channelParticipant is TLRPC.TLChannelParticipantAdmin && !channelParticipant.canEdit)) {
 				canEditAdmin = false
 			}
 
 			if (canEditAdmin) {
-				isAdmin = channelParticipant.admin_rights == null
+				isAdmin = channelParticipant?.adminRights == null
 				items.add(if (isAdmin) context.getString(R.string.SetAsAdmin) else context.getString(R.string.EditAdminRights))
 				icons.add(if (isAdmin) R.drawable.msg_admins else R.drawable.msg_permissions)
 				actions.add(0)
@@ -187,23 +190,27 @@ class MemberData {
 			if (actions[i] == 0) {
 				val needShowBulletin = BooleanArray(1)
 
-				val newFragment: ChatRightsEditActivity = object : ChatRightsEditActivity(user!!.id, chat.id, finalCurrentParticipant!!.channelParticipant.admin_rights, null, finalCurrentParticipant.channelParticipant.banned_rights, finalCurrentParticipant.channelParticipant.rank, TYPE_ADMIN, true, finalIsAdmin, null) {
+				val newFragment: ChatRightsEditActivity = object : ChatRightsEditActivity(user!!.id, chat.id, finalCurrentParticipant?.channelParticipant?.adminRights, null, finalCurrentParticipant?.channelParticipant?.bannedRights, finalCurrentParticipant?.channelParticipant?.rank, TYPE_ADMIN, true, finalIsAdmin, null) {
 					override fun onTransitionAnimationEnd(isOpen: Boolean, backward: Boolean) {
 						if (!isOpen && backward && needShowBulletin[0] && BulletinFactory.canShowBulletin(fragment)) {
-							BulletinFactory.createPromoteToAdminBulletin(fragment, user!!.first_name).show()
+							BulletinFactory.createPromoteToAdminBulletin(fragment, user?.firstName).show()
 						}
 					}
 				}
 
 				newFragment.setDelegate(object : ChatRightsEditActivity.ChatRightsEditActivityDelegate {
-					override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+					override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TLChatAdminRights?, rightsBanned: TLRPC.TLChatBannedRights?, rank: String?) {
 						if (rights == 0) {
-							finalCurrentParticipant.channelParticipant.admin_rights = null
-							finalCurrentParticipant.channelParticipant.rank = ""
+							finalCurrentParticipant?.channelParticipant?.let {
+								it.adminRights = null
+								it.rank = ""
+							}
 						}
 						else {
-							finalCurrentParticipant.channelParticipant.admin_rights = rightsAdmin
-							finalCurrentParticipant.channelParticipant.rank = rank
+							finalCurrentParticipant?.channelParticipant?.let {
+								it.adminRights = rightsAdmin
+								it.rank = rank
+							}
 
 							if (finalIsAdmin) {
 								needShowBulletin[0] = true
@@ -211,7 +218,7 @@ class MemberData {
 						}
 					}
 
-					override fun didChangeOwner(user: User) {
+					override fun didChangeOwner(user: TLRPC.User) {
 						// unused
 					}
 				})
@@ -235,9 +242,9 @@ class MemberData {
 	}
 
 	companion object {
-		fun from(poster: TLRPC.TL_statsGroupTopPoster, users: ArrayList<User>): MemberData {
+		fun from(poster: TLRPC.TLStatsGroupTopPoster, users: List<TLRPC.User>): MemberData {
 			val data = MemberData()
-			data.userId = poster.user_id
+			data.userId = poster.userId
 			data.user = find(data.userId, users)
 
 			data.description = buildString {
@@ -245,21 +252,21 @@ class MemberData {
 					append(LocaleController.formatPluralString("messages", poster.messages))
 				}
 
-				if (poster.avg_chars > 0) {
+				if (poster.avgChars > 0) {
 					if (isNotEmpty()) {
 						append(", ")
 					}
 
-					append(LocaleController.formatString("CharactersPerMessage", R.string.CharactersPerMessage, LocaleController.formatPluralString("Characters", poster.avg_chars)))
+					append(LocaleController.formatString("CharactersPerMessage", R.string.CharactersPerMessage, LocaleController.formatPluralString("Characters", poster.avgChars)))
 				}
 			}
 
 			return data
 		}
 
-		fun from(admin: TLRPC.TL_statsGroupTopAdmin, users: ArrayList<User>): MemberData {
+		fun from(admin: TLRPC.TLStatsGroupTopAdmin, users: List<TLRPC.User>): MemberData {
 			val data = MemberData()
-			data.userId = admin.user_id
+			data.userId = admin.userId
 			data.user = find(data.userId, users)
 
 			data.description = buildString {
@@ -286,9 +293,9 @@ class MemberData {
 			return data
 		}
 
-		fun from(inviter: TLRPC.TL_statsGroupTopInviter, users: ArrayList<User>): MemberData {
+		fun from(inviter: TLRPC.TLStatsGroupTopInviter, users: List<TLRPC.User>): MemberData {
 			val data = MemberData()
-			data.userId = inviter.user_id
+			data.userId = inviter.userId
 			data.user = find(data.userId, users)
 
 			if (inviter.invitations > 0) {
@@ -301,7 +308,7 @@ class MemberData {
 			return data
 		}
 
-		fun find(userId: Long, users: ArrayList<User>): User? {
+		fun find(userId: Long, users: List<TLRPC.User>): TLRPC.User? {
 			return users.find { it.id == userId }
 		}
 	}

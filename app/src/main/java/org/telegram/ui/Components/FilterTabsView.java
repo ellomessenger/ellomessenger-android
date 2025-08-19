@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
@@ -20,7 +20,6 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
-import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -39,15 +38,6 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
-import androidx.core.graphics.ColorUtils;
-import androidx.recyclerview.widget.DefaultItemAnimator;
-import androidx.recyclerview.widget.ItemTouchHelper;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.LinearSmoothScroller;
-import androidx.recyclerview.widget.RecyclerView;
-
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.LocaleController;
@@ -62,8 +52,16 @@ import org.telegram.ui.ActionBar.Theme;
 
 import java.util.ArrayList;
 
-public class FilterTabsView extends FrameLayout {
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
+import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.LinearSmoothScroller;
+import androidx.recyclerview.widget.RecyclerView;
 
+public class FilterTabsView extends FrameLayout {
 	public int getCurrentTabStableId() {
 		return positionToStableId.get(currentPosition, -1);
 	}
@@ -240,7 +238,7 @@ public class FilterTabsView extends FrameLayout {
 
 		@SuppressLint("DrawAllocation")
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			boolean reorderEnabled = (!currentTab.isDefault || UserConfig.getInstance(UserConfig.selectedAccount).isPremium());
 			boolean showRemove = !currentTab.isDefault && reorderEnabled;
 			if (reorderEnabled && editingAnimationProgress != 0) {
@@ -1081,7 +1079,7 @@ public class FilterTabsView extends FrameLayout {
 		});
 		listView.setOnScrollListener(new RecyclerView.OnScrollListener() {
 			@Override
-			public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+			public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
 				invalidate();
 			}
 		});
@@ -1252,7 +1250,7 @@ public class FilterTabsView extends FrameLayout {
 	}
 
 	@Override
-	protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+	protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 		boolean result = super.drawChild(canvas, child, drawingTime);
 		if (child == listView) {
 			final int height = getMeasuredHeight();
@@ -1505,7 +1503,7 @@ public class FilterTabsView extends FrameLayout {
 		invalidate();
 		if (!isEditing && orderChanged) {
 			MessagesStorage.getInstance(UserConfig.selectedAccount).saveDialogFiltersOrder();
-			TLRPC.TL_messages_updateDialogFiltersOrder req = new TLRPC.TL_messages_updateDialogFiltersOrder();
+			var req = new TLRPC.TLMessagesUpdateDialogFiltersOrder();
 			ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).dialogFilters;
 			for (int a = 0, N = filters.size(); a < N; a++) {
 				MessagesController.DialogFilter filter = filters.get(a);
@@ -1517,8 +1515,7 @@ public class FilterTabsView extends FrameLayout {
 				}
 			}
 			MessagesController.getInstance(UserConfig.selectedAccount).lockFiltersInternal();
-			ConnectionsManager.getInstance(UserConfig.selectedAccount).sendRequest(req, (response, error) -> {
-			});
+			ConnectionsManager.getInstance(UserConfig.selectedAccount).sendRequest(req);
 			orderChanged = false;
 		}
 	}
@@ -1594,12 +1591,13 @@ public class FilterTabsView extends FrameLayout {
 		}
 
 		@Override
-		public boolean isEnabled(RecyclerView.ViewHolder holder) {
+		public boolean isEnabled(@NonNull RecyclerView.ViewHolder holder) {
 			return true;
 		}
 
+		@NonNull
 		@Override
-		public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 			return new RecyclerListView.Holder(new TabView(mContext));
 		}
 

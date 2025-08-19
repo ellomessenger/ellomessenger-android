@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.statistics
 
@@ -49,18 +49,25 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_inputPeerEmpty
-import org.telegram.tgnet.TLRPC.TL_statsGraph
-import org.telegram.tgnet.TLRPC.TL_statsGraphError
-import org.telegram.tgnet.TLRPC.TL_stats_getMessagePublicForwards
-import org.telegram.tgnet.TLRPC.TL_stats_getMessageStats
-import org.telegram.tgnet.TLRPC.TL_stats_loadAsyncGraph
-import org.telegram.tgnet.TLRPC.TL_stats_messageStats
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_messages_messagesSlice
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.TLInputPeerEmpty
+import org.telegram.tgnet.TLRPC.TLMessagesMessagesSlice
+import org.telegram.tgnet.TLRPC.TLStatsGetMessagePublicForwards
+import org.telegram.tgnet.TLRPC.TLStatsGetMessageStats
+import org.telegram.tgnet.TLRPC.TLStatsGraph
+import org.telegram.tgnet.TLRPC.TLStatsGraphError
+import org.telegram.tgnet.TLRPC.TLStatsLoadAsyncGraph
+import org.telegram.tgnet.TLRPC.TLStatsMessageStats
+import org.telegram.tgnet.forwards
+import org.telegram.tgnet.fwdFrom
+import org.telegram.tgnet.media
+import org.telegram.tgnet.message
+import org.telegram.tgnet.type
+import org.telegram.tgnet.views
+import org.telegram.tgnet.webpage
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.BaseFragment
@@ -126,13 +133,13 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 	}
 
 	init {
-		if (messageObject.messageOwner?.fwd_from == null) {
+		if (messageObject.messageOwner?.fwdFrom == null) {
 			chatId = messageObject.chatId
 			messageId = messageObject.id
 		}
 		else {
 			chatId = -messageObject.fromChatId
-			messageId = messageObject.messageOwner?.fwd_msg_id ?: 0
+			messageId = messageObject.messageOwner?.fwdMsgId ?: 0
 		}
 
 		chat = messagesController.getChatFull(chatId)
@@ -451,7 +458,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 					CHANNEL_STATS -> {
 						val args = Bundle()
 
-						if (messageObject.messageOwner?.fwd_from == null) {
+						if (messageObject.messageOwner?.fwdFrom == null) {
 							args.putLong("chat_id", messageObject.chatId)
 						}
 						else {
@@ -497,7 +504,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 	}
 
 	private fun updateMenu() {
-		if (chat?.can_view_stats == true) {
+		if (chat?.canViewStats == true) {
 			val menu = actionBar?.createMenu()
 			menu?.clearItems()
 			val headerItem = menu?.addItem(0, R.drawable.overflow_menu)
@@ -514,33 +521,35 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 
 		listViewAdapter?.notifyDataSetChanged()
 
-		val req = TL_stats_getMessagePublicForwards()
+		val req = TLStatsGetMessagePublicForwards()
 		req.limit = count
 
-		if (messageObject.messageOwner?.fwd_from != null) {
-			req.msg_id = messageObject.messageOwner?.fwd_from?.saved_from_msg_id ?: 0
+		if (messageObject.messageOwner?.fwdFrom != null) {
+			req.msgId = messageObject.messageOwner?.fwdFrom?.savedFromMsgId ?: 0
 			req.channel = messagesController.getInputChannel(-messageObject.fromChatId)
 		}
 		else {
-			req.msg_id = messageObject.id
+			req.msgId = messageObject.id
 			req.channel = messagesController.getInputChannel(-messageObject.dialogId)
 		}
 
 		if (messages.isNotEmpty()) {
 			val message = messages[messages.size - 1]
-			req.offset_id = message.id
-			req.offset_peer = messagesController.getInputPeer(MessageObject.getDialogId(message))
-			req.offset_rate = nextRate
+			req.offsetId = message.id
+			req.offsetPeer = messagesController.getInputPeer(MessageObject.getDialogId(message))
+			req.offsetRate = nextRate
 		}
 		else {
-			req.offset_peer = TL_inputPeerEmpty()
+			req.offsetPeer = TLInputPeerEmpty()
 		}
 
 		val reqId = connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
-				if (error == null && response is messages_Messages) {
+				if (error == null && response is TLRPC.MessagesMessages) {
 					if (response.flags and 1 != 0) {
-						nextRate = response.next_rate
+						(response as? TLMessagesMessagesSlice)?.nextRate?.let {
+							nextRate = it
+						}
 					}
 
 					if (response.count != 0) {
@@ -550,7 +559,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 						publicChats = response.messages.size
 					}
 
-					endReached = response !is TL_messages_messagesSlice
+					endReached = response !is TLMessagesMessagesSlice
 
 					messagesController.putChats(response.chats, false)
 					messagesController.putUsers(response.users, false)
@@ -572,14 +581,14 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 	}
 
 	private fun loadStat() {
-		val req = TL_stats_getMessageStats()
+		val req = TLStatsGetMessageStats()
 
-		if (messageObject.messageOwner?.fwd_from != null) {
-			req.msg_id = messageObject.messageOwner?.fwd_from?.saved_from_msg_id ?: 0
+		if (messageObject.messageOwner?.fwdFrom != null) {
+			req.msgId = messageObject.messageOwner?.fwdFrom?.savedFromMsgId ?: 0
 			req.channel = messagesController.getInputChannel(-messageObject.fromChatId)
 		}
 		else {
-			req.msg_id = messageObject.id
+			req.msgId = messageObject.id
 			req.channel = messagesController.getInputChannel(-messageObject.dialogId)
 		}
 
@@ -592,19 +601,19 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 					return@runOnUIThread
 				}
 
-				if (response !is TL_stats_messageStats) {
+				if (response !is TLStatsMessageStats) {
 					updateRows()
 					return@runOnUIThread
 				}
 
-				val interactionsViewData = StatisticActivity.createViewData(response.views_graph, R.string.InteractionsChartTitle, 1, false).also {
+				val interactionsViewData = StatisticActivity.createViewData(response.viewsGraph, R.string.InteractionsChartTitle, 1, false).also {
 					this.interactionsViewData = it
 				}
 
 				if (interactionsViewData != null && interactionsViewData.chartData!!.x.size <= 5) {
 					statsLoaded = false
 
-					val request = TL_stats_loadAsyncGraph()
+					val request = TLStatsLoadAsyncGraph()
 					request.token = interactionsViewData.zoomToken
 					request.x = interactionsViewData.chartData!!.x[interactionsViewData.chartData!!.x.size - 1]
 					request.flags = request.flags or 1
@@ -613,7 +622,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 
 					val reqId = connectionsManager.sendRequest(request, { response1, error1 ->
 						var childData: ChartData? = null
-						if (response1 is TL_statsGraph) {
+						if (response1 is TLStatsGraph) {
 							val json = response1.json?.data
 
 							if (!json.isNullOrEmpty()) {
@@ -625,7 +634,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 								}
 							}
 						}
-						else if (response1 is TL_statsGraphError) {
+						else if (response1 is TLStatsGraphError) {
 							AndroidUtilities.runOnUIThread {
 								parentActivity?.let {
 									Toast.makeText(it, response1.error, Toast.LENGTH_LONG).show()
@@ -771,7 +780,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 								return
 							}
 
-							val request = TL_stats_loadAsyncGraph()
+							val request = TLStatsLoadAsyncGraph()
 							request.token = data!!.zoomToken
 
 							if (x != 0L) {
@@ -791,7 +800,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 								AndroidUtilities.runOnUIThread {
 									var childData: ChartData? = null
 
-									if (response is TL_statsGraph) {
+									if (response is TLStatsGraph) {
 										val json = response.json?.data
 
 										if (!json.isNullOrEmpty()) {
@@ -803,7 +812,7 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 											}
 										}
 									}
-									else if (response is TL_statsGraphError) {
+									else if (response is TLStatsGraphError) {
 										Toast.makeText(context, response.error, Toast.LENGTH_LONG).show()
 									}
 
@@ -886,15 +895,15 @@ class MessageStatisticActivity(private val messageObject: MessageObject) : BaseF
 					else {
 						`object` = messagesController.getChat(-did)
 
-						if (`object` != null && `object`.participants_count != 0) {
+						if (`object` != null && `object`.participantsCount != 0) {
 							status = if (isChannel(`object`) && !`object`.megagroup) {
-								LocaleController.formatPluralString("Subscribers", `object`.participants_count)
+								LocaleController.formatPluralString("Subscribers", `object`.participantsCount)
 							}
 							else {
-								LocaleController.formatPluralString("Members", `object`.participants_count)
+								LocaleController.formatPluralString("Members", `object`.participantsCount)
 							}
 
-							status = String.format("%1\$s, %2\$s", status, LocaleController.formatPluralString("Views", item!!.views))
+							status = String.format("%1\$s, %2\$s", status, LocaleController.formatPluralString("Views", item?.views ?: 0))
 						}
 					}
 

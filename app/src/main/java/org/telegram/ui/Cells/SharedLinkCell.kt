@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -15,7 +15,6 @@ import android.graphics.CornerPathEffect
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Region
-import android.net.Uri
 import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableString
@@ -30,6 +29,9 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
+import androidx.core.net.toUri
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.Emoji
 import org.telegram.messenger.FileLoader
@@ -40,13 +42,18 @@ import org.telegram.messenger.LocaleController
 import org.telegram.messenger.MediaDataController
 import org.telegram.messenger.R
 import org.telegram.messenger.messageobject.MessageObject
-import org.telegram.tgnet.tlrpc.TL_messageEntityEmail
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
-import org.telegram.tgnet.tlrpc.TL_messageEntityUrl
-import org.telegram.tgnet.TLRPC.TL_messageMediaWebPage
-import org.telegram.tgnet.TLRPC.TL_webPage
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.WebPage
+import org.telegram.tgnet.description
+import org.telegram.tgnet.embedUrl
+import org.telegram.tgnet.entities
+import org.telegram.tgnet.media
+import org.telegram.tgnet.message
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.siteName
+import org.telegram.tgnet.title
+import org.telegram.tgnet.url
+import org.telegram.tgnet.webpage
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.ChatMessageCell.Companion.generateStaticLayout
 import org.telegram.ui.Components.CheckBox2
@@ -197,7 +204,7 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 		val message = message
 
 
-		if (message?.messageOwner?.media is TL_messageMediaWebPage && message.messageOwner?.media?.webpage is TL_webPage) {
+		if (message?.messageOwner?.media is TLRPC.TLMessageMediaWebPage && message.messageOwner?.media?.webpage is TLRPC.TLWebPage) {
 			val webPage = message.messageOwner?.media?.webpage
 
 			if (message.photoThumbs == null && webPage?.photo != null) {
@@ -208,7 +215,7 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 			title = webPage?.title
 
 			if (title == null) {
-				title = webPage?.site_name
+				title = webPage?.siteName
 			}
 
 			description = webPage?.description
@@ -216,8 +223,8 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 		}
 
 		if (message != null && !message.messageOwner?.entities.isNullOrEmpty()) {
-			for (a in message.messageOwner!!.entities.indices) {
-				val entity = message.messageOwner!!.entities[a]
+			for (a in message.messageOwner!!.entities!!.indices) {
+				val entity = message.messageOwner!!.entities!![a]
 
 				if (entity.length <= 0 || entity.offset < 0 || entity.offset >= message.messageOwner!!.message!!.length) {
 					continue
@@ -227,7 +234,7 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 				}
 
 				if (a == 0 && webPageLink != null && !(entity.offset == 0 && entity.length == message.messageOwner!!.message!!.length)) {
-					if (message.messageOwner!!.entities.size == 1) {
+					if (message.messageOwner?.entities?.size == 1) {
 						if (description == null) {
 							val st = SpannableStringBuilder.valueOf(message.messageOwner!!.message)
 							MediaDataController.addTextStyleRuns(message, st)
@@ -243,8 +250,8 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 				try {
 					var link: CharSequence? = null
 
-					if (entity is TL_messageEntityTextUrl || entity is TL_messageEntityUrl) {
-						link = if (entity is TL_messageEntityUrl) {
+					if (entity is TLRPC.TLMessageEntityTextUrl || entity is TLRPC.TLMessageEntityUrl) {
+						link = if (entity is TLRPC.TLMessageEntityUrl) {
 							message.messageOwner?.message?.substring(entity.offset, entity.offset + entity.length)
 						}
 						else {
@@ -254,7 +261,7 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 						if (title.isNullOrEmpty()) {
 							title = link.toString()
 
-							val uri = Uri.parse(title)
+							val uri = title.toUri()
 
 							title = uri.host
 
@@ -281,7 +288,7 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 							}
 						}
 					}
-					else if (entity is TL_messageEntityEmail) {
+					else if (entity is TLRPC.TLMessageEntityEmail) {
 						if (title.isNullOrEmpty()) {
 							link = "mailto:" + message.messageOwner?.message?.substring(entity.offset, entity.offset + entity.length)
 							title = message.messageOwner?.message?.substring(entity.offset, entity.offset + entity.length)
@@ -311,11 +318,11 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 						val start = entity.offset
 						val end = entity.offset + entity.length
 
-						for (e in message.messageOwner!!.entities) {
+						message.messageOwner?.entities?.forEach { e ->
 							val ss = e.offset
 							val se = e.offset + e.length
 
-							if (e is TL_messageEntitySpoiler && start <= se && end >= ss) {
+							if (e is TLRPC.TLMessageEntitySpoiler && start <= se && end >= ss) {
 								val run = TextStyleRun()
 								run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_SPOILER
 								sb.setSpan(TextStyleSpan(run), max(start, ss), min(end, se) + offset, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -484,11 +491,8 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 				currentPhotoObjectThumb = null
 			}
 
-			currentPhotoObject!!.size = -1
-
-			if (currentPhotoObjectThumb != null) {
-				currentPhotoObjectThumb.size = -1
-			}
+			currentPhotoObject?.size = -1
+			currentPhotoObjectThumb?.size = -1
 
 			linkImageView.setImageCoordinates(x.toFloat(), AndroidUtilities.dp(11f).toFloat(), maxPhotoWidth.toFloat(), maxPhotoWidth.toFloat())
 
@@ -644,8 +648,8 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 								try {
 									val webPage = if (pressedLink == 0 && message.messageOwner?.media != null) message.messageOwner?.media?.webpage else null
 
-									if (webPage?.embed_url != null && webPage.embed_url.isNotEmpty()) {
-										delegate.needOpenWebView(webPage, message)
+									if (!webPage?.embedUrl.isNullOrEmpty()) {
+										delegate.needOpenWebView(webPage!!, message)
 									}
 									else {
 										delegate.onLinkPress(links[pressedLink].toString(), false)
@@ -870,48 +874,46 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 		}
 
 		if (dateLayout != null) {
-			canvas.save()
-			canvas.translate((AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()) + if (LocaleController.isRTL) 0 else dateLayoutX).toFloat(), titleY.toFloat())
-			dateLayout?.draw(canvas)
-			canvas.restore()
+			canvas.withTranslation((AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()) + if (LocaleController.isRTL) 0 else dateLayoutX).toFloat(), titleY.toFloat()) {
+				dateLayout?.draw(this)
+			}
 		}
 
 		if (titleLayout != null) {
-			canvas.save()
+			canvas.withSave {
+				var x = AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat()
 
-			var x = AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat()
+				if (LocaleController.isRTL) {
+					x += (if (dateLayout == null) 0 else dateLayout!!.width + AndroidUtilities.dp(4f)).toFloat()
+				}
 
-			if (LocaleController.isRTL) {
-				x += (if (dateLayout == null) 0 else dateLayout!!.width + AndroidUtilities.dp(4f)).toFloat()
+				translate(x, titleY.toFloat())
+				titleLayout?.draw(this)
 			}
-
-			canvas.translate(x, titleY.toFloat())
-			titleLayout?.draw(canvas)
-			canvas.restore()
 		}
 
 		if (captionLayout != null) {
 			captionTextPaint.color = context.getColor(R.color.text)
-			canvas.save()
-			canvas.translate(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), captionY.toFloat())
-			captionLayout?.draw(canvas)
-			canvas.restore()
+
+			canvas.withTranslation(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), captionY.toFloat()) {
+				captionLayout?.draw(this)
+			}
 		}
 
 		if (descriptionLayout != null) {
 			descriptionTextPaint.color = context.getColor(R.color.text)
-			canvas.save()
-			canvas.translate(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), descriptionY.toFloat())
-			SpoilerEffect.renderWithRipple(this, false, descriptionTextPaint.color, -AndroidUtilities.dp(2f), patchedDescriptionLayout, descriptionLayout, descriptionLayoutSpoilers, canvas, false)
-			canvas.restore()
+
+			canvas.withTranslation(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), descriptionY.toFloat()) {
+				SpoilerEffect.renderWithRipple(this@SharedLinkCell, false, descriptionTextPaint.color, -AndroidUtilities.dp(2f), patchedDescriptionLayout, descriptionLayout, descriptionLayoutSpoilers, this, false)
+			}
 		}
 
 		if (descriptionLayout2 != null) {
 			descriptionTextPaint.color = context.getColor(R.color.text)
-			canvas.save()
-			canvas.translate(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), description2Y.toFloat())
-			SpoilerEffect.renderWithRipple(this, false, descriptionTextPaint.color, -AndroidUtilities.dp(2f), patchedDescriptionLayout2, descriptionLayout2, descriptionLayout2Spoilers, canvas, false)
-			canvas.restore()
+
+			canvas.withTranslation(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), description2Y.toFloat()) {
+				SpoilerEffect.renderWithRipple(this@SharedLinkCell, false, descriptionTextPaint.color, -AndroidUtilities.dp(2f), patchedDescriptionLayout2, descriptionLayout2, descriptionLayout2Spoilers, this, false)
+			}
 		}
 
 		if (linkLayout.isNotEmpty()) {
@@ -983,10 +985,9 @@ class SharedLinkCell @JvmOverloads constructor(context: Context, private val vie
 		}
 
 		if (fromInfoLayout != null) {
-			canvas.save()
-			canvas.translate(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), fromInfoLayoutY.toFloat())
-			fromInfoLayout?.draw(canvas)
-			canvas.restore()
+			canvas.withTranslation(AndroidUtilities.dp((if (LocaleController.isRTL) 8 else AndroidUtilities.leftBaseline).toFloat()).toFloat(), fromInfoLayoutY.toFloat()) {
+				fromInfoLayout?.draw(this)
+			}
 		}
 
 		letterDrawable.draw(canvas)

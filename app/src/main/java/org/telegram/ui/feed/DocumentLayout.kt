@@ -1,10 +1,10 @@
 /*
- * This is the source code of ElloApp
+ * This is the source code of Ello
  *  for Android.
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -17,9 +17,9 @@ import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.FileLoader
 import org.telegram.messenger.ImageLocation
 import org.telegram.messenger.ImageReceiver
-import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.DocumentLayoutBinding
+import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.ui.ActionBar.Theme
@@ -44,7 +44,7 @@ class DocumentLayout(val binding: DocumentLayoutBinding) : FrameLayout(binding.r
 				return
 			}
 
-			val filename = (document.file_name ?: document.file_name_fixed)?.trim()
+			val filename = FileLoader.getDocumentFileName(document)?.trim()
 
 			binding.fileNameLabel.text = filename ?: context.getString(R.string.document)
 			binding.fileSizeLabel.text = AndroidUtilities.formatFileSize(document.size)
@@ -61,7 +61,7 @@ class DocumentLayout(val binding: DocumentLayoutBinding) : FrameLayout(binding.r
 				}
 			}
 
-			val mimeType = document.mime_type?.trim()
+			val mimeType = document.mimeType?.trim()
 
 			if (mimeType?.startsWith("image/") == true) {
 				binding.typeLabel.gone()

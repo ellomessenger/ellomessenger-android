@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components.Paint.Views;
 
 import android.content.Context;
@@ -12,6 +20,7 @@ import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.Components.AnimatedFileDrawable;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.Point;
@@ -22,7 +31,6 @@ import org.telegram.ui.Components.Size;
 import androidx.annotation.NonNull;
 
 public class StickerView extends EntityView {
-
 	private class FrameLayoutDrawer extends FrameLayout {
 		public FrameLayoutDrawer(Context context) {
 			super(context);
@@ -30,19 +38,18 @@ public class StickerView extends EntityView {
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			StickerView.this.stickerDraw(canvas);
 		}
 	}
 
-	private TLRPC.Document sticker;
-	private Object parentObject;
+	private final TLRPC.Document sticker;
+	private final Object parentObject;
 	private int anchor = -1;
 	private boolean mirrored = false;
-	private Size baseSize;
-
-	private FrameLayoutDrawer containerView;
-	private ImageReceiver centerImage = new ImageReceiver();
+	private final Size baseSize;
+	private final FrameLayoutDrawer containerView;
+	private final ImageReceiver centerImage = new ImageReceiver();
 
 	public StickerView(Context context, Point position, Size baseSize, TLRPC.Document sticker, Object parentObject) {
 		this(context, position, 0.0f, 1.0f, baseSize, sticker, parentObject);
@@ -57,13 +64,15 @@ public class StickerView extends EntityView {
 		this.baseSize = baseSize;
 		this.parentObject = parentObject;
 
-		for (int a = 0; a < sticker.attributes.size(); a++) {
-			TLRPC.DocumentAttribute attribute = sticker.attributes.get(a);
-			if (attribute instanceof TLRPC.TL_documentAttributeSticker) {
-				if (attribute.mask_coords != null) {
-					anchor = attribute.mask_coords.n;
+		if (sticker instanceof TLRPC.TLDocument tlSticker) {
+			for (int a = 0; a < tlSticker.attributes.size(); a++) {
+				TLRPC.DocumentAttribute attribute = tlSticker.attributes.get(a);
+				if (attribute instanceof TLRPC.TLDocumentAttributeSticker attr) {
+					if (attr.maskCoords != null) {
+						anchor = attr.maskCoords.n;
+					}
+					break;
 				}
-				break;
 			}
 		}
 
@@ -72,7 +81,7 @@ public class StickerView extends EntityView {
 
 		centerImage.setAspectFit(true);
 		centerImage.setParentView(containerView);
-		TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(sticker.thumbs, 90);
+		TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(sticker), 90);
 		centerImage.setImage(ImageLocation.getForDocument(sticker), null, ImageLocation.getForDocument(thumb, sticker), null, "webp", parentObject, 1);
 
 		centerImage.setDelegate(new ImageReceiver.ImageReceiverDelegate() {
@@ -199,8 +208,8 @@ public class StickerView extends EntityView {
 
 	public class StickerViewSelectionView extends SelectionView {
 
-		private Paint arcPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		private RectF arcRect = new RectF();
+		private final Paint arcPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		private final RectF arcRect = new RectF();
 
 		public StickerViewSelectionView(Context context) {
 			super(context);
@@ -235,7 +244,7 @@ public class StickerView extends EntityView {
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			super.onDraw(canvas);
 
 			float thickness = AndroidUtilities.dp(1.0f);

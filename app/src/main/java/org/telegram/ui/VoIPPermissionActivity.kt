@@ -22,10 +22,8 @@ class VoIPPermissionActivity : Activity() {
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 
-		val service = VoIPService.sharedInstance
-		val isVideoCall = if (service != null) service.privateCall != null && service.privateCall!!.video else VoIPPreNotificationService.isVideo
-
-		val permissions = ArrayList<String>()
+		val isVideoCall = VoIPService.sharedInstance?.privateCall?.video ?: VoIPPreNotificationService.isVideo
+		val permissions = mutableListOf<String>()
 
 		if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
 			permissions.add(Manifest.permission.RECORD_AUDIO)
@@ -37,7 +35,7 @@ class VoIPPermissionActivity : Activity() {
 
 		if (permissions.isNotEmpty()) {
 			try {
-				requestPermissions(permissions.toTypedArray<String>(), if (isVideoCall) 102 else 101)
+				requestPermissions(permissions.toTypedArray(), if (isVideoCall) VoIPHelper.REQUEST_CODE_CAMERA else VoIPHelper.REQUEST_CODE_RECORD_AUDIO)
 			}
 			catch (e: Exception) {
 				FileLog.e(e)
@@ -46,7 +44,7 @@ class VoIPPermissionActivity : Activity() {
 	}
 
 	override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-		if (requestCode == 101 || requestCode == 102) {
+		if (requestCode == VoIPHelper.REQUEST_CODE_RECORD_AUDIO || requestCode == VoIPHelper.REQUEST_CODE_CAMERA) {
 			var allGranted = true
 
 			for (grantResult in grantResults) {
@@ -55,13 +53,9 @@ class VoIPPermissionActivity : Activity() {
 					break
 				}
 			}
+
 			if (grantResults.isNotEmpty() && allGranted) {
-				if (VoIPService.sharedInstance != null) {
-					VoIPService.sharedInstance!!.acceptIncomingCall()
-				}
-				else {
-					VoIPPreNotificationService.answer(this)
-				}
+				VoIPService.sharedInstance?.acceptIncomingCall() ?: VoIPPreNotificationService.answer(this)
 
 				finish()
 
@@ -69,13 +63,7 @@ class VoIPPermissionActivity : Activity() {
 			}
 			else {
 				if (!shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
-					if (VoIPService.sharedInstance != null) {
-						VoIPService.sharedInstance!!.declineIncomingCall()
-					}
-					else {
-						VoIPPreNotificationService.decline(this, VoIPService.DISCARD_REASON_HANGUP)
-					}
-
+					VoIPService.sharedInstance?.declineIncomingCall() ?: VoIPPreNotificationService.decline(this, VoIPService.DISCARD_REASON_HANGUP)
 					VoIPHelper.permissionDenied(this, { this.finish() }, requestCode)
 				}
 				else {

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -28,6 +28,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.isGone
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AndroidUtilities
@@ -38,7 +39,8 @@ import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -148,7 +150,7 @@ class DialogOrContactPickerActivity : BaseFragment() {
 
 		val menu = actionBar?.createMenu()
 
-		searchItem = menu?.addItem(search_button, R.drawable.ic_search_menu)?.setIsSearchField(true)?.setActionBarMenuItemSearchListener(object : ActionBarMenuItemSearchListener() {
+		searchItem = menu?.addItem(SEARCH_BUTTON, R.drawable.ic_search_menu)?.setIsSearchField(true)?.setActionBarMenuItemSearchListener(object : ActionBarMenuItemSearchListener() {
 			override fun onSearchExpand() {
 				dialogsActivity.actionBar?.openSearchField("", false)
 				contactsActivity.actionBar?.openSearchField("", false)
@@ -295,7 +297,7 @@ class DialogOrContactPickerActivity : BaseFragment() {
 				for (i in 0 until childCount) {
 					val child = getChildAt(i)
 
-					if (child == null || child.visibility == GONE || child === actionBar) {
+					if (child == null || child.isGone || child === actionBar) {
 						continue
 					}
 
@@ -685,7 +687,7 @@ class DialogOrContactPickerActivity : BaseFragment() {
 
 		val builder = AlertDialog.Builder(parentActivity)
 		builder.setTitle(parentActivity.getString(R.string.BlockUser))
-		builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("AreYouSureBlockContact2", R.string.AreYouSureBlockContact2, ContactsController.formatName(user.first_name, user.last_name))))
+		builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("AreYouSureBlockContact2", R.string.AreYouSureBlockContact2, ContactsController.formatName(user.firstName, user.lastName))))
 
 		builder.setPositiveButton(parentActivity.getString(R.string.BlockContact)) { _, _ ->
 			if (MessagesController.isSupportUser(user)) {
@@ -750,7 +752,7 @@ class DialogOrContactPickerActivity : BaseFragment() {
 	}
 
 	companion object {
-		private const val search_button = 0
+		private const val SEARCH_BUTTON = 0
 
 		private val interpolator = Interpolator {
 			var t = it

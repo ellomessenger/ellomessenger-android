@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -23,7 +23,6 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -47,9 +46,10 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -106,7 +106,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 			GroupCreateSpan span = (GroupCreateSpan)v;
 			if (span.isDeleting()) {
 				currentDeletingSpan = null;
-				selectedContacts.remove(span.getUid());
+				selectedContacts.remove(span.uid);
 				spansContainer.removeSpan(span);
 				spansCountChanged(true);
 				AndroidUtilities.updateVisibleRows(listView);
@@ -146,12 +146,21 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 		searchListViewAdapter = searchAdapter = new SearchAdapter();
 		listView.setAdapter(listViewAdapter = new ListAdapter());
 
-		ArrayList<TLRPC.TL_contact> arrayList = ContactsController.getInstance(account).contacts;
+		var arrayList = ContactsController.getInstance(account).contacts;
+
 		for (int a = 0; a < arrayList.size(); a++) {
-			User user = MessagesController.getInstance(currentAccount).getUser(arrayList.get(a).user_id);
-			if (user == null || user.self || user.deleted) {
+			User user = MessagesController.getInstance(currentAccount).getUser(arrayList.get(a).userId);
+
+			if (user == null) {
 				continue;
 			}
+
+			if (user instanceof TLRPC.TLUser tlUser) {
+				if (tlUser.isSelf || tlUser.deleted) {
+					continue;
+				}
+			}
+
 			contacts.add(user);
 		}
 
@@ -186,8 +195,8 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 					if (chat != null && !TextUtils.isEmpty(chat.username)) {
 						link = String.format(Locale.getDefault(), "https://%s/%s", ApplicationLoader.applicationContext.getString(R.string.domain), chat.username);
 					}
-					else if (chatInfo != null && chatInfo.exported_invite != null) {
-						link = chatInfo.exported_invite.link;
+					else if (chatInfo != null && chatInfo.exportedInvite != null) {
+						link = TLRPCExtensions.getLink(chatInfo.exportedInvite);
 					}
 					else {
 						generateLink();
@@ -267,30 +276,21 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 		floatingButton.setScaleType(ImageView.ScaleType.CENTER);
 
 		Drawable drawable = Theme.createSimpleSelectorCircleDrawable(AndroidUtilities.dp(56), Theme.getColor(Theme.key_chats_actionBackground), Theme.getColor(Theme.key_chats_actionPressedBackground));
-		if (Build.VERSION.SDK_INT < 21) {
-			Drawable shadowDrawable = context.getResources().getDrawable(R.drawable.floating_shadow).mutate();
-			shadowDrawable.setColorFilter(new PorterDuffColorFilter(0xff000000, PorterDuff.Mode.MULTIPLY));
-			CombinedDrawable combinedDrawable = new CombinedDrawable(shadowDrawable, drawable, 0, 0);
-			combinedDrawable.setIconSize(AndroidUtilities.dp(56), AndroidUtilities.dp(56));
-			drawable = combinedDrawable;
-		}
 		floatingButton.setBackgroundDrawable(drawable);
 		floatingButton.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_chats_actionIcon), PorterDuff.Mode.MULTIPLY));
 		floatingButton.setImageResource(R.drawable.floating_check);
 
-		if (Build.VERSION.SDK_INT >= 21) {
-			StateListAnimator animator = new StateListAnimator();
-			animator.addState(new int[]{android.R.attr.state_pressed}, ObjectAnimator.ofFloat(floatingButton, "translationZ", AndroidUtilities.dp(2), AndroidUtilities.dp(4)).setDuration(200));
-			animator.addState(new int[]{}, ObjectAnimator.ofFloat(floatingButton, "translationZ", AndroidUtilities.dp(4), AndroidUtilities.dp(2)).setDuration(200));
-			floatingButton.setStateListAnimator(animator);
-			floatingButton.setOutlineProvider(new ViewOutlineProvider() {
-				@SuppressLint("NewApi")
-				@Override
-				public void getOutline(View view, Outline outline) {
-					outline.setOval(0, 0, AndroidUtilities.dp(56), AndroidUtilities.dp(56));
-				}
-			});
-		}
+		StateListAnimator animator = new StateListAnimator();
+		animator.addState(new int[]{android.R.attr.state_pressed}, ObjectAnimator.ofFloat(floatingButton, "translationZ", AndroidUtilities.dp(2), AndroidUtilities.dp(4)).setDuration(200));
+		animator.addState(new int[]{}, ObjectAnimator.ofFloat(floatingButton, "translationZ", AndroidUtilities.dp(4), AndroidUtilities.dp(2)).setDuration(200));
+		floatingButton.setStateListAnimator(animator);
+		floatingButton.setOutlineProvider(new ViewOutlineProvider() {
+			@SuppressLint("NewApi")
+			@Override
+			public void getOutline(View view, Outline outline) {
+				outline.setOval(0, 0, AndroidUtilities.dp(56), AndroidUtilities.dp(56));
+			}
+		});
 
 		floatingButton.setOnClickListener(v -> {
 			if (dialogsDelegate == null && selectedContacts.size() == 0) {
@@ -327,7 +327,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 					if (stringBuilder.length() > 0) {
 						stringBuilder.append(", ");
 					}
-					stringBuilder.append("**").append(ContactsController.formatName(user.getFirst_name(), user.getLast_name())).append("**");
+					stringBuilder.append("**").append(ContactsController.formatName(user.firstName, user.lastName)).append("**");
 				}
 				TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(chatId);
 				if (selectedContacts.size() > 5) {
@@ -354,7 +354,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 		floatingButton.setAlpha(0.0f);
 		floatingButton.setContentDescription(LocaleController.getString("Next", R.string.Next));
 
-		containerView.addView(floatingButton, LayoutHelper.createFrame((Build.VERSION.SDK_INT >= 21 ? 56 : 60), (Build.VERSION.SDK_INT >= 21 ? 56 : 60), Gravity.RIGHT | Gravity.BOTTOM, 14, 14, 14, 14));
+		containerView.addView(floatingButton, LayoutHelper.createFrame(56, 56, Gravity.RIGHT | Gravity.BOTTOM, 14, 14, 14, 14));
 
 		((ViewGroup.MarginLayoutParams)emptyView.getLayoutParams()).topMargin = AndroidUtilities.dp(20);
 		((ViewGroup.MarginLayoutParams)emptyView.getLayoutParams()).leftMargin = AndroidUtilities.dp(4);
@@ -705,10 +705,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 
 		@Override
 		public boolean isEnabled(RecyclerView.ViewHolder holder) {
-			if (holder.getItemViewType() == 3 || holder.getItemViewType() == 1) {
-				return true;
-			}
-			return false;
+			return holder.getItemViewType() == 3 || holder.getItemViewType() == 1;
 		}
 
 		@Override
@@ -742,7 +739,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 
 				@Nullable
 				@Override
-				public LongSparseArray<TLRPC.TL_groupCallParticipant> getExcludeCallParticipants() {
+				public LongSparseArray<TLRPC.TLGroupCallParticipant> getExcludeCallParticipants() {
 					return null;
 				}
 
@@ -772,37 +769,24 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 
 		@Override
 		public boolean isEnabled(RecyclerView.ViewHolder holder) {
-			if (holder.getItemViewType() == 1) {
-				return true;
-			}
-			return false;
+			return holder.getItemViewType() == 1;
 		}
 
 		@NonNull
 		@Override
 		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 			Context context = parent.getContext();
-			View view;
-			switch (viewType) {
-				default:
-				case 0:
-					view = new GroupCreateSectionCell(context);
-					break;
-				case 1:
-					view = new GroupCreateUserCell(context, 1, 0, false);
-					break;
-				case 2:
-					view = new View(context) {
-						@Override
-						protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-							super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(48) + additionalHeight + searchAdditionalHeight, MeasureSpec.EXACTLY));
-						}
-					};
-					break;
-				case 4:
-					view = new View(context);
-					break;
-			}
+			View view = switch (viewType) {
+				case 1 -> new GroupCreateUserCell(context, 1, 0, false);
+				case 2 -> new View(context) {
+					@Override
+					protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+						super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(48) + additionalHeight + searchAdditionalHeight, MeasureSpec.EXACTLY));
+					}
+				};
+				case 4 -> new View(context);
+				default -> new GroupCreateSectionCell(context);
+			};
 			return new RecyclerListView.Holder(view);
 		}
 
@@ -1012,9 +996,8 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 							String name;
 							String username;
 
-							if (object instanceof User) {
-								User user = (User)object;
-								name = ContactsController.formatName(user.getFirst_name(), user.getLast_name()).toLowerCase();
+							if (object instanceof User user) {
+								name = ContactsController.formatName(user.firstName, user.lastName).toLowerCase();
 								username = user.username;
 							}
 							else {
@@ -1038,9 +1021,8 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 
 								if (found != 0) {
 									if (found == 1) {
-										if (object instanceof User) {
-											User user = (User)object;
-											resultArrayNames.add(AndroidUtilities.generateSearchName(user.getFirst_name(), user.getLast_name(), q));
+										if (object instanceof User user) {
+											resultArrayNames.add(AndroidUtilities.generateSearchName(user.firstName, user.lastName, q));
 										}
 										else {
 											TLRPC.Chat chat = (TLRPC.Chat)object;
@@ -1239,7 +1221,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 
 		public void addSpan(final GroupCreateSpan span, boolean animated) {
 			addAnimation = true;
-			selectedContacts.put(span.getUid(), span);
+			selectedContacts.put(span.uid, span);
 
 			if (currentAnimation != null) {
 				currentAnimation.setupEndValues();
@@ -1268,7 +1250,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 		public void removeSpan(final GroupCreateSpan span) {
 			addAnimation = false;
 			boolean ignoreScrollEvent = true;
-			selectedContacts.remove(span.getUid());
+			selectedContacts.remove(span.uid);
 			span.setOnClickListener(null);
 
 			if (currentAnimation != null) {
@@ -1358,7 +1340,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 			}
 
 			@Override
-			protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+			protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 				if (child == spansScrollView) {
 					canvas.save();
 					canvas.clipRect(0, child.getY() - AndroidUtilities.dp(4), getMeasuredWidth(), child.getY() + scrollViewH + 1);
@@ -1385,7 +1367,7 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 		delegate = contactsAddActivityDelegate;
 	}
 
-	public void setDelegate(InviteMembersBottomSheetDelegate inviteMembersBottomSheetDelegate, ArrayList<Long> selectedDialogs) {
+	public void setDelegate(InviteMembersBottomSheetDelegate inviteMembersBottomSheetDelegate) {
 		dialogsDelegate = inviteMembersBottomSheetDelegate;
 		NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.dialogsNeedReload);
 		dialogsServerOnly = new ArrayList<>(MessagesController.getInstance(currentAccount).dialogsServerOnly);
@@ -1418,23 +1400,23 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
 	}
 
 	boolean linkGenerating;
-	TLRPC.TL_chatInviteExported invite;
+	TLRPC.TLChatInviteExported invite;
 
 	private void generateLink() {
 		if (linkGenerating) {
 			return;
 		}
 		linkGenerating = true;
-		TLRPC.TL_messages_exportChatInvite req = new TLRPC.TL_messages_exportChatInvite();
-		req.legacy_revoke_permanent = true;
+		var req = new TLRPC.TLMessagesExportChatInvite();
+		req.legacyRevokePermanent = true;
 		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(-chatId);
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 			if (error == null) {
-				invite = (TLRPC.TL_chatInviteExported)response;
+				invite = (TLRPC.TLChatInviteExported)response;
 
 				TLRPC.ChatFull chatInfo = MessagesController.getInstance(currentAccount).getChatFull(chatId);
 				if (chatInfo != null) {
-					chatInfo.exported_invite = invite;
+					chatInfo.exportedInvite = invite;
 				}
 
 				if (invite.link == null) {

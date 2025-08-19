@@ -22,7 +22,7 @@ import java.io.InputStream
 
 class MP3Input : PositionInputStream {
 	constructor(delegate: InputStream?) : super(delegate)
-	constructor(delegate: InputStream?, position: Long) : super(delegate, position) {}
+	constructor(delegate: InputStream?, position: Long) : super(delegate, position)
 
 	@Throws(IOException::class)
 	fun readFully(b: ByteArray, off: Int, len: Int) {

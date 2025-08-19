@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -24,9 +24,9 @@ import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.WalletHelper
-import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
+import org.telegram.ui.ChatActivity
 import java.util.Timer
 import kotlin.concurrent.timer
 
@@ -35,6 +35,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 	private var mode = WalletFragment.CARD
 	private var amount = 0f
 	private var walletId = 0L
+	private var channelId = 0L
 	private var currency = ""
 
 	//	private var cardNumber = ""
@@ -43,7 +44,6 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 //	private var cardCvc = 0
 	private var paypalLink: String? = null
 	private var paymentId: Long? = null
-	private var paymentInProgress = false
 	private var timer: Timer? = null
 	private var isTopUp = true
 	private var verificationCode: String? = null
@@ -57,6 +57,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 		currency = arguments?.getString(WalletFragment.ARG_CURRENCY)?.lowercase() ?: WalletHelper.DEFAULT_CURRENCY
 		walletId = arguments?.getLong(WalletFragment.ARG_WALLET_ID)?.takeIf { it != 0L } ?: return false
 		isTopUp = arguments?.getBoolean(WalletFragment.ARG_IS_TOPUP, true) ?: true
+		channelId = arguments?.getLong(WalletFragment.ARG_CHANNEL_ID, 0L) ?: 0L
 
 		when (mode) {
 			WalletFragment.MY_BALANCE -> {
@@ -88,6 +89,11 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 					verificationCode = arguments?.getString(WalletFragment.ARG_VERIFICATION_CODE) ?: return false
 					paypalEmail = arguments?.getString(WalletFragment.ARG_PAYPAL_EMAIL) ?: return false
 				}
+			}
+
+			WalletFragment.GOOGLE -> {
+				// Google Play is topup only
+				paymentId = arguments?.getLong(WalletFragment.ARG_WALLET_PAYMENT_ID)?.takeIf { it != 0L } ?: return false
 			}
 		}
 
@@ -142,6 +148,10 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 					launchMainWalletTransferOutPayment()
 				}
 			}
+
+			WalletFragment.GOOGLE -> {
+				// Google Play payment just needs a timer, which is launched in onResume
+			}
 		}
 
 		return binding?.root
@@ -152,13 +162,11 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 		val earningsWalletId = walletHelper.earningsWallet?.id
 
 		if (earningsWalletId == null || earningsWalletId == 0L) {
-			val error = TL_error()
+			val error = TLRPC.TLError()
 			error.text = context.getString(R.string.no_earnings_wallet_found)
 			processError(error)
 			return
 		}
-
-		paymentInProgress = true
 
 		binding?.image?.setImageResource(R.drawable.tick_circle_green)
 		binding?.mainLabel?.setText(R.string.request_has_been_sent)
@@ -169,7 +177,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TLRPC.TL_biz_dataRaw) {
+				if (response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.MyBalanceTransferResponse>()
 
 					if (data != null) {
@@ -188,8 +196,6 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 
 	private fun launchTransferOutPayment() {
 		val context = context ?: return
-
-		paymentInProgress = true
 
 		binding?.image?.setImageResource(R.drawable.tick_circle_green)
 		binding?.mainLabel?.setText(R.string.request_has_been_sent)
@@ -226,7 +232,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TLRPC.TL_biz_dataRaw) {
+				if (response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.WithdrawApprovePayment>()
 
 					if (data != null) {
@@ -246,8 +252,6 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 	private fun launchPaypalPayment() {
 		val context = context ?: return
 
-		paymentInProgress = true
-
 		binding?.image?.setImageResource(R.drawable.tick_circle_green)
 		binding?.mainLabel?.setText(R.string.request_has_been_sent)
 		binding?.secondaryLabel?.setText(R.string.in_progress)
@@ -261,8 +265,6 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 	private fun launchCardPayment() {
 		val context = context ?: return
 
-		paymentInProgress = true
-
 		binding?.image?.setImageResource(R.drawable.tick_circle_green)
 		binding?.mainLabel?.setText(R.string.request_has_been_sent)
 		binding?.secondaryLabel?.setText(R.string.in_progress)
@@ -274,7 +276,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TLRPC.TL_biz_dataRaw) {
+				if (response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.StripePaymentResponse>()
 
 					if (data != null) {
@@ -319,24 +321,25 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 		binding?.purchaseWarning?.gone()
 		binding?.image?.setImageResource(R.drawable.panda_payment_success)
 		binding?.mainLabel?.setText(R.string.success_excl)
-		binding?.secondaryLabel?.text = context.getString(R.string.you_purchased_format, amount).fillElloCoinLogos(size = 16f)
+		binding?.secondaryLabel?.text = context.getString(R.string.you_deposited_dollar_format, amount)
+		//MARK: uncomment if you need coin icon
+//		binding?.secondaryLabel?.text = context.getString(R.string.you_purchased_format, amount).fillElloCoinLogos(size = 16f)
 		binding?.secondaryLabel?.setTextColor(ResourcesCompat.getColor(context.resources, R.color.text, null))
 		binding?.backButton?.visible()
 
-		parentLayout?.let {
-			it.postDelayed({
-				it.showFragment(1)
-				it.removeFragmentsUpTo(1)
-			}, 1_500)
+		if (channelId != 0L) {
+			AndroidUtilities.runOnUIThread({
+				val chatActivity = parentLayout?.getTopFragmentOfClass(ChatActivity::class.java) as? ChatActivity
+				chatActivity?.retrySubscribe = true
+				parentLayout?.popToTopFragmentOfClass(ChatActivity::class.java) as? ChatActivity
+			}, 1_000)
 		}
 	}
 
-	private fun processError(error: TL_error? = null) {
+	private fun processError(error: TLRPC.TLError? = null) {
 		val context = context ?: return
 
 		walletHelper.currentTransferOutPaymentId = null
-
-		paymentInProgress = false
 
 		binding?.image?.setImageResource(R.drawable.panda_payment_error)
 		binding?.mainLabel?.setText(R.string.error_excl)
@@ -371,7 +374,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 
 			connectionsManager.sendRequest(req, { response, error ->
 				AndroidUtilities.runOnUIThread {
-					if (response is TLRPC.TL_biz_dataRaw) {
+					if (response is TLRPC.TLBizDataRaw) {
 						val data = response.readData<ElloRpc.WalletPaymentByIdResponse>()
 						val payment = data?.payment
 
@@ -394,6 +397,7 @@ class PaymentProcessingFragment(args: Bundle) : BaseFragment(args) {
 
 	override fun finishFragment() {
 		super.finishFragment()
+
 		parentLayout?.let {
 			it.showFragment(1)
 			it.removeFragmentsUpTo(1)

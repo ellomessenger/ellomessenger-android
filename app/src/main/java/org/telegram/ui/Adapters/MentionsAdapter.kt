@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Adapters
 
@@ -20,6 +20,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.collection.LongSparseArray
+import androidx.core.content.edit
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject
@@ -43,33 +44,19 @@ import org.telegram.messenger.UserObject
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.RequestDelegate
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.BotInfo
 import org.telegram.tgnet.TLRPC.BotInlineResult
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaAuto
-import org.telegram.tgnet.TLRPC.TL_channelFull
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsMentions
-import org.telegram.tgnet.TLRPC.TL_channels_getParticipants
-import org.telegram.tgnet.TLRPC.TL_contacts_resolveUsername
-import org.telegram.tgnet.TLRPC.TL_contacts_resolvedPeer
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentAttributeSticker
-import org.telegram.tgnet.TLRPC.TL_groupCallParticipant
-import org.telegram.tgnet.TLRPC.TL_inlineBotSwitchPM
-import org.telegram.tgnet.TLRPC.TL_inputGeoPoint
-import org.telegram.tgnet.TLRPC.TL_inputPeerEmpty
-import org.telegram.tgnet.TLRPC.TL_messages_botResults
-import org.telegram.tgnet.TLRPC.TL_messages_getInlineBotResults
-import org.telegram.tgnet.TLRPC.TL_messages_getStickers
-import org.telegram.tgnet.TLRPC.TL_messages_stickers
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.TLRPC.TL_photoSize
-import org.telegram.tgnet.TLRPC.TL_photoSizeProgressive
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.botInlineGeo
+import org.telegram.tgnet.content
+import org.telegram.tgnet.document
+import org.telegram.tgnet.participants
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.thumbs
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.Adapters.SearchAdapterHelper.HashtagObject
 import org.telegram.ui.Adapters.SearchAdapterHelper.SearchAdapterHelperDelegate
@@ -101,7 +88,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 	private var searchResultSuggestions: ArrayList<KeywordResult>? = null
 	private var lastSearchKeyboardLanguage: Array<String>? = null
 	private var searchResultCommandsUsers: ArrayList<User?>? = null
-	private var botInfo: LongSparseArray<BotInfo>? = null
+	private var botInfo: LongSparseArray<TLRPC.TLBotInfo>? = null
 	private var lastText: String? = null
 	private var lastForSearch = false
 	private var lastUsernameOnly = false
@@ -135,10 +122,10 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 	private var lastData: Array<Any?>? = null
 	private var isReversed = false
 
-	var searchResultBotContext: ArrayList<BotInlineResult>? = null
+	var searchResultBotContext: MutableList<BotInlineResult>? = null
 		private set
 
-	var botContextSwitch: TL_inlineBotSwitchPM? = null
+	var botContextSwitch: TLRPC.TLInlineBotSwitchPM? = null
 		private set
 
 	var resultStartPosition = 0
@@ -155,7 +142,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 
 	private val locationProvider = object : SendMessagesHelper.LocationProvider(object : LocationProviderDelegate {
 		override fun onLocationAcquired(location: Location) {
-			if (contextBotUser?.bot_inline_geo == true) {
+			if ((contextBotUser as? TLRPC.TLUser)?.botInlineGeo == true) {
 				lastKnownLocation = location
 				searchForContextBotResults(true, contextBotUser, searchingContextQuery, "")
 			}
@@ -177,7 +164,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 				return true
 			}
 
-			override val excludeCallParticipants: LongSparseArray<TL_groupCallParticipant>?
+			override val excludeCallParticipants: LongSparseArray<TLRPC.TLGroupCallParticipant>?
 				get() = null
 
 			override val excludeUsers: LongSparseArray<User>?
@@ -217,11 +204,11 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 	}
 
 	private fun addStickerToResult(document: TLRPC.Document?, parent: Any) {
-		if (document == null) {
+		if (document !is TLRPC.TLDocument) {
 			return
 		}
 
-		val key = document.dc_id.toString() + "_" + document.id
+		val key = document.dcId.toString() + "_" + document.id
 
 		if (stickersMap?.containsKey(key) == true) {
 			return
@@ -253,8 +240,14 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 		val size = documents.size
 
 		while (a < size) {
-			val document = documents[a]
-			val key = document.dc_id.toString() + "_" + document.id
+			val document = documents[a] as? TLRPC.TLDocument
+
+			if (document == null) {
+				a++
+				continue
+			}
+
+			val key = document.dcId.toString() + "_" + document.id
 
 			if (stickersMap != null && stickersMap!!.containsKey(key)) {
 				a++
@@ -272,7 +265,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 			while (b < size2) {
 				val attribute = document.attributes[b]
 
-				if (attribute is TL_documentAttributeSticker) {
+				if (attribute is TLRPC.TLDocumentAttributeSticker) {
 					parent = attribute.stickerset
 					break
 				}
@@ -303,7 +296,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 			val result = stickers[a]
 			val thumb = FileLoader.getClosestPhotoSizeWithSize(result.sticker.thumbs, 90)
 
-			if (thumb is TL_photoSize || thumb is TL_photoSizeProgressive) {
+			if (thumb is TLRPC.TLPhotoSize || thumb is TLRPC.TLPhotoSizeProgressive) {
 				val f = FileLoader.getInstance(currentAccount).getPathToAttach(thumb, "webp", true)
 
 				if (!f.exists()) {
@@ -317,14 +310,18 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 	}
 
 	private fun isValidSticker(document: TLRPC.Document, emoji: String?): Boolean {
+		if (document !is TLRPC.TLDocument) {
+			return false
+		}
+
 		var b = 0
 		val size2 = document.attributes.size
 
 		while (b < size2) {
 			val attribute = document.attributes[b]
 
-			if (attribute is TL_documentAttributeSticker) {
-				if (attribute.alt != null && emoji != null && attribute.alt.contains(emoji)) {
+			if (attribute is TLRPC.TLDocumentAttributeSticker) {
+				if (emoji != null && attribute.alt?.contains(emoji) == true) {
 					return true
 				}
 
@@ -338,7 +335,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 	}
 
 	private fun searchServerStickers(emoji: String?, originalEmoji: String?) {
-		val req = TL_messages_getStickers()
+		val req = TLRPC.TLMessagesGetStickers()
 		req.emoticon = originalEmoji
 		req.hash = 0
 
@@ -346,7 +343,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 			AndroidUtilities.runOnUIThread {
 				lastReqId = 0
 
-				if (emoji != lastSticker || response !is TL_messages_stickers) {
+				if (emoji != lastSticker || response !is TLRPC.TLMessagesStickers) {
 					return@runOnUIThread
 				}
 
@@ -521,7 +518,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 		needBotContext = value
 	}
 
-	fun setBotInfo(info: LongSparseArray<BotInfo>?) {
+	fun setBotInfo(info: LongSparseArray<TLRPC.TLBotInfo>?) {
 		botInfo = info
 	}
 
@@ -547,7 +544,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 
 		locationProvider.stop()
 
-		if (user != null && user.bot && user.bot_inline_placeholder != null) {
+		if (user is TLRPC.TLUser && user.bot && user.botInlinePlaceholder != null) {
 			contextBotUser = user
 
 			if (parentFragment != null) {
@@ -563,7 +560,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 				}
 			}
 
-			if (contextBotUser?.bot_inline_geo == true) {
+			if ((contextBotUser as? TLRPC.TLUser)?.botInlineGeo == true) {
 				val preferences = MessagesController.getNotificationsSettings(currentAccount)
 				val allowGeo = preferences.getBoolean("inlinegeo_" + contextBotUser?.id, false)
 
@@ -582,7 +579,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 
 						if (foundContextBotFinal != null) {
 							val preferences1 = MessagesController.getNotificationsSettings(currentAccount)
-							preferences1.edit().putBoolean("inlinegeo_" + foundContextBotFinal.id, true).commit()
+							preferences1.edit { putBoolean("inlinegeo_" + foundContextBotFinal.id, true) }
 							checkLocationPermissionsOrStart()
 						}
 					}
@@ -712,7 +709,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 						processFoundUser(`object`)
 					}
 					else {
-						val req = TL_contacts_resolveUsername()
+						val req = TLRPC.TLContactsResolveUsername()
 						req.username = searchingContextUsername
 
 						contextUsernameRequestId = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
@@ -724,9 +721,9 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 								var user: User? = null
 
 								if (error == null) {
-									val res = response as? TL_contacts_resolvedPeer
+									val res = response as? TLRPC.TLContactsResolvedPeer
 
-									if (res != null && !res.users.isNullOrEmpty()) {
+									if (res != null && res.users.isNotEmpty()) {
 										user = res.users[0]
 										messagesController.putUser(user, false)
 										messagesStorage.putUsersAndChats(res.users, null, true, true)
@@ -748,7 +745,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 
 	@SuppressLint("Range")
 	private fun onLocationUnavailable() {
-		if (contextBotUser?.bot_inline_geo == true) {
+		if ((contextBotUser as? TLRPC.TLUser)?.botInlineGeo == true) {
 			lastKnownLocation = Location("network")
 			lastKnownLocation?.latitude = -1000.0
 			lastKnownLocation?.longitude = -1000.0
@@ -765,7 +762,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 			return
 		}
 
-		if (contextBotUser?.bot_inline_geo == true) {
+		if ((contextBotUser as? TLRPC.TLUser)?.botInlineGeo == true) {
 			locationProvider.start()
 		}
 	}
@@ -777,7 +774,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 	val botCaption: String?
 		get() {
 			if (contextBotUser != null) {
-				return contextBotUser?.bot_inline_placeholder
+				return (contextBotUser as? TLRPC.TLUser)?.botInlinePlaceholder
 			}
 			else if (searchingContextUsername != null && searchingContextUsername == "gif") {
 				return "Search GIFs"
@@ -810,11 +807,11 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 			return
 		}
 
-		if (user.bot_inline_geo && lastKnownLocation == null) {
+		if (user.botInlineGeo && lastKnownLocation == null) {
 			return
 		}
 
-		val key = dialogId.toString() + "_" + query + "_" + offset + "_" + dialogId + "_" + user.id + "_" + if (user.bot_inline_geo && lastKnownLocation?.latitude != -1000.0) (lastKnownLocation?.latitude ?: 0.0) + (lastKnownLocation?.longitude ?: 0.0) else ""
+		val key = dialogId.toString() + "_" + query + "_" + offset + "_" + dialogId + "_" + user.id + "_" + if (user.botInlineGeo && lastKnownLocation?.latitude != -1000.0) (lastKnownLocation?.latitude ?: 0.0) + (lastKnownLocation?.longitude ?: 0.0) else ""
 		val messagesStorage = MessagesStorage.getInstance(currentAccount)
 
 		val requestDelegate = RequestDelegate { response, _ ->
@@ -832,15 +829,15 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 					delegate?.onContextSearch(false)
 				}
 
-				if (response is TL_messages_botResults) {
-					if (!cache && response.cache_time != 0) {
+				if (response is TLRPC.TLMessagesBotResults) {
+					if (!cache && response.cacheTime != 0) {
 						messagesStorage.saveBotCache(key, response)
 					}
 
-					nextQueryOffset = response.next_offset
+					nextQueryOffset = response.nextOffset
 
 					if (botContextSwitch == null) {
-						botContextSwitch = response.switch_pm
+						botContextSwitch = response.switchPm
 					}
 
 					var a = 0
@@ -848,12 +845,12 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 					while (a < response.results.size) {
 						val result = response.results[a]
 
-						if (result.document !is TL_document && result.photo !is TL_photo && "game" != result.type && result.content == null && result.send_message is TL_botInlineMessageMediaAuto) {
+						if (result.document !is TLRPC.TLDocument && result.photo !is TLRPC.TLPhoto && "game" != result.type && result.content == null && result.sendMessage is TLRPC.TLBotInlineMessageMediaAuto) {
 							response.results.removeAt(a)
 							a--
 						}
 
-						result.query_id = response.query_id
+						// result.query_id = response.queryId
 
 						a++
 					}
@@ -906,24 +903,26 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 			messagesStorage.getBotCache(key, requestDelegate)
 		}
 		else {
-			val req = TL_messages_getInlineBotResults()
+			val req = TLRPC.TLMessagesGetInlineBotResults()
 			req.bot = MessagesController.getInstance(currentAccount).getInputUser(user)
 			req.query = query
 			req.offset = offset
 
-			if (user.bot_inline_geo) {
-				lastKnownLocation?.let {
-					if (it.latitude != -1000.0) {
+			if (user.botInlineGeo) {
+				lastKnownLocation?.let { location ->
+					if (location.latitude != -1000.0) {
 						req.flags = req.flags or 1
-						req.geo_point = TL_inputGeoPoint()
-						req.geo_point.lat = AndroidUtilities.fixLocationCoordinate(it.latitude)
-						req.geo_point._long = AndroidUtilities.fixLocationCoordinate(it.longitude)
+
+						req.geoPoint = TLRPC.TLInputGeoPoint().also {
+							it.lat = AndroidUtilities.fixLocationCoordinate(location.latitude)
+							it.lon = AndroidUtilities.fixLocationCoordinate(location.longitude)
+						}
 					}
 				}
 			}
 
 			if (DialogObject.isEncryptedDialog(dialogId)) {
-				req.peer = TL_inputPeerEmpty()
+				req.peer = TLRPC.TLInputPeerEmpty()
 			}
 			else {
 				req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId)
@@ -1287,7 +1286,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 				var count = 0
 
 				for (a in inlineBots.indices) {
-					val user = messagesController.getUser(inlineBots[a].peer.user_id) ?: continue
+					val user = messagesController.getUser(inlineBots[a].peer.userId) ?: continue
 
 					if (!user.username.isNullOrEmpty() && (usernameString.isEmpty() || user.username?.lowercase()?.startsWith(usernameString) == true)) {
 						newResult.add(user)
@@ -1332,17 +1331,17 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 							continue
 						}
 
-						firstName = chat.title
+						firstName = chat.title ?: ""
 						lastName = null
-						username = chat.username
+						username = chat.username ?: ""
 						`object` = chat
 						id = -chat.id
 					}
 					else {
-						val chatParticipant = info!!.participants.participants[a]
-						val user = messagesController.getUser(chatParticipant.user_id)
+						val chatParticipant = info?.participants?.participants?.get(a)
+						val user = messagesController.getUser(chatParticipant?.userId)
 
-						if (user == null || !usernameOnly && UserObject.isUserSelf(user) || newResultsHashMap.indexOfKey(user.id) >= 0) {
+						if (user !is TLRPC.TLUser || !usernameOnly && UserObject.isUserSelf(user) || newResultsHashMap.indexOfKey(user.id) >= 0) {
 							continue
 						}
 
@@ -1353,8 +1352,8 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 							}
 						}
 
-						firstName = user.first_name ?: ""
-						lastName = user.last_name ?: ""
+						firstName = user.firstName ?: ""
+						lastName = user.lastName ?: ""
 						username = user.username ?: ""
 						`object` = user
 						id = user.id
@@ -1432,18 +1431,18 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 							return
 						}
 
-						val req = TL_channels_getParticipants()
+						val req = TLRPC.TLChannelsGetParticipants()
 						req.channel = MessagesController.getInputChannel(chat)
 						req.limit = 20
 						req.offset = 0
 
-						val channelParticipantsMentions = TL_channelParticipantsMentions()
+						val channelParticipantsMentions = TLRPC.TLChannelParticipantsMentions()
 						channelParticipantsMentions.flags = channelParticipantsMentions.flags or 1
 						channelParticipantsMentions.q = usernameString
 
 						if (threadId != 0) {
 							channelParticipantsMentions.flags = channelParticipantsMentions.flags or 2
-							channelParticipantsMentions.top_msg_id = threadId
+							channelParticipantsMentions.topMsgId = threadId
 						}
 
 						req.filter = channelParticipantsMentions
@@ -1456,16 +1455,22 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 									showUsersResult(newResult, newMap, false)
 
 									if (error == null) {
-										if (response is TL_channels_channelParticipants) {
+										if (response is TLRPC.TLChannelsChannelParticipants) {
 											messagesController.putUsers(response.users, false)
 											messagesController.putChats(response.chats, false)
 
 											if (response.participants.isNotEmpty()) {
-
 												val currentUserId = UserConfig.getInstance(currentAccount).getClientUserId()
+
 												for (a in response.participants.indices) {
 													val participant = response.participants[a]
-													val peerId = MessageObject.getPeerId(participant.peer)
+
+													var peerId = MessageObject.getPeerId(participant.peer)
+
+													if (peerId == 0L) {
+														peerId = participant.userId
+													}
+
 
 													if ((searchResultUsernamesMap?.indexOfKey(peerId) ?: -1) >= 0 || !isSearchingMentions && peerId == currentUserId) {
 														continue
@@ -1537,8 +1542,8 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 
 						if (botCommand.command?.startsWith(command) == true) {
 							newResult.add("/" + botCommand.command)
-							newResultHelp.add(botCommand.description)
-							newResultUsers.add(messagesController.getUser(info.user_id))
+							newResultHelp.add(botCommand.description!!)
+							newResultUsers.add(messagesController.getUser(info.userId))
 						}
 					}
 				}
@@ -1739,7 +1744,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 		else if (searchResultCommands != null) {
 			val command = searchResultCommands?.getOrNull(i) ?: return null
 
-			return if (searchResultCommandsUsers != null && (botsCount != 1 || info is TL_channelFull)) {
+			return if (searchResultCommandsUsers != null && (botsCount != 1 || info is TLRPC.TLChannelFull)) {
 				val user = searchResultCommandsUsers?.getOrNull(i)
 
 				if (user != null) {
@@ -1792,7 +1797,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 				view = ContextLinkCell(mContext)
 
 				view.setDelegate {
-					delegate?.onContextClick(it.result)
+					delegate?.onContextClick(it?.result)
 				}
 			}
 
@@ -1835,14 +1840,14 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 			val chat = parentFragment?.currentChat
 
 			if (chat != null) {
-				if (!ChatObject.hasAdminRights(chat) && chat.default_banned_rights != null && chat.default_banned_rights.send_inline) {
+				if (!ChatObject.hasAdminRights(chat) && chat.defaultBannedRights?.sendInline == true) {
 					textView.text = mContext.getString(R.string.GlobalAttachInlineRestricted)
 				}
-				else if (AndroidUtilities.isBannedForever(chat.banned_rights)) {
+				else if (AndroidUtilities.isBannedForever(chat.bannedRights)) {
 					textView.text = mContext.getString(R.string.AttachInlineRestrictedForever)
 				}
 				else {
-					textView.text = LocaleController.formatString("AttachInlineRestricted", R.string.AttachInlineRestricted, LocaleController.formatDateForBan(chat.banned_rights.until_date.toLong()))
+					textView.text = LocaleController.formatString("AttachInlineRestricted", R.string.AttachInlineRestricted, LocaleController.formatDateForBan(chat.bannedRights?.untilDate?.toLong() ?: 0))
 				}
 			}
 		}
@@ -1859,7 +1864,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 					position--
 				}
 
-				(holder.itemView as ContextLinkCell).setLink(searchResultBotContext!![position], contextBotUser, contextMedia, position != searchResultBotContext!!.size - 1, hasTop && position == 0, "gif" == searchingContextUsername)
+				(holder.itemView as? ContextLinkCell)?.setLink(searchResultBotContext!![position], contextBotUser, contextMedia, position != searchResultBotContext!!.size - 1, hasTop && position == 0, "gif" == searchingContextUsername)
 			}
 		}
 		else {
@@ -1889,7 +1894,7 @@ class MentionsAdapter(private val mContext: Context, private val dialogId: Long,
 
 	fun onRequestPermissionsResultFragment(requestCode: Int, grantResults: IntArray?) {
 		if (requestCode == 2) {
-			if (contextBotUser?.bot_inline_geo == true) {
+			if ((contextBotUser as? TLRPC.TLUser)?.botInlineGeo == true) {
 				if (grantResults?.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
 					locationProvider.start()
 				}

@@ -66,7 +66,7 @@
 			android:layout_height="match_parent"
 			android:hint="@string/gender"
 			android:imeOptions="actionNext"
-			android:inputType="text"
+			android:inputType="none"
 			android:maxLines="1" />
 
 	</com.google.android.material.textfield.TextInputLayout>

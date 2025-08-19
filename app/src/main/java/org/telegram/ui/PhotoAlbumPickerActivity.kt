@@ -596,10 +596,12 @@ class PhotoAlbumPickerActivity(private val selectPhotoType: Int, private val all
 
 				if (classGuid == guid) {
 					albumsSorted = if (selectPhotoType == SELECT_TYPE_AVATAR || selectPhotoType == SELECT_TYPE_WALLPAPER || selectPhotoType == SELECT_TYPE_QR || !allowSearchImages) {
-						args[2] as ArrayList<AlbumEntry>
+						args[2] as List<AlbumEntry>
 					}
 					else {
-						args[1] as ArrayList<AlbumEntry>
+						args[1] as List<AlbumEntry>
+					}.let {
+						ArrayList(it)
 					}
 
 					progressView?.visibility = View.GONE

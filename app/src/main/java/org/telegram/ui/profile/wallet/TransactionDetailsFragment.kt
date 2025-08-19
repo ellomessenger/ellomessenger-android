@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -29,9 +29,9 @@ import org.telegram.messenger.utils.toLongDateString
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.TransactionHistoryEntry.PeerType
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
@@ -124,6 +124,13 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 				"apple" -> {
 					binding.paymentSourceLabel.typeface = Theme.TYPEFACE_BOLD
 					binding.paymentSourceLabel.text = binding.root.context.getString(R.string.apple_pay)
+					paymentSourceAvatarImageView?.setImageResource(R.drawable.wallet_transaction_icon_bank_card)
+					shouldFillPeer = false
+				}
+
+				"google" -> {
+					binding.paymentSourceLabel.typeface = Theme.TYPEFACE_BOLD
+					binding.paymentSourceLabel.text = binding.root.context.getString(R.string.google)
 					paymentSourceAvatarImageView?.setImageResource(R.drawable.wallet_transaction_icon_bank_card)
 					shouldFillPeer = false
 				}
@@ -274,8 +281,9 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 					binding.transactionTypeLabel.gone()
 					binding.aiBotTransactionTypeLabel.visible()
 
-					binding.paymentSourceLabel.text = binding.root.context.getString(R.string.ai_text)
-					paymentSourceAvatarImageView?.setImageResource(R.drawable.ic_ai_text)
+					binding.paymentSourceLabel.text = context?.getString(R.string.ai_buy_plans, context?.getString(R.string.ai_buy_text))
+					paymentSourceAvatarImageView?.setImageResource(R.drawable.icon_ai_chat)
+					binding.aiBotTransactionTypeLabel.text = context?.getString(R.string.individual_prompts)
 
 					if (amount > 0) {
 						binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -289,8 +297,9 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 					binding.transactionTypeLabel.gone()
 					binding.aiBotTransactionTypeLabel.visible()
 
-					binding.paymentSourceLabel.text = binding.root.context.getString(R.string.ai_image)
+					binding.paymentSourceLabel.text = context?.getString(R.string.ai_buy_plans, context?.getString(R.string.ai_buy_image))
 					paymentSourceAvatarImageView?.setImageResource(R.drawable.ic_ai_image)
+					binding.aiBotTransactionTypeLabel.text = context?.getString(R.string.individual_prompts)
 
 					if (amount > 0) {
 						binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -305,7 +314,8 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 					binding.aiBotTransactionTypeLabel.visible()
 
 					binding.paymentSourceLabel.text = binding.root.context.getString(R.string.ai_buy_text_pictures)
-					paymentSourceAvatarImageView?.setImageResource(R.drawable.ic_ai_image_text)
+					paymentSourceAvatarImageView?.setImageResource(R.drawable.icon_ai_double)
+					binding.aiBotTransactionTypeLabel.text = context?.getString(R.string.individual_prompts)
 
 					if (amount > 0) {
 						binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -316,7 +326,12 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 				}
 
 				PeerType.AI_TEXT_SUBSCRIPTION -> {
-					binding.transactionTypeLabel.text = binding.root.context.getString(R.string.ai_text_subscription)
+					binding.transactionTypeLabel.gone()
+					binding.aiBotTransactionTypeLabel.visible()
+
+					binding.paymentSourceLabel.text = context?.getString(R.string.ai_buy_plans, context?.getString(R.string.ai_buy_text))
+					paymentSourceAvatarImageView?.setImageResource(R.drawable.icon_ai_chat)
+					binding.aiBotTransactionTypeLabel.text = context?.getString(R.string.unlimited_monthly)
 
 					if (amount > 0) {
 						binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -327,7 +342,28 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 				}
 
 				PeerType.AI_IMAGE_SUBSCRIPTION -> {
-					binding.transactionTypeLabel.text = binding.root.context.getString(R.string.ai_image_subscription)
+					binding.transactionTypeLabel.gone()
+					binding.aiBotTransactionTypeLabel.visible()
+
+					binding.paymentSourceLabel.text = context?.getString(R.string.ai_buy_plans, context?.getString(R.string.ai_buy_image))
+					paymentSourceAvatarImageView?.setImageResource(R.drawable.ic_ai_image)
+					binding.aiBotTransactionTypeLabel.text = context?.getString(R.string.unlimited_monthly)
+
+					if (amount > 0) {
+						binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
+					}
+					else {
+						binding.transactionTypeImage.setImageResource(R.drawable.ic_ai_bot_outgoing)
+					}
+				}
+
+				PeerType.AI_IMAGE_TEXT_SUBSCRIPTION -> {
+					binding.transactionTypeLabel.gone()
+					binding.aiBotTransactionTypeLabel.visible()
+
+					binding.paymentSourceLabel.text = binding.root.context.getString(R.string.ai_buy_chat_picture)
+					paymentSourceAvatarImageView?.setImageResource(R.drawable.icon_ai_double)
+					binding.aiBotTransactionTypeLabel.text = context?.getString(R.string.unlimited_monthly)
 
 					if (amount > 0) {
 						binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -390,7 +426,7 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 			binding.balanceContainer.gone()
 		}
 
-		binding.dateLabel.text = t?.createdAt?.let { Date(it * 1000L) }?.toLongDateString()
+		binding.dateLabel.text = t?.createdAt?.let { Date(it * 1000L).toLongDateString().replace(Regex("(\\d{4}) "), "$1, ") }
 
 		when (t?.status?.lowercase()) {
 			"completed" -> {
@@ -419,32 +455,7 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 			binding.paymentMethodContainer.gone()
 		}
 		else {
-			when (paymentMethod) {
-				"apple" -> {
-					binding.paymentMethodLabel.text = walletType
-				}
-
-				"paypal" -> {
-					binding.paymentMethodLabel.text = walletType
-				}
-
-				"bank" -> {
-					binding.paymentMethodLabel.text = walletType
-				}
-
-				"stripe" -> {
-					binding.paymentMethodLabel.text = walletType
-				}
-
-				"ello_card" -> {
-					binding.paymentMethodLabel.text = walletType
-				}
-
-				"ello_earn_card" -> {
-					binding.paymentMethodLabel.text = walletType
-				}
-			}
-
+			binding.paymentMethodLabel.text = walletType
 			binding.paymentMethodContainer.visible()
 		}
 
@@ -464,6 +475,10 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 			val info = when (paymentMethod) {
 				"apple" -> {
 					binding.root.context.getString(R.string.apple_pay)
+				}
+
+				"google" -> {
+					binding.root.context.getString(R.string.google)
 				}
 
 				"paypal" -> {
@@ -556,8 +571,8 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 					channelAvatarImageView?.setImage(null, null, channelAvatarDrawable, chat)
 				}
 
-				binding?.channelHeaderLabel?.setText(if (ChatObject.isOnlineCourse(chat)) {
-					R.string.online_course
+				binding?.channelHeaderLabel?.setText(if (ChatObject.isMasterclass(chat)) {
+					R.string.masterclass
 				}
 				else {
 					R.string.channel
@@ -643,7 +658,7 @@ class TransactionDetailsFragment(args: Bundle) : BaseFragment(args) {
 	}
 
 	private fun loadUserPeerInfo(peerId: Long) {
-		val user = TLRPC.TL_userEmpty().apply { id = peerId }
+		val user = TLRPC.TLUserEmpty().apply { id = peerId }
 		messagesController.loadFullUser(user, classGuid, true)
 	}
 

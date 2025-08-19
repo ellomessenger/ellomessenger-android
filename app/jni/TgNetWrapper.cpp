@@ -29,7 +29,6 @@ jclass jclass_WriteToSocketDelegate;
 jmethodID jclass_WriteToSocketDelegate_run;
 
 jclass jclass_ConnectionsManager;
-jmethodID jclass_ConnectionsManager_onConnectionRetriesDepleted;
 jmethodID jclass_ConnectionsManager_onUnparsedMessageReceived;
 jmethodID jclass_ConnectionsManager_onUpdate;
 jmethodID jclass_ConnectionsManager_onSessionCreated;
@@ -207,7 +206,7 @@ void setUserId(JNIEnv *env, jclass c, jint instanceNum, int64_t id) {
 }
 
 void pauseNetwork(JNIEnv *env, jclass c, jint instanceNum) {
-    ConnectionsManager::getInstance(instanceNum).pauseNetwork(false);
+    ConnectionsManager::getInstance(instanceNum).pauseNetwork();
 }
 
 void resumeNetwork(JNIEnv *env, jclass c, jint instanceNum, jboolean partial) {
@@ -538,10 +537,6 @@ extern "C" int registerNativeTgNetFunctions(JavaVM *vm, JNIEnv *env) {
     }
     jclass_ConnectionsManager = (jclass) env->NewGlobalRef(env->FindClass("org/telegram/tgnet/ConnectionsManager"));
     if (jclass_ConnectionsManager == 0) {
-        return JNI_FALSE;
-    }
-    jclass_ConnectionsManager_onConnectionRetriesDepleted = env->GetStaticMethodID(jclass_ConnectionsManager, "onConnectionRetriesDepleted", "(I)V");
-    if (jclass_ConnectionsManager_onConnectionRetriesDepleted == 0) {
         return JNI_FALSE;
     }
     jclass_ConnectionsManager_onUnparsedMessageReceived = env->GetStaticMethodID(jclass_ConnectionsManager, "onUnparsedMessageReceived", "(JI)V");

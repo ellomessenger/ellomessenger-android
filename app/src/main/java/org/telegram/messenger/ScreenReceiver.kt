@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger
 
@@ -17,22 +17,14 @@ class ScreenReceiver : BroadcastReceiver() {
 	override fun onReceive(context: Context, intent: Intent) {
 		when (intent.action) {
 			Intent.ACTION_SCREEN_OFF -> {
-				if (BuildConfig.DEBUG) {
-					FileLog.d("screen off")
-				}
-
+				FileLog.d("screen off")
 				ConnectionsManager.getInstance(UserConfig.selectedAccount).setAppPaused(value = true, byScreenState = true)
-
 				ApplicationLoader.isScreenOn = false
 			}
 
 			Intent.ACTION_SCREEN_ON -> {
-				if (BuildConfig.DEBUG) {
-					FileLog.d("screen on")
-				}
-
+				FileLog.d("screen on")
 				ConnectionsManager.getInstance(UserConfig.selectedAccount).setAppPaused(value = false, byScreenState = true)
-
 				ApplicationLoader.isScreenOn = true
 			}
 		}

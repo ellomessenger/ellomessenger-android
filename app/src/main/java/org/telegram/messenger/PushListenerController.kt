@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -23,20 +23,7 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.NativeByteBuffer
 import org.telegram.tgnet.SerializedData
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_help_saveAppLog
-import org.telegram.tgnet.TLRPC.TL_inputAppEvent
-import org.telegram.tgnet.TLRPC.TL_jsonNull
-import org.telegram.tgnet.TLRPC.TL_messageActionPinMessage
-import org.telegram.tgnet.TLRPC.TL_messageMediaEmpty
-import org.telegram.tgnet.TLRPC.TL_peerChannel
-import org.telegram.tgnet.TLRPC.TL_peerChat
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.TLRPC.TL_updateReadChannelInbox
-import org.telegram.tgnet.TLRPC.TL_updateReadHistoryInbox
-import org.telegram.tgnet.TLRPC.TL_updateServiceNotification
-import org.telegram.tgnet.TLRPC.TL_updates
 import org.telegram.tgnet.TLRPC.Update
-import org.telegram.tgnet.tlrpc.TL_message
 import org.telegram.ui.Components.ForegroundDetector
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -72,21 +59,21 @@ object PushListenerController {
 				if (userConfig.getClientUserId() != 0L) {
 					if (sendStat) {
 						val tag = if (pushType == PUSH_TYPE_FIREBASE) "fcm" else "hcm"
-						val req = TL_help_saveAppLog()
+						val req = TLRPC.TLHelpSaveAppLog()
 
-						var event = TL_inputAppEvent()
+						var event = TLRPC.TLInputAppEvent()
 						event.time = SharedConfig.pushStringGetTimeStart.toDouble()
 						event.type = tag + "_token_request"
 						event.peer = 0
-						event.data = TL_jsonNull()
+						event.data = TLRPC.TLJsonNull()
 
 						req.events.add(event)
 
-						event = TL_inputAppEvent()
+						event = TLRPC.TLInputAppEvent()
 						event.time = SharedConfig.pushStringGetTimeEnd.toDouble()
 						event.type = tag + "_token_response"
 						event.peer = SharedConfig.pushStringGetTimeEnd - SharedConfig.pushStringGetTimeStart
-						event.data = TL_jsonNull()
+						event.data = TLRPC.TLJsonNull()
 						req.events.add(event)
 
 						sendStat = false
@@ -251,10 +238,10 @@ object PushListenerController {
 
 								if (callBytes != null) {
 									val updates = SerializedData(callBytes).use {
-										TLRPC.Updates.TLdeserialize(it, it.readInt32(false), false)
+										TLRPC.Updates.deserialize(it, it.readInt32(false), false)
 									}
 
-									if (!updates?.updates.isNullOrEmpty()) {
+									if (updates != null && updates.updates.isNotEmpty()) {
 										MessagesController.getInstance(currentAccount).processUpdateArray(updates.updates, updates.users, updates.chats, false, updates.date)
 									}
 								}
@@ -289,15 +276,15 @@ object PushListenerController {
 						}
 
 						"MESSAGE_ANNOUNCEMENT" -> {
-							val update = TL_updateServiceNotification()
+							val update = TLRPC.TLUpdateServiceNotification()
 							update.popup = false
 							update.flags = 2
-							update.inbox_date = (time / 1000).toInt()
+							update.inboxDate = (time / 1000).toInt()
 							update.message = json.getString("message")
 							update.type = "announcement"
-							update.media = TL_messageMediaEmpty()
+							update.media = TLRPC.TLMessageMediaEmpty()
 
-							val updates = TL_updates()
+							val updates = TLRPC.TLUpdates()
 							updates.updates.add(update)
 
 							Utilities.stageQueue.postRunnable {
@@ -389,25 +376,27 @@ object PushListenerController {
 							FileLog.d("$tag received read notification max_id = $maxId for dialogId = $dialogId")
 
 							if (channelId != 0L) {
-								val update = TL_updateReadChannelInbox()
-								update.channel_id = channelId
-								update.max_id = maxId
-								update.still_unread_count = 0
+								val update = TLRPC.TLUpdateReadChannelInbox()
+								update.channelId = channelId
+								update.maxId = maxId
+								update.stillUnreadCount = 0
 								updates.add(update)
 							}
 							else {
-								val update = TL_updateReadHistoryInbox()
+								val update = TLRPC.TLUpdateReadHistoryInbox()
 
 								if (userId != 0L) {
-									update.peer = TL_peerUser()
-									update.peer.user_id = userId
+									update.peer = TLRPC.TLPeerUser().also {
+										it.userId = userId
+									}
 								}
 								else {
-									update.peer = TL_peerChat()
-									update.peer.chat_id = chatId
+									update.peer = TLRPC.TLPeerChat().also {
+										it.chatId = chatId
+									}
 								}
 
-								update.max_id = maxId
+								update.maxId = maxId
 
 								updates.add(update)
 							}
@@ -1241,56 +1230,63 @@ object PushListenerController {
 								}
 
 								if (messageText != null) {
-									val messageOwner = TL_message()
+									val messageOwner = TLRPC.TLMessage()
 									messageOwner.id = msgId
-									messageOwner.random_id = randomId
+									messageOwner.randomId = randomId
 									messageOwner.message = message1 ?: messageText
 									messageOwner.date = (time / 1000).toInt()
 
 									if (pinned) {
-										messageOwner.action = TL_messageActionPinMessage()
+										messageOwner.pinned = true
+										// messageOwner.action = TLMessageActionPinMessage()
 									}
 
 									if (supergroup) {
 										messageOwner.flags = messageOwner.flags or -0x80000000
 									}
 
-									messageOwner.dialog_id = dialogId
+									messageOwner.dialogId = dialogId
 
 									if (channelId != 0L) {
-										messageOwner.peer_id = TL_peerChannel()
-										messageOwner.peer_id?.channel_id = channelId
+										messageOwner.peerId = TLRPC.TLPeerChannel().also {
+											it.channelId = channelId
+										}
 									}
 									else if (chatId != 0L) {
-										messageOwner.peer_id = TL_peerChat()
-										messageOwner.peer_id?.chat_id = chatId
+										messageOwner.peerId = TLRPC.TLPeerChat().also {
+											it.chatId = chatId
+										}
 									}
 									else {
-										messageOwner.peer_id = TL_peerUser()
-										messageOwner.peer_id?.user_id = userId
+										messageOwner.peerId = TLRPC.TLPeerUser().also {
+											it.userId = userId
+										}
 									}
 
 									messageOwner.flags = messageOwner.flags or 256
 
 									if (chatFromGroupId != 0L) {
-										messageOwner.from_id = TL_peerChat()
-										messageOwner.from_id?.chat_id = chatId
+										messageOwner.fromId = TLRPC.TLPeerChat().also {
+											it.chatId = chatId
+										}
 									}
 									else if (chatFromBroadcastId != 0L) {
-										messageOwner.from_id = TL_peerChannel()
-										messageOwner.from_id?.channel_id = chatFromBroadcastId
+										messageOwner.fromId = TLRPC.TLPeerChannel().also {
+											it.channelId = chatFromBroadcastId
+										}
 									}
 									else if (chatFromId != 0L) {
-										messageOwner.from_id = TL_peerUser()
-										messageOwner.from_id?.user_id = chatFromId
+										messageOwner.fromId = TLRPC.TLPeerUser().also {
+											it.userId = chatFromId
+										}
 									}
 									else {
-										messageOwner.from_id = messageOwner.peer_id
+										messageOwner.fromId = messageOwner.peerId
 									}
 
 									messageOwner.mentioned = mention || pinned
 									messageOwner.silent = silent
-									messageOwner.from_scheduled = scheduled
+									messageOwner.fromScheduled = scheduled
 
 									val messageObject = MessageObject(currentAccount, messageOwner, messageText, name, userName, localMessage, channel, supergroup, edited)
 									messageObject.isReactionPush = locKey.startsWith("REACT_") || locKey.startsWith("CHAT_REACT_")
@@ -1410,14 +1406,10 @@ object PushListenerController {
 			val currentPushString = SharedConfig.pushString
 
 			if (!currentPushString.isNullOrEmpty()) {
-				if (BuildConfig.DEBUG_PRIVATE_VERSION && BuildVars.logsEnabled) {
-					FileLog.d("FCM regId = $currentPushString")
-				}
+				FileLog.d("FCM regId = $currentPushString")
 			}
 			else {
-				if (BuildConfig.DEBUG) {
-					FileLog.d("FCM Registration not found.")
-				}
+				FileLog.d("FCM Registration not found.")
 			}
 
 			Utilities.globalQueue.postRunnable {

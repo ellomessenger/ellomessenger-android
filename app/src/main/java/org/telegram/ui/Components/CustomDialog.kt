@@ -4,43 +4,43 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
 class CustomDialog {
-    @JvmField
-    var name: String? = null
+	@JvmField
+	var name: String? = null
 
-    @JvmField
-    var message: String? = null
+	@JvmField
+	var message: String? = null
 
-    @JvmField
-    var id = 0
+	@JvmField
+	var id = 0
 
-    @JvmField
-    var unread_count = 0
+	@JvmField
+	var unreadCount = 0
 
-    @JvmField
-    var pinned = false
+	@JvmField
+	var pinned = false
 
-    @JvmField
-    var muted = false
+	@JvmField
+	var muted = false
 
-    @JvmField
-    var type = 0
+	@JvmField
+	var type = 0
 
-    @JvmField
-    var date = 0
+	@JvmField
+	var date = 0
 
-    @JvmField
-    var verified = false
+	@JvmField
+	var verified = false
 
-    @JvmField
-    var isMedia = false
+	@JvmField
+	var isMedia = false
 
-    @JvmField
-    var sent = false
+	@JvmField
+	var sent = false
 
 	@JvmField
 	var adult = true

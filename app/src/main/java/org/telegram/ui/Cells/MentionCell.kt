@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -27,7 +27,9 @@ import org.telegram.messenger.UserObject
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoSmall
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedEmojiDrawable
 import org.telegram.ui.Components.AvatarDrawable
@@ -101,7 +103,7 @@ class MentionCell(context: Context) : LinearLayout(context) {
 
 		avatarDrawable.setInfo(user)
 
-		if (user.photo?.photo_small != null) {
+		if (user.photo?.photoSmall != null) {
 			imageView.setForUserOrChat(user, avatarDrawable)
 		}
 		else {
@@ -149,7 +151,7 @@ class MentionCell(context: Context) : LinearLayout(context) {
 
 		avatarDrawable.setInfo(chat)
 
-		if (chat.photo?.photo_small != null) {
+		if (chat.photo?.photoSmall != null) {
 			imageView.setForUserOrChat(chat, avatarDrawable)
 		}
 		else {
@@ -259,7 +261,7 @@ class MentionCell(context: Context) : LinearLayout(context) {
 		if (user != null) {
 			avatarDrawable.setInfo(user)
 
-			if (user.photo?.photo_small != null) {
+			if (user.photo?.photoSmall != null) {
 				imageView.setForUserOrChat(user, avatarDrawable)
 			}
 			else {

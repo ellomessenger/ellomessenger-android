@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.profile
 
@@ -36,7 +36,7 @@ class MyChannelViewHolder(private val binding: LeftoversMyChannelViewHolderBindi
 
 	fun bind(chat: TLRPC.Chat) {
 		binding.channelName.text = chat.title
-		binding.subscribersCountLabel.text = chat.participants_count.toString()
+		binding.subscribersCountLabel.text = chat.participantsCount.toString()
 
 		if (chat.adult) {
 			binding.adultChannelIcon.visible()

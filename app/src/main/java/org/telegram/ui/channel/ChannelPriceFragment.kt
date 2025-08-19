@@ -5,8 +5,8 @@
  *
  * Copyright Nikita Denin, Ello 2023.
  * Copyright Mykhailo Mykytyn, Ello 2023.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.channel
 
@@ -110,7 +110,7 @@ class ChannelPriceFragment(args: Bundle) : BaseFragment(args) {
 			binding?.dateDescription?.gone()
 		}
 
-		setAgreementTextWithLink(context, binding?.agreementText, if (isCourse) context.getString(R.string.online_course).lowercase() else context.getString(R.string.subscription_channel).lowercase())
+		setAgreementTextWithLink(context, binding?.agreementText, if (isCourse) context.getString(R.string.a_masterclass).lowercase() else context.getString(R.string.a_subscription_channel).lowercase())
 
 		fragmentView = binding?.root
 
@@ -197,7 +197,7 @@ class ChannelPriceFragment(args: Bundle) : BaseFragment(args) {
 
 		return DatePickerDialog(context, { _, y, m, d ->
 			val formatter = SimpleDateFormat("ddMMyyyy", Locale.getDefault())
-			val date = formatter.parse(String.format("%02d%02d%d", d, m + 1, y))
+			val date = formatter.parse(String.format(Locale.getDefault(), "%02d%02d%d", d, m + 1, y))
 			// DateTime(date).withZone(DateTimeZone.UTC).toString("MMMM dd YYYY")
 			textView.text = date?.formatBirthday()
 		}, year, month, day)

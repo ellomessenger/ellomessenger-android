@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -44,6 +44,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.createBitmap
+import androidx.core.view.isNotEmpty
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
@@ -63,16 +65,17 @@ import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
-import org.telegram.messenger.UserObject.isUserSelf
 import org.telegram.messenger.utils.gone
 import org.telegram.tgnet.TLRPC.Chat
+import org.telegram.tgnet.TLRPC.Message
 import org.telegram.tgnet.TLRPC.MessageMedia
-import org.telegram.tgnet.TLRPC.TL_geoPoint
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeo
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeoLive
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.TLGeoPoint
+import org.telegram.tgnet.TLRPC.TLMessageMediaGeo
+import org.telegram.tgnet.TLRPC.TLMessageMediaGeoLive
+import org.telegram.tgnet.TLRPC.TLMessageMediaVenue
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.lat
+import org.telegram.tgnet.lon
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.ActionBarMenuItem.ActionBarMenuItemSearchListener
@@ -85,11 +88,12 @@ import org.telegram.ui.ChatActivity
 import org.telegram.ui.Components.ChatAttachAlert.AttachAlertLayout
 import org.telegram.ui.Components.LayoutHelper.createFrame
 import org.telegram.ui.Components.LayoutHelper.createLinear
+import org.telegram.ui.LocationActivity
 import kotlin.concurrent.thread
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
+@SuppressLint("NotifyDataSetChanged")
 class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : AttachAlertLayout(alert, context), NotificationCenterDelegate {
 	private val locationButton: ImageView
 	private val mapTypeButton: ActionBarMenuItem
@@ -107,6 +111,47 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 	private var ignoreLayout = false
 	private var scrolling = false
 	private val loadingMapView: View
+	private val markerImageView = ImageView(context)
+	private val layoutManager: FillLastLinearLayoutManager
+	private val otherItem: ActionBarMenuItem? = null
+	private var currentMapStyleDark = false
+	private var checkGpsEnabled = true
+	private var locationDenied = true
+	private var isFirstLocation = true
+	private val backgroundPaint = Paint()
+	private val placeMarkers = mutableListOf<VenueLocation>()
+	private var animatorSet: AnimatorSet? = null
+	private var lastPressedMarker: IMarker? = null
+	private var lastPressedVenue: VenueLocation? = null
+	private var lastPressedMarkerView: FrameLayout? = null
+	private var searching: Boolean
+	private var searchWas: Boolean
+	private var searchInProgress: Boolean
+	private var mapsInitialized = false
+	private var onResumeCalled = false
+	private var myLocation: Location? = null
+	private var userLocation: Location? = null
+	private var markerTop = 0
+	private var userLocationMoved = false
+	private var searchedForCustomLocations = false
+	private var firstWas = false
+	private var delegate: LocationActivityDelegate? = null
+	private var locationType = LocationActivity.LOCATION_TYPE_SEND
+	private var overScrollHeight = AndroidUtilities.displaySize.x - ActionBar.getCurrentActionBarHeight() - AndroidUtilities.dp(66f)
+	private var mapHeight = overScrollHeight
+	private var clipSize = 0
+	private var nonClipSize = 0
+	private var first = true
+	private val bitmapCache = arrayOfNulls<Bitmap>(7)
+	private val searchListView = RecyclerListView(context)
+
+	private val backgroundLocationDenied: Boolean
+		get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+			parentActivity?.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED
+		}
+		else {
+			false
+		}
 
 	private val mapViewClip = object : FrameLayout(context) {
 		override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -158,8 +203,6 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		}
 	}
 
-	private val searchListView = RecyclerListView(context)
-
 	private val searchAdapter: LocationActivitySearchAdapter by lazy {
 		object : LocationActivitySearchAdapter(context) {
 			override fun notifyDataSetChanged() {
@@ -170,47 +213,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		}
 	}
 
-	private val markerImageView = ImageView(context)
-	private val layoutManager: FillLastLinearLayoutManager
-
-	// private val avatarDrawable: AvatarDrawable? = null
-	private val otherItem: ActionBarMenuItem? = null
-	private var currentMapStyleDark = false
-	private var checkGpsEnabled = true
-	private var locationDenied = false
-	private var isFirstLocation = true
 	private val dialogId: Long
-
-	// private val firstFocus = true
-	private val backgroundPaint = Paint()
-	private val placeMarkers = ArrayList<VenueLocation>()
-	private var animatorSet: AnimatorSet? = null
-	private var lastPressedMarker: IMarker? = null
-	private var lastPressedVenue: VenueLocation? = null
-	private var lastPressedMarkerView: FrameLayout? = null
-	private var checkPermission = true
-	private var checkBackgroundPermission = true
-	private var searching: Boolean
-	private var searchWas: Boolean
-	private var searchInProgress: Boolean
-
-	// private val wasResults = false
-	private var mapsInitialized = false
-	private var onResumeCalled = false
-	private var myLocation: Location? = null
-	private var userLocation: Location? = null
-	private var markerTop = 0
-	private var userLocationMoved = false
-	private var searchedForCustomLocations = false
-	private var firstWas = false
-	private var delegate: LocationActivityDelegate? = null
-	private var locationType = 0
-	private var overScrollHeight = AndroidUtilities.displaySize.x - ActionBar.getCurrentActionBarHeight() - AndroidUtilities.dp(66f)
-	private var mapHeight = overScrollHeight
-	private var clipSize = 0
-	private var nonClipSize = 0
-	private var first = true
-	private val bitmapCache = arrayOfNulls<Bitmap>(7)
 
 	init {
 		AndroidUtilities.fixGoogleMapsBug()
@@ -218,12 +221,14 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 
 		dialogId = chatActivity.dialogId
 
-		locationType = if (chatActivity.currentEncryptedChat == null && !chatActivity.isInScheduleMode && !isUserSelf(chatActivity.currentUser)) {
-			LOCATION_TYPE_SEND_WITH_LIVE
-		}
-		else {
-			LOCATION_TYPE_SEND
-		}
+		// MARK: uncomment following and remove subsequent assignment to enable live locations
+		// MARK: also uncomment corresponding permission in manifest
+//		locationType = if (chatActivity.currentEncryptedChat == null && !chatActivity.isInScheduleMode && !isUserSelf(chatActivity.currentUser)) {
+//			LOCATION_TYPE_SEND_WITH_LIVE
+//		}
+//		else {
+//			LOCATION_TYPE_SEND
+//		}
 
 		NotificationCenter.globalInstance.addObserver(this, NotificationCenter.locationPermissionGranted)
 		NotificationCenter.globalInstance.addObserver(this, NotificationCenter.locationPermissionDenied)
@@ -347,9 +352,9 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		mapTypeButton.setSubMenuOpenSide(2)
 		mapTypeButton.setAdditionalXOffset(AndroidUtilities.dp(10f))
 		mapTypeButton.setAdditionalYOffset(-AndroidUtilities.dp(10f))
-		mapTypeButton.addSubItem(map_list_menu_map, R.drawable.msg_map, context.getString(R.string.Map))
-		mapTypeButton.addSubItem(map_list_menu_satellite, R.drawable.msg_satellite, context.getString(R.string.Satellite))
-		mapTypeButton.addSubItem(map_list_menu_hybrid, R.drawable.msg_hybrid, context.getString(R.string.Hybrid))
+		mapTypeButton.addSubItem(MAP_LIST_MENU_MAP, R.drawable.msg_map, context.getString(R.string.Map))
+		mapTypeButton.addSubItem(MAP_LIST_MENU_SATELLITE, R.drawable.msg_satellite, context.getString(R.string.Satellite))
+		mapTypeButton.addSubItem(MAP_LIST_MENU_HYBRID, R.drawable.msg_hybrid, context.getString(R.string.Hybrid))
 		mapTypeButton.contentDescription = context.getString(R.string.AccDescrMoreOptions)
 
 		drawable = Theme.createSimpleSelectorCircleDrawable(AndroidUtilities.dp(40f), ResourcesCompat.getColor(context.resources, R.color.background, null), ResourcesCompat.getColor(context.resources, R.color.light_background, null))
@@ -381,15 +386,15 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 			}
 
 			when (it) {
-				map_list_menu_map -> {
+				MAP_LIST_MENU_MAP -> {
 					map?.setMapType(IMapsProvider.MAP_TYPE_NORMAL)
 				}
 
-				map_list_menu_satellite -> {
+				MAP_LIST_MENU_SATELLITE -> {
 					map?.setMapType(IMapsProvider.MAP_TYPE_SATELLITE)
 				}
 
-				map_list_menu_hybrid -> {
+				MAP_LIST_MENU_HYBRID -> {
 					map?.setMapType(IMapsProvider.MAP_TYPE_HYBRID)
 				}
 			}
@@ -426,7 +431,10 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 
 			if (activity != null) {
 				if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-					AlertsCreator.createLocationRequiredDialog(activity, true).show()
+					AlertsCreator.createLocationRequiredDialog(activity, true) {
+						requestLocationPermission()
+					}.show()
+
 					return@setOnClickListener
 				}
 			}
@@ -553,15 +561,19 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 
 		listView.setOnItemClickListener { _, position ->
 			if (position == 1) {
+				val userLocation = userLocation
+
 				if (delegate != null && userLocation != null) {
 					if (lastPressedMarkerView != null) {
 						lastPressedMarkerView?.callOnClick()
 					}
 					else {
-						val location = TL_messageMediaGeo()
-						location.geo = TL_geoPoint()
-						location.geo.lat = AndroidUtilities.fixLocationCoordinate(userLocation!!.latitude)
-						location.geo._long = AndroidUtilities.fixLocationCoordinate(userLocation!!.longitude)
+						val location = TLMessageMediaGeo()
+
+						location.geo = TLGeoPoint().also {
+							it.lat = AndroidUtilities.fixLocationCoordinate(userLocation.latitude)
+							it.lon = AndroidUtilities.fixLocationCoordinate(userLocation.longitude)
+						}
 
 						if (chatActivity.isInScheduleMode) {
 							AlertsCreator.createScheduleDatePickerDialog(parentActivity, chatActivity.dialogId) { notify, scheduleDate ->
@@ -577,19 +589,24 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 				}
 				else if (locationDenied) {
 					parentActivity?.let {
-						AlertsCreator.createLocationRequiredDialog(it, true).show()
+						AlertsCreator.createLocationRequiredDialog(it, true) {
+							requestLocationPermission()
+						}.show()
 					}
 				}
 			}
-			else if (position == 2 && locationType == LOCATION_TYPE_SEND_WITH_LIVE) {
+			else if (position == 2 && locationType == LocationActivity.LOCATION_TYPE_SEND_WITH_LIVE) {
 				if (locationController.isSharingLocation(dialogId)) {
 					locationController.removeSharingLocation(dialogId)
 					parentAlert.dismiss(true)
 				}
 				else {
-					if (myLocation == null && locationDenied) {
-						parentActivity?.let {
-							AlertsCreator.createLocationRequiredDialog(it, true).show()
+					if (myLocation == null || locationDenied || backgroundLocationDenied) {
+						if (locationDenied) {
+							requestLocationPermission()
+						}
+						else {
+							AlertsCreator.createBackgroundLocationPermissionDialog(parentActivity, messagesController.getUser(userConfig.getClientUserId()), null)?.show()
 						}
 					}
 					else {
@@ -600,7 +617,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 			else {
 				val `object` = adapter.getItem(position)
 
-				if (`object` is TL_messageMediaVenue) {
+				if (`object` is TLMessageMediaVenue) {
 					if (chatActivity.isInScheduleMode) {
 						AlertsCreator.createScheduleDatePickerDialog(parentActivity, chatActivity.dialogId) { notify, scheduleDate ->
 							delegate?.didSelectLocation(`object`, locationType, notify, scheduleDate)
@@ -678,6 +695,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 
 				adapter.setCustomLocation(userLocation)
 			}
+
 			origMethod.call(ev)!!
 		}
 
@@ -978,20 +996,6 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		val delegate = delegate ?: return
 		val parentActivity = parentActivity ?: return
 		val myLocation = myLocation ?: return
-
-		if (checkBackgroundPermission && Build.VERSION.SDK_INT >= 29) {
-			checkBackgroundPermission = false
-
-			val preferences = MessagesController.getGlobalMainSettings()
-			val lastTime = preferences.getInt("backgroundloc", 0)
-
-			if (abs(System.currentTimeMillis() / 1000 - lastTime) > 24 * 60 * 60 && parentActivity.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-				preferences.edit().putInt("backgroundloc", (System.currentTimeMillis() / 1000).toInt()).commit()
-				AlertsCreator.createBackgroundLocationPermissionDialog(parentActivity, messagesController.getUser(userConfig.getClientUserId())) { openShareLiveLocation() }?.show()
-				return
-			}
-		}
-
 		var user: User? = null
 
 		if (DialogObject.isUserDialog(dialogId)) {
@@ -999,10 +1003,13 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		}
 
 		AlertsCreator.createLocationUpdateDialog(parentActivity, user) { param ->
-			val location = TL_messageMediaGeoLive()
-			location.geo = TL_geoPoint()
-			location.geo.lat = AndroidUtilities.fixLocationCoordinate(myLocation.latitude)
-			location.geo._long = AndroidUtilities.fixLocationCoordinate(myLocation.longitude)
+			val location = TLMessageMediaGeoLive()
+
+			location.geo = TLGeoPoint().also {
+				it.lat = AndroidUtilities.fixLocationCoordinate(myLocation.latitude)
+				it.lon = AndroidUtilities.fixLocationCoordinate(myLocation.longitude)
+			}
+
 			location.period = param
 
 			delegate.didSelectLocation(location, locationType, true, 0)
@@ -1020,7 +1027,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 			val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 			paint.color = -0x1
 
-			val bitmap = Bitmap.createBitmap(AndroidUtilities.dp(12f), AndroidUtilities.dp(12f), Bitmap.Config.ARGB_8888)
+			val bitmap = createBitmap(AndroidUtilities.dp(12f), AndroidUtilities.dp(12f))
 
 			val canvas = Canvas(bitmap)
 			canvas.drawCircle(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
@@ -1039,7 +1046,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		return null
 	}
 
-	private fun updatePlacesMarkers(places: List<TL_messageMediaVenue>?) {
+	private fun updatePlacesMarkers(places: List<TLMessageMediaVenue>?) {
 		if (places == null) {
 			return
 		}
@@ -1052,16 +1059,18 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 
 		places.forEachIndexed { index, venue ->
 			try {
-				val options = ApplicationLoader.mapsProvider.onCreateMarkerOptions().position(IMapsProvider.LatLng(venue.geo.lat, venue.geo._long))
+				val options = ApplicationLoader.mapsProvider.onCreateMarkerOptions().position(IMapsProvider.LatLng(venue.geo?.lat, venue.geo?.lon))
 				options.icon(createPlaceBitmap(index))
 				options.anchor(0.5f, 0.5f)
 				options.title(venue.title)
 				options.snippet(venue.address)
+
 				val venueLocation = VenueLocation()
 				venueLocation.num = index
 				venueLocation.marker = map?.addMarker(options)
 				venueLocation.venue = venue
 				venueLocation.marker?.tag = venueLocation
+
 				placeMarkers.add(venueLocation)
 			}
 			catch (e: Exception) {
@@ -1085,9 +1094,10 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 	private fun onMapInit() {
 		val map = map ?: return
 
+		// MARK: default location is set to New York
 		userLocation = Location("network")
-		userLocation?.latitude = 20.659322
-		userLocation?.longitude = -11.406250
+		userLocation?.latitude = 40.71427
+		userLocation?.longitude = -74.00597
 
 		try {
 			map.setMyLocationEnabled(true)
@@ -1105,14 +1115,14 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 				showSearchPlacesButton(true)
 				removeInfoView()
 
-				if (!scrolling && listView.childCount > 0) {
+				if (!scrolling && listView.isNotEmpty()) {
 					val view = listView.getChildAt(0)
 
 					if (view != null) {
 						val holder = listView.findContainingViewHolder(view)
 
 						if (holder != null && holder.adapterPosition == 0) {
-							val min = if (locationType == LOCATION_TYPE_SEND) 0 else AndroidUtilities.dp(66f)
+							val min = if (locationType == LocationActivity.LOCATION_TYPE_SEND) 0 else AndroidUtilities.dp(66f)
 							val top = view.top
 
 							if (top < -min) {
@@ -1159,7 +1169,12 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 			}
 		}, 200)
 
-		positionMarker(lastLocation.also { myLocation = it })
+		if (lastLocation != null) {
+			positionMarker(lastLocation.also { myLocation = it })
+		}
+		else {
+			positionMarker(userLocation)
+		}
 
 		val parentActivity = parentActivity
 
@@ -1194,6 +1209,8 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		}
 
 		updateClipView()
+
+		adapter.setCustomLocation(userLocation)
 	}
 
 	private fun removeInfoView() {
@@ -1311,8 +1328,8 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 			}
 
 			if (locationDenied && isTypeSend) {
-//                adapter.setOverScrollHeight(overScrollHeight + top);
-//                // TODO(dkaraush): fix ripple effect on buttons
+				// adapter.setOverScrollHeight(overScrollHeight + top);
+
 				val count = adapter.itemCount
 
 				for (i in 1 until count) {
@@ -1327,12 +1344,12 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 	}
 
 	private val isTypeSend: Boolean
-		get() = locationType == LOCATION_TYPE_SEND || locationType == LOCATION_TYPE_SEND_WITH_LIVE
+		get() = locationType == LocationActivity.LOCATION_TYPE_SEND || locationType == LocationActivity.LOCATION_TYPE_SEND_WITH_LIVE
 
 	private fun buttonsHeight(): Int {
 		var buttonsHeight = AndroidUtilities.dp(66f)
 
-		if (locationType == LOCATION_TYPE_SEND_WITH_LIVE) {
+		if (locationType == LocationActivity.LOCATION_TYPE_SEND_WITH_LIVE) {
 			buttonsHeight += AndroidUtilities.dp(66f)
 		}
 
@@ -1453,28 +1470,31 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {
 		when (id) {
-			NotificationCenter.locationPermissionGranted -> {
-				locationDenied = false
-
-				adapter.setMyLocationDenied(locationDenied)
-
-				try {
-					map?.setMyLocationEnabled(true)
-				}
-				catch (e: Exception) {
-					FileLog.e(e)
-				}
-			}
-
-			NotificationCenter.locationPermissionDenied -> {
-				locationDenied = true
-				adapter.setMyLocationDenied(locationDenied)
-			}
+			NotificationCenter.locationPermissionGranted -> didGrantLocationPermission()
+			NotificationCenter.locationPermissionDenied -> didDenyLocationPermission()
 		}
 
 		fixLayoutInternal()
 
 		searchItem?.visibility = if (locationDenied) GONE else VISIBLE
+	}
+
+	private fun didGrantLocationPermission() {
+		locationDenied = false
+
+		adapter.setMyLocationDenied(locationDenied)
+
+		try {
+			map?.setMyLocationEnabled(true)
+		}
+		catch (e: Exception) {
+			FileLog.e(e)
+		}
+	}
+
+	private fun didDenyLocationPermission() {
+		locationDenied = true
+		adapter.setMyLocationDenied(locationDenied)
 	}
 
 	override fun onResume() {
@@ -1524,22 +1544,24 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 		val keyboardVisible = parentAlert.chatAttachViewDelegate?.needEnterComment() ?: false
 
 		AndroidUtilities.runOnUIThread({
-			if (checkPermission) {
-				val activity = parentActivity
+			val activity = parentActivity ?: return@runOnUIThread
 
-				if (activity != null) {
-					checkPermission = false
-
-					if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-						activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION), 2)
-					}
-				}
+			if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+				didDenyLocationPermission()
 			}
-		}, (if (keyboardVisible) 200 else 0).toLong())
+		}, if (keyboardVisible) 200L else 0L)
 
 		layoutManager.scrollToPositionWithOffset(0, 0)
 
 		updateClipView()
+	}
+
+	private fun requestLocationPermission() {
+		val activity = parentActivity ?: return
+
+		if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+			activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION), 2)
+		}
 	}
 
 	fun setDelegate(delegate: LocationActivityDelegate?) {
@@ -1553,7 +1575,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 	class VenueLocation {
 		var num = 0
 		var marker: IMarker? = null
-		var venue: TL_messageMediaVenue? = null
+		var venue: TLMessageMediaVenue? = null
 	}
 
 	class LiveLocation {
@@ -1673,7 +1695,7 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 			frameLayout.addView(iconLayout, createFrame(36, 36f, Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM, 0f, 0f, 0f, 4f))
 
 			val imageView = BackupImageView(context)
-			imageView.setImage("https://ss3.4sqi.net/img/categories_v2/" + location.venue!!.venue_type + "_64.png", null, null)
+			imageView.setImage("https://ss3.4sqi.net/img/categories_v2/" + location.venue?.venueType + "_64.png", null, null)
 
 			iconLayout.addView(imageView, createFrame(30, 30, Gravity.CENTER))
 
@@ -1745,10 +1767,10 @@ class ChatAttachAlertLocationLayout(alert: ChatAttachAlert, context: Context) : 
 	}
 
 	companion object {
-		const val LOCATION_TYPE_SEND = 0
-		const val LOCATION_TYPE_SEND_WITH_LIVE = 1
-		private const val map_list_menu_map = 2
-		private const val map_list_menu_satellite = 3
-		private const val map_list_menu_hybrid = 4
+		//		const val LOCATION_TYPE_SEND = 0
+//		const val LOCATION_TYPE_SEND_WITH_LIVE = 1
+		private const val MAP_LIST_MENU_MAP = 2
+		private const val MAP_LIST_MENU_SATELLITE = 3
+		private const val MAP_LIST_MENU_HYBRID = 4
 	}
 }

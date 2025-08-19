@@ -4,29 +4,23 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.messenger
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.SystemClock
 import android.util.Base64
+import androidx.core.content.edit
 import org.telegram.tgnet.SerializedData
-import org.telegram.tgnet.TLRPC.InputStorePaymentPurpose
-import org.telegram.tgnet.TLRPC.TL_account_tmpPassword
-import org.telegram.tgnet.TLRPC.TL_emojiStatus
-import org.telegram.tgnet.TLRPC.TL_emojiStatusUntil
-import org.telegram.tgnet.TLRPC.TL_help_termsOfService
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC
 import java.util.Arrays
 import kotlin.math.abs
 
-@SuppressLint("ApplySharedPref")
 class UserConfig(instance: Int) : BaseController(instance) {
 	private val sync = Any()
-	private var currentUser: User? = null
+	private var currentUser: TLRPC.TLUser? = null
 	private var lastBroadcastId = -1
 	private var hasValidDialogLoadIds = false
 	private var lastSendMessageId = -210000
@@ -52,7 +46,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 	var unreadDialogsLoaded = true
 
 	@JvmField
-	var tmpPassword: TL_account_tmpPassword? = null
+	var tmpPassword: TLRPC.TLAccountTmpPassword? = null
 
 	@JvmField
 	var ratingLoadTime = 0
@@ -103,7 +97,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 	var loginTime = 0
 
 	@JvmField
-	var unacceptedTermsOfService: TL_help_termsOfService? = null
+	var unacceptedTermsOfService: TLRPC.TLHelpTermsOfService? = null
 
 	@JvmField
 	var autoDownloadConfigLoadTime: Long = 0
@@ -112,7 +106,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 	var awaitBillingProductIds: List<String> = ArrayList()
 
 	@JvmField
-	var billingPaymentPurpose: InputStorePaymentPurpose? = null
+	var billingPaymentPurpose: TLRPC.InputStorePaymentPurpose? = null
 
 	@JvmField
 	var premiumGiftsStickerPack: String? = null
@@ -153,95 +147,95 @@ class UserConfig(instance: Int) : BaseController(instance) {
 		NotificationCenter.getInstance(currentAccount).doOnIdle {
 			synchronized(sync) {
 				try {
-					val editor = preferences.edit()
-					editor.putInt("selectedAccount", selectedAccount)
-					editor.putBoolean("registeredForPush", registeredForPush)
-					editor.putInt("lastSendMessageId", lastSendMessageId)
-					editor.putInt("contactsSavedCount", contactsSavedCount)
-					editor.putInt("lastBroadcastId", lastBroadcastId)
-					editor.putInt("lastContactsSyncTime", lastContactsSyncTime)
-					editor.putInt("lastHintsSyncTime", lastHintsSyncTime)
-					editor.putBoolean("draftsLoaded", draftsLoaded)
-					editor.putBoolean("unreadDialogsLoaded", unreadDialogsLoaded)
-					editor.putInt("ratingLoadTime", ratingLoadTime)
-					editor.putInt("botRatingLoadTime", botRatingLoadTime)
-					editor.putInt("loginTime", loginTime)
-					editor.putBoolean("suggestContacts", suggestContacts)
-					editor.putBoolean("hasSecureData", hasSecureData)
-					editor.putBoolean("notificationsSettingsLoaded3", notificationsSettingsLoaded)
-					editor.putBoolean("notificationsSignUpSettingsLoaded", notificationsSignUpSettingsLoaded)
-					editor.putLong("autoDownloadConfigLoadTime", autoDownloadConfigLoadTime)
-					editor.putBoolean("hasValidDialogLoadIds", hasValidDialogLoadIds)
-					editor.putInt("sharingMyLocationUntil", sharingMyLocationUntil)
-					editor.putInt("lastMyLocationShareTime", lastMyLocationShareTime)
-					editor.putBoolean("filtersLoaded", filtersLoaded)
-					editor.putStringSet("awaitBillingProductIds", HashSet(awaitBillingProductIds))
+					preferences.edit(commit = true) {
+						putInt("selectedAccount", selectedAccount)
+						putBoolean("registeredForPush", registeredForPush)
+						putInt("lastSendMessageId", lastSendMessageId)
+						putInt("contactsSavedCount", contactsSavedCount)
+						putInt("lastBroadcastId", lastBroadcastId)
+						putInt("lastContactsSyncTime", lastContactsSyncTime)
+						putInt("lastHintsSyncTime", lastHintsSyncTime)
+						putBoolean("draftsLoaded", draftsLoaded)
+						putBoolean("unreadDialogsLoaded", unreadDialogsLoaded)
+						putInt("ratingLoadTime", ratingLoadTime)
+						putInt("botRatingLoadTime", botRatingLoadTime)
+						putInt("loginTime", loginTime)
+						putBoolean("suggestContacts", suggestContacts)
+						putBoolean("hasSecureData", hasSecureData)
+						putBoolean("notificationsSettingsLoaded3", notificationsSettingsLoaded)
+						putBoolean("notificationsSignUpSettingsLoaded", notificationsSignUpSettingsLoaded)
+						putLong("autoDownloadConfigLoadTime", autoDownloadConfigLoadTime)
+						putBoolean("hasValidDialogLoadIds", hasValidDialogLoadIds)
+						putInt("sharingMyLocationUntil", sharingMyLocationUntil)
+						putInt("lastMyLocationShareTime", lastMyLocationShareTime)
+						putBoolean("filtersLoaded", filtersLoaded)
+						putStringSet("awaitBillingProductIds", HashSet(awaitBillingProductIds))
 
-					if (billingPaymentPurpose != null) {
-						val data = SerializedData(billingPaymentPurpose!!.objectSize)
-						billingPaymentPurpose?.serializeToStream(data)
-						editor.putString("billingPaymentPurpose", Base64.encodeToString(data.toByteArray(), Base64.DEFAULT))
-						data.cleanup()
-					}
-					else {
-						editor.remove("billingPaymentPurpose")
-					}
-
-					editor.putString("premiumGiftsStickerPack", premiumGiftsStickerPack)
-					editor.putLong("lastUpdatedPremiumGiftsStickerPack", lastUpdatedPremiumGiftsStickerPack)
-					editor.putString("genericAnimationsStickerPack", genericAnimationsStickerPack)
-					editor.putLong("lastUpdatedGenericAnimations", lastUpdatedGenericAnimations)
-					editor.putInt("6migrateOffsetId", migrateOffsetId)
-
-					if (migrateOffsetId != -1) {
-						editor.putInt("6migrateOffsetDate", migrateOffsetDate)
-						editor.putLong("6migrateOffsetUserId", migrateOffsetUserId)
-						editor.putLong("6migrateOffsetChatId", migrateOffsetChatId)
-						editor.putLong("6migrateOffsetChannelId", migrateOffsetChannelId)
-						editor.putLong("6migrateOffsetAccess", migrateOffsetAccess)
-					}
-
-					if (unacceptedTermsOfService != null) {
-						try {
-							val data = SerializedData(unacceptedTermsOfService!!.objectSize)
-							unacceptedTermsOfService?.serializeToStream(data)
-							editor.putString("terms", Base64.encodeToString(data.toByteArray(), Base64.DEFAULT))
+						if (billingPaymentPurpose != null) {
+							val data = SerializedData(billingPaymentPurpose!!.objectSize)
+							billingPaymentPurpose?.serializeToStream(data)
+							putString("billingPaymentPurpose", Base64.encodeToString(data.toByteArray(), Base64.DEFAULT))
 							data.cleanup()
 						}
-						catch (ignore: Exception) {
+						else {
+							remove("billingPaymentPurpose")
 						}
-					}
-					else {
-						editor.remove("terms")
-					}
 
-					SharedConfig.saveConfig()
+						putString("premiumGiftsStickerPack", premiumGiftsStickerPack)
+						putLong("lastUpdatedPremiumGiftsStickerPack", lastUpdatedPremiumGiftsStickerPack)
+						putString("genericAnimationsStickerPack", genericAnimationsStickerPack)
+						putLong("lastUpdatedGenericAnimations", lastUpdatedGenericAnimations)
+						putInt("6migrateOffsetId", migrateOffsetId)
 
-					if (tmpPassword != null) {
-						val data = SerializedData()
-						tmpPassword?.serializeToStream(data)
-						val string = Base64.encodeToString(data.toByteArray(), Base64.DEFAULT)
-						editor.putString("tmpPassword", string)
-						data.cleanup()
-					}
-					else {
-						editor.remove("tmpPassword")
-					}
+						if (migrateOffsetId != -1) {
+							putInt("6migrateOffsetDate", migrateOffsetDate)
+							putLong("6migrateOffsetUserId", migrateOffsetUserId)
+							putLong("6migrateOffsetChatId", migrateOffsetChatId)
+							putLong("6migrateOffsetChannelId", migrateOffsetChannelId)
+							putLong("6migrateOffsetAccess", migrateOffsetAccess)
+						}
 
-					if (currentUser != null) {
-						if (withFile) {
+						if (unacceptedTermsOfService != null) {
+							try {
+								val data = SerializedData(unacceptedTermsOfService!!.objectSize)
+								unacceptedTermsOfService?.serializeToStream(data)
+								putString("terms", Base64.encodeToString(data.toByteArray(), Base64.DEFAULT))
+								data.cleanup()
+							}
+							catch (ignore: Exception) {
+							}
+						}
+						else {
+							remove("terms")
+						}
+
+						SharedConfig.saveConfig()
+
+						if (tmpPassword != null) {
 							val data = SerializedData()
-							currentUser?.serializeToStream(data)
+							tmpPassword?.serializeToStream(data)
 							val string = Base64.encodeToString(data.toByteArray(), Base64.DEFAULT)
-							editor.putString("user", string)
+							putString("tmpPassword", string)
 							data.cleanup()
 						}
-					}
-					else {
-						editor.remove("user")
-					}
+						else {
+							remove("tmpPassword")
+						}
 
-					editor.commit()
+						if (currentUser != null) {
+							if (withFile) {
+								val data = SerializedData()
+								currentUser?.serializeToStream(data)
+								val string = Base64.encodeToString(data.toByteArray(), Base64.DEFAULT)
+								putString("user", string)
+								data.cleanup()
+							}
+						}
+						else {
+							remove("user")
+						}
+
+					}
 				}
 				catch (e: Exception) {
 					FileLog.e(e)
@@ -263,11 +257,11 @@ class UserConfig(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	fun getCurrentUser(): User? {
+	fun getCurrentUser(): TLRPC.TLUser? {
 		synchronized(sync) { return currentUser }
 	}
 
-	fun setCurrentUser(user: User) {
+	fun setCurrentUser(user: TLRPC.TLUser) {
 		synchronized(sync) {
 			val oldUser = currentUser
 			currentUser = user
@@ -276,14 +270,14 @@ class UserConfig(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	private fun checkPremiumSelf(oldUser: User?, newUser: User?) {
+	private fun checkPremiumSelf(oldUser: TLRPC.TLUser?, newUser: TLRPC.TLUser?) {
 		if (oldUser == null || newUser != null && oldUser.premium != newUser.premium) {
 			AndroidUtilities.runOnUIThread {
-				messagesController.updatePremium(newUser!!.premium)
+				messagesController.updatePremium(newUser?.premium == true)
 				NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.currentUserPremiumStatusChanged)
 				NotificationCenter.globalInstance.postNotificationName(NotificationCenter.premiumStatusChangedGlobal)
 				mediaDataController.loadPremiumPromo(false)
-				mediaDataController.loadReactions(false, true)
+				mediaDataController.loadReactions(cache = false, force = true)
 			}
 		}
 	}
@@ -327,7 +321,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 
 					if (arr != null) {
 						val data = SerializedData()
-						billingPaymentPurpose = InputStorePaymentPurpose.TLdeserialize(data, data.readInt32(false), false)
+						billingPaymentPurpose = TLRPC.InputStorePaymentPurpose.deserialize(data, data.readInt32(false), false)
 						data.cleanup()
 					}
 				}
@@ -346,7 +340,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 
 					if (arr != null) {
 						val data = SerializedData(arr)
-						unacceptedTermsOfService = TL_help_termsOfService.TLdeserialize(data, data.readInt32(false), false)
+						unacceptedTermsOfService = TLRPC.TLHelpTermsOfService.deserialize(data, data.readInt32(false), false)
 						data.cleanup()
 					}
 				}
@@ -372,7 +366,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 
 				if (bytes != null) {
 					val data = SerializedData(bytes)
-					tmpPassword = TL_account_tmpPassword.TLdeserialize(data, data.readInt32(false), false)
+					tmpPassword = TLRPC.TLAccountTmpPassword.deserialize(data, data.readInt32(false), false)
 					data.cleanup()
 				}
 			}
@@ -384,7 +378,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 
 				if (bytes != null) {
 					val data = SerializedData(bytes)
-					currentUser = User.TLdeserialize(data, data.readInt32(false), false)
+					currentUser = TLRPC.User.deserialize(data, data.readInt32(false), false) as? TLRPC.TLUser
 					data.cleanup()
 				}
 			}
@@ -435,7 +429,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 		}
 
 	fun clearConfig() {
-		preferences.edit().clear().commit()
+		preferences.edit(commit = true) { clear() }
 		sharingMyLocationUntil = 0
 		lastMyLocationShareTime = 0
 		currentUser = null
@@ -488,7 +482,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 	}
 
 	fun setPinnedDialogsLoaded(folderId: Int, loaded: Boolean) {
-		preferences.edit().putBoolean("2pinnedDialogsLoaded$folderId", loaded).commit()
+		preferences.edit(commit = true) { putBoolean("2pinnedDialogsLoaded$folderId", loaded) }
 	}
 
 	fun getTotalDialogsCount(folderId: Int): Int {
@@ -496,7 +490,7 @@ class UserConfig(instance: Int) : BaseController(instance) {
 	}
 
 	fun setTotalDialogsCount(folderId: Int, totalDialogsLoadCount: Int) {
-		preferences.edit().putInt("2totalDialogsLoadCount" + if (folderId == 0) "" else folderId, totalDialogsLoadCount).commit()
+		preferences.edit(commit = true) { putInt("2totalDialogsLoadCount" + if (folderId == 0) "" else folderId, totalDialogsLoadCount) }
 	}
 
 	fun getDialogLoadOffsets(folderId: Int): LongArray {
@@ -511,15 +505,15 @@ class UserConfig(instance: Int) : BaseController(instance) {
 	}
 
 	fun setDialogsLoadOffset(folderId: Int, dialogsLoadOffsetId: Int, dialogsLoadOffsetDate: Int, dialogsLoadOffsetUserId: Long, dialogsLoadOffsetChatId: Long, dialogsLoadOffsetChannelId: Long, dialogsLoadOffsetAccess: Long) {
-		val editor = preferences.edit()
-		editor.putInt("2dialogsLoadOffsetId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetId)
-		editor.putInt("2dialogsLoadOffsetDate" + if (folderId == 0) "" else folderId, dialogsLoadOffsetDate)
-		editor.putLong("2dialogsLoadOffsetUserId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetUserId)
-		editor.putLong("2dialogsLoadOffsetChatId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetChatId)
-		editor.putLong("2dialogsLoadOffsetChannelId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetChannelId)
-		editor.putLong("2dialogsLoadOffsetAccess" + if (folderId == 0) "" else folderId, dialogsLoadOffsetAccess)
-		editor.putBoolean("hasValidDialogLoadIds", true)
-		editor.commit()
+		preferences.edit(commit = true) {
+			putInt("2dialogsLoadOffsetId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetId)
+			putInt("2dialogsLoadOffsetDate" + if (folderId == 0) "" else folderId, dialogsLoadOffsetDate)
+			putLong("2dialogsLoadOffsetUserId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetUserId)
+			putLong("2dialogsLoadOffsetChatId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetChatId)
+			putLong("2dialogsLoadOffsetChannelId" + if (folderId == 0) "" else folderId, dialogsLoadOffsetChannelId)
+			putLong("2dialogsLoadOffsetAccess" + if (folderId == 0) "" else folderId, dialogsLoadOffsetAccess)
+			putBoolean("hasValidDialogLoadIds", true)
+		}
 	}
 
 	val isPremium: Boolean
@@ -529,12 +523,12 @@ class UserConfig(instance: Int) : BaseController(instance) {
 		get() {
 			val currentUser = currentUser ?: return null
 
-			if (currentUser.emoji_status is TL_emojiStatusUntil && (currentUser.emoji_status as TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
-				return (currentUser.emoji_status as TL_emojiStatusUntil).document_id
+			if (currentUser.emojiStatus is TLRPC.TLEmojiStatusUntil && (currentUser.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+				return (currentUser.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId
 			}
 
-			if (currentUser.emoji_status is TL_emojiStatus) {
-				return (currentUser.emoji_status as TL_emojiStatus).document_id
+			if (currentUser.emojiStatus is TLRPC.TLEmojiStatus) {
+				return (currentUser.emojiStatus as TLRPC.TLEmojiStatus).documentId
 			}
 
 			return null

@@ -5,7 +5,7 @@
 	xmlns:app="http://schemas.android.com/apk/res-auto"
 	xmlns:tools="http://schemas.android.com/tools"
 	android:layout_marginTop="8dp"
-	app:cardCornerRadius="9dp"
+	app:cardCornerRadius="0dp"
 	app:strokeWidth="0dp"
 	android:orientation="vertical">
 
@@ -13,7 +13,7 @@
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
 		android:padding="8dp"
-		android:background="@color/light_background"
+		android:background="@color/background"
 		android:orientation="horizontal">
 
 		<FrameLayout
@@ -22,32 +22,64 @@
 			android:layout_height="50dp"
 			android:background="@drawable/ai_bot_avatar"/>
 
-		<LinearLayout
+		<androidx.constraintlayout.widget.ConstraintLayout
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
 			android:orientation="vertical">
 
 			<TextView
 				android:id="@+id/bot_title"
-				android:layout_width="wrap_content"
+				android:layout_width="0dp"
 				android:layout_height="wrap_content"
-				android:layout_marginStart="16dp"
+				android:layout_marginStart="8dp"
+				android:layout_marginEnd="6dp"
 				android:textColor="@color/dark"
-				android:textStyle="bold"
 				android:textSize="16sp"
-				tools:text="@string/ai_chat_and_media"/>
+				android:textStyle="bold"
+				android:maxLines="1"
+				android:ellipsize="end"
+				android:singleLine="true"
+				app:layout_constraintEnd_toStartOf="@+id/textView2"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent"
+				tools:text="@string/ai_chat_and_media" />
 
 			<TextView
 				android:id="@+id/bot_description"
-				android:layout_width="wrap_content"
+				android:layout_width="0dp"
 				android:layout_height="wrap_content"
-				android:layout_marginStart="16dp"
+				android:layout_marginStart="8dp"
 				android:layout_marginTop="4sp"
+				android:layout_marginEnd="6dp"
 				android:textColor="@color/disabled_text"
 				android:textSize="15sp"
-				tools:text="@string/general_topics_ai_chat_and_image_bot"/>
+				android:maxLines="1"
+				android:ellipsize="end"
+				android:singleLine="true"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toStartOf="@+id/textView2"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toBottomOf="@+id/bot_title"
+				tools:text="@string/general_topics_ai_chat_and_image_bot" />
 
-		</LinearLayout>
+			<TextView
+				android:id="@+id/textView2"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:background="@drawable/shape_8_dp"
+				android:backgroundTint="@color/color_toggle_active"
+				android:paddingHorizontal="10dp"
+				android:paddingVertical="4dp"
+				android:text="@string/Open"
+				android:textAllCaps="true"
+				android:textColor="@color/brand"
+				android:textSize="12sp"
+				android:textStyle="bold"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
 
 	</LinearLayout>
 

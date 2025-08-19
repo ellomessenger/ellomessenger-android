@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -24,13 +24,16 @@ import org.telegram.messenger.DownloadController;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.MediaController;
-import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.BaseCell;
 
 import java.io.File;
+
+import androidx.annotation.NonNull;
 
 public class PopupAudioView extends BaseCell implements SeekBar.SeekBarDelegate, DownloadController.FileDownloadProgressListener {
 
@@ -118,7 +121,7 @@ public class PopupAudioView extends BaseCell implements SeekBar.SeekBarDelegate,
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (currentMessageObject == null) {
 			return;
 		}
@@ -130,8 +133,7 @@ public class PopupAudioView extends BaseCell implements SeekBar.SeekBarDelegate,
 
 		int h = AndroidUtilities.displaySize.y;
 		int w = AndroidUtilities.displaySize.x;
-		if (getParent() instanceof View) {
-			View view = (View)getParent();
+		if (getParent() instanceof View view) {
 			w = view.getMeasuredWidth();
 			h = view.getMeasuredHeight();
 		}
@@ -226,7 +228,7 @@ public class PopupAudioView extends BaseCell implements SeekBar.SeekBarDelegate,
 		if (buttonState == 0) {
 			boolean result = MediaController.getInstance().playMessage(currentMessageObject);
 			if (!currentMessageObject.isOut() && currentMessageObject.isContentUnread()) {
-				if (currentMessageObject.messageOwner.peer_id.channel_id == 0) {
+				if (TLRPCExtensions.getChannelId(currentMessageObject.messageOwner.peerId) == 0) {
 					MessagesController.getInstance(currentAccount).markMessageContentAsRead(currentMessageObject);
 					currentMessageObject.setContentIsRead();
 				}
@@ -266,11 +268,13 @@ public class PopupAudioView extends BaseCell implements SeekBar.SeekBarDelegate,
 
 		int duration = 0;
 		if (!MediaController.getInstance().isPlayingMessage(currentMessageObject)) {
-			for (int a = 0; a < currentMessageObject.getDocument().attributes.size(); a++) {
-				TLRPC.DocumentAttribute attribute = currentMessageObject.getDocument().attributes.get(a);
-				if (attribute instanceof TLRPC.TL_documentAttributeAudio) {
-					duration = attribute.duration;
-					break;
+			if (currentMessageObject.getDocument() instanceof TLRPC.TLDocument tlDocument) {
+				for (int a = 0; a < tlDocument.attributes.size(); a++) {
+					TLRPC.DocumentAttribute attribute = tlDocument.attributes.get(a);
+					if (attribute instanceof TLRPC.TLDocumentAttributeAudio) {
+						duration = attribute.duration;
+						break;
+					}
 				}
 			}
 		}

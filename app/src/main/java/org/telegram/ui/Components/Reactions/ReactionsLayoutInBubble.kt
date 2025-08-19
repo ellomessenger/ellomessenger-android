@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components.Reactions
 
@@ -20,6 +20,8 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.DocumentObject.getSvgThumb
 import org.telegram.messenger.Emoji
@@ -30,11 +32,8 @@ import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.messageobject.MessageObject
-import org.telegram.tgnet.tlrpc.Reaction
-import org.telegram.tgnet.tlrpc.ReactionCount
-import org.telegram.tgnet.tlrpc.TL_reactionCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.reactions
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.ChatMessageCell
 import org.telegram.ui.Components.AnimatedEmojiDrawable
@@ -134,7 +133,7 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 					reactionButtons.add(button)
 
 					if (!isSmall) {
-						val users = mutableListOf<User>()
+						val users = mutableListOf<TLRPC.User>()
 
 						if (messageObject.dialogId > 0) {
 							if (reactionCount.count == 2) {
@@ -172,8 +171,8 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 								val visibleReactionPeer = VisibleReaction.fromTLReaction(recent.reaction)
 								val visibleReactionCount = VisibleReaction.fromTLReaction(reactionCount.reaction)
 
-								if (visibleReactionPeer == visibleReactionCount && MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(recent.peer_id)) != null) {
-									MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(recent.peer_id))?.let {
+								if (visibleReactionPeer == visibleReactionCount && MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(recent.peerId)) != null) {
+									MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(recent.peerId))?.let {
 										users.add(it)
 									}
 								}
@@ -335,49 +334,41 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 			totalY = totalY * animationProgress + fromY * (1f - animationProgress)
 		}
 
-		canvas.save()
-		canvas.translate(totalX, totalY)
+		canvas.withTranslation(totalX, totalY) {
+			for (reactionButton in reactionButtons) {
+				withSave {
+					var x = reactionButton.x.toFloat()
+					var y = reactionButton.y.toFloat()
 
-		for (reactionButton in reactionButtons) {
-			canvas.save()
+					if (animationProgress != 1f && reactionButton.animationType == ANIMATION_TYPE_MOVE) {
+						x = reactionButton.x * animationProgress + reactionButton.animateFromX * (1f - animationProgress)
+						y = reactionButton.y * animationProgress + reactionButton.animateFromY * (1f - animationProgress)
+					}
 
-			var x = reactionButton.x.toFloat()
-			var y = reactionButton.y.toFloat()
+					translate(x, y)
 
-			if (animationProgress != 1f && reactionButton.animationType == ANIMATION_TYPE_MOVE) {
-				x = reactionButton.x * animationProgress + reactionButton.animateFromX * (1f - animationProgress)
-				y = reactionButton.y * animationProgress + reactionButton.animateFromY * (1f - animationProgress)
+					var alpha = 1f
+
+					if (animationProgress != 1f && reactionButton.animationType == ANIMATION_TYPE_IN) {
+						val s = 0.5f + 0.5f * animationProgress
+						alpha = animationProgress
+						scale(s, s, reactionButton.width / 2f, reactionButton.height / 2f)
+					}
+
+					reactionButton.draw(this, if (reactionButton.animationType == ANIMATION_TYPE_MOVE) animationProgress else 1f, alpha, drawOnlyReaction != null)
+
+				}
 			}
 
-			canvas.translate(x, y)
-
-			var alpha = 1f
-
-			if (animationProgress != 1f && reactionButton.animationType == ANIMATION_TYPE_IN) {
-				val s = 0.5f + 0.5f * animationProgress
-				alpha = animationProgress
-				canvas.scale(s, s, reactionButton.width / 2f, reactionButton.height / 2f)
+			for (reactionButton in outButtons) {
+				withTranslation(reactionButton.x.toFloat(), reactionButton.y.toFloat()) {
+					val s = 0.5f + 0.5f * (1f - animationProgress)
+					scale(s, s, reactionButton.width / 2f, reactionButton.height / 2f)
+					reactionButton.draw(this, 1f, 1f - animationProgress, false)
+				}
 			}
 
-			reactionButton.draw(canvas, if (reactionButton.animationType == ANIMATION_TYPE_MOVE) animationProgress else 1f, alpha, drawOnlyReaction != null)
-
-			canvas.restore()
 		}
-
-		for (reactionButton in outButtons) {
-			canvas.save()
-			canvas.translate(reactionButton.x.toFloat(), reactionButton.y.toFloat())
-
-			val s = 0.5f + 0.5f * (1f - animationProgress)
-
-			canvas.scale(s, s, reactionButton.width / 2f, reactionButton.height / 2f)
-
-			reactionButton.draw(canvas, 1f, 1f - animationProgress, false)
-
-			canvas.restore()
-		}
-
-		canvas.restore()
 	}
 
 	fun recordDrawingState() {
@@ -500,7 +491,7 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 		return changed
 	}
 
-	private fun equalsUsersList(users: List<User>?, users1: List<User>?): Boolean {
+	private fun equalsUsersList(users: List<TLRPC.User>?, users1: List<TLRPC.User>?): Boolean {
 		@Suppress("NAME_SHADOWING") val users = users ?: return false
 		@Suppress("NAME_SHADOWING") val users1 = users1 ?: return false
 
@@ -678,7 +669,7 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 			val r = MediaDataController.getInstance(currentAccount).reactionsMap[reaction.emojicon]
 
 			if (r != null) {
-				imageReceiver.setImage(ImageLocation.getForDocument(r.center_icon), "40_40_nolimit", null, "tgs", r, 1)
+				imageReceiver.setImage(ImageLocation.getForDocument(r.centerIcon), "40_40_nolimit", null, "tgs", r, 1)
 			}
 
 			imageReceiver.setAutoRepeat(0)
@@ -721,7 +712,7 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 		}
 	}
 
-	inner class ReactionButton(val reactionCount: ReactionCount, val isSmall: Boolean) {
+	inner class ReactionButton(val reactionCount: TLRPC.TLReactionCount, val isSmall: Boolean) {
 		private var animatedEmojiDrawable: AnimatedEmojiDrawable? = null
 		private var serviceBackgroundColor = 0
 		private var serviceTextColor = 0
@@ -744,7 +735,7 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 		var lastDrawnBackgroundColor = 0
 		var lastDrawnTextColor = 0
 		var lastImageDrawn = false
-		val reaction: Reaction? = reactionCount.reaction
+		val reaction: TLRPC.Reaction? = reactionCount.reaction
 		var realCount = reactionCount.count
 		var textColor = 0
 		val visibleReaction = VisibleReaction.fromTLReaction(reactionCount.reaction)
@@ -755,7 +746,7 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 		val drawingImageRect = Rect()
 		val imageReceiver = ImageReceiver()
 
-		var users: List<User>? = null
+		var users: List<TLRPC.User>? = null
 			set(value) {
 				field = value?.sortedWith(usersComparator)
 
@@ -788,8 +779,8 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 
 		init {
 			key = when (reaction) {
-				is TL_reactionEmoji -> reaction.emoticon
-				is TL_reactionCustomEmoji -> reaction.documentId.toString()
+				is TLRPC.TLReactionEmoji -> reaction.emoticon
+				is TLRPC.TLReactionCustomEmoji -> reaction.documentId.toString()
 				else -> throw RuntimeException("unsupported")
 			}
 
@@ -805,10 +796,10 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 				val r = MediaDataController.getInstance(currentAccount).reactionsMap[visibleReaction.emojicon]
 
 				if (r != null) {
-					val svgThumb = getSvgThumb(r.static_icon, ResourcesCompat.getColor(parentView.resources, R.color.dark_gray, null), 1.0f)
+					val svgThumb = getSvgThumb(r.staticIcon, ResourcesCompat.getColor(parentView.resources, R.color.dark_gray, null), 1.0f)
 
 					if (svgThumb != null) {
-						val image = ImageLocation.getForDocument(r.center_icon)
+						val image = ImageLocation.getForDocument(r.centerIcon)
 
 						if (image != null) {
 							fallbackToEmoji = false
@@ -947,24 +938,16 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 
 			drawImage(canvas, alpha)
 
-			// if (count != 0 || counterDrawable.countChangeProgress != 1f) {
-			canvas.save()
-			canvas.translate((AndroidUtilities.dp(8f) + AndroidUtilities.dp(20f) + AndroidUtilities.dp(2f)).toFloat(), 0f)
-
-			counterDrawable.draw(canvas)
-
-			canvas.restore()
-			// }
+			canvas.withTranslation((AndroidUtilities.dp(8f) + AndroidUtilities.dp(20f) + AndroidUtilities.dp(2f)).toFloat(), 0f) {
+				counterDrawable.draw(this)
+			}
 
 			avatarsDrawable?.let {
-				canvas.save()
-				canvas.translate((AndroidUtilities.dp(10f) + AndroidUtilities.dp(20f) + AndroidUtilities.dp(2f)).toFloat(), 0f)
-
-				it.setAlpha(alpha)
-				it.setTransitionProgress(progress)
-				it.onDraw(canvas)
-
-				canvas.restore()
+				canvas.withTranslation((AndroidUtilities.dp(10f) + AndroidUtilities.dp(20f) + AndroidUtilities.dp(2f)).toFloat(), 0f) {
+					it.setAlpha(alpha)
+					it.setTransitionProgress(progress)
+					it.onDraw(this)
+				}
 			}
 		}
 
@@ -1053,19 +1036,19 @@ class ReactionsLayoutInBubble(private val parentView: ChatMessageCell) {
 		// private const val ANIMATION_TYPE_OUT = 2
 		private const val ANIMATION_TYPE_MOVE = 3
 		private val comparator = ButtonsComparator()
-		private val usersComparator = Comparator { user1: User, user2: User -> (user1.id - user2.id).toInt() }
+		private val usersComparator = Comparator { user1: TLRPC.User, user2: TLRPC.User -> (user1.id - user2.id).toInt() }
 		private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 		private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
 		private var animationUnique = 0
 		private var pointer = 1
 
 		@JvmStatic
-		fun equalsTLReaction(reaction: Reaction?, reaction1: Reaction?): Boolean {
-			if (reaction is TL_reactionEmoji && reaction1 is TL_reactionEmoji) {
+		fun equalsTLReaction(reaction: TLRPC.Reaction?, reaction1: TLRPC.Reaction?): Boolean {
+			if (reaction is TLRPC.TLReactionEmoji && reaction1 is TLRPC.TLReactionEmoji) {
 				return TextUtils.equals(reaction.emoticon, reaction1.emoticon)
 			}
 
-			if (reaction is TL_reactionCustomEmoji && reaction1 is TL_reactionCustomEmoji) {
+			if (reaction is TLRPC.TLReactionCustomEmoji && reaction1 is TLRPC.TLReactionCustomEmoji) {
 				return reaction.documentId == reaction1.documentId
 			}
 

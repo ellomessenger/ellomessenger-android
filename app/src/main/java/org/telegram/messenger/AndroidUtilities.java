@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.messenger;
 
@@ -110,10 +110,10 @@ import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.utils.CustomHtml;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.TLChatBannedRights;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBarLayout;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -372,7 +372,7 @@ public class AndroidUtilities {
 		return str;
 	}
 
-	public static CharSequence highlightText(CharSequence str, ArrayList<String> query) {
+	public static CharSequence highlightText(CharSequence str, @Nullable ArrayList<String> query) {
 		if (query == null) {
 			return null;
 		}
@@ -497,14 +497,16 @@ public class AndroidUtilities {
 					String id = intent.getStringExtra("com.google.android.voicesearch.extra.RECIPIENT_CONTACT_CHAT_ID");
 					long uid = Long.parseLong(id);
 					User user = MessagesController.getInstance(currentAccount).getUser(uid);
+
 					if (user == null) {
 						user = MessagesStorage.getInstance(currentAccount).getUserSync(uid);
-						if (user != null) {
-							MessagesController.getInstance(currentAccount).putUser(user, true);
+
+						if (user instanceof TLRPC.TLUser usr) {
+							MessagesController.getInstance(currentAccount).putUser(usr, true);
 						}
 					}
 					if (user != null) {
-						SendMessagesHelper.getInstance(currentAccount).sendMessage(text, user.id, null, null, null, true, null, null, null, true, 0, null, false, false, null);
+						SendMessagesHelper.getInstance(currentAccount).sendMessage(text, user.id, null, null, null, true, null, null, null, true, 0, null, false);
 					}
 				}
 			}
@@ -1219,7 +1221,7 @@ public class AndroidUtilities {
 		return new byte[0];
 	}
 
-	public static ArrayList<User> loadVCardFromStream(Uri uri, int currentAccount, boolean asset, ArrayList<VcardItem> items, String name) {
+	public static ArrayList<User> loadVCardFromStream(Uri uri, int currentAccount, boolean asset, List<VcardItem> items, String name) {
 		ArrayList<User> result = null;
 		try {
 			InputStream stream;
@@ -1255,7 +1257,7 @@ public class AndroidUtilities {
 							currentData.name = name;
 						}
 						else if (originalLine.startsWith("END:VCARD")) {
-
+							// ignore
 						}
 						else if (items != null) {
 							if (originalLine.startsWith("TEL")) {
@@ -1384,30 +1386,22 @@ public class AndroidUtilities {
 			}
 			for (int a = 0; a < vcardDatas.size(); a++) {
 				VcardData vcardData = vcardDatas.get(a);
+
 				if (vcardData.name != null && !vcardData.phones.isEmpty()) {
 					if (result == null) {
 						result = new ArrayList<>();
 					}
 
-					// String phoneToUse = vcardData.phones.get(0);
-//					for (int b = 0; b < vcardData.phones.size(); b++) {
-//						String phone = vcardData.phones.get(b);
-//						String sphone = phone.substring(Math.max(0, phone.length() - 7));
-//						if (ContactsController.getInstance(currentAccount).contactsByShortPhone.get(sphone) != null) {
-//							phoneToUse = phone;
-//							break;
-//						}
-//					}
-					User user = new TLRPC.TL_userContact_old2();
+					var user = new TLRPC.TLUser();
 					// user.phone = phoneToUse;
-					user.setFirst_name(vcardData.name);
-					user.setLast_name("");
+					user.firstName = vcardData.name;
+					user.lastName = "";
 					user.id = 0;
-					TLRPC.TL_restrictionReason reason = new TLRPC.TL_restrictionReason();
+					var reason = new TLRPC.TLRestrictionReason();
 					reason.text = vcardData.vcard.toString();
 					reason.platform = "";
 					reason.reason = "";
-					user.restriction_reason.add(reason);
+					user.restrictionReason.add(reason);
 					result.add(user);
 				}
 			}
@@ -1629,15 +1623,16 @@ public class AndroidUtilities {
 		return result;
 	}
 
+	@NonNull
 	public static ArrayList<File> getRootDirs() {
 		ArrayList<File> result = null;
 		File[] dirs = ApplicationLoader.applicationContext.getExternalFilesDirs(null);
 		if (dirs != null) {
-			for (int a = 0; a < dirs.length; a++) {
-				if (dirs[a] == null) {
+			for (File dir : dirs) {
+				if (dir == null) {
 					continue;
 				}
-				String path = dirs[a].getAbsolutePath();
+				String path = dir.getAbsolutePath();
 				int idx = path.indexOf("/Android");
 				if (idx >= 0) {
 					if (result == null) {
@@ -1791,11 +1786,11 @@ public class AndroidUtilities {
 			if (roundMessageSize == 0) {
 				if (AndroidUtilities.isTablet()) {
 					roundMessageSize = (int)(AndroidUtilities.getMinTabletSide() * 0.6f);
-					roundPlayingMessageSize = (int)(AndroidUtilities.getMinTabletSide() - AndroidUtilities.dp(28));
+					roundPlayingMessageSize = AndroidUtilities.getMinTabletSide() - AndroidUtilities.dp(28);
 				}
 				else {
 					roundMessageSize = (int)(Math.min(AndroidUtilities.displaySize.x, AndroidUtilities.displaySize.y) * 0.6f);
-					roundPlayingMessageSize = (int)(Math.min(AndroidUtilities.displaySize.x, AndroidUtilities.displaySize.y) - AndroidUtilities.dp(28));
+					roundPlayingMessageSize = Math.min(AndroidUtilities.displaySize.x, AndroidUtilities.displaySize.y) - AndroidUtilities.dp(28);
 				}
 				roundMessageInset = dp(2);
 			}
@@ -2001,18 +1996,18 @@ public class AndroidUtilities {
 		return photoSize;
 	}
 
-	@SuppressWarnings("unchecked")
 	public static void endIncomingCall() {
 		if (!hasCallPermissions) {
 			return;
 		}
+
 		try {
 			TelephonyManager tm = (TelephonyManager)ApplicationLoader.applicationContext.getSystemService(Context.TELEPHONY_SERVICE);
-			Class c = Class.forName(tm.getClass().getName());
+			Class<?> c = Class.forName(tm.getClass().getName());
 			Method m = c.getDeclaredMethod("getITelephony");
 			m.setAccessible(true);
-			ITelephony telephonyService = (ITelephony)m.invoke(tm);
-			telephonyService = (ITelephony)m.invoke(tm);
+
+			var telephonyService = (ITelephony)m.invoke(tm);
 			telephonyService.silenceRinger();
 			telephonyService.endCall();
 		}
@@ -2025,24 +2020,31 @@ public class AndroidUtilities {
 		if (!hasCallPermissions) {
 			return null;
 		}
+
 		try (Cursor cursor = ApplicationLoader.applicationContext.getContentResolver().query(CallLog.Calls.CONTENT_URI, new String[]{CallLog.Calls.NUMBER, CallLog.Calls.DATE}, CallLog.Calls.TYPE + " IN (" + CallLog.Calls.MISSED_TYPE + "," + CallLog.Calls.INCOMING_TYPE + "," + CallLog.Calls.REJECTED_TYPE + ")", null, "date DESC LIMIT 5")) {
-			while (cursor.moveToNext()) {
-				String number = cursor.getString(0);
-				long date = cursor.getLong(1);
-				if (BuildConfig.DEBUG) {
-					FileLog.e("number = " + number);
-				}
-				if (Math.abs(System.currentTimeMillis() - date) >= 60 * 60 * 1000) {
-					continue;
-				}
-				if (checkPhonePattern(pattern, number)) {
-					return number;
+			if (cursor != null) {
+				while (cursor.moveToNext()) {
+					String number = cursor.getString(0);
+					long date = cursor.getLong(1);
+
+					if (BuildConfig.DEBUG) {
+						FileLog.e("number = " + number);
+					}
+
+					if (Math.abs(System.currentTimeMillis() - date) >= 60 * 60 * 1000) {
+						continue;
+					}
+
+					if (checkPhonePattern(pattern, number)) {
+						return number;
+					}
 				}
 			}
 		}
 		catch (Exception e) {
 			FileLog.e(e);
 		}
+
 		return null;
 	}
 
@@ -2468,18 +2470,12 @@ public class AndroidUtilities {
 					final String[] split = docId.split(":");
 					final String type = split[0];
 
-					Uri contentUri = null;
-					switch (type) {
-						case "image":
-							contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-							break;
-						case "video":
-							contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-							break;
-						case "audio":
-							contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-							break;
-					}
+					Uri contentUri = switch (type) {
+						case "image" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+						case "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+						case "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+						default -> null;
+					};
 
 					final String selection = "_id=?";
 					final String[] selectionArgs = new String[]{split[1]};
@@ -2945,9 +2941,16 @@ public class AndroidUtilities {
 		}
 
 		File f = null;
-		String fileName = message.messageOwner.media != null ? FileLoader.getAttachFileName(document) : "";
 
-		if (message.messageOwner.attachPath != null && message.messageOwner.attachPath.length() != 0) {
+		TLRPC.MessageMedia media = null;
+
+		if (message.messageOwner instanceof TLRPC.TLMessage msg) {
+			media = msg.media;
+		}
+
+		String fileName = media != null ? FileLoader.getAttachFileName(document) : "";
+
+		if (message.messageOwner.attachPath != null && !message.messageOwner.attachPath.isEmpty()) {
 			f = new File(message.messageOwner.attachPath);
 		}
 
@@ -2985,7 +2988,7 @@ public class AndroidUtilities {
 						realMimeType = myMime.getMimeTypeFromExtension(ext.toLowerCase());
 
 						if (realMimeType == null) {
-							realMimeType = document.mime_type;
+							realMimeType = document.mimeType;
 
 							if (realMimeType == null || realMimeType.isEmpty()) {
 								realMimeType = null;
@@ -3027,7 +3030,7 @@ public class AndroidUtilities {
 					AlertDialog.Builder builder = new AlertDialog.Builder(activity);
 					builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
 					builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), null);
-					builder.setMessage(LocaleController.formatString("NoHandleAppInstalled", R.string.NoHandleAppInstalled, message.getDocument().mime_type));
+					builder.setMessage(LocaleController.formatString("NoHandleAppInstalled", R.string.NoHandleAppInstalled, message.getDocument().mimeType));
 
 					if (parentFragment != null) {
 						parentFragment.showDialog(builder.create());
@@ -3101,7 +3104,7 @@ public class AndroidUtilities {
 	public static boolean openForView(TLRPC.Document document, Activity activity) {
 		String fileName = FileLoader.getAttachFileName(document);
 		File f = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(document, true);
-		return openForView(f, fileName, document.mime_type, activity);
+		return openForView(f, fileName, document.mimeType, activity);
 	}
 
 	public static SpannableStringBuilder formatSpannableSimple(String format, CharSequence... cs) {
@@ -3199,10 +3202,10 @@ public class AndroidUtilities {
 				String ext = fileName.substring(idx + 1);
 				realMimeType = myMime.getMimeTypeFromExtension(ext.toLowerCase());
 				if (realMimeType == null) {
-					if (media instanceof TLRPC.TL_document) {
-						realMimeType = ((TLRPC.TL_document)media).mime_type;
+					if (media instanceof TLRPC.TLDocument) {
+						realMimeType = ((TLRPC.TLDocument)media).mimeType;
 					}
-					if (realMimeType == null || realMimeType.length() == 0) {
+					if (realMimeType == null || realMimeType.isEmpty()) {
 						realMimeType = null;
 					}
 				}
@@ -3237,8 +3240,8 @@ public class AndroidUtilities {
 		}
 	}
 
-	public static boolean isBannedForever(@Nullable TL_chatBannedRights rights) {
-		return rights == null || Math.abs(rights.until_date - System.currentTimeMillis() / 1000) > 5 * 365 * 24 * 60 * 60;
+	public static boolean isBannedForever(@Nullable TLChatBannedRights rights) {
+		return rights == null || Math.abs(rights.untilDate - System.currentTimeMillis() / 1000) > 5 * 365 * 24 * 60 * 60;
 	}
 
 	public static void setRectToRect(Matrix matrix, RectF src, RectF dst, int rotation, boolean translate) {
@@ -3519,11 +3522,12 @@ public class AndroidUtilities {
 	@SuppressLint("PrivateApi")
 	public static String getSystemProperty(String key) {
 		try {
-			Class props = Class.forName("android.os.SystemProperties");
+			Class<?> props = Class.forName("android.os.SystemProperties");
 			return (String)props.getMethod("get", String.class).invoke(null, key);
 		}
 		catch (Exception ignore) {
 		}
+
 		return null;
 	}
 
@@ -3690,12 +3694,7 @@ public class AndroidUtilities {
 	public static int getPatternSideColor(int color) {
 		float[] hsb = RGBtoHSB(Color.red(color), Color.green(color), Color.blue(color));
 		hsb[1] = Math.min(1.0f, hsb[1] + 0.05f);
-		if (hsb[2] > 0.5f) {
-			hsb[2] = Math.max(0.0f, hsb[2] * 0.90f);
-		}
-		else {
-			hsb[2] = Math.max(0.0f, hsb[2] * 0.90f);
-		}
+		hsb[2] = Math.max(0.0f, hsb[2] * 0.90f);
 		return HSBtoRGB(hsb[0], hsb[1], hsb[2]) | 0xff000000;
 	}
 
@@ -3717,14 +3716,16 @@ public class AndroidUtilities {
 
 	public static String getWallPaperUrl(Object object) {
 		String link;
-		if (object instanceof TLRPC.TL_wallPaper) {
-			TLRPC.TL_wallPaper wallPaper = (TLRPC.TL_wallPaper)object;
+
+		if (object instanceof TLRPC.TLWallPaper wallPaper) {
 			link = "https://" + MessagesController.getInstance(UserConfig.selectedAccount).linkPrefix + "/bg/" + wallPaper.slug;
 			StringBuilder modes = new StringBuilder();
+
 			if (wallPaper.settings != null) {
 				if (wallPaper.settings.blur) {
 					modes.append("blur");
 				}
+
 				if (wallPaper.settings.motion) {
 					if (modes.length() > 0) {
 						modes.append("+");
@@ -3732,17 +3733,18 @@ public class AndroidUtilities {
 					modes.append("motion");
 				}
 			}
+
 			if (modes.length() > 0) {
 				link += "?mode=" + modes;
 			}
 		}
-		else if (object instanceof WallpapersListActivity.ColorWallpaper) {
-			WallpapersListActivity.ColorWallpaper wallPaper = (WallpapersListActivity.ColorWallpaper)object;
+		else if (object instanceof WallpapersListActivity.ColorWallpaper wallPaper) {
 			link = wallPaper.getUrl();
 		}
 		else {
 			link = null;
 		}
+
 		return link;
 	}
 
@@ -4597,24 +4599,14 @@ public class AndroidUtilities {
 				if (value.startsWith("X-")) {
 					value = value.substring(2);
 				}
-				switch (value) {
-					case "PREF":
-						value = LocaleController.getString("PhoneMain", R.string.PhoneMain);
-						break;
-					case "HOME":
-						value = LocaleController.getString("PhoneHome", R.string.PhoneHome);
-						break;
-					case "MOBILE":
-					case "CELL":
-						value = LocaleController.getString("PhoneMobile", R.string.PhoneMobile);
-						break;
-					case "OTHER":
-						value = LocaleController.getString("PhoneOther", R.string.PhoneOther);
-						break;
-					case "WORK":
-						value = LocaleController.getString("PhoneWork", R.string.PhoneWork);
-						break;
-				}
+				value = switch (value) {
+					case "PREF" -> LocaleController.getString("PhoneMain", R.string.PhoneMain);
+					case "HOME" -> LocaleController.getString("PhoneHome", R.string.PhoneHome);
+					case "MOBILE", "CELL" -> LocaleController.getString("PhoneMobile", R.string.PhoneMobile);
+					case "OTHER" -> LocaleController.getString("PhoneOther", R.string.PhoneOther);
+					case "WORK" -> LocaleController.getString("PhoneWork", R.string.PhoneWork);
+					default -> value;
+				};
 			}
 			value = value.substring(0, 1).toUpperCase() + value.substring(1).toLowerCase();
 			return value;
@@ -4643,13 +4635,10 @@ public class AndroidUtilities {
 
 		int currentNightMode = configuration.uiMode & Configuration.UI_MODE_NIGHT_MASK;
 
-		switch (currentNightMode) {
-			case Configuration.UI_MODE_NIGHT_NO:
-				return false;
-			case Configuration.UI_MODE_NIGHT_YES:
-				return true;
-			default:
-				return false;
-		}
+		return switch (currentNightMode) {
+			case Configuration.UI_MODE_NIGHT_NO -> false;
+			case Configuration.UI_MODE_NIGHT_YES -> true;
+			default -> false;
+		};
 	}
 }

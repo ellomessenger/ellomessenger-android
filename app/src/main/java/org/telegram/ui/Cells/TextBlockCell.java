@@ -22,38 +22,38 @@ import org.telegram.ui.Components.LayoutHelper;
 
 public class TextBlockCell extends FrameLayout {
 
-    private TextView textView;
-    private boolean needDivider;
+	private TextView textView;
+	private boolean needDivider;
 
-    public TextBlockCell(Context context) {
-        super(context);
+	public TextBlockCell(Context context) {
+		super(context);
 
-        textView = new TextView(context);
-        textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-        textView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
-        addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 23, 10, 23, 10));
-    }
+		textView = new TextView(context);
+		textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+		textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+		textView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
+		addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 23, 10, 23, 10));
+	}
 
-    public void setTextColor(int color) {
-        textView.setTextColor(color);
-    }
+	public void setTextColor(int color) {
+		textView.setTextColor(color);
+	}
 
-    public void setText(String text, boolean divider) {
-        textView.setText(text);
-        needDivider = divider;
-        setWillNotDraw(!divider);
-    }
+	public void setText(String text, boolean divider) {
+		textView.setText(text);
+		needDivider = divider;
+		setWillNotDraw(!divider);
+	}
 
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), heightMeasureSpec);
-    }
+	@Override
+	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+		super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), heightMeasureSpec);
+	}
 
-    @Override
-    protected void onDraw(Canvas canvas) {
-        if (needDivider) {
-            canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(19), getMeasuredHeight() - 1, getMeasuredWidth() - (LocaleController.isRTL ? AndroidUtilities.dp(19) : 0), getMeasuredHeight() - 1, Theme.dividerPaint);
-        }
-    }
+	@Override
+	protected void onDraw(Canvas canvas) {
+		if (needDivider) {
+			canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(19), getMeasuredHeight() - 1, getMeasuredWidth() - (LocaleController.isRTL ? AndroidUtilities.dp(19) : 0), getMeasuredHeight() - 1, Theme.dividerPaint);
+		}
+	}
 }

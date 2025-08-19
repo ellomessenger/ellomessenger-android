@@ -5,106 +5,356 @@
 	android:layout_width="match_parent"
 	android:layout_height="match_parent"
 	android:orientation="vertical"
+	android:background="@drawable/background_ai_chat_purchase"
 	android:paddingTop="16dp">
 
-	<FrameLayout
-		android:id="@+id/id"
-		android:layout_width="match_parent"
-		android:layout_height="wrap_content"
-		android:paddingHorizontal="20dp"
-		android:visibility="gone"
-		app:layout_constraintEnd_toEndOf="parent"
+	<ImageView
+		android:id="@+id/back"
+		android:layout_width="32dp"
+		android:layout_height="32dp"
+		android:clickable="true"
+		android:layout_marginTop="36dp"
+		android:focusable="true"
+		android:scaleType="center"
+		android:layout_marginStart="16dp"
+		android:src="@drawable/ic_back_arrow"
 		app:layout_constraintStart_toStartOf="parent"
-		app:layout_constraintTop_toTopOf="parent"/>
+		app:layout_constraintTop_toTopOf="parent"
+		android:tint="@color/white"
+		app:tint="@color/white" />
 
-	<ScrollView
+	<TextView
+		android:id="@+id/action_bar_title"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:gravity="center|start"
+		android:text="@string/ai_buy_text"
+		android:textColor="@color/white"
+		android:textStyle="bold"
+		android:textSize="18sp"
+		android:layout_marginTop="38dp"
+		android:layout_marginStart="20dp"
+		app:layout_constraintStart_toEndOf="@+id/back"
+		app:layout_constraintTop_toTopOf="parent" />
+
+
+	<androidx.core.widget.NestedScrollView
 		android:id="@+id/content"
 		android:layout_width="match_parent"
 		android:layout_height="0dp"
+		android:overScrollMode="never"
+		android:layout_marginTop="16dp"
 		app:layout_constraintBottom_toTopOf="@id/bottom_background"
 		app:layout_constraintEnd_toEndOf="parent"
 		app:layout_constraintStart_toStartOf="parent"
-		app:layout_constraintTop_toBottomOf="@id/id">
+		app:layout_constraintTop_toBottomOf="@id/back">
 
 		<LinearLayout
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
-			android:orientation="vertical"
-			android:paddingHorizontal="20dp"
-			android:paddingTop="4dp">
+			android:orientation="vertical">
 
-			<androidx.viewpager2.widget.ViewPager2
-				android:id="@+id/ai_buy_view_pager"
+			<androidx.constraintlayout.widget.ConstraintLayout
 				android:layout_width="match_parent"
-				android:layout_height="wrap_content"
-				android:layout_marginTop="15dp"
-				tools:background="#00ff00" />
+				android:layout_height="wrap_content">
+
+				<ImageView
+					android:id="@+id/icon_ai_purchase_type"
+					android:layout_width="100dp"
+					android:layout_height="100dp"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/txt_ai_purchase_type"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="@string/ai_buy_text"
+					android:textColor="@color/white"
+					android:textSize="24sp"
+					android:textStyle="bold"
+					android:layout_marginTop="24dp"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@+id/icon_ai_purchase_type" />
+
+				<TextView
+					android:id="@+id/description_ai_chat"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="@string/ai_buy_description"
+					android:textColor="@color/white"
+					android:textSize="16sp"
+					android:layout_marginBottom="16dp"
+					android:layout_marginTop="8dp"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@+id/txt_ai_purchase_type" />
+
+				<androidx.constraintlayout.widget.ConstraintLayout
+					android:id="@+id/constraintLayout2"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="24dp"
+					android:layout_marginTop="24dp"
+					android:layout_marginEnd="24dp"
+					android:background="@drawable/bg_unlimited_prompts"
+					android:padding="12dp"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@+id/description_ai_chat">
+
+					<ImageView
+						android:layout_width="25dp"
+						android:layout_height="25dp"
+						android:layout_marginEnd="10dp"
+						android:src="@drawable/ic_unlimited_pack"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintEnd_toEndOf="parent"
+						app:layout_constraintTop_toTopOf="parent" />
+
+					<com.google.android.material.checkbox.MaterialCheckBox
+						android:id="@+id/unlimited_check_box"
+						style="@style/Widget.App.CheckBox"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toStartOf="parent"
+						app:layout_constraintTop_toTopOf="parent"
+						tools:checked="true" />
+
+					<TextView
+						android:id="@+id/textView2"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:text="@string/unlimited_monthly"
+						android:textColor="@color/dark_fixed"
+						android:textStyle="bold"
+						app:layout_constraintStart_toEndOf="@+id/unlimited_check_box"
+						app:layout_constraintTop_toTopOf="parent" />
+
+					<TextView
+						android:id="@+id/unlimited_prompts_price"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:textStyle="bold"
+						android:textColor="@color/brand"
+						android:drawableTint="@color/brand"
+						android:drawableStart="@drawable/dollar_ic_unlimited_promts_price"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toEndOf="@+id/unlimited_check_box"
+						app:layout_constraintTop_toBottomOf="@+id/textView2"
+						tools:text="20"/>
+
+					<TextView
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:text="@string/month_unlimited_prompts"
+						android:textColor="@color/disabled_text"
+						android:textStyle="bold"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toEndOf="@+id/unlimited_prompts_price"
+						app:layout_constraintTop_toBottomOf="@+id/textView2" />
+
+				</androidx.constraintlayout.widget.ConstraintLayout>
+
+				<androidx.constraintlayout.widget.ConstraintLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:background="@drawable/shape_15_dp_bottom"
+					android:backgroundTint="@color/white"
+					android:padding="10dp"
+					android:layout_marginEnd="40dp"
+					android:layout_marginStart="40dp"
+					android:layout_marginBottom="24dp"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@+id/constraintLayout2">
+
+					<com.google.android.material.checkbox.MaterialCheckBox
+						android:id="@+id/pack_check_box"
+						style="@style/Widget.App.CheckBox"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toStartOf="parent"
+						app:layout_constraintTop_toTopOf="parent"
+						tools:checked="true" />
+
+					<TextView
+						android:id="@+id/textView22"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:text="@string/individual_prompts"
+						android:textColor="@color/dark_fixed"
+						android:textStyle="bold"
+						app:layout_constraintStart_toEndOf="@+id/pack_check_box"
+						app:layout_constraintTop_toTopOf="parent" />
+
+					<LinearLayout
+						android:id="@+id/default_pack_price_container"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:orientation="horizontal"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toEndOf="@+id/pack_check_box">
+
+						<TextView
+							android:id="@+id/pack_count"
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:background="@drawable/pack_count_background"
+							android:gravity="center"
+							android:paddingStart="10dp"
+							android:paddingEnd="10dp"
+							android:textColor="@color/white"
+							tools:text="80" />
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:text="@string/pack_for"
+							android:textStyle="bold"
+							android:textColor="@color/dark_fixed"
+							android:layout_marginEnd="4dp"
+							android:layout_marginStart="4dp" />
+
+						<TextView
+							android:id="@+id/pack_prompts_price"
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:textStyle="bold"
+							android:textColor="@color/brand"
+							android:drawableTint="@color/brand"
+							android:drawableStart="@drawable/dollar_ic_unlimited_promts_price"
+							tools:text="5.99"/>
+
+					</LinearLayout>
+
+					<LinearLayout
+						android:id="@+id/combined_pack_price_container"
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:orientation="horizontal"
+						android:visibility="gone"
+						app:layout_constraintBottom_toBottomOf="parent"
+						app:layout_constraintStart_toEndOf="@+id/pack_check_box">
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:text="@string/chats"
+							android:textStyle="bold"
+							android:textSize="@dimen/common_size_12dp"
+							android:textColor="@color/dark_fixed"
+							android:layout_marginEnd="4dp" />
+
+						<TextView
+							android:id="@+id/chats_pack_count"
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:background="@drawable/pack_count_background"
+							android:gravity="center"
+							android:paddingStart="10dp"
+							android:paddingEnd="10dp"
+							android:textSize="@dimen/common_size_12dp"
+							android:textColor="@color/white"
+							tools:text="80" />
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:text="/"
+							android:textSize="@dimen/common_size_12dp"
+							android:textStyle="bold"
+							android:textColor="@color/dark_fixed"
+							android:layout_marginEnd="4dp"
+							android:layout_marginStart="4dp" />
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:text="@string/ImagesTab2"
+							android:textStyle="bold"
+							android:textColor="@color/dark_fixed"
+							android:textSize="@dimen/common_size_12dp"
+							android:layout_marginEnd="4dp" />
+
+						<TextView
+							android:id="@+id/images_pack_count"
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:background="@drawable/pack_count_background"
+							android:gravity="center"
+							android:paddingStart="10dp"
+							android:paddingEnd="10dp"
+							android:textSize="@dimen/common_size_12dp"
+							android:textColor="@color/white"
+							tools:text="80" />
+
+						<TextView
+							android:id="@+id/combined_pack_prompts_price"
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:textStyle="bold"
+							android:textColor="@color/brand"
+							android:layout_marginStart="2dp"
+							android:textSize="@dimen/common_size_14dp"
+							android:drawableTint="@color/brand"
+							android:drawableStart="@drawable/dollar_ic_unlimited_promts_price"
+							tools:text="5.99"/>
+
+					</LinearLayout>
+
+				</androidx.constraintlayout.widget.ConstraintLayout>
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
 
 			<LinearLayout
-				android:id="@+id/page_indicators"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
-				android:divider="@drawable/pager_indicator_divider"
-				android:gravity="center"
-				android:orientation="horizontal"
-				android:paddingVertical="16dp"
-				android:showDividers="middle" />
+				android:background="@drawable/shape_15_dp_top"
+				android:orientation="vertical"
+				android:backgroundTint="@color/background"
+				android:paddingTop="4dp">
 
-			<LinearLayout
-				android:id="@+id/tabs_container"
-				android:layout_width="match_parent"
-				android:layout_height="48dp"
-				android:layout_marginTop="10dp"
-				android:layout_marginBottom="16dp"
-				android:visibility="gone">
-				<include
-					android:id="@+id/tabs"
-					layout="@layout/ai_plans_tabs_header"
+				<LinearLayout
+					android:id="@+id/ai_buy_view_pager"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:orientation="vertical"
+					android:layout_marginTop="15dp" />
+
+				<LinearLayout
+					android:id="@+id/tabs_container"
 					android:layout_width="match_parent"
 					android:layout_height="48dp"
-					android:layout_gravity="center_horizontal" />
-			</LinearLayout>
+					android:layout_marginTop="10dp"
+					android:layout_marginBottom="16dp"
+					android:layout_marginStart="16dp"
+					android:layout_marginEnd="16dp"
+					android:visibility="gone">
+					<include
+						android:id="@+id/tabs"
+						layout="@layout/ai_plans_tabs_header"
+						android:layout_width="match_parent"
+						android:layout_height="48dp"
+						android:layout_gravity="center_horizontal" />
+				</LinearLayout>
 
-			<LinearLayout
-				android:id="@+id/free_row"
-				android:layout_width="match_parent"
-				android:layout_height="wrap_content"
-				android:background="@drawable/ai_buy_requests_background"
-				android:gravity="center_vertical|start"
-				android:orientation="horizontal"
-				android:padding="8dp">
-
-				<TextView
-					android:id="@+id/tv_free"
-					android:layout_width="wrap_content"
+				<androidx.recyclerview.widget.RecyclerView
+					android:id="@+id/descriptions"
+					android:layout_width="match_parent"
 					android:layout_height="wrap_content"
-					android:background="@drawable/ai_buy_free_background"
-					android:paddingHorizontal="16dp"
-					android:paddingVertical="8dp"
-					android:text="@string/LimitFree"
-					android:textColor="@color/white_day_night"
-					android:textSize="@dimen/common_size_18dp"
-					android:textStyle="bold" />
+					tools:itemCount="5"
+					tools:listitem="@layout/ai_buy_description_item"
+					android:paddingBottom="4dp" />
 
-				<TextView
-					android:id="@+id/free_requests"
-					android:layout_width="wrap_content"
-					android:layout_height="wrap_content"
-					android:paddingStart="12dp"
-					android:text="@string/ai_prompts_per_month_format"
-					android:textColor="@color/dark"
-					android:textSize="@dimen/common_size_16dp" />
 			</LinearLayout>
-
-			<LinearLayout
-				android:id="@+id/descriptions"
-				android:layout_width="match_parent"
-				android:layout_height="wrap_content"
-				android:orientation="vertical"
-				android:paddingBottom="4dp" />
-
 		</LinearLayout>
-	</ScrollView>
+	</androidx.core.widget.NestedScrollView>
 
 	<View
 		android:id="@+id/bottom_background"
@@ -129,6 +379,54 @@
 		app:layout_constraintEnd_toEndOf="parent"
 		app:layout_constraintStart_toStartOf="parent"
 		app:layout_constraintTop_toTopOf="@id/bottom_background" />
+
+	<com.google.android.material.card.MaterialCardView
+		android:id="@+id/unlim_subs_active_button"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="@dimen/common_size_16dp"
+		android:layout_marginHorizontal="20dp"
+		android:layout_marginBottom="16dp"
+		app:cardCornerRadius="12dp"
+		app:strokeWidth="0dp"
+		android:visibility="gone"
+		android:backgroundTint="@android:color/transparent"
+		app:layout_constraintBottom_toBottomOf="@id/bottom_background"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="@id/bottom_background">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:padding="6dp"
+			android:orientation="vertical"
+			android:background="@drawable/dashed_gradient_border">
+
+			<TextView
+				android:id="@+id/subscription_status_text"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="@string/plans_subscription_status"
+				android:textColor="@color/brand"
+				android:textStyle="bold"
+				android:textSize="16sp" />
+
+			<TextView
+				android:id="@+id/expires_until_text"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="@string/plans_expires_until"
+				android:textColor="@color/dark"
+				android:textSize="14sp"
+				android:gravity="center"
+				android:layout_marginTop="4dp" />
+
+		</LinearLayout>
+
+	</com.google.android.material.card.MaterialCardView>
+
 
 	<LinearLayout
 		android:id="@+id/progress_container"

@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui;
 
 import android.animation.Animator;
@@ -23,7 +31,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -154,7 +162,7 @@ public class TooManyCommunitiesActivity extends BaseFragment {
 			}
 
 			@Override
-			public void onTextChanged(EditText editText) {
+			public void onTextChanged(@NonNull EditText editText) {
 				String query = editText.getText().toString();
 				searchAdapter.search(query);
 				if (!expanded && !TextUtils.isEmpty(query)) {
@@ -198,7 +206,7 @@ public class TooManyCommunitiesActivity extends BaseFragment {
 		searchListView.setOnItemLongClickListener(onItemLongClickListener);
 		searchListView.setOnScrollListener(new RecyclerView.OnScrollListener() {
 			@Override
-			public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+			public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
 				if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
 					AndroidUtilities.hideKeyboard(getParentActivity().getCurrentFocus());
 				}
@@ -227,7 +235,7 @@ public class TooManyCommunitiesActivity extends BaseFragment {
 
 		buttonLayout = new FrameLayout(context) {
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				super.onDraw(canvas);
 				canvas.drawRect(0, 0, getMeasuredWidth(), 1, Theme.dividerPaint);
 			}
@@ -322,10 +330,9 @@ public class TooManyCommunitiesActivity extends BaseFragment {
 		adapter.notifyDataSetChanged();
 		enterProgress = 0f;
 		AndroidUtilities.runOnUIThread(showProgressRunnable, 500);
-		TLRPC.TL_channels_getInactiveChannels inactiveChannelsRequest = new TLRPC.TL_channels_getInactiveChannels();
+		var inactiveChannelsRequest = new TLRPC.TLChannelsGetInactiveChannels();
 		getConnectionsManager().sendRequest(inactiveChannelsRequest, ((response, error) -> {
-			if (error == null) {
-				final TLRPC.TL_messages_inactiveChats chats = (TLRPC.TL_messages_inactiveChats)response;
+			if (response instanceof TLRPC.TLMessagesInactiveChats chats) {
 				final ArrayList<String> signatures = new ArrayList<>();
 				for (int i = 0; i < chats.chats.size(); i++) {
 					TLRPC.Chat chat = chats.chats.get(i);
@@ -344,14 +351,14 @@ public class TooManyCommunitiesActivity extends BaseFragment {
 						dateFormat = LocaleController.formatPluralString("Years", daysDif / 365);
 					}
 					if (ChatObject.isMegagroup(chat)) {
-						String members = LocaleController.formatPluralString("Members", chat.participants_count);
+						String members = LocaleController.formatPluralString("Members", chat.participantsCount);
 						signatures.add(LocaleController.formatString("InactiveChatSignature", R.string.InactiveChatSignature, members, dateFormat));
 					}
 					else if (ChatObject.isChannel(chat)) {
 						signatures.add(LocaleController.formatString("InactiveChannelSignature", R.string.InactiveChannelSignature, dateFormat));
 					}
 					else {
-						String members = LocaleController.formatPluralString("Members", chat.participants_count);
+						String members = LocaleController.formatPluralString("Members", chat.participantsCount);
 						signatures.add(LocaleController.formatString("InactiveChatSignature", R.string.InactiveChatSignature, members, dateFormat));
 					}
 				}
@@ -600,10 +607,7 @@ public class TooManyCommunitiesActivity extends BaseFragment {
 
 		@Override
 		public boolean isEnabled(RecyclerView.ViewHolder holder) {
-			if (holder.getAdapterPosition() >= inactiveChatsStartRow && holder.getAdapterPosition() < inactiveChatsEndRow) {
-				return true;
-			}
-			return false;
+			return holder.getAdapterPosition() >= inactiveChatsStartRow && holder.getAdapterPosition() < inactiveChatsEndRow;
 		}
 	}
 
@@ -615,7 +619,7 @@ public class TooManyCommunitiesActivity extends BaseFragment {
 		private int lastSearchId;
 
 		@Override
-		public boolean isEnabled(RecyclerView.ViewHolder holder) {
+		public boolean isEnabled(@NonNull RecyclerView.ViewHolder holder) {
 			return true;
 		}
 

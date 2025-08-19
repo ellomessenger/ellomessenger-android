@@ -1,6 +1,13 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.messenger;
 
-import android.annotation.TargetApi;
 import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
@@ -11,7 +18,6 @@ import java.lang.reflect.Method;
 // MIUI. Redefining Android.
 // (not in the very best way I'd say)
 public class XiaomiUtilities {
-
 	// custom permissions
 	public static final int OP_ACCESS_XIAOMI_ACCOUNT = 10015;
 	public static final int OP_AUTO_START = 10008;
@@ -42,14 +48,14 @@ public class XiaomiUtilities {
 	}
 
 	@SuppressWarnings("JavaReflectionMemberAccess")
-	@TargetApi(19)
 	public static boolean isCustomPermissionGranted(int permission) {
 		try {
-			AppOpsManager mgr = (AppOpsManager) ApplicationLoader.applicationContext.getSystemService(Context.APP_OPS_SERVICE);
+			AppOpsManager mgr = (AppOpsManager)ApplicationLoader.applicationContext.getSystemService(Context.APP_OPS_SERVICE);
 			Method m = AppOpsManager.class.getMethod("checkOpNoThrow", int.class, int.class, String.class);
-			int result = (int) m.invoke(mgr, permission, android.os.Process.myUid(), ApplicationLoader.applicationContext.getPackageName());
+			int result = (int)m.invoke(mgr, permission, android.os.Process.myUid(), ApplicationLoader.applicationContext.getPackageName());
 			return result == AppOpsManager.MODE_ALLOWED;
-		} catch (Exception x) {
+		}
+		catch (Exception x) {
 			FileLog.e(x);
 		}
 		return true;
@@ -60,7 +66,8 @@ public class XiaomiUtilities {
 		if (prop != null) {
 			try {
 				return Integer.parseInt(prop.replace("V", ""));
-			} catch (NumberFormatException ignore) {
+			}
+			catch (NumberFormatException ignore) {
 			}
 		}
 		return -1;

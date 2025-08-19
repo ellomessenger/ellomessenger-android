@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.animation.ValueAnimator;
@@ -57,8 +65,9 @@ public class AttachBotIntroTopView extends View {
 		paint.setStrokeCap(Paint.Cap.ROUND);
 	}
 
-	public void setAttachBot(TLRPC.TL_attachMenuBot bot) {
-		TLRPC.TL_attachMenuBotIcon icon = MediaDataController.getStaticAttachMenuBotIcon(bot);
+	public void setAttachBot(TLRPC.TLAttachMenuBot bot) {
+		var icon = MediaDataController.getStaticAttachMenuBotIcon(bot);
+
 		if (icon != null) {
 			imageReceiver.setImage(ImageLocation.getForDocument(icon.icon), "42_42", DocumentObject.getSvgThumb(icon.icon, ResourcesCompat.getColor(getContext().getResources(), R.color.dark_gray, null), 1.0f), "svg", bot, 0);
 		}
@@ -87,7 +96,7 @@ public class AttachBotIntroTopView extends View {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		super.onDraw(canvas);
 
 		AndroidUtilities.rectTmp.set(0, 0, getWidth(), getHeight() + AndroidUtilities.dp(6));

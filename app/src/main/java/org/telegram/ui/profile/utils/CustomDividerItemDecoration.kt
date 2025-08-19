@@ -1,26 +1,33 @@
+/*
+ * This is the source code of Ello for Android.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikita Denin, Ello 2023-2025.
+ */
 package org.telegram.ui.profile.utils
 
 import android.content.Context
-import android.content.res.TypedArray
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.view.View
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
+import androidx.core.content.withStyledAttributes
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.ItemDecoration
 
 class CustomDividerItemDecoration : ItemDecoration {
-	private var divider: Drawable?
+	private var divider: Drawable? = null
 	private var paddingLeft: Float = 0f
 
 	/**
 	 * Default divider will be used
 	 */
 	constructor(context: Context) {
-		val styledAttributes: TypedArray = context.obtainStyledAttributes(ATTRS)
-		divider = styledAttributes.getDrawable(0)
-		styledAttributes.recycle()
+		context.withStyledAttributes(null, ATTRS) {
+			divider = getDrawable(0)
+		}
 	}
 
 	/**

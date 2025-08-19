@@ -1,10 +1,10 @@
 /*
- * This is the source code of ElloApp
+ * This is the source code of Ello
  *  for Android.
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -129,7 +129,7 @@ class FeedChannelsFragment(args: Bundle) : BaseFragment(args), NotificationCente
 			AndroidUtilities.runOnUIThread {
 				val context = context ?: return@runOnUIThread
 
-				if (error == null && response is TLRPC.TL_biz_dataRaw) {
+				if (error == null && response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.SimpleStatusResponse>()
 
 					FileLog.d("Save feed settings: ${response.readString()}")
@@ -214,14 +214,14 @@ class FeedChannelsFragment(args: Bundle) : BaseFragment(args), NotificationCente
 				avatarDrawable.setInfo(value)
 				avatarImage.setForUserOrChat(value, avatarDrawable)
 
-				if (value.pay_type == TLRPC.Chat.PAY_TYPE_SUBSCRIBE || value.pay_type == TLRPC.Chat.PAY_TYPE_BASE) {
+				if (value.payType == TLRPC.PAY_TYPE_SUBSCRIBE || value.payType == TLRPC.PAY_TYPE_BASE) {
 					binding.paidFeedIcon.visible()
 				}
 				else {
 					binding.paidFeedIcon.gone()
 				}
 
-				if (ChatObject.isOnlineCourse(value)) {
+				if (ChatObject.isMasterclass(value)) {
 					binding.paidFeedIcon.gone()
 					binding.onlineCourseIcon.visible()
 				}
@@ -258,7 +258,7 @@ class FeedChannelsFragment(args: Bundle) : BaseFragment(args), NotificationCente
 					return
 				}
 
-				val subscribers = info.participants_count
+				val subscribers = info.participantsCount
 
 				binding.introLabel.text = binding.root.context.resources.getQuantityString(R.plurals.subscribers, subscribers, subscribers)
 			}

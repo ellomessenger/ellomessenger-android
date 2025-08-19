@@ -4,7 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
+ * Copyright Shamil Afandiyev, Ello 2025.
  */
 package org.telegram.ui.Cells
 
@@ -17,6 +18,7 @@ import android.text.StaticLayout
 import android.text.TextUtils
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.BuildConfig
 import org.telegram.messenger.ChatObject
@@ -34,14 +36,22 @@ import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.UserObject.getUserName
 import org.telegram.messenger.UserObject.isReplyUser
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.emojiStatus
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.isSelf
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.status
+import org.telegram.tgnet.strippedBitmap
+import org.telegram.tgnet.unreadCount
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.CheckBox2
-import org.telegram.ui.Components.Premium.PremiumGradient
 import org.telegram.ui.NotificationsSettingsActivity.NotificationException
 import java.util.Locale
 import kotlin.math.ceil
@@ -192,7 +202,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 			val encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(exception.did))
 
 			if (encryptedChat != null) {
-				val user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.user_id)
+				val user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.userId)
 
 				if (user != null) {
 					setData(user, encryptedChat, name, text, needCount = false, saved = false)
@@ -298,7 +308,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 				dialogId = user.id
 				nameLockTop = AndroidUtilities.dp(21f)
 				drawCheck = user.verified
-				drawPremium = !user.self && MessagesController.getInstance(currentAccount).isPremiumUser(user)
+				drawPremium = !user.isSelf && MessagesController.getInstance(currentAccount).isPremiumUser(user)
 
 				updateStatus(drawCheck, user, false)
 			}
@@ -318,7 +328,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 			var nameString2 = ""
 
 			if (chat != null) {
-				nameString2 = chat.title
+				nameString2 = chat.title ?: ""
 			}
 			else if (user != null) {
 				nameString2 = getUserName(user)
@@ -328,7 +338,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 		}
 
 		if (nameString.isEmpty()) {
-			nameString = user?.let { it.username ?: String.format("%d", it.id) } ?: context.getString(R.string.HiddenName)
+			nameString = user?.let { it.username ?: String.format(Locale.getDefault(), "%d", it.id) } ?: context.getString(R.string.HiddenName)
 		}
 
 		val currentNamePaint = if (encryptedChat != null) {
@@ -364,10 +374,10 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 		if (drawCount) {
 			val dialog = MessagesController.getInstance(currentAccount).dialogs_dict[dialogId]
 
-			if (dialog != null && dialog.unread_count != 0) {
-				lastUnreadCount = dialog.unread_count
+			if (dialog != null && dialog.unreadCount != 0) {
+				lastUnreadCount = dialog.unreadCount
 
-				val countString = String.format("%d", dialog.unread_count)
+				val countString = String.format(Locale.getDefault(), "%d", dialog.unreadCount)
 
 				countWidth = max(AndroidUtilities.dp(12f), ceil(Theme.dialogs_countTextPaint.measureText(countString).toDouble()).toInt())
 				countLayout = StaticLayout(countString, Theme.dialogs_countTextPaint, countWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, 0.0f, false)
@@ -459,8 +469,8 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 		}
 		else {
 			statusString = if (ChatObject.isChannel(chat) && !chat.megagroup) {
-				if (chat.participants_count != 0) {
-					LocaleController.formatPluralString("Subscribers", chat.participants_count)
+				if (chat.participantsCount != 0) {
+					LocaleController.formatPluralString("Subscribers", chat.participantsCount)
 				}
 				else {
 					if (TextUtils.isEmpty(chat.username)) {
@@ -472,11 +482,11 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 				}
 			}
 			else {
-				if (chat.participants_count != 0) {
-					LocaleController.formatPluralString("Members", chat.participants_count)
+				if (chat.participantsCount != 0) {
+					LocaleController.formatPluralString("Members", chat.participantsCount)
 				}
 				else {
-					if (chat.has_geo) {
+					if (chat.hasGeo) {
 						context.getString(R.string.MegaLocation)
 					}
 					else if (TextUtils.isEmpty(chat.username)) {
@@ -573,20 +583,26 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 
 	fun updateStatus(verified: Boolean, user: User?, animated: Boolean) {
 		if (verified) {
-			statusDrawable.set(ResourcesCompat.getDrawable(resources, R.drawable.verified_icon, null), animated)
+			if (user != null && !user.isSelf && MessagesController.getInstance(currentAccount).isPremiumUser(user)) {
+				statusDrawable.set(ResourcesCompat.getDrawable(resources, R.drawable.verified_donated_icon, null), animated)
+				statusDrawable.color = null
+			}
+			else if (user?.isSelf == false) {
+				statusDrawable.set(ResourcesCompat.getDrawable(resources, R.drawable.verified_icon, null), animated)
+				statusDrawable.color = null
+			}
+		}
+		else if (user != null && !user.isSelf && user.emojiStatus is TLRPC.TLEmojiStatusUntil && (user.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+			statusDrawable.set((user.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId, animated)
+			statusDrawable.color = ResourcesCompat.getColor(resources, R.color.brand, null)
+		}
+		else if (user != null && !user.isSelf && user.emojiStatus is TLRPC.TLEmojiStatus) {
+			statusDrawable.set((user.emojiStatus as TLRPC.TLEmojiStatus).documentId, animated)
+			statusDrawable.color = ResourcesCompat.getColor(resources, R.color.brand, null)
+		}
+		else if (user != null && !user.isSelf && MessagesController.getInstance(currentAccount).isPremiumUser(user)) {
+			statusDrawable.set(ResourcesCompat.getDrawable(resources, R.drawable.donated, null), animated)
 			statusDrawable.color = null
-		}
-		else if (user != null && !user.self && user.emoji_status is TLRPC.TL_emojiStatusUntil && (user.emoji_status as TLRPC.TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
-			statusDrawable.set((user.emoji_status as TLRPC.TL_emojiStatusUntil).document_id, animated)
-			statusDrawable.color = ResourcesCompat.getColor(resources, R.color.brand, null)
-		}
-		else if (user != null && !user.self && user.emoji_status is TLRPC.TL_emojiStatus) {
-			statusDrawable.set((user.emoji_status as TLRPC.TL_emojiStatus).document_id, animated)
-			statusDrawable.color = ResourcesCompat.getColor(resources, R.color.brand, null)
-		}
-		else if (user != null && !user.self && MessagesController.getInstance(currentAccount).isPremiumUser(user)) {
-			statusDrawable.set(PremiumGradient.getInstance().premiumStarDrawableMini, animated)
-			statusDrawable.color = ResourcesCompat.getColor(resources, R.color.brand, null)
 		}
 		else {
 			statusDrawable.set(null as Drawable?, animated)
@@ -612,7 +628,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 				var thumb: Drawable? = avatarDrawable
 
 				if (user?.photo != null) {
-					photo = user?.photo?.photo_small
+					photo = user?.photo?.photoSmall
 					thumb = user?.photo?.strippedBitmap
 				}
 
@@ -622,11 +638,11 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 		else if (chat != null) {
 			var thumb: Drawable? = avatarDrawable
 
-			if (chat!!.photo != null) {
-				photo = chat!!.photo.photo_small
+			if (chat?.photo != null) {
+				photo = chat?.photo?.photoSmall
 
-				if (chat!!.photo.strippedBitmap != null) {
-					thumb = chat!!.photo.strippedBitmap
+				chat?.photo?.strippedBitmap?.let {
+					thumb = it
 				}
 			}
 
@@ -642,7 +658,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 			var continueUpdate = false
 
 			if (mask and MessagesController.UPDATE_MASK_AVATAR != 0 && user != null || mask and MessagesController.UPDATE_MASK_CHAT_AVATAR != 0 && chat != null) {
-				if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar!!.volume_id != photo!!.volume_id || lastAvatar!!.local_id != photo.local_id)) {
+				if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar!!.volumeId != photo!!.volumeId || lastAvatar!!.localId != photo.localId)) {
 					continueUpdate = true
 				}
 			}
@@ -661,7 +677,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 
 			if (!continueUpdate && mask and MessagesController.UPDATE_MASK_NAME != 0 && user != null || mask and MessagesController.UPDATE_MASK_CHAT_NAME != 0 && chat != null) {
 				val newName = if (user != null) {
-					user!!.first_name + user!!.last_name
+					user!!.firstName + user!!.lastName
 				}
 				else {
 					chat!!.title
@@ -675,7 +691,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 			if (!continueUpdate && drawCount && mask and MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE != 0) {
 				val dialog = MessagesController.getInstance(currentAccount).dialogs_dict[dialogId]
 
-				if (dialog != null && dialog.unread_count != lastUnreadCount) {
+				if (dialog != null && dialog.unreadCount != lastUnreadCount) {
 					continueUpdate = true
 				}
 			}
@@ -687,7 +703,7 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 
 		if (user != null) {
 			lastStatus = user?.status?.expires ?: 0
-			lastName = user?.first_name + user?.last_name
+			lastName = user?.firstName + user?.lastName
 		}
 		else if (chat != null) {
 			lastName = chat?.title
@@ -724,12 +740,9 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 		}
 
 		if (nameLayout != null) {
-			canvas.save()
-			canvas.translate(nameLeft.toFloat(), nameTop.toFloat())
-
-			nameLayout?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(nameLeft.toFloat(), nameTop.toFloat()) {
+				nameLayout?.draw(this)
+			}
 
 			val x = if (LocaleController.isRTL) {
 				if (nameLayout!!.getLineLeft(0) == 0f) {
@@ -750,20 +763,19 @@ class ProfileSearchCell @JvmOverloads constructor(context: Context, private val 
 		}
 
 		if (statusLayout != null) {
-			canvas.save()
-			canvas.translate((statusLeft + sublabelOffsetX).toFloat(), (AndroidUtilities.dp(33f) + sublabelOffsetY).toFloat())
-			statusLayout?.draw(canvas)
-			canvas.restore()
+			canvas.withTranslation((statusLeft + sublabelOffsetX).toFloat(), (AndroidUtilities.dp(33f) + sublabelOffsetY).toFloat()) {
+				statusLayout?.draw(this)
+			}
 		}
 
 		if (countLayout != null) {
 			val x = countLeft - AndroidUtilities.dp(5.5f)
 			rect.set(x.toFloat(), countTop.toFloat(), (x + countWidth + AndroidUtilities.dp(11f)).toFloat(), (countTop + AndroidUtilities.dp(23f)).toFloat())
 			canvas.drawRoundRect(rect, 11.5f * AndroidUtilities.density, 11.5f * AndroidUtilities.density, if (MessagesController.getInstance(currentAccount).isDialogMuted(dialogId)) Theme.dialogs_countGrayPaint else Theme.dialogs_countPaint)
-			canvas.save()
-			canvas.translate(countLeft.toFloat(), (countTop + AndroidUtilities.dp(4f)).toFloat())
-			countLayout?.draw(canvas)
-			canvas.restore()
+
+			canvas.withTranslation(countLeft.toFloat(), (countTop + AndroidUtilities.dp(4f)).toFloat()) {
+				countLayout?.draw(this)
+			}
 		}
 
 		avatarImage.draw(canvas)

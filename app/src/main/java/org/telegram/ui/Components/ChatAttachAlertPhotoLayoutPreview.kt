@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -35,6 +35,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.Interpolator
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
 import androidx.exifinterface.media.ExifInterface
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -80,7 +83,7 @@ class ChatAttachAlertPhotoLayoutPreview(alert: ChatAttachAlert, context: Context
 	var listView: RecyclerListView
 	private val layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
 	private val groupsView = PreviewGroupsView(context)
-	private val undoView = UndoView(context, null, false)
+	private val undoView = UndoView(context, false)
 	var header: TextView
 	private var draggingCellTouchX = 0f
 	private var draggingCellTouchY = 0f
@@ -1247,52 +1250,47 @@ class ChatAttachAlertPhotoLayoutPreview(alert: ChatAttachAlert, context: Context
 			viewTop = max(0, scrollY - listTopPadding).toFloat()
 			viewBottom = (listView.measuredHeight - listTopPadding + scrollY).toFloat()
 
-			canvas.save()
-			canvas.translate(0f, paddingTop.toFloat())
+			canvas.withTranslation(0f, paddingTop.toFloat()) {
+				val groupCellsCount = groupCells.size
 
-			val groupCellsCount = groupCells.size
+				for (j in 0 until groupCellsCount) {
+					val groupCell = groupCells[j]
+					val height = groupCell.measure()
 
-			for (j in 0 until groupCellsCount) {
-				val groupCell = groupCells[j]
-				val height = groupCell.measure()
+					groupCell.y = y
+					groupCell.indexStart = i
 
-				groupCell.y = y
-				groupCell.indexStart = i
+					val groupIsSeen = y in viewTop..viewBottom || y + height in viewTop..viewBottom || y <= viewTop && y + height >= viewBottom
 
-				val groupIsSeen = y in viewTop..viewBottom || y + height in viewTop..viewBottom || y <= viewTop && y + height >= viewBottom
+					if (groupIsSeen && groupCell.draw(this)) {
+						invalidate()
+					}
 
-				if (groupIsSeen && groupCell.draw(canvas)) {
-					invalidate()
+					translate(0f, height)
+
+					y += height
+					i += groupCell.group!!.photos!!.size
 				}
 
-				canvas.translate(0f, height)
+				hintView.setVisiblePart(y, hintView.measuredHeight)
 
-				y += height
-				i += groupCell.group!!.photos!!.size
+				if (hintView.hasGradientService()) {
+					hintView.drawBackground(this, true)
+				}
+
+				hintView.draw(this)
 			}
-
-			hintView.setVisiblePart(y, hintView.measuredHeight)
-
-			if (hintView.hasGradientService()) {
-				hintView.drawBackground(canvas, true)
-			}
-
-			hintView.draw(canvas)
-
-			canvas.restore()
 
 			if (draggingCell != null) {
-				canvas.save()
+				canvas.withSave {
+					val point = dragTranslate()
 
-				val point = dragTranslate()
+					translate(point.x, point.y)
 
-				canvas.translate(point.x, point.y)
-
-				if (draggingCell?.draw(canvas, true) == true) {
-					invalidate()
+					if (draggingCell?.draw(this, true) == true) {
+						invalidate()
+					}
 				}
-
-				canvas.restore()
 			}
 
 			super.onDraw(canvas)
@@ -1902,7 +1900,7 @@ class ChatAttachAlertPhotoLayoutPreview(alert: ChatAttachAlert, context: Context
 						type = PhotoViewer.SELECT_TYPE_AVATAR
 					}
 					else if (parentAlert.baseFragment is ChatActivity) {
-						chatActivity = parentAlert.baseFragment as ChatActivity
+						chatActivity = parentAlert.baseFragment
 						type = 0
 					}
 					else {
@@ -2256,7 +2254,7 @@ class ChatAttachAlertPhotoLayoutPreview(alert: ChatAttachAlert, context: Context
 
 					if (indexText != null && (indexBitmap == null || indexBitmapText == null || indexBitmapText != indexText)) {
 						if (indexBitmap == null) {
-							indexBitmap = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888)
+							indexBitmap = createBitmap(sz, sz)
 						}
 
 						val bitmapCanvas = Canvas(indexBitmap!!)
@@ -2318,7 +2316,7 @@ class ChatAttachAlertPhotoLayoutPreview(alert: ChatAttachAlert, context: Context
 
 							if (videoDurationBitmap == null || videoDurationBitmap!!.width != w || videoDurationBitmap!!.height != h) {
 								videoDurationBitmap?.recycle()
-								videoDurationBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+								videoDurationBitmap = createBitmap(w, h)
 							}
 
 							val bitmapCanvas = Canvas(videoDurationBitmap!!)

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="wrap_content"
+	android:layout_height="wrap_content"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:paddingVertical="15dp"
+	android:paddingHorizontal="17dp"
+	android:layout_marginEnd="8dp"
+	android:textStyle="bold"
+	android:clickable="true"
+	android:background="@drawable/donate_rounded_border_inactive"
+	tools:text="$5" />

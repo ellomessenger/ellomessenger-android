@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui.Cells;
 
 import android.animation.Animator;
@@ -37,13 +37,14 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.messageobject.MessageObject;
-import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ProgressButton;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
 public class FeaturedStickerSetCell extends FrameLayout {
@@ -88,7 +89,7 @@ public class FeaturedStickerSetCell extends FrameLayout {
 		addView(imageView, LayoutHelper.createFrame(48, 48, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 0 : 12, 8, LocaleController.isRTL ? 12 : 0, 0));
 
 		addButton = new ProgressButton(context);
-		addButton.setText(LocaleController.getString("Add", R.string.Add));
+		addButton.setText(context.getString(R.string.Add));
 		addButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
 		addButton.setProgressColor(Theme.getColor(Theme.key_featuredStickers_buttonProgress));
 		addButton.setBackgroundRoundRect(Theme.getColor(Theme.key_featuredStickers_addButton), Theme.getColor(Theme.key_featuredStickers_addButtonPressed));
@@ -174,30 +175,33 @@ public class FeaturedStickerSetCell extends FrameLayout {
 		valueTextView.setText(LocaleController.formatPluralString("Stickers", set.set.count));
 
 		TLRPC.Document sticker;
-		if (set.cover != null) {
-			sticker = set.cover;
+
+		if (set instanceof TLRPC.TLStickerSetCovered coveredSet && coveredSet.cover != null) {
+			sticker = coveredSet.cover;
 		}
-		else if (!set.covers.isEmpty()) {
-			sticker = set.covers.get(0);
+		else if (set instanceof TLRPC.TLStickerSetMultiCovered coveredSet && !coveredSet.covers.isEmpty()) {
+			sticker = coveredSet.covers.get(0);
 		}
 		else {
 			sticker = null;
 		}
-		if (sticker != null) {
+
+		if (sticker instanceof TLRPC.TLDocument stickerDocument) {
 			TLObject object = FileLoader.getClosestPhotoSizeWithSize(set.set.thumbs, 90);
 			if (object == null) {
 				object = sticker;
 			}
+
 			SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(set.set.thumbs, ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), 1.0f);
 			ImageLocation imageLocation;
 
 			if (object instanceof TLRPC.Document) {
-				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(sticker.thumbs, 90);
+				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(stickerDocument.thumbs, 90);
 				imageLocation = ImageLocation.getForDocument(thumb, sticker);
 			}
 			else {
 				TLRPC.PhotoSize thumb = (TLRPC.PhotoSize)object;
-				imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumb_version);
+				imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumbVersion);
 			}
 
 			if (object instanceof TLRPC.Document && MessageObject.isAnimatedStickerDocument(sticker, true)) {
@@ -318,7 +322,7 @@ public class FeaturedStickerSetCell extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (needDivider) {
 			canvas.drawLine(0, getHeight() - 1, getWidth() - getPaddingRight(), getHeight() - 1, Theme.dividerPaint);
 		}

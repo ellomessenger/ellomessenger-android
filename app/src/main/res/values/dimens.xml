@@ -28,4 +28,5 @@
 	<dimen name="common_size_20dp">20dp</dimen>
 	<dimen name="common_size_14dp">14dp</dimen>
 	<dimen name="common_size_24dp">24dp</dimen>
+	<dimen name="common_size_36dp">36dp</dimen>
 </resources>

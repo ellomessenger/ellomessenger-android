@@ -4,13 +4,12 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Telegram, 2013-2024.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger.voip
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.annotation.TargetApi
 import android.app.*
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothHeadset
@@ -43,7 +42,11 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.RemoteViews
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
+import androidx.core.content.edit
+import androidx.core.graphics.createBitmap
+import androidx.core.net.toUri
 import org.json.JSONObject
 import org.telegram.messenger.*
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
@@ -54,10 +57,11 @@ import org.telegram.messenger.voip.NativeInstance.AudioLevelsCallback
 import org.telegram.messenger.voip.NativeInstance.SsrcGroup
 import org.telegram.messenger.voip.VoIPController.ConnectionStateListener
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.*
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.Vector
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.photoSmall
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.ActionBar.Theme
@@ -87,7 +91,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	private var currentState = 0
 	private var wasConnected = false
 	private var reconnectScreenCapture = false
-	private var chat: Chat? = null
+	private var chat: TLRPC.Chat? = null
 	private var isVideoAvailable = false
 	private var notificationsDisabled = false
 	private var isMuted = false
@@ -128,7 +132,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	private var playedConnectedSound = false
 	private var switchingStream = false
 	private var switchingAccount = false
-	private var privateCall: PhoneCall? = null
+	private var privateCall: TLRPC.PhoneCall? = null
 
 	@JvmField
 	var groupCall: ChatObject.Call? = null
@@ -136,14 +140,14 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	private var currentGroupModeStreaming = false
 	private var createGroupCall = false
 	private var scheduleDate = 0
-	private var groupCallPeer: InputPeer? = null
+	private var groupCallPeer: TLRPC.InputPeer? = null
 
 	@JvmField
 	var hasFewPeers = false
 
 	private var joinHash: String? = null
 	private var remoteVideoState = VIDEO_STATE_INACTIVE
-	private var myParams: TL_dataJSON? = null
+	private var myParams: TLRPC.TLDataJSON? = null
 	private val mySource = IntArray(2)
 	private val tgVoip = arrayOfNulls<NativeInstance>(2)
 	private val captureDevice = LongArray(2)
@@ -185,11 +189,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	private var needRateCall = false
 	private var lastTypingTimeSend: Long = 0
 	private var endCallAfterRequest = false
-	private val pendingUpdates = ArrayList<PhoneCall?>()
+	private val pendingUpdates = mutableListOf<TLRPC.PhoneCall>()
 	private var delayedStartOutgoingCall: Runnable? = null
 	private var startedRinging = false
 	private var classGuid = 0
 	private val currentStreamRequestTimestamp = HashMap<String, Int>()
+	private val mediaButtonEventReceiver by lazy { ComponentName(this, VoIPMediaButtonReceiver::class.java) }
 
 	@JvmField
 	var micSwitching = false
@@ -197,7 +202,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	private val afterSoundRunnable = Runnable {
 		val am = getSystemService(AUDIO_SERVICE) as AudioManager
 		am.abandonAudioFocus(this@VoIPService)
-		am.unregisterMediaButtonEventReceiver(ComponentName(this@VoIPService, VoIPMediaButtonReceiver::class.java))
+		am.unregisterMediaButtonEventReceiver(mediaButtonEventReceiver)
 
 		if (!USE_CONNECTION_SERVICE && sharedInstance == null) {
 			if (isBtHeadsetConnected) {
@@ -388,7 +393,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			if (!send) {
 				val self = groupCall?.participants?.get(getSelfId())
 
-				if (self != null && self.muted && !self.can_self_unmute) {
+				if (self != null && self.muted && !self.canSelfUnmute) {
 					send = true
 				}
 			}
@@ -424,10 +429,10 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		val selfId = getSelfId()
 		val participant = call.participants[selfId]
-		return participant != null && !participant.can_self_unmute && participant.muted && !ChatObject.canManageCalls(chat)
+		return participant != null && !participant.canSelfUnmute && participant.muted && !ChatObject.canManageCalls(chat)
 	}
 
-	private val waitingFrameParticipant = mutableMapOf<String, TL_groupCallParticipant>()
+	private val waitingFrameParticipant = mutableMapOf<String, TLRPC.TLGroupCallParticipant>()
 
 	private val proxyVideoSinkLruCache = object : LruCache<String, ProxyVideoSink>(6) {
 		override fun entryRemoved(evicted: Boolean, key: String?, oldValue: ProxyVideoSink, newValue: ProxyVideoSink) {
@@ -440,7 +445,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return captureDevice[CAPTURE_DEVICE_CAMERA] != 0L
 	}
 
-	fun checkVideoFrame(participant: TL_groupCallParticipant, screencast: Boolean) {
+	fun checkVideoFrame(participant: TLRPC.TLGroupCallParticipant, screencast: Boolean) {
 		val endpointId = (if (screencast) participant.presentationEndpoint else participant.videoEndpoint) ?: return
 
 		if (screencast && participant.hasPresentationFrame != ChatObject.VIDEO_FRAME_NO_FRAME || !screencast && participant.hasCameraFrame != ChatObject.VIDEO_FRAME_NO_FRAME) {
@@ -603,19 +608,22 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		val peerUserId = intent.getLongExtra("peerUserId", 0)
 
 		if (peerChatId != 0L) {
-			groupCallPeer = TL_inputPeerChat()
-			groupCallPeer?.chat_id = peerChatId
-			groupCallPeer?.access_hash = intent.getLongExtra("peerAccessHash", 0)
+			groupCallPeer = TLRPC.TLInputPeerChat().also {
+				it.chatId = peerChatId
+				it.accessHash = intent.getLongExtra("peerAccessHash", 0)
+			}
 		}
 		else if (peerChannelId != 0L) {
-			groupCallPeer = TL_inputPeerChannel()
-			groupCallPeer?.channel_id = peerChannelId
-			groupCallPeer?.access_hash = intent.getLongExtra("peerAccessHash", 0)
+			groupCallPeer = TLRPC.TLInputPeerChannel().also {
+				it.channelId = peerChannelId
+				it.accessHash = intent.getLongExtra("peerAccessHash", 0)
+			}
 		}
 		else if (peerUserId != 0L) {
-			groupCallPeer = TL_inputPeerUser()
-			groupCallPeer?.user_id = peerUserId
-			groupCallPeer?.access_hash = intent.getLongExtra("peerAccessHash", 0)
+			groupCallPeer = TLRPC.TLInputPeerUser().also {
+				it.userId = peerUserId
+				it.accessHash = intent.getLongExtra("peerAccessHash", 0)
+			}
 		}
 
 		scheduleDate = intent.getIntExtra("scheduleDate", 0)
@@ -625,8 +633,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		notificationsDisabled = intent.getBooleanExtra("notifications_disabled", false)
 		isMuted = intent.getBooleanExtra("is_muted", false)
 
-		val instantAccept = intent.getBooleanExtra("accept", false);
-
+		val instantAccept = intent.getBooleanExtra("accept", false)
 		val openFragment = intent.getBooleanExtra("openFragment", false)
 
 		if (userID != 0L) {
@@ -637,7 +644,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			chat = MessagesController.getInstance(currentAccount).getChat(chatID)
 
 			if (ChatObject.isChannel(chat)) {
-				MessagesController.getInstance(currentAccount).startShortPoll(chat, classGuid, false)
+				MessagesController.getInstance(currentAccount).startShortPoll(chat!!, classGuid, false)
 			}
 		}
 
@@ -714,7 +721,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, addAccountToTelecomManager())
 					myExtras.putInt("call_type", 1)
 					extras.putBundle(TelecomManager.EXTRA_OUTGOING_CALL_EXTRAS, myExtras)
-					// ContactsController.getInstance(currentAccount).createOrUpdateConnectionServiceContact(user!!.id, user!!.first_name, user!!.last_name)
+					// ContactsController.getInstance(currentAccount).createOrUpdateConnectionServiceContact(user!!.id, user!!.firstName, user!!.lastName)
 					tm.placeCall(Uri.fromParts("tel", "+99084" + user!!.id, null), extras)
 				}
 				else {
@@ -799,7 +806,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return user
 	}
 
-	fun getChat(): Chat? {
+	fun getChat(): TLRPC.Chat? {
 		return chat
 	}
 
@@ -845,22 +852,22 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.groupCallUpdated, chat!!.id, groupCall!!.call!!.id, false)
 				}
 
-				val req = TL_phone_discardGroupCall()
-				req.call = groupCall!!.inputGroupCall
+				val req = TLRPC.TLPhoneDiscardGroupCall()
+				req.call = groupCall?.inputGroupCall
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
-					if (response is TL_updates) {
+					if (response is TLRPC.Updates) {
 						MessagesController.getInstance(currentAccount).processUpdates(response, false)
 					}
 				}
 			}
 			else {
-				val req = TL_phone_leaveGroupCall()
-				req.call = groupCall!!.inputGroupCall
+				val req = TLRPC.TLPhoneLeaveGroupCall()
+				req.call = groupCall?.inputGroupCall
 				req.source = mySource[CAPTURE_DEVICE_CAMERA]
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
-					if (response is TL_updates) {
+					if (response is TLRPC.Updates) {
 						MessagesController.getInstance(currentAccount).processUpdates(response, false)
 					}
 				}
@@ -872,7 +879,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		declineIncomingCall(DISCARD_REASON_HANGUP, null)
 	}
 
-	override fun getPrivateCall(): PhoneCall? {
+	override fun getPrivateCall(): TLRPC.PhoneCall? {
 		return privateCall
 	}
 
@@ -894,8 +901,8 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		Utilities.random.nextBytes(salt)
 
-		val req = TL_messages_getDhConfig()
-		req.random_length = 256
+		val req = TLRPC.TLMessagesGetDhConfig()
+		req.randomLength = 256
 
 		val messagesStorage = MessagesStorage.getInstance(currentAccount)
 
@@ -909,25 +916,23 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				return@sendRequest
 			}
 
-			if (error == null) {
-				val res = response as messages_DhConfig
-
-				if (response is TL_messages_dhConfig) {
-					if (!Utilities.isGoodPrime(res.p, res.g)) {
+			if (response is TLRPC.MessagesDhConfig) {
+				if (response is TLRPC.TLMessagesDhConfig) {
+					if (!Utilities.isGoodPrime(response.p, response.g)) {
 						callFailed()
 						return@sendRequest
 					}
 
-					messagesStorage.secretPBytes = res.p
-					messagesStorage.secretG = res.g
-					messagesStorage.lastSecretVersion = res.version
+					messagesStorage.secretPBytes = response.p
+					messagesStorage.secretG = response.g
+					messagesStorage.lastSecretVersion = response.version
 					messagesStorage.saveSecretParams(messagesStorage.lastSecretVersion, messagesStorage.secretG, messagesStorage.secretPBytes)
 				}
 
 				val salt1 = ByteArray(256)
 
 				for (a in 0..255) {
-					salt1[a] = ((Utilities.random.nextDouble() * 256).toInt().toByte() xor res.random[a].toInt().toByte())
+					salt1[a] = ((Utilities.random.nextDouble() * 256).toInt().toByte() xor response.random!![a].toInt().toByte())
 				}
 
 				var i_g_a = BigInteger.valueOf(messagesStorage.secretG.toLong())
@@ -941,25 +946,25 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					g_a = correctedAuth
 				}
 
-				val reqCall = TL_phone_requestCall()
-				reqCall.user_id = MessagesController.getInstance(currentAccount).getInputUser(user)
-				reqCall.protocol = TL_phoneCallProtocol()
+				val reqCall = TLRPC.TLPhoneRequestCall()
+				reqCall.userId = MessagesController.getInstance(currentAccount).getInputUser(user)
+				reqCall.callProtocol = TLRPC.TLPhoneCallProtocol()
 				reqCall.video = videoCall
-				reqCall.protocol.udp_p2p = true
-				reqCall.protocol.udp_reflector = true
-				reqCall.protocol.min_layer = CALL_MIN_LAYER
-				reqCall.protocol.max_layer = getConnectionMaxLayer()
-				reqCall.protocol.library_versions.addAll(AVAILABLE_VERSIONS)
+				reqCall.callProtocol?.udpP2p = true
+				reqCall.callProtocol?.udpReflector = true
+				reqCall.callProtocol?.minLayer = CALL_MIN_LAYER
+				reqCall.callProtocol?.maxLayer = getConnectionMaxLayer()
+				reqCall.callProtocol?.libraryVersions?.addAll(AVAILABLE_VERSIONS)
 
 				this@VoIPService.g_a = g_a
 
-				reqCall.g_a_hash = Utilities.computeSHA256(g_a, 0, g_a.size.toLong())
-				reqCall.random_id = Utilities.random.nextInt()
+				reqCall.gAHash = Utilities.computeSHA256(g_a, 0, g_a.size.toLong())
+				reqCall.randomId = Utilities.random.nextInt()
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(reqCall, { response12, error12 ->
 					AndroidUtilities.runOnUIThread {
 						if (error12 == null) {
-							privateCall = (response12 as TL_phone_phoneCall).phone_call
+							privateCall = (response12 as TLRPC.TLPhonePhoneCall).phoneCall
 							a_or_b = salt1
 
 							dispatchStateChanged(STATE_WAITING)
@@ -980,11 +985,13 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 							timeoutRunnable = Runnable {
 								timeoutRunnable = null
 
-								val req1 = TL_phone_discardCall()
-								req1.peer = TL_inputPhoneCall()
-								req1.peer.access_hash = privateCall!!.access_hash
-								req1.peer.id = privateCall!!.id
-								req1.reason = TL_phoneCallDiscardReasonMissed()
+								val req1 = TLRPC.TLPhoneDiscardCall()
+								req1.peer = TLRPC.TLInputPhoneCall().also {
+									it.id = privateCall?.id ?: 0
+									it.accessHash = privateCall?.accessHash ?: 0
+								}
+
+								req1.reason = TLRPC.TLPhoneCallDiscardReasonMissed()
 
 								ConnectionsManager.getInstance(currentAccount).sendRequest(req1, { response1, error1 ->
 									if (error1 != null) {
@@ -1028,7 +1035,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	}
 
 	private fun acknowledgeCall(startRinging: Boolean) {
-		if (privateCall is TL_phoneCallDiscarded) {
+		if (privateCall is TLRPC.TLPhoneCallDiscarded) {
 			FileLog.w("Call " + privateCall?.id + " was discarded before the service started, stopping")
 			stopSelf()
 			return
@@ -1042,10 +1049,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			}
 		}
 
-		val req = TL_phone_receivedCall()
-		req.peer = TL_inputPhoneCall()
-		req.peer.id = privateCall!!.id
-		req.peer.access_hash = privateCall!!.access_hash
+		val req = TLRPC.TLPhoneReceivedCall()
+
+		req.peer = TLRPC.TLInputPhoneCall().also {
+			it.id = privateCall?.id ?: 0
+			it.accessHash = privateCall?.accessHash ?: 0
+		}
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
@@ -1061,7 +1070,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				}
 				else {
 					if (USE_CONNECTION_SERVICE) {
-						// ContactsController.getInstance(currentAccount).createOrUpdateConnectionServiceContact(user!!.id, user!!.first_name, user!!.last_name)
+						// ContactsController.getInstance(currentAccount).createOrUpdateConnectionServiceContact(user!!.id, user!!.firstName, user!!.lastName)
 						val tm = getSystemService(TELECOM_SERVICE) as TelecomManager
 						val extras = Bundle()
 						extras.putInt("call_type", 1)
@@ -1230,13 +1239,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			return
 		}
 
-		val req = TL_phone_leaveGroupCallPresentation()
-		req.call = groupCall!!.inputGroupCall
+		val req = TLRPC.TLPhoneLeaveGroupCallPresentation()
+		req.call = groupCall?.inputGroupCall
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
-			if (response != null) {
-				val updates = response as Updates
-				MessagesController.getInstance(currentAccount).processUpdates(updates, false)
+			if (response is TLRPC.Updates) {
+				MessagesController.getInstance(currentAccount).processUpdates(response, false)
 			}
 		}
 
@@ -1280,7 +1288,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		remoteSink[if (screencast) CAPTURE_DEVICE_SCREEN else CAPTURE_DEVICE_CAMERA]?.target = remote
 	}
 
-	fun addRemoteSink(participant: TL_groupCallParticipant, screencast: Boolean, remote: VideoSink?, background: VideoSink?): ProxyVideoSink? {
+	fun addRemoteSink(participant: TLRPC.TLGroupCallParticipant, screencast: Boolean, remote: VideoSink?, background: VideoSink?): ProxyVideoSink? {
 		if (tgVoip[CAPTURE_DEVICE_CAMERA] == null) {
 			return null
 		}
@@ -1315,17 +1323,17 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return sink
 	}
 
-	private fun createSsrcGroups(video: TL_groupCallParticipantVideo): Array<SsrcGroup>? {
-		if (video.source_groups.isEmpty()) {
+	private fun createSsrcGroups(video: TLRPC.TLGroupCallParticipantVideo?): Array<SsrcGroup>? {
+		if (video?.sourceGroups.isNullOrEmpty()) {
 			return null
 		}
 
-		return video.source_groups.map {
+		return video?.sourceGroups?.map {
 			SsrcGroup().apply {
 				semantics = it.semantics
 				ssrcs = it.sources.toIntArray()
 			}
-		}.toTypedArray()
+		}?.toTypedArray()
 
 //		val result = arrayOfNulls<SsrcGroup>(video.source_groups.size)
 //
@@ -1344,7 +1352,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 //		return result
 	}
 
-	fun requestFullScreen(participant: TL_groupCallParticipant, full: Boolean, screencast: Boolean) {
+	fun requestFullScreen(participant: TLRPC.TLGroupCallParticipant, full: Boolean, screencast: Boolean) {
 		val endpointId = (if (screencast) participant.presentationEndpoint else participant.videoEndpoint) ?: return
 
 		if (full) {
@@ -1355,7 +1363,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	fun removeRemoteSink(participant: TL_groupCallParticipant, presentation: Boolean) {
+	fun removeRemoteSink(participant: TLRPC.TLGroupCallParticipant, presentation: Boolean) {
 		val sink = if (presentation) {
 			remoteSinks.remove(participant.presentationEndpoint)
 		}
@@ -1368,7 +1376,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	fun isFullscreen(participant: TL_groupCallParticipant, screencast: Boolean): Boolean {
+	fun isFullscreen(participant: TLRPC.TLGroupCallParticipant, screencast: Boolean): Boolean {
 		return currentBackgroundSink[if (screencast) CAPTURE_DEVICE_SCREEN else CAPTURE_DEVICE_CAMERA] != null && TextUtils.equals(currentBackgroundEndpointId[if (screencast) CAPTURE_DEVICE_SCREEN else CAPTURE_DEVICE_CAMERA], if (screencast) participant.presentationEndpoint else participant.videoEndpoint)
 	}
 
@@ -1386,8 +1394,8 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return currentState == STATE_HANGING_UP
 	}
 
-	fun onSignalingData(data: TL_updatePhoneCallSignalingData) {
-		if (user == null || tgVoip[CAPTURE_DEVICE_CAMERA] == null || tgVoip[CAPTURE_DEVICE_CAMERA]!!.isGroup || getCallID() != data.phone_call_id) {
+	fun onSignalingData(data: TLRPC.TLUpdatePhoneCallSignalingData) {
+		if (user == null || tgVoip[CAPTURE_DEVICE_CAMERA] == null || tgVoip[CAPTURE_DEVICE_CAMERA]!!.isGroup || getCallID() != data.phoneCallId) {
 			return
 		}
 
@@ -1398,22 +1406,22 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		val groupCallPeer = groupCallPeer ?: return UserConfig.getInstance(currentAccount).clientUserId
 
 		return when (groupCallPeer) {
-			is TL_inputPeerUser -> {
-				groupCallPeer.user_id
+			is TLRPC.TLInputPeerUser -> {
+				groupCallPeer.userId
 			}
 
-			is TL_inputPeerChannel -> {
-				-groupCallPeer.channel_id
+			is TLRPC.TLInputPeerChannel -> {
+				-groupCallPeer.channelId
 			}
 
 			else -> {
-				-groupCallPeer.chat_id
+				-groupCallPeer.chatId
 			}
 		}
 	}
 
-	fun onGroupCallParticipantsUpdate(update: TL_updateGroupCallParticipants) {
-		if (chat == null || groupCall == null || groupCall?.call?.id != update.call.id) {
+	fun onGroupCallParticipantsUpdate(update: TLRPC.TLUpdateGroupCallParticipants) {
+		if (chat == null || groupCall == null || groupCall?.call?.id != update.call?.id) {
 			return
 		}
 
@@ -1426,7 +1434,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 						var selfCount = 0
 
 						update.participants.forEach { p ->
-							if (p.self || p.source == mySource[CAPTURE_DEVICE_CAMERA]) {
+							if (p.isSelf || p.source == mySource[CAPTURE_DEVICE_CAMERA]) {
 								selfCount++
 							}
 						}
@@ -1444,7 +1452,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					hangUp(2)
 					return
 				}
-				else if (ChatObject.isChannel(chat) && currentGroupModeStreaming && participant.can_self_unmute) {
+				else if (ChatObject.isChannel(chat) && currentGroupModeStreaming && participant.canSelfUnmute) {
 					switchingStream = true
 					createGroupInstance(CAPTURE_DEVICE_CAMERA, false)
 				}
@@ -1456,7 +1464,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	fun onGroupCallUpdated(call: GroupCall) {
+	fun onGroupCallUpdated(call: TLRPC.GroupCall?) {
+		if (call == null) {
+			return
+		}
+
 		if (chat == null) {
 			return
 		}
@@ -1465,7 +1477,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			return
 		}
 
-		if (groupCall?.call is TL_groupCallDiscarded) {
+		if (groupCall?.call is TLRPC.TLGroupCallDiscarded) {
 			hangUp(2)
 			return
 		}
@@ -1491,7 +1503,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			try {
 				if (newModeStreaming) {
-					tgVoip[CAPTURE_DEVICE_CAMERA]?.prepareForStream(groupCall?.call != null && groupCall?.call?.rtmp_stream == true)
+					tgVoip[CAPTURE_DEVICE_CAMERA]?.prepareForStream((groupCall?.call as? TLRPC.TLGroupCall)?.rtmpStream == true)
 				}
 				else {
 					tgVoip[CAPTURE_DEVICE_CAMERA]?.setJoinResponsePayload(myParams!!.data)
@@ -1505,7 +1517,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	fun onCallUpdated(phoneCall: PhoneCall?) {
+	fun onCallUpdated(phoneCall: TLRPC.PhoneCall?) {
+		if (phoneCall == null) {
+			return
+		}
+
 		if (user == null) {
 			return
 		}
@@ -1515,30 +1531,26 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			return
 		}
 
-		if (phoneCall == null) {
-			return
-		}
-
 		if (phoneCall.id != privateCall?.id) {
 			FileLog.w("onCallUpdated called with wrong call id (got " + phoneCall.id + ", expected " + privateCall!!.id + ")")
 			return
 		}
 
-		if (phoneCall.access_hash == 0L) {
-			phoneCall.access_hash = privateCall?.access_hash ?: 0L
+		if (phoneCall.accessHash == 0L) {
+			phoneCall.accessHash = privateCall?.accessHash ?: 0L
 		}
 
 		FileLog.d("Call updated: $phoneCall")
 
 		privateCall = phoneCall
 
-		if (phoneCall is TL_phoneCallDiscarded) {
-			needSendDebugLog = phoneCall.need_debug
-			needRateCall = phoneCall.need_rating
+		if (phoneCall is TLRPC.TLPhoneCallDiscarded) {
+			needSendDebugLog = phoneCall.needDebug
+			needRateCall = phoneCall.needRating
 
 			FileLog.d("call discarded, stopping service")
 
-			if (phoneCall.reason is TL_phoneCallDiscardReasonBusy) {
+			if (phoneCall.reason is TLRPC.TLPhoneCallDiscardReasonBusy) {
 				dispatchStateChanged(STATE_BUSY)
 
 				playingSound = true
@@ -1555,22 +1567,22 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				callEnded()
 			}
 		}
-		else if (phoneCall is TL_phoneCall && authKey == null) {
-			if (phoneCall.g_a_or_b == null) {
+		else if (phoneCall is TLRPC.TLPhoneCall && authKey == null) {
+			if (phoneCall.gAOrB == null) {
 				FileLog.w("stopping VoIP service, Ga == null")
 				callFailed()
 				return
 			}
 
-			if (!g_a_hash.contentEquals(Utilities.computeSHA256(phoneCall.g_a_or_b, 0, phoneCall.g_a_or_b.size.toLong()))) {
+			if (!g_a_hash.contentEquals(Utilities.computeSHA256(phoneCall.gAOrB, 0, phoneCall.gAOrB?.size?.toLong() ?: 0L))) {
 				FileLog.w("stopping VoIP service, Ga hash doesn't match")
 				callFailed()
 				return
 			}
 
-			g_a = phoneCall.g_a_or_b
+			g_a = phoneCall.gAOrB
 
-			var g_a = BigInteger(1, phoneCall.g_a_or_b)
+			var g_a = BigInteger(1, phoneCall.gAOrB)
 			val p = BigInteger(1, MessagesStorage.getInstance(currentAccount).secretPBytes)
 
 			if (!Utilities.isGoodGaAndGb(g_a, p)) {
@@ -1609,7 +1621,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			keyFingerprint = Utilities.bytesToLong(authKeyId)
 
-			if (keyFingerprint != phoneCall.key_fingerprint) {
+			if (keyFingerprint != phoneCall.keyFingerprint) {
 				FileLog.w("key fingerprints don't match")
 				callFailed()
 				return
@@ -1617,11 +1629,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			initiateActualEncryptedCall()
 		}
-		else if (phoneCall is TL_phoneCallAccepted && authKey == null) {
+		else if (phoneCall is TLRPC.TLPhoneCallAccepted && authKey == null) {
 			processAcceptedCall()
 		}
 		else {
-			if (currentState == STATE_WAITING && phoneCall.receive_date != 0) {
+			if (currentState == STATE_WAITING && (phoneCall as? TLRPC.TLPhoneCallWaiting)?.receiveDate != 0) {
 				dispatchStateChanged(STATE_RINGING)
 
 				FileLog.d("!!!!!! CALL RECEIVED")
@@ -1656,7 +1668,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 	private fun startRatingActivity() {
 		try {
-			PendingIntent.getActivity(this@VoIPService, 0, Intent(this@VoIPService, VoIPFeedbackActivity::class.java).putExtra("call_id", privateCall!!.id).putExtra("call_access_hash", privateCall!!.access_hash).putExtra("call_video", privateCall!!.video).putExtra("account", currentAccount).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE).send()
+			PendingIntent.getActivity(this@VoIPService, 0, Intent(this@VoIPService, VoIPFeedbackActivity::class.java).putExtra("call_id", privateCall!!.id).putExtra("call_access_hash", privateCall!!.accessHash).putExtra("call_video", privateCall!!.video).putExtra("account", currentAccount).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE).send()
 		}
 		catch (x: Exception) {
 			FileLog.e("Error starting incall activity", x)
@@ -1671,7 +1683,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		dispatchStateChanged(STATE_EXCHANGING_KEYS)
 
 		val p = BigInteger(1, MessagesStorage.getInstance(currentAccount).secretPBytes)
-		var i_authKey = BigInteger(1, privateCall!!.g_b)
+		var i_authKey = BigInteger(1, (privateCall as? TLRPC.TLPhoneCallAccepted)?.gB)
 
 		if (!Utilities.isGoodGaAndGb(i_authKey, p)) {
 			FileLog.w("stopping VoIP service, bad Ga and Gb")
@@ -1709,18 +1721,22 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		this.authKey = authKey
 		keyFingerprint = fingerprint
 
-		val req = TL_phone_confirmCall()
-		req.g_a = g_a
-		req.key_fingerprint = fingerprint
-		req.peer = TL_inputPhoneCall()
-		req.peer.id = privateCall!!.id
-		req.peer.access_hash = privateCall!!.access_hash
-		req.protocol = TL_phoneCallProtocol()
-		req.protocol.max_layer = getConnectionMaxLayer()
-		req.protocol.min_layer = CALL_MIN_LAYER
-		req.protocol.udp_reflector = true
-		req.protocol.udp_p2p = req.protocol.udp_reflector
-		req.protocol.library_versions.addAll(AVAILABLE_VERSIONS)
+		val req = TLRPC.TLPhoneConfirmCall()
+		req.gA = g_a
+		req.keyFingerprint = fingerprint
+
+		req.peer = TLRPC.TLInputPhoneCall().also {
+			it.id = privateCall?.id ?: 0
+			it.accessHash = privateCall?.accessHash ?: 0
+		}
+
+		req.callProtocol = TLRPC.TLPhoneCallProtocol().also {
+			it.udpP2p = true
+			it.udpReflector = true
+			it.minLayer = CALL_MIN_LAYER
+			it.maxLayer = getConnectionMaxLayer()
+			it.libraryVersions.addAll(AVAILABLE_VERSIONS)
+		}
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 			AndroidUtilities.runOnUIThread {
@@ -1728,7 +1744,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					callFailed()
 				}
 				else {
-					privateCall = (response as TL_phone_phoneCall).phone_call
+					privateCall = (response as? TLRPC.TLPhonePhoneCall)?.phoneCall
 					initiateActualEncryptedCall()
 				}
 			}
@@ -1743,11 +1759,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return if (ApplicationLoader.isRoaming) DATA_SAVING_MOBILE else DATA_SAVING_NEVER
 	}
 
-	fun migrateToChat(newChat: Chat?) {
+	fun migrateToChat(newChat: TLRPC.Chat?) {
 		chat = newChat
 	}
 
-	fun setGroupCallPeer(peer: InputPeer?) {
+	fun setGroupCallPeer(peer: TLRPC.InputPeer?) {
 		if (groupCall == null) {
 			return
 		}
@@ -1758,10 +1774,10 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		val chatFull = MessagesController.getInstance(currentAccount).getChatFull(groupCall!!.chatId)
 
 		if (chatFull != null) {
-			chatFull.groupcall_default_join_as = groupCall!!.selfPeer
+			chatFull.groupcallDefaultJoinAs = groupCall?.selfPeer
 
-			if (chatFull.groupcall_default_join_as != null) {
-				if (chatFull is TL_chatFull) {
+			if (chatFull.groupcallDefaultJoinAs != null) {
+				if (chatFull is TLRPC.TLChatFull) {
 					chatFull.flags = chatFull.flags or 32768
 				}
 				else {
@@ -1769,7 +1785,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				}
 			}
 			else {
-				if (chatFull is TL_chatFull) {
+				if (chatFull is TLRPC.TLChatFull) {
 					chatFull.flags = chatFull.flags and 32768.inv()
 				}
 				else {
@@ -1792,11 +1808,14 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		if (createGroupCall) {
 			groupCall = ChatObject.Call()
-			groupCall?.call = TL_groupCall()
-			groupCall?.call?.participants_count = 0
-			groupCall?.call?.version = 1
-			groupCall?.call?.can_start_video = true
-			groupCall?.call?.can_change_join_muted = true
+
+			groupCall?.call = TLRPC.TLGroupCall().also {
+				it.version = 1
+				it.participantsCount = 0
+				it.canStartVideo = true
+				it.canChangeJoinMuted = true
+			}
+
 			groupCall?.chatId = chat!!.id
 			groupCall?.currentAccount = AccountInstance.getInstance(currentAccount)
 			groupCall?.setSelfPeer(groupCallPeer)
@@ -1804,30 +1823,30 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			dispatchStateChanged(STATE_CREATING)
 
-			val req = TL_phone_createGroupCall()
+			val req = TLRPC.TLPhoneCreateGroupCall()
 			req.peer = MessagesController.getInputPeer(chat)
-			req.random_id = Utilities.random.nextInt()
+			req.randomId = Utilities.random.nextInt()
 
 			if (scheduleDate != 0) {
-				req.schedule_date = scheduleDate
+				req.scheduleDate = scheduleDate
 				req.flags = req.flags or 2
 			}
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error ->
 				if (response != null) {
-					val updates = response as Updates
+					val updates = response as TLRPC.Updates
 
 					for (a in updates.updates.indices) {
 						val update = updates.updates[a]
 
-						if (update is TL_updateGroupCall) {
+						if (update is TLRPC.TLUpdateGroupCall) {
 							AndroidUtilities.runOnUIThread {
 								if (sharedInstance == null) {
 									return@runOnUIThread
 								}
 
-								groupCall?.call?.access_hash = update.call.access_hash
-								groupCall?.call?.id = update.call.id
+								groupCall?.call?.accessHash = update.call?.accessHash ?: 0
+								groupCall?.call?.id = update.call?.id ?: 0
 
 								groupCall?.let {
 									MessagesController.getInstance(currentAccount).putGroupCall(it.chatId, it)
@@ -1879,24 +1898,24 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			FileLog.d("initial source = $ssrc")
 
-			val req = TL_phone_joinGroupCall()
+			val req = TLRPC.TLPhoneJoinGroupCall()
 			req.muted = true
-			req.video_stopped = videoState[CAPTURE_DEVICE_CAMERA] != VIDEO_STATE_ACTIVE
-			req.call = groupCall!!.inputGroupCall
-			req.params = TL_dataJSON()
-			req.params.data = json
+			req.videoStopped = videoState[CAPTURE_DEVICE_CAMERA] != VIDEO_STATE_ACTIVE
+			req.call = groupCall?.inputGroupCall
+			req.params = TLRPC.TLDataJSON()
+			req.params?.data = json
 
-			if (!TextUtils.isEmpty(joinHash)) {
-				req.invite_hash = joinHash
+			if (!joinHash.isNullOrEmpty()) {
+				req.inviteHash = joinHash
 				req.flags = req.flags or 2
 			}
 
 			if (groupCallPeer != null) {
-				req.join_as = groupCallPeer
+				req.joinAs = groupCallPeer
 			}
 			else {
-				req.join_as = TL_inputPeerUser()
-				req.join_as.user_id = AccountInstance.getInstance(currentAccount).userConfig.getClientUserId()
+				req.joinAs = TLRPC.TLInputPeerUser()
+				req.joinAs?.userId = AccountInstance.getInstance(currentAccount).userConfig.getClientUserId()
 			}
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
@@ -1905,11 +1924,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 						mySource[CAPTURE_DEVICE_CAMERA] = ssrc
 					}
 
-					val updates = response as Updates
+					val updates = response as TLRPC.Updates
 					val selfId = getSelfId()
 
 					updates.updates.forEach { update ->
-						if (update is TL_updateGroupCallParticipants) {
+						if (update is TLRPC.TLUpdateGroupCallParticipants) {
 							for (participant in update.participants) {
 								if (MessageObject.getPeerId(participant.peer) == selfId) {
 									AndroidUtilities.runOnUIThread {
@@ -1922,7 +1941,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 								}
 							}
 						}
-						else if (update is TL_updateGroupCallConnection) {
+						else if (update is TLRPC.TLUpdateGroupCallConnection) {
 							if (!update.presentation) {
 								myParams = update.params
 							}
@@ -1944,14 +1963,14 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 								val chatFull = MessagesController.getInstance(currentAccount).getChatFull(chat!!.id)
 
 								if (chatFull != null) {
-									if (chatFull is TL_chatFull) {
+									if (chatFull is TLRPC.TLChatFull) {
 										chatFull.flags = chatFull.flags and 32768.inv()
 									}
 									else {
 										chatFull.flags = chatFull.flags and 67108864.inv()
 									}
 
-									chatFull.groupcall_default_join_as = null
+									chatFull.groupcallDefaultJoinAs = null
 
 									JoinCallAlert.resetCache()
 								}
@@ -1986,11 +2005,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		mySource[CAPTURE_DEVICE_SCREEN] = 0
 
-		val req = TL_phone_joinGroupCallPresentation()
+		val req = TLRPC.TLPhoneJoinGroupCallPresentation()
 
-		req.call = groupCall!!.inputGroupCall
-		req.params = TL_dataJSON()
-		req.params.data = json
+		req.call = groupCall?.inputGroupCall
+		req.params = TLRPC.TLDataJSON()
+		req.params?.data = json
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 			if (response != null) {
@@ -1998,7 +2017,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					mySource[CAPTURE_DEVICE_SCREEN] = ssrc
 				}
 
-				val updates = response as Updates
+				val updates = response as TLRPC.Updates
 
 				AndroidUtilities.runOnUIThread {
 					if (tgVoip[CAPTURE_DEVICE_SCREEN] != null) {
@@ -2009,12 +2028,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 						while (a < N) {
 							val update = updates.updates[a]
 
-							if (update is TL_updateGroupCallConnection) {
+							if (update is TLRPC.TLUpdateGroupCallConnection) {
 								if (update.presentation) {
-									tgVoip[CAPTURE_DEVICE_SCREEN]!!.setJoinResponsePayload(update.params.data)
+									tgVoip[CAPTURE_DEVICE_SCREEN]?.setJoinResponsePayload(update.params?.data)
 								}
 							}
-							else if (update is TL_updateGroupCallParticipants) {
+							else if (update is TLRPC.TLUpdateGroupCallParticipants) {
 								var b = 0
 								val N2 = update.participants.size
 
@@ -2023,15 +2042,15 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 									if (MessageObject.getPeerId(participant.peer) == selfId) {
 										if (participant.presentation != null) {
-											if (participant.presentation.flags and 2 != 0) {
-												mySource[CAPTURE_DEVICE_SCREEN] = participant.presentation.audio_source
+											if (participant.presentation!!.flags and 2 != 0) {
+												mySource[CAPTURE_DEVICE_SCREEN] = participant.presentation!!.audioSource
 											}
 											else {
 												var c = 0
-												val N3 = participant.presentation.source_groups.size
+												val N3 = participant.presentation!!.sourceGroups.size
 
 												while (c < N3) {
-													val sourceGroup = participant.presentation.source_groups[c]
+													val sourceGroup = participant.presentation!!.sourceGroups[c]
 
 													if (sourceGroup.sources.size > 0) {
 														mySource[CAPTURE_DEVICE_SCREEN] = sourceGroup.sources[0]
@@ -2067,14 +2086,14 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 						val chatFull = MessagesController.getInstance(currentAccount).getChatFull(chat!!.id)
 
 						if (chatFull != null) {
-							if (chatFull is TL_chatFull) {
+							if (chatFull is TLRPC.TLChatFull) {
 								chatFull.flags = chatFull.flags and 32768.inv()
 							}
 							else {
 								chatFull.flags = chatFull.flags and 67108864.inv()
 							}
 
-							chatFull.groupcall_default_join_as = null
+							chatFull.groupcallDefaultJoinAs = null
 
 							JoinCallAlert.resetCache()
 						}
@@ -2098,73 +2117,74 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	private var checkRequestId = 0
 
 	private fun startGroupCheckShortpoll() {
-		if (shortPollRunnable != null || sharedInstance == null || groupCall == null || mySource[CAPTURE_DEVICE_CAMERA] == 0 && mySource[CAPTURE_DEVICE_SCREEN] == 0 && !(groupCall?.call != null && groupCall?.call?.rtmp_stream == true)) {
-			return
-		}
-
-		AndroidUtilities.runOnUIThread(Runnable label@{
-			if (shortPollRunnable == null || sharedInstance == null || groupCall == null || mySource[CAPTURE_DEVICE_CAMERA] == 0 && mySource[CAPTURE_DEVICE_SCREEN] == 0 && !(groupCall?.call != null && groupCall?.call?.rtmp_stream == true)) {
-				return@label
-			}
-
-			val req = TL_phone_checkGroupCall()
-			req.call = groupCall!!.inputGroupCall
-
-			for (i in mySource) {
-				if (i != 0) {
-					req.sources.add(i)
-				}
-			}
-
-			checkRequestId = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
-				AndroidUtilities.runOnUIThread {
-					if (shortPollRunnable == null || sharedInstance == null || groupCall == null) {
-						return@runOnUIThread
-					}
-
-					shortPollRunnable = null
-					checkRequestId = 0
-
-					var recreateCamera = false
-					var recreateScreenCapture = false
-
-					if (response is Vector) {
-						if (mySource[CAPTURE_DEVICE_CAMERA] != 0 && req.sources.contains(mySource[CAPTURE_DEVICE_CAMERA])) {
-							if (!response.objects.contains(mySource[CAPTURE_DEVICE_CAMERA])) {
-								recreateCamera = true
-							}
-						}
-
-						if (mySource[CAPTURE_DEVICE_SCREEN] != 0 && req.sources.contains(mySource[CAPTURE_DEVICE_SCREEN])) {
-							if (!response.objects.contains(mySource[CAPTURE_DEVICE_SCREEN])) {
-								recreateScreenCapture = true
-							}
-						}
-					}
-					else if (error != null && error.code == 400) {
-						recreateCamera = true
-
-						if (mySource[CAPTURE_DEVICE_SCREEN] != 0 && req.sources.contains(mySource[CAPTURE_DEVICE_SCREEN])) {
-							recreateScreenCapture = true
-						}
-					}
-
-					if (recreateCamera) {
-						createGroupInstance(CAPTURE_DEVICE_CAMERA, false)
-					}
-
-					if (recreateScreenCapture) {
-						createGroupInstance(CAPTURE_DEVICE_SCREEN, false)
-					}
-
-					if (mySource[CAPTURE_DEVICE_SCREEN] != 0 || mySource[CAPTURE_DEVICE_CAMERA] != 0 || groupCall?.call != null && groupCall?.call?.rtmp_stream == true) {
-						startGroupCheckShortpoll()
-					}
-				}
-			}
-		}.also {
-			shortPollRunnable = it
-		}, 4000)
+		// TODO: uncomment when `TLPhoneCheckGroupCall` will be implemented on server
+//		if (shortPollRunnable != null || sharedInstance == null || groupCall == null || mySource[CAPTURE_DEVICE_CAMERA] == 0 && mySource[CAPTURE_DEVICE_SCREEN] == 0 && (groupCall?.call as? TLRPC.TLGroupCall)?.rtmpStream != true) {
+//			return
+//		}
+//
+//		AndroidUtilities.runOnUIThread(Runnable label@{
+//			if (shortPollRunnable == null || sharedInstance == null || groupCall == null || mySource[CAPTURE_DEVICE_CAMERA] == 0 && mySource[CAPTURE_DEVICE_SCREEN] == 0 && (groupCall?.call as? TLRPC.TLGroupCall)?.rtmpStream != true) {
+//				return@label
+//			}
+//
+//			val req = TLRPC.TLPhoneCheckGroupCall()
+//			req.call = groupCall?.inputGroupCall
+//
+//			for (i in mySource) {
+//				if (i != 0) {
+//					req.sources.add(i)
+//				}
+//			}
+//
+//			checkRequestId = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
+//				AndroidUtilities.runOnUIThread {
+//					if (shortPollRunnable == null || sharedInstance == null || groupCall == null) {
+//						return@runOnUIThread
+//					}
+//
+//					shortPollRunnable = null
+//					checkRequestId = 0
+//
+//					var recreateCamera = false
+//					var recreateScreenCapture = false
+//
+//					if (response is Vector) {
+//						if (mySource[CAPTURE_DEVICE_CAMERA] != 0 && req.sources.contains(mySource[CAPTURE_DEVICE_CAMERA])) {
+//							if (!response.objects.contains(mySource[CAPTURE_DEVICE_CAMERA])) {
+//								recreateCamera = true
+//							}
+//						}
+//
+//						if (mySource[CAPTURE_DEVICE_SCREEN] != 0 && req.sources.contains(mySource[CAPTURE_DEVICE_SCREEN])) {
+//							if (!response.objects.contains(mySource[CAPTURE_DEVICE_SCREEN])) {
+//								recreateScreenCapture = true
+//							}
+//						}
+//					}
+//					else if (error != null && error.code == 400) {
+//						recreateCamera = true
+//
+//						if (mySource[CAPTURE_DEVICE_SCREEN] != 0 && req.sources.contains(mySource[CAPTURE_DEVICE_SCREEN])) {
+//							recreateScreenCapture = true
+//						}
+//					}
+//
+//					if (recreateCamera) {
+//						createGroupInstance(CAPTURE_DEVICE_CAMERA, false)
+//					}
+//
+//					if (recreateScreenCapture) {
+//						createGroupInstance(CAPTURE_DEVICE_SCREEN, false)
+//					}
+//
+//					if (mySource[CAPTURE_DEVICE_SCREEN] != 0 || mySource[CAPTURE_DEVICE_CAMERA] != 0 || groupCall?.call != null && groupCall?.call?.rtmp_stream == true) {
+//						startGroupCheckShortpoll()
+//					}
+//				}
+//			}
+//		}.also {
+//			shortPollRunnable = it
+//		}, 4000)
 	}
 
 	private fun cancelGroupCheckShortPoll() {
@@ -2183,7 +2203,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	private class RequestedParticipant(var participant: TL_groupCallParticipant, var audioSsrc: Int)
+	private class RequestedParticipant(var participant: TLRPC.TLGroupCallParticipant, var audioSsrc: Int)
 
 	private fun broadcastUnknownParticipants(taskPtr: Long, unknown: IntArray) {
 		if (groupCall == null || tgVoip[CAPTURE_DEVICE_CAMERA] == null) {
@@ -2235,7 +2255,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			while (a < n) {
 				val p = participants[a]
 
-				if (p.participant.muted_by_you) {
+				if (p.participant.mutedByYou) {
 					tgVoip[CAPTURE_DEVICE_CAMERA]?.setVolume(p.audioSsrc, 0.0)
 				}
 				else {
@@ -2295,8 +2315,8 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 						if (lastTypingTimeSend < SystemClock.uptimeMillis() - 5000 && levels[a] > 0.1f && voice[a]) {
 							lastTypingTimeSend = SystemClock.uptimeMillis()
 
-							val req = TL_messages_setTyping()
-							req.action = TL_speakingInGroupCallAction()
+							val req = TLRPC.TLMessagesSetTyping()
+							req.action = TLRPC.TLSpeakingInGroupCallAction()
 							req.peer = MessagesController.getInputPeer(chat)
 
 							ConnectionsManager.getInstance(currentAccount).sendRequest(req) { _, _ ->
@@ -2336,12 +2356,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					return@makeGroup
 				}
 
-				val req = TL_upload_getFile()
+				val req = TLRPC.TLUploadGetFile()
 				req.limit = 128 * 1024
 
-				val inputGroupCallStream = TL_inputGroupCallStream()
-				inputGroupCallStream.call = groupCall!!.inputGroupCall
-				inputGroupCallStream.time_ms = timestamp
+				val inputGroupCallStream = TLRPC.TLInputGroupCallStream()
+				inputGroupCallStream.call = groupCall?.inputGroupCall
+				inputGroupCallStream.timeMs = timestamp
 
 				if (duration == 500L) {
 					inputGroupCallStream.scale = 1
@@ -2349,8 +2369,8 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 				if (videoChannel != 0) {
 					inputGroupCallStream.flags = inputGroupCallStream.flags or 1
-					inputGroupCallStream.video_channel = videoChannel
-					inputGroupCallStream.video_quality = quality
+					inputGroupCallStream.videoChannel = videoChannel
+					inputGroupCallStream.videoQuality = quality
 				}
 
 				req.location = inputGroupCallStream
@@ -2367,17 +2387,17 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					}
 
 					if (response != null) {
-						val res = response as TL_upload_file
-						tgVoip[type]?.onStreamPartAvailable(timestamp, res.bytes.buffer, res.bytes.limit(), responseTime, videoChannel, quality)
+						val res = response as TLRPC.TLUploadFile
+						tgVoip[type]?.onStreamPartAvailable(timestamp, res.bytes!!.buffer, res.bytes!!.limit(), responseTime, videoChannel, quality)
 					}
 					else {
-						if ("GROUPCALL_JOIN_MISSING" == error.text) {
+						if ("GROUPCALL_JOIN_MISSING" == error?.text) {
 							AndroidUtilities.runOnUIThread {
 								createGroupInstance(type, false)
 							}
 						}
 						else {
-							val status = if ("TIME_TOO_BIG" == error.text || error.text?.startsWith("FLOOD_WAIT") == true) {
+							val status = if ("TIME_TOO_BIG" == error?.text || error?.text?.startsWith("FLOOD_WAIT") == true) {
 								0
 							}
 							else {
@@ -2387,7 +2407,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 							tgVoip[type]?.onStreamPartAvailable(timestamp, null, status, responseTime, videoChannel, quality)
 						}
 					}
-				}, ConnectionsManager.RequestFlagFailOnServerErrors, ConnectionsManager.ConnectionTypeDownload, groupCall!!.call!!.stream_dc_id)
+				}, ConnectionsManager.RequestFlagFailOnServerErrors, ConnectionsManager.ConnectionTypeDownload, (groupCall?.call as? TLRPC.TLGroupCall)?.streamDcId ?: 0)
 
 				AndroidUtilities.runOnUIThread {
 					currentStreamRequestTimestamp[key] = reqId
@@ -2407,33 +2427,31 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					}
 				}
 			}) { taskPtr ->
-				if (groupCall != null && groupCall!!.call != null && groupCall!!.call!!.rtmp_stream) {
-					val req = TL_phone_getGroupCallStreamChannels()
-					req.call = groupCall!!.inputGroupCall
+				if ((groupCall?.call as? TLRPC.TLGroupCall)?.rtmpStream == true) {
+					val req = TLRPC.TLPhoneGetGroupCallStreamChannels()
+					req.call = groupCall?.inputGroupCall
 
 					if (groupCall == null || groupCall!!.call == null || tgVoip[type] == null) {
 						tgVoip[type]?.onRequestTimeComplete(taskPtr, 0)
 						return@makeGroup
 					}
 
-					ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error, _ ->
+					ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, _, _ ->
 						var currentTime = 0L
 
-						if (error == null) {
-							val res = response as TL_phone_groupCallStreamChannels
-
-							if (res.channels.isNotEmpty()) {
-								currentTime = res.channels[0].last_timestamp_ms
+						if (response is TLRPC.TLPhoneGroupCallStreamChannels) {
+							if (response.channels.isNotEmpty()) {
+								currentTime = response.channels[0].lastTimestampMs
 							}
 
 							if (!groupCall!!.loadedRtmpStreamParticipant) {
-								groupCall?.createRtmpStreamParticipant(res.channels)
+								groupCall?.createRtmpStreamParticipant(response.channels)
 								groupCall?.loadedRtmpStreamParticipant = true
 							}
 						}
 
 						tgVoip[type]?.onRequestTimeComplete(taskPtr, currentTime)
-					}, ConnectionsManager.RequestFlagFailOnServerErrors, ConnectionsManager.ConnectionTypeDownload, groupCall!!.call!!.stream_dc_id)
+					}, ConnectionsManager.RequestFlagFailOnServerErrors, ConnectionsManager.ConnectionTypeDownload, (groupCall?.call as? TLRPC.TLGroupCall)?.streamDcId ?: 0)
 				}
 				else {
 					tgVoip[type]?.onRequestTimeComplete(taskPtr, ConnectionsManager.getInstance(currentAccount).currentTimeMillis)
@@ -2544,20 +2562,21 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	}
 
 	fun setParticipantsVolume() {
+		val groupCall = groupCall ?: return
 //		val instance = tgVoip[CAPTURE_DEVICE_CAMERA] ?: return
 
 		var a = 0
-		val N = groupCall!!.participants.size()
+		val N = groupCall.participants.size()
 
 		while (a < N) {
-			val participant = groupCall!!.participants.valueAt(a)
+			val participant = groupCall.participants.valueAt(a)
 
-			if (participant!!.self || participant.source == 0 || !participant.can_self_unmute && participant.muted) {
+			if (participant.isSelf || participant.source == 0 || !participant.canSelfUnmute && participant.muted) {
 				a++
 				continue
 			}
 
-			if (participant.muted_by_you) {
+			if (participant.mutedByYou) {
 				setParticipantVolume(participant, 0)
 			}
 			else {
@@ -2568,11 +2587,13 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 	}
 
-	fun setParticipantVolume(participant: TL_groupCallParticipant, volume: Int) {
+	fun setParticipantVolume(participant: TLRPC.TLGroupCallParticipant, volume: Int) {
 		tgVoip[CAPTURE_DEVICE_CAMERA]?.setVolume(participant.source, volume / 10000.0)
 
-		if (participant.presentation != null && participant.presentation.audio_source != 0) {
-			tgVoip[CAPTURE_DEVICE_CAMERA]?.setVolume(participant.presentation.audio_source, volume / 10000.0)
+		participant.presentation?.let {
+			if (it.audioSource != 0) {
+				tgVoip[CAPTURE_DEVICE_CAMERA]?.setVolume(it.audioSource, volume / 10000.0)
+			}
 		}
 	}
 
@@ -2599,7 +2620,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				HashSet()
 			}
 
-			hashes.add(privateCall!!.id.toString() + " " + privateCall!!.access_hash + " " + System.currentTimeMillis())
+			hashes.add(privateCall!!.id.toString() + " " + privateCall!!.accessHash + " " + System.currentTimeMillis())
 
 			while (hashes.size > 20) {
 				var oldest: String? = null
@@ -2633,7 +2654,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				}
 			}
 
-			nprefs.edit().putStringSet("calls_access_hashes", hashes).apply()
+			nprefs.edit { putStringSet("calls_access_hashes", hashes) }
 
 			var sysAecAvailable = false
 			var sysNsAvailable = false
@@ -2664,7 +2685,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			val enableNs = !(sysNsAvailable && serverConfig.useSystemNs)
 			val logFilePath = if (BuildConfig.DEBUG) getLogFilePath("voip" + privateCall!!.id) else getLogFilePath(privateCall!!.id, false)
 			val statsLogFilePath = getLogFilePath(privateCall!!.id, true)
-			val config = Config(initializationTimeout, receiveTimeout, voipDataSaving, privateCall!!.p2p_allowed, enableAec, enableNs, true, false, serverConfig.enableStunMarking, logFilePath, statsLogFilePath, privateCall!!.protocol.max_layer)
+			val config = Config(initializationTimeout, receiveTimeout, voipDataSaving, (privateCall as? TLRPC.TLPhoneCall)?.p2pAllowed == true, enableAec, enableNs, true, false, serverConfig.enableStunMarking, logFilePath, statsLogFilePath, privateCall?.callProtocol?.maxLayer ?: 0)
 
 			// persistent state
 			val persistentStateFilePath = File(ApplicationLoader.applicationContext.cacheDir, "voip_persistent_state.json").absolutePath
@@ -2672,12 +2693,20 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			// endpoints
 			val forceTcp = preferences.getBoolean("dbg_force_tcp_in_calls", false)
 			val endpointType = if (forceTcp) ENDPOINT_TYPE_TCP_RELAY else ENDPOINT_TYPE_UDP_RELAY
-			val endpoints = arrayOfNulls<Endpoint>(privateCall!!.connections.size)
 
-			for (i in endpoints.indices) {
-				val connection = privateCall!!.connections[i]
-				endpoints[i] = Endpoint(connection is TL_phoneConnectionWebrtc, connection.id, connection.ip, connection.ipv6, connection.port, endpointType, connection.peer_tag, connection.turn, connection.stun, connection.username, connection.password, connection.tcp)
-			}
+			val endpoints = (privateCall as? TLRPC.TLPhoneCall)?.connections?.map {
+				val webRtcConnection = it as? TLRPC.TLPhoneConnectionWebrtc
+				val tcpConnection = it as? TLRPC.TLPhoneConnection
+
+				Endpoint(webRtcConnection != null, it.id, it.ip, it.ipv6, it.port, endpointType, tcpConnection?.peerTag, webRtcConnection?.turn ?: false, webRtcConnection?.stun ?: false, webRtcConnection?.username, webRtcConnection?.password, tcpConnection?.tcp ?: false)
+			}?.toTypedArray()
+
+//			val endpoints = arrayOfNulls<Endpoint>(privateCall!!.connections.size)
+//
+//			for (i in endpoints.indices) {
+//				val connection = privateCall!!.connections[i]
+//				endpoints[i] = Endpoint(connection is TL_phoneConnectionWebrtc, connection.id, connection.ip, connection.ipv6, connection.port, endpointType, connection.peer_tag, connection.turn, connection.stun, connection.username, connection.password, connection.tcp)
+//			}
 
 			if (forceTcp) {
 				AndroidUtilities.runOnUIThread {
@@ -2699,7 +2728,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			// encryption key
 			val encryptionKey = EncryptionKey(authKey, isOutgoing)
-			val newAvailable = "2.7.7" <= privateCall!!.protocol.library_versions[0]
+			val newAvailable = "2.7.7" <= privateCall!!.callProtocol!!.libraryVersions[0]
 
 			if (captureDevice[CAPTURE_DEVICE_CAMERA] != 0L && !newAvailable) {
 				NativeInstance.destroyVideoCapturer(captureDevice[CAPTURE_DEVICE_CAMERA])
@@ -2718,7 +2747,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			}
 
 			// init
-			tgVoip[CAPTURE_DEVICE_CAMERA] = makeInstance(privateCall!!.protocol.library_versions[0], config, persistentStateFilePath, endpoints, proxy, getNetworkType(), encryptionKey, remoteSink[CAPTURE_DEVICE_CAMERA], captureDevice[CAPTURE_DEVICE_CAMERA]) { _, levels, _ ->
+			tgVoip[CAPTURE_DEVICE_CAMERA] = makeInstance(privateCall!!.callProtocol!!.libraryVersions[0], config, persistentStateFilePath, endpoints, proxy, getNetworkType(), encryptionKey, remoteSink[CAPTURE_DEVICE_CAMERA], captureDevice[CAPTURE_DEVICE_CAMERA]) { _, levels, _ ->
 				if (sharedInstance == null || privateCall == null) {
 					return@makeInstance
 				}
@@ -2824,10 +2853,13 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 	fun onSignalingData(data: ByteArray?) {
 		val privateCall = privateCall ?: return
 
-		val req = TL_phone_sendSignalingData()
-		req.peer = TL_inputPhoneCall()
-		req.peer.access_hash = privateCall.access_hash
-		req.peer.id = privateCall.id
+		val req = TLRPC.TLPhoneSendSignalingData()
+
+		req.peer = TLRPC.TLInputPhoneCall().also {
+			it.accessHash = privateCall.accessHash
+			it.id = privateCall.id
+		}
+
 		req.data = data
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req)
@@ -2969,8 +3001,8 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			return
 		}
 
-		val req = TL_phone_editGroupCallParticipant()
-		req.call = groupCall!!.inputGroupCall
+		val req = TLRPC.TLPhoneEditGroupCallParticipant()
+		req.call = groupCall?.inputGroupCall
 
 		if (`object` is User) {
 			if (UserObject.isUserSelf(`object`) && groupCallPeer != null) {
@@ -2979,13 +3011,13 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			else {
 				req.participant = MessagesController.getInputPeer(`object`)
 
-				FileLog.d("edit group call part id = " + req.participant.user_id + " access_hash = " + req.participant.user_id)
+				FileLog.d("edit group call part id = " + req.participant?.userId + " access_hash = " + req.participant?.userId)
 			}
 		}
-		else if (`object` is Chat) {
+		else if (`object` is TLRPC.Chat) {
 			req.participant = MessagesController.getInputPeer(`object`)
 
-			FileLog.d("edit group call part id = " + (if (req.participant.chat_id != 0L) req.participant.chat_id else req.participant.channel_id) + " access_hash = " + req.participant.access_hash)
+			FileLog.d("edit group call part id = " + (if (req.participant.chatId != 0L) req.participant.chatId else req.participant?.channelId) + " access_hash = " + req.participant?.accessHash)
 		}
 
 		if (mute != null) {
@@ -2999,12 +3031,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 
 		if (raiseHand != null) {
-			req.raise_hand = raiseHand
+			req.raiseHand = raiseHand
 			req.flags = req.flags or 4
 		}
 
 		if (muteVideo != null) {
-			req.video_stopped = muteVideo
+			req.videoStopped = muteVideo
 			req.flags = req.flags or 8
 		}
 
@@ -3014,7 +3046,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		AccountInstance.getInstance(account).connectionsManager.sendRequest(req) { response, error ->
 			if (response != null) {
-				AccountInstance.getInstance(account).messagesController.processUpdates(response as Updates?, false)
+				AccountInstance.getInstance(account).messagesController.processUpdates(response as? TLRPC.Updates, false)
 			}
 			else if (error != null) {
 				if ("GROUPCALL_VIDEO_TOO_MUCH" == error.text) {
@@ -3326,8 +3358,10 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					prefs.getString("CallsRingtonePath", RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE).toString())
 				}
 
-				ringtonePlayer?.setDataSource(this, Uri.parse(notificationUri))
-				ringtonePlayer?.prepareAsync()
+				notificationUri?.toUri()?.let {
+					ringtonePlayer?.setDataSource(this, it)
+					ringtonePlayer?.prepareAsync()
+				} ?: throw Exception("null ringtone uri")
 			}
 			catch (e: Exception) {
 				FileLog.e(e)
@@ -3510,7 +3544,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				am.abandonAudioFocus(this)
 			}
 
-			am.unregisterMediaButtonEventReceiver(ComponentName(this, VoIPMediaButtonReceiver::class.java))
+			am.unregisterMediaButtonEventReceiver(mediaButtonEventReceiver)
 
 			if (hasAudioFocus) {
 				am.abandonAudioFocus(this)
@@ -3567,31 +3601,29 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		val messagesStorage = MessagesStorage.getInstance(currentAccount)
 
-		val req = TL_messages_getDhConfig()
-		req.random_length = 256
+		val req = TLRPC.TLMessagesGetDhConfig()
+		req.randomLength = 256
 		req.version = messagesStorage.lastSecretVersion
 
-		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
-			if (error == null) {
-				val res = response as messages_DhConfig
-
-				if (response is TL_messages_dhConfig) {
-					if (!Utilities.isGoodPrime(res.p, res.g)) {
+		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
+			if (response is TLRPC.MessagesDhConfig) {
+				if (response is TLRPC.TLMessagesDhConfig) {
+					if (!Utilities.isGoodPrime(response.p, response.g)) {
 						FileLog.e("stopping VoIP service, bad prime")
 						callFailed()
 						return@sendRequest
 					}
 
-					messagesStorage.secretPBytes = res.p
-					messagesStorage.secretG = res.g
-					messagesStorage.lastSecretVersion = res.version
+					messagesStorage.secretPBytes = response.p
+					messagesStorage.secretG = response.g
+					messagesStorage.lastSecretVersion = response.version
 					MessagesStorage.getInstance(currentAccount).saveSecretParams(messagesStorage.lastSecretVersion, messagesStorage.secretG, messagesStorage.secretPBytes)
 				}
 
 				val salt = ByteArray(256)
 
 				for (a in 0..255) {
-					salt[a] = ((Utilities.random.nextDouble() * 256).toInt().toByte() xor res.random[a].toInt().toByte())
+					salt[a] = ((Utilities.random.nextDouble() * 256).toInt().toByte() xor response.random!![a].toInt().toByte())
 				}
 
 				if (privateCall == null) {
@@ -3607,7 +3639,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 				g_b = g_b.modPow(BigInteger(1, salt), p)
 
-				g_a_hash = privateCall!!.g_a_hash
+				g_a_hash = (privateCall as? TLRPC.TLPhoneCallRequested)?.gAHash
 
 				var g_b_bytes = g_b.toByteArray()
 
@@ -3617,26 +3649,29 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 					g_b_bytes = correctedAuth
 				}
 
-				val req1 = TL_phone_acceptCall()
-				req1.g_b = g_b_bytes
-				req1.peer = TL_inputPhoneCall()
-				req1.peer.id = privateCall!!.id
-				req1.peer.access_hash = privateCall!!.access_hash
-				req1.protocol = TL_phoneCallProtocol()
-				req1.protocol.udp_reflector = true
-				req1.protocol.udp_p2p = req1.protocol.udp_reflector
-				req1.protocol.min_layer = CALL_MIN_LAYER
-				req1.protocol.max_layer = getConnectionMaxLayer()
-				req1.protocol.library_versions.addAll(AVAILABLE_VERSIONS)
+				val req1 = TLRPC.TLPhoneAcceptCall()
+				req1.gB = g_b_bytes
+
+				req1.peer = TLRPC.TLInputPhoneCall().also {
+					it.id = privateCall?.id ?: 0
+					it.accessHash = privateCall?.accessHash ?: 0
+				}
+
+				req1.callProtocol = TLRPC.TLPhoneCallProtocol()
+				req1.callProtocol?.udpReflector = true
+				req1.callProtocol?.udpP2p = req1.callProtocol?.udpReflector ?: false
+				req1.callProtocol?.minLayer = CALL_MIN_LAYER
+				req1.callProtocol?.maxLayer = getConnectionMaxLayer()
+				req1.callProtocol?.libraryVersions?.addAll(AVAILABLE_VERSIONS)
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req1, { response1, error1 ->
 					AndroidUtilities.runOnUIThread {
 						if (error1 == null) {
 							FileLog.w("accept call ok! $response1")
 
-							privateCall = (response1 as TL_phone_phoneCall).phone_call
+							privateCall = (response1 as? TLRPC.TLPhonePhoneCall)?.phoneCall
 
-							if (privateCall is TL_phoneCallDiscarded) {
+							if (privateCall is TLRPC.TLPhoneCallDiscarded) {
 								onCallUpdated(privateCall)
 							}
 						}
@@ -3697,19 +3732,22 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			return
 		}
 
-		val req = TL_phone_discardCall()
-		req.peer = TL_inputPhoneCall()
-		req.peer.access_hash = privateCall!!.access_hash
-		req.peer.id = privateCall!!.id
+		val req = TLRPC.TLPhoneDiscardCall()
+
+		req.peer = TLRPC.TLInputPhoneCall().also {
+			it.id = privateCall?.id ?: 0
+			it.accessHash = privateCall?.accessHash ?: 0
+		}
+
 		req.duration = (callDuration / 1000).toInt()
-		req.connection_id = if (tgVoip[CAPTURE_DEVICE_CAMERA] != null) tgVoip[CAPTURE_DEVICE_CAMERA]!!.preferredRelayId else 0
+		req.connectionId = if (tgVoip[CAPTURE_DEVICE_CAMERA] != null) tgVoip[CAPTURE_DEVICE_CAMERA]!!.preferredRelayId else 0
 
 		when (reason) {
-			DISCARD_REASON_DISCONNECT -> req.reason = TL_phoneCallDiscardReasonDisconnect()
-			DISCARD_REASON_MISSED -> req.reason = TL_phoneCallDiscardReasonMissed()
-			DISCARD_REASON_LINE_BUSY -> req.reason = TL_phoneCallDiscardReasonBusy()
-			DISCARD_REASON_HANGUP -> req.reason = TL_phoneCallDiscardReasonHangup()
-			else -> req.reason = TL_phoneCallDiscardReasonHangup()
+			DISCARD_REASON_DISCONNECT -> req.reason = TLRPC.TLPhoneCallDiscardReasonDisconnect()
+			DISCARD_REASON_MISSED -> req.reason = TLRPC.TLPhoneCallDiscardReasonMissed()
+			DISCARD_REASON_LINE_BUSY -> req.reason = TLRPC.TLPhoneCallDiscardReasonBusy()
+			DISCARD_REASON_HANGUP -> req.reason = TLRPC.TLPhoneCallDiscardReasonHangup()
+			else -> req.reason = TLRPC.TLPhoneCallDiscardReasonHangup()
 		}
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error ->
@@ -3717,7 +3755,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				FileLog.e("error on phone.discardCall: $error")
 			}
 			else {
-				if (response is TL_updates) {
+				if (response is TLRPC.TLUpdates) {
 					MessagesController.getInstance(currentAccount).processUpdates(response, false)
 				}
 
@@ -3734,7 +3772,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return LaunchActivity::class.java
 	}
 
-	@TargetApi(Build.VERSION_CODES.O)
+	@RequiresApi(Build.VERSION_CODES.O)
 	fun getConnectionAndStartCall(): CallConnection {
 		return systemCallConnection ?: CallConnection().apply {
 			FileLog.d("creating call connection")
@@ -3751,7 +3789,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			}
 
 			setAddress(Uri.fromParts("tel", "+99084" + user!!.id, null), TelecomManager.PRESENTATION_ALLOWED)
-			setCallerDisplayName(ContactsController.formatName(user!!.first_name, user!!.last_name), TelecomManager.PRESENTATION_ALLOWED)
+			setCallerDisplayName(ContactsController.formatName(user!!.firstName, user!!.lastName), TelecomManager.PRESENTATION_ALLOWED)
 		}.also {
 			systemCallConnection = it
 		}
@@ -3785,7 +3823,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			}
 		}
 		else {
-			showIncomingNotification(ContactsController.formatName(user!!.first_name, user!!.last_name), user, privateCall!!.video)
+			showIncomingNotification(ContactsController.formatName(user!!.firstName, user!!.lastName), user, privateCall!!.video)
 
 			FileLog.d("Showing incoming call notification")
 		}
@@ -3803,21 +3841,21 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 		setGlobalServerConfig(preferences.getString("voip_server_config", "{}"))
 
-		ConnectionsManager.getInstance(currentAccount).sendRequest(TL_phone_getCallConfig()) { response, error ->
+		ConnectionsManager.getInstance(currentAccount).sendRequest(TLRPC.TLPhoneGetCallConfig()) { response, error ->
 			if (error == null) {
-				val data = (response as TL_dataJSON).data
+				val data = (response as TLRPC.TLDataJSON).data
 				setGlobalServerConfig(data)
-				preferences.edit().putString("voip_server_config", data).apply()
+				preferences.edit { putString("voip_server_config", data) }
 			}
 		}
 	}
 
 	private fun showNotification() {
 		if (user != null) {
-			showNotification(ContactsController.formatName(user!!.first_name, user!!.last_name), getRoundAvatarBitmap(user))
+			showNotification(ContactsController.formatName(user?.firstName, user?.lastName), getRoundAvatarBitmap(user))
 		}
 		else {
-			showNotification(chat!!.title, getRoundAvatarBitmap(chat))
+			showNotification(chat?.title ?: "", getRoundAvatarBitmap(chat))
 		}
 	}
 
@@ -3827,7 +3865,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 			req.debug=new TLRPC.TL_dataJSON();
 			req.debug.data=debugLog;
 			req.peer=new TLRPC.TL_inputPhoneCall();
-			req.peer.access_hash=call.access_hash;
+			req.peer.accessHash=call.accessHash;
 			req.peer.id=call.id;
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, new RequestDelegate(){
 				@Override
@@ -3858,12 +3896,13 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		}
 
 		if (needSendDebugLog && finalState.debugLog != null) {
-			val req = TL_phone_saveCallDebug()
-			req.debug = TL_dataJSON()
-			req.debug.data = finalState.debugLog
-			req.peer = TL_inputPhoneCall()
-			req.peer.access_hash = privateCall!!.access_hash
-			req.peer.id = privateCall!!.id
+			val req = TLRPC.TLPhoneSaveCallDebug()
+			req.debug = TLRPC.TLDataJSON()
+			req.debug?.data = finalState.debugLog
+
+			req.peer = TLRPC.TLInputPhoneCall()
+			req.peer?.accessHash = privateCall?.accessHash ?: 0
+			req.peer?.id = privateCall?.id ?: 0
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
 				FileLog.d("Sent debug logs, response = $response")
@@ -3921,7 +3960,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			fetchBluetoothDeviceName()
 
-			am.registerMediaButtonEventReceiver(ComponentName(this, VoIPMediaButtonReceiver::class.java))
+			am.registerMediaButtonEventReceiver(mediaButtonEventReceiver)
 
 			if (!USE_CONNECTION_SERVICE && btAdapter != null && btAdapter?.isEnabled == true) {
 				try {
@@ -4274,7 +4313,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return currentState
 	}
 
-	fun getGroupCallPeer(): InputPeer? {
+	fun getGroupCallPeer(): TLRPC.InputPeer? {
 		return groupCallPeer
 	}
 
@@ -4351,7 +4390,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 					chanIndex++
 
-					nprefs.edit().putInt("calls_notification_channel", chanIndex).apply()
+					nprefs.edit { putInt("calls_notification_channel", chanIndex) }
 				}
 				else {
 					needCreate = false
@@ -4453,7 +4492,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 
 			if (UserConfig.activatedAccountsCount > 1) {
 				val self = UserConfig.getInstance(currentAccount).getCurrentUser()
-				customView.setTextViewText(android.R.id.title, if (video) LocaleController.formatString("VoipInVideoCallBrandingWithName", R.string.VoipInVideoCallBrandingWithName, ContactsController.formatName(self?.first_name, self?.last_name)) else LocaleController.formatString("VoipInCallBrandingWithName", R.string.VoipInCallBrandingWithName, ContactsController.formatName(self?.first_name, self?.last_name)))
+				customView.setTextViewText(android.R.id.title, if (video) LocaleController.formatString("VoipInVideoCallBrandingWithName", R.string.VoipInVideoCallBrandingWithName, ContactsController.formatName(self?.firstName, self?.lastName)) else LocaleController.formatString("VoipInCallBrandingWithName", R.string.VoipInCallBrandingWithName, ContactsController.formatName(self?.firstName, self?.lastName)))
 			}
 			else {
 				customView.setTextViewText(android.R.id.title, if (video) getString(R.string.VoipInVideoCallBranding) else getString(R.string.VoipInCallBranding))
@@ -4483,13 +4522,13 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		if (privateCall != null) {
 			FileLog.d("Discarding failed call")
 
-			val req = TL_phone_discardCall()
-			req.peer = TL_inputPhoneCall()
-			req.peer.access_hash = privateCall!!.access_hash
-			req.peer.id = privateCall!!.id
+			val req = TLRPC.TLPhoneDiscardCall()
+			req.peer = TLRPC.TLInputPhoneCall()
+			req.peer?.accessHash = privateCall!!.accessHash
+			req.peer?.id = privateCall!!.id
 			req.duration = (callDuration / 1000).toInt()
-			req.connection_id = if (tgVoip[CAPTURE_DEVICE_CAMERA] != null) tgVoip[CAPTURE_DEVICE_CAMERA]!!.preferredRelayId else 0
-			req.reason = TL_phoneCallDiscardReasonDisconnect()
+			req.connectionId = if (tgVoip[CAPTURE_DEVICE_CAMERA] != null) tgVoip[CAPTURE_DEVICE_CAMERA]!!.preferredRelayId else 0
+			req.reason = TLRPC.TLPhoneCallDiscardReasonDisconnect()
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error1 ->
 				if (error1 != null) {
@@ -4813,12 +4852,12 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		return remoteVideoState
 	}
 
-	@TargetApi(Build.VERSION_CODES.O)
+	@RequiresApi(Build.VERSION_CODES.O)
 	private fun addAccountToTelecomManager(): PhoneAccountHandle {
 		val tm = getSystemService(TELECOM_SERVICE) as TelecomManager
 		val self = UserConfig.getInstance(currentAccount).getCurrentUser()
 		val handle = PhoneAccountHandle(ComponentName(this, ElloConnectionService::class.java), "" + self!!.id)
-		val account = PhoneAccount.Builder(handle, ContactsController.formatName(self.first_name, self.last_name)).setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED).setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher)).setHighlightColor(-0xd35a20).addSupportedUriScheme("sip").build()
+		val account = PhoneAccount.Builder(handle, ContactsController.formatName(self.firstName, self.lastName)).setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED).setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher)).setHighlightColor(-0xd35a20).addSupportedUriScheme("sip").build()
 		tm.registerPhoneAccount(account)
 		return handle
 	}
@@ -4936,7 +4975,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		private var setModeRunnable: Runnable? = null
 		private val sync = Any()
 
-		var callIShouldHavePutIntoIntent: PhoneCall? = null
+		var callIShouldHavePutIntoIntent: TLRPC.PhoneCall? = null
 			set(value) {
 				field = value
 				FileLog.d("callIShouldHavePutIntoIntent = $value")
@@ -4946,16 +4985,18 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 		var audioLevelsCallback: AudioLevelsCallback? = null
 
 		fun hasRtmpStream(): Boolean {
-			return sharedInstance?.groupCall?.call?.rtmp_stream == true
+			return (sharedInstance?.groupCall?.call as? TLRPC.TLGroupCall)?.rtmpStream == true
 		}
 
 		fun getRoundAvatarBitmap(userOrChat: TLObject?): Bitmap {
 			var bitmap: Bitmap? = null
 
 			try {
-				if (userOrChat is User) {
-					if (userOrChat.photo?.photo_small != null) {
-						val img = ImageLoader.getInstance().getImageFromMemory(userOrChat.photo?.photo_small, null, "50_50")
+				if (userOrChat is TLRPC.TLUser) {
+					val photoSmall = userOrChat.photo?.photoSmall
+
+					if (photoSmall != null) {
+						val img = ImageLoader.getInstance().getImageFromMemory(photoSmall, null, "50_50")
 
 						if (img != null) {
 							bitmap = img.bitmap.copy(Bitmap.Config.ARGB_8888, true)
@@ -4964,7 +5005,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 							try {
 								val opts = BitmapFactory.Options()
 								opts.inMutable = true
-								bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(userOrChat.photo?.photo_small, true).toString(), opts)
+								bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(photoSmall, true).toString(), opts)
 							}
 							catch (e: Throwable) {
 								FileLog.e(e)
@@ -4972,11 +5013,11 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 						}
 					}
 				}
-				else {
-					val chat = userOrChat as Chat?
+				else if (userOrChat is TLRPC.Chat) {
+					val photoSmall = userOrChat.photo?.photoSmall
 
-					if (chat?.photo?.photo_small != null) {
-						val img = ImageLoader.getInstance().getImageFromMemory(chat.photo.photo_small, null, "50_50")
+					if (photoSmall != null) {
+						val img = ImageLoader.getInstance().getImageFromMemory(photoSmall, null, "50_50")
 
 						if (img != null) {
 							bitmap = img.bitmap.copy(Bitmap.Config.ARGB_8888, true)
@@ -4985,7 +5026,7 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 							try {
 								val opts = BitmapFactory.Options()
 								opts.inMutable = true
-								bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(chat.photo.photo_small, true).toString(), opts)
+								bitmap = BitmapFactory.decodeFile(FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(photoSmall, true).toString(), opts)
 							}
 							catch (e: Throwable) {
 								FileLog.e(e)
@@ -5002,13 +5043,13 @@ class VoIPService : Service(), SensorEventListener, OnAudioFocusChangeListener, 
 				Theme.createDialogsResources(ApplicationLoader.applicationContext)
 
 				val placeholder: AvatarDrawable = if (userOrChat is User) {
-					AvatarDrawable(userOrChat as User?)
+					AvatarDrawable(userOrChat as? User)
 				}
 				else {
-					AvatarDrawable(userOrChat as Chat?)
+					AvatarDrawable(userOrChat as? TLRPC.Chat)
 				}
 
-				bitmap = Bitmap.createBitmap(AndroidUtilities.dp(42f), AndroidUtilities.dp(42f), Bitmap.Config.ARGB_8888)
+				bitmap = createBitmap(AndroidUtilities.dp(42f), AndroidUtilities.dp(42f))
 
 				placeholder.setBounds(0, 0, bitmap.width, bitmap.height)
 				placeholder.draw(Canvas(bitmap))

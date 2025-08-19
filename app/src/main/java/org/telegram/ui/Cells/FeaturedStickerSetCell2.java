@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -36,7 +36,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.messageobject.MessageObject;
-import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
@@ -44,21 +44,19 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.Premium.PremiumButtonView;
 import org.telegram.ui.Components.ProgressButton;
 
-import java.util.ArrayList;
+import java.util.List;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
 public class FeaturedStickerSetCell2 extends FrameLayout {
-
 	private final int currentAccount = UserConfig.selectedAccount;
-
 	private final TextView textView;
 	private final TextView valueTextView;
 	private final BackupImageView imageView;
 	private final ProgressButton addButton;
 	private final TextView delButton;
 	private final PremiumButtonView unlockButton;
-
 	private AnimatorSet currentAnimation;
 	private TLRPC.StickerSetCovered stickersSet;
 	private boolean isInstalled;
@@ -94,7 +92,7 @@ public class FeaturedStickerSetCell2 extends FrameLayout {
 		addView(imageView, LayoutHelper.createFrame(48, 48, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 0 : 12, 8, LocaleController.isRTL ? 12 : 0, 0));
 
 		addButton = new ProgressButton(context);
-		addButton.setText(LocaleController.getString("Add", R.string.Add));
+		addButton.setText(context.getString(R.string.Add));
 		addButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
 		addView(addButton, LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.END, 0, 18, 14, 0));
 
@@ -103,12 +101,12 @@ public class FeaturedStickerSetCell2 extends FrameLayout {
 		delButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_removeButtonText));
 		delButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
 		delButton.setTypeface(Theme.TYPEFACE_BOLD);
-		delButton.setText(LocaleController.getString("StickersRemove", R.string.StickersRemove));
+		delButton.setText(context.getString(R.string.StickersRemove));
 		addView(delButton, LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.END, 0, 16, 14, 0));
 
 		unlockButton = new PremiumButtonView(context, AndroidUtilities.dp(4), false);
 		unlockButton.setIcon(R.raw.unlock_icon);
-		unlockButton.setButton(LocaleController.getString("Unlock", R.string.Unlock), e -> onPremiumButtonClick());
+		unlockButton.setButton(context.getString(R.string.Unlock), e -> onPremiumButtonClick());
 		unlockButton.setVisibility(View.GONE);
 		try {
 			MarginLayoutParams iconLayout = (MarginLayoutParams)unlockButton.getIconView().getLayoutParams();
@@ -208,23 +206,24 @@ public class FeaturedStickerSetCell2 extends FrameLayout {
 		valueTextView.setText(LocaleController.formatPluralString(set.set.emojis ? "EmojiCount" : "Stickers", set.set.count));
 
 		TLRPC.Document sticker;
-		if (set.cover != null) {
-			sticker = set.cover;
+
+		if (set instanceof TLRPC.TLStickerSetCovered covered && covered.cover != null) {
+			sticker = covered.cover;
 		}
-		else if (!set.covers.isEmpty()) {
-			sticker = set.covers.get(0);
-			for (int i = 0; i < set.covers.size(); ++i) {
-				if (set.covers.get(i).id == set.set.thumb_document_id) {
-					sticker = set.covers.get(i);
+		else if (set instanceof TLRPC.TLStickerSetMultiCovered covered && !covered.covers.isEmpty()) {
+			sticker = covered.covers.get(0);
+			for (int i = 0; i < covered.covers.size(); ++i) {
+				if (covered.covers.get(i).id == set.set.thumbDocumentId) {
+					sticker = covered.covers.get(i);
 					break;
 				}
 			}
 		}
-		else if ((set instanceof TLRPC.TL_stickerSetFullCovered && !((TLRPC.TL_stickerSetFullCovered)set).documents.isEmpty())) {
-			ArrayList<TLRPC.Document> documents = ((TLRPC.TL_stickerSetFullCovered)set).documents;
+		else if ((set instanceof TLRPC.TLStickerSetFullCovered && !((TLRPC.TLStickerSetFullCovered)set).documents.isEmpty())) {
+			List<TLRPC.Document> documents = ((TLRPC.TLStickerSetFullCovered)set).documents;
 			sticker = documents.get(0);
 			for (int i = 0; i < documents.size(); ++i) {
-				if (documents.get(i).id == set.set.thumb_document_id) {
+				if (documents.get(i).id == set.set.thumbDocumentId) {
 					sticker = documents.get(i);
 					break;
 				}
@@ -233,7 +232,8 @@ public class FeaturedStickerSetCell2 extends FrameLayout {
 		else {
 			sticker = null;
 		}
-		if (sticker != null) {
+
+		if (sticker instanceof TLRPC.TLDocument stickerDocument) {
 			if (MessageObject.canAutoplayAnimatedSticker(sticker)) {
 				TLObject object = FileLoader.getClosestPhotoSizeWithSize(set.set.thumbs, 90);
 				if (object == null) {
@@ -243,12 +243,12 @@ public class FeaturedStickerSetCell2 extends FrameLayout {
 				ImageLocation imageLocation;
 
 				if (object instanceof TLRPC.Document) { // first sticker in set as a thumb
-					TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(sticker.thumbs, 90);
+					TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(stickerDocument.thumbs, 90);
 					imageLocation = ImageLocation.getForDocument(thumb, sticker);
 				}
 				else { // unique thumb
 					TLRPC.PhotoSize thumb = (TLRPC.PhotoSize)object;
-					imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumb_version);
+					imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumbVersion);
 				}
 
 				if (object instanceof TLRPC.Document && MessageObject.isAnimatedStickerDocument(sticker, true)) {
@@ -267,7 +267,7 @@ public class FeaturedStickerSetCell2 extends FrameLayout {
 				}
 			}
 			else {
-				final TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(sticker.thumbs, 90);
+				final TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(stickerDocument.thumbs, 90);
 				if (thumb != null) {
 					imageView.setImage(ImageLocation.getForDocument(thumb, sticker), "50_50", "webp", null, set);
 				}
@@ -385,7 +385,7 @@ public class FeaturedStickerSetCell2 extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (needDivider) {
 			canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(71), getHeight() - 1, getWidth() - (LocaleController.isRTL ? AndroidUtilities.dp(71) : 0), getHeight() - 1, Theme.dividerPaint);
 		}

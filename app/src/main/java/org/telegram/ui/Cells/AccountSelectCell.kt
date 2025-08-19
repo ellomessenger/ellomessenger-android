@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -22,9 +22,9 @@ import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ContactsController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.BackupImageView
@@ -100,7 +100,7 @@ class AccountSelectCell @JvmOverloads constructor(context: Context, hasInfo: Boo
 		when (`object`) {
 			is User -> {
 				avatarDrawable.setInfo(`object`)
-				infoTextView?.text = ContactsController.formatName(`object`.first_name, `object`.last_name)
+				infoTextView?.text = ContactsController.formatName(`object`.firstName, `object`.lastName)
 				imageView.setForUserOrChat(`object`, avatarDrawable)
 			}
 
@@ -119,7 +119,7 @@ class AccountSelectCell @JvmOverloads constructor(context: Context, hasInfo: Boo
 
 		avatarDrawable.setInfo(user)
 
-		textView.text = ContactsController.formatName(user?.first_name, user?.last_name)
+		textView.text = ContactsController.formatName(user?.firstName, user?.lastName)
 
 		imageView.imageReceiver.currentAccount = account
 		imageView.setForUserOrChat(user, avatarDrawable)

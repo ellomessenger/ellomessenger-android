@@ -9,11 +9,11 @@
 package org.telegram.ui
 
 import android.Manifest
-import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.ComponentActivity
 import androidx.annotation.RawRes
 import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AndroidUtilities
@@ -29,7 +29,7 @@ import org.telegram.ui.Components.AlertsCreator
 import org.telegram.ui.group.GroupCallActivity
 import kotlin.math.min
 
-open class BasePermissionsActivity : Activity() {
+open class BasePermissionsActivity : ComponentActivity() {
 	@JvmField
 	protected var currentAccount = -1
 

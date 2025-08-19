@@ -119,10 +119,22 @@
 			android:text="@string/monthly_payment"
 			android:textSize="22sp"
 			android:textStyle="bold"
-			app:layout_constraintBottom_toTopOf="@id/ello_coin_logo"
-			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintTop_toBottomOf="@+id/end_date_layout"
 			app:layout_constraintStart_toStartOf="parent"
-			app:layout_constraintTop_toBottomOf="@+id/end_date_layout" />
+			app:layout_constraintEnd_toEndOf="parent" />
+
+		<TextView
+			android:id="@+id/duration_description"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:layout_marginStart="18dp"
+			android:layout_marginEnd="18dp"
+			android:text="@string/monthly_subscription_description"
+			android:textSize="16sp"
+			app:layout_constraintTop_toBottomOf="@id/duration_label"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintEnd_toEndOf="parent" />
 
 		<ImageView
 			android:id="@+id/ello_coin_logo"
@@ -131,9 +143,9 @@
 			android:layout_marginTop="16dp"
 			android:contentDescription="@string/cont_desc_ello_coin"
 			android:src="@drawable/panda_rich"
-			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintTop_toBottomOf="@id/duration_description"
 			app:layout_constraintStart_toStartOf="parent"
-			app:layout_constraintTop_toBottomOf="@id/barrier" />
+			app:layout_constraintEnd_toEndOf="parent" />
 
 		<TextView
 			android:id="@+id/tv_price"

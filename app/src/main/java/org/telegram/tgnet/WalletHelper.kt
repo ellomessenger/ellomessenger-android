@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.tgnet
 
@@ -19,10 +19,11 @@ import org.telegram.messenger.utils.encrypt
 import org.telegram.messenger.utils.fromJson
 import org.telegram.messenger.utils.toJson
 import org.telegram.tgnet.ElloRpc.readData
-import org.telegram.tgnet.tlrpc.TL_error
+import org.telegram.tgnet.TLRPC.TLError
 import org.telegram.ui.profile.wallet.TransactionsView
 import java.lang.ref.WeakReference
 import kotlin.coroutines.suspendCoroutine
+import kotlin.math.absoluteValue
 
 class WalletHelper private constructor(num: Int) : BaseController(num) {
 	private var availableAsset: ElloRpc.WalletAsset? = null
@@ -56,11 +57,13 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		val req = ElloRpc.createWalletRequest(assetId = DEFAULT_ASSET_ID)
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				loadWallet()
 			}
 		}, ConnectionsManager.RequestFlagFailOnServerErrors)
 	}
+
+	fun availableBalance() = earnings?.freezeBalance?.let { earnings?.availableBalance?.minus(it)?.absoluteValue }
 
 	fun addListener(listener: OnWalletChangedListener) {
 		listeners.add(WeakReference(listener))
@@ -85,7 +88,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		val req = ElloRpc.getLastMonthActivityGraphics(walletId, limit = TransactionsView.numberOfColumns, page = 0)
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val stats = response.readData<ElloRpc.LastMonthActivityGraphicsResponse>()?.data
 				walletStats = stats
 				informAboutWalletStats()
@@ -107,7 +110,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		val req = ElloRpc.getLastMonthActivityGraphics(earningsWalletId, limit = TransactionsView.numberOfColumns, page = 0)
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val stats = response.readData<ElloRpc.LastMonthActivityGraphicsResponse>()?.data
 				earnStats = stats
 				informAboutEarnStats()
@@ -124,6 +127,47 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		walletStats = null
 
 		loadWallet()
+	}
+
+	suspend fun fetchWallet() {
+		if (!UserConfig.isLoggedIn) {
+			return
+		}
+
+		if (availableAsset == null) {
+			fetchAvailableAsset()
+
+			if (availableAsset != null) {
+				fetchWallet()
+			}
+
+			return
+		}
+
+		val req = ElloRpc.loadWalletRequest(assetId = DEFAULT_ASSET_ID)
+		val response = connectionsManager.performRequest(req)
+
+		if (response is TLRPC.TLBizDataRaw) {
+			val allWallets = response.readData<ElloRpc.Wallets>()?.wallets
+
+			allWallets?.find { it.type == DEFAULT_WALLET_TYPE }?.takeIf { it.id != 0L }?.let {
+				wallet = it
+
+				FileLog.d("Wallet id is ${it.id}")
+
+				saveWalletsCache()
+
+				loadWalletTransactionsStats()
+			}
+
+			allWallets?.find { it.type == EARNING_WALLET_TYPE }?.takeIf { it.id != 0L }?.let {
+				earningsWallet = it
+				saveWalletsCache()
+				loadEarnings()
+			}
+
+			informListeners()
+		}
 	}
 
 	fun loadWallet() {
@@ -144,7 +188,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		val req = ElloRpc.loadWalletRequest(assetId = DEFAULT_ASSET_ID)
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val allWallets = response.readData<ElloRpc.Wallets>()?.wallets
 
 				allWallets?.find { it.type == DEFAULT_WALLET_TYPE }?.takeIf { it.id != 0L }?.let {
@@ -172,14 +216,14 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 	 * @param callback callback with (optional) link to payment page and (optional) error
 	 * @return request id
 	 */
-	fun getPayPalPaymentLink(assetId: Int, walletId: Long, currency: String, message: String, amount: Float, callback: ((link: String?, paymentId: Long?, error: TL_error?) -> Unit)?): Int {
+	fun getPayPalPaymentLink(assetId: Int, walletId: Long, currency: String, message: String, amount: Float, callback: ((link: String?, paymentId: Long?, error: TLError?) -> Unit)?): Int {
 		val req = ElloRpc.paypalPaymentRequest(assetId = assetId, walletId = walletId, currency = currency, message = message, coin = amount, amount = null)
 
 		return connectionsManager.sendRequest(req, { response, error ->
 			var link: String? = null
 			var paymentId: Long? = null
 
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val res = response.readData<ElloRpc.PayPalPaymentLinkResponse>()
 				link = res?.link?.trim()
 				paymentId = res?.paymentId
@@ -235,7 +279,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		val req = ElloRpc.loadEarningsRequest(walletId = earningsWalletId)
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val earnings = response.readData<ElloRpc.Earnings>()
 
 				if (earnings != null) {
@@ -250,6 +294,28 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		}, ConnectionsManager.RequestFlagFailOnServerErrors)
 	}
 
+	private suspend fun fetchAvailableAsset() {
+		if (!UserConfig.isLoggedIn) {
+			return
+		}
+
+		val req = ElloRpc.availableWalletAssetsRequest()
+		val response = connectionsManager.performRequest(req)
+
+		if (response is TLRPC.TLBizDataRaw) {
+			val data = response.readData<ElloRpc.AvailableAssetsResponse>()
+
+			val asset = data?.assets?.find {
+				it.id == DEFAULT_ASSET_ID
+			}
+
+			if (asset != null) {
+				availableAsset = asset
+				settings.edit { putString(availableAssetField, availableAsset.toJson()) }
+			}
+		}
+	}
+
 	private fun loadAvailableAsset(callback: (() -> Unit)? = null) {
 		if (!UserConfig.isLoggedIn) {
 			return
@@ -258,7 +324,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		val req = ElloRpc.availableWalletAssetsRequest()
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val data = response.readData<ElloRpc.AvailableAssetsResponse>()
 				val asset = data?.assets?.find {
 					it.id == DEFAULT_ASSET_ID
@@ -266,7 +332,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 
 				if (asset != null) {
 					availableAsset = asset
-					settings.edit().putString(availableAssetField, availableAsset.toJson()).commit()
+					settings.edit { putString(availableAssetField, availableAsset.toJson()) }
 				}
 			}
 
@@ -280,10 +346,10 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		return suspendCoroutine {
 			val req = ElloRpc.getCalculateTransferFee(fromWalletId = fromWalletId, toWalletId = toWalletId, currency = currency, message = message, amount = amount)
 
-			connectionsManager.sendRequest(req, { response, error ->
+			connectionsManager.sendRequest(req, { response, _ ->
 				var fee: Float? = null
 
-				if (response is TLRPC.TL_biz_dataRaw) {
+				if (response is TLRPC.TLBizDataRaw) {
 					fee = response.readData<ElloRpc.CalculateTransferFeeResponse>()?.fee
 				}
 
@@ -293,7 +359,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 	}
 
 	@Synchronized
-	fun createWithdrawPaymentRequest(walletId: Long, amount: Float, currency: String = DEFAULT_CURRENCY, paypalEmail: String? = null, paymentId: String? = null, bankWithdrawRequisitesId: Long? = null, withdrawSystem: String? = null, callback: ((paymentId: String?, amount: Float?, amountFiat: Float?, withdrawMax: Float?, withdrawMin: Float?, fee: Float?, paymentSystemFee: Float?, error: TL_error?) -> Unit)? = null): Int {
+	fun createWithdrawPaymentRequest(walletId: Long, amount: Float, currency: String = DEFAULT_CURRENCY, paypalEmail: String? = null, paymentId: String? = null, bankWithdrawRequisitesId: Long? = null, withdrawSystem: String? = null, callback: ((paymentId: String?, amount: Float?, amountFiat: Float?, withdrawMax: Float?, withdrawMin: Float?, fee: Float?, paymentSystemFee: Float?, error: TLError?) -> Unit)? = null): Int {
 		if (withdrawPaymentRequestId != 0) {
 			connectionsManager.cancelRequest(withdrawPaymentRequestId, true)
 			withdrawPaymentRequestId = 0
@@ -310,7 +376,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 			var receiveAmount: Float? = null
 			var receiveAmountFiat: Float? = null
 
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val data = response.readData<ElloRpc.WithdrawPayment>()
 
 				receivedPaymentId = data?.paymentId
@@ -425,9 +491,7 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 		private const val DEFAULT_WALLET_TYPE = "main"
 		private const val EARNING_WALLET_TYPE = "earning"
 		const val DEFAULT_ASSET_ID = 2 // USD
-		const val minTopupAmount = 10f // 10 USD
-
-		// const val DEFAULT_CURRENCY_SYMBOL = "$"
+		const val MIN_TOPUP_AMOUNT = 10f // 10 USD
 		const val DEFAULT_CURRENCY = "usd"
 
 		@JvmStatic
@@ -448,10 +512,5 @@ class WalletHelper private constructor(num: Int) : BaseController(num) {
 
 			return localInstance!!
 		}
-
-//		fun assetSymbolToRealSymbol(symbol: String?) = when (symbol?.lowercase()) {
-//			"usd" -> "$"
-//			else -> DEFAULT_CURRENCY_SYMBOL
-//		}
 	}
 }

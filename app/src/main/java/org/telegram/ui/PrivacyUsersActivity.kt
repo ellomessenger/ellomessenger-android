@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -23,7 +23,8 @@ import org.telegram.messenger.MessagesController
 import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -475,10 +476,10 @@ class PrivacyUsersActivity : BaseFragment, NotificationCenterDelegate, ContactsA
 						val chat = messagesController.getChat(-uid)
 
 						if (chat != null) {
-							val subtitle = if (chat.participants_count != 0) {
-								LocaleController.formatPluralString("Members", chat.participants_count)
+							val subtitle = if (chat.participantsCount != 0) {
+								LocaleController.formatPluralString("Members", chat.participantsCount)
 							}
-							else if (chat.has_geo) {
+							else if (chat.hasGeo) {
 								userCell.context.getString(R.string.MegaLocation)
 							}
 							else if (chat.username.isNullOrEmpty()) {

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.sales
 
@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.LinearLayout
+import androidx.core.net.toUri
 import androidx.core.view.updateLayoutParams
 import androidx.core.widget.addTextChangedListener
 import com.beint.elloapp.FileHelper
@@ -34,7 +35,7 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_messages_sendMessage
+import org.telegram.tgnet.TLRPC.TLMessagesSendMessage
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.Components.BulletinFactory
@@ -393,23 +394,23 @@ class CreateMediaSaleFragment(args: Bundle) : BaseFragment(args), ChatAttachAler
 	private fun startMediaSale() {
 		binding?.startButton?.isEnabled = false
 
-		val req = TL_messages_sendMessage()
+		val req = TLMessagesSendMessage()
 		req.message = description
-		req.clear_draft = true
+		req.clearDraft = true
 		req.silent = false
 		req.peer = messagesController.getInputPeer(dialogId)
-		req.random_id = Utilities.random.nextLong()
-		req.no_webpage = true
-		req.is_media_sale = true
-		req.title = title
-		req.price = price?.toDouble() ?: 0.0
-		req.quantity = quantity ?: 0
+		req.randomId = Utilities.random.nextLong()
+		req.noWebpage = true
+		// req.is_media_sale = true
+		// req.title = title
+		// req.price = price?.toDouble() ?: 0.0
+		// req.quantity = quantity ?: 0
 		req.noforwards = true
 
-		val peer = TLRPC.TL_peerChannel()
-		peer.channel_id = dialogId
+		val peer = TLRPC.TLPeerChannel()
+		peer.channelId = dialogId
 
-		req.send_as = messagesController.getInputPeer(peer)
+		req.sendAs = messagesController.getInputPeer(peer)
 
 		connectionsManager.sendRequest(req, { response, error ->
 			if (error != null) {
@@ -422,10 +423,10 @@ class CreateMediaSaleFragment(args: Bundle) : BaseFragment(args), ChatAttachAler
 
 			var mediaHash: String? = null
 
-			if (response is TLRPC.TL_updates) {
+			if (response is TLRPC.TLUpdates) {
 				for (obj in response.updates) {
-					if (obj is TLRPC.TL_updateNewMessage) {
-						mediaHash = obj.message.mediaHash
+					if (obj is TLRPC.TLUpdateNewMessage) {
+						// mediaHash = obj.message.mediaHash
 						break
 					}
 				}
@@ -439,7 +440,7 @@ class CreateMediaSaleFragment(args: Bundle) : BaseFragment(args), ChatAttachAler
 				return@sendRequest
 			}
 
-			SendMessagesHelper.prepareSendingDocuments(accountInstance, mediasPaths, mediasOriginalPaths, uris, null, null, dialogId, null, null, null, null, true, 0, isMediaSale = true, mediaSaleHash = mediaHash)
+			SendMessagesHelper.prepareSendingDocuments(accountInstance, mediasPaths, mediasOriginalPaths, uris, null, null, dialogId, null, null, null, null, true, 0)
 
 			AndroidUtilities.runOnUIThread {
 				finishFragment()
@@ -511,7 +512,7 @@ class CreateMediaSaleFragment(args: Bundle) : BaseFragment(args), ChatAttachAler
 					if (index != -1) {
 						firstExtraction = firstExtraction.substring(0, index)
 						val secondExtraction = URLDecoder.decode(firstExtraction, "UTF-8")
-						uri = Uri.parse(secondExtraction)
+						uri = secondExtraction.toUri()
 					}
 				}.onFailure {
 					FileLog.e(it)

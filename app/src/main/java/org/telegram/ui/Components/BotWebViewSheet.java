@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -41,22 +41,18 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
 import org.telegram.ui.ActionBar.AlertDialog;
-import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ChatActivity;
 import org.telegram.ui.LaunchActivity;
-import org.telegram.ui.PaymentFormActivity;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.util.Locale;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
@@ -119,13 +115,13 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 
 	private final Runnable pollRunnable = () -> {
 		if (!dismissed) {
-			TLRPC.TL_messages_prolongWebView prolongWebView = new TLRPC.TL_messages_prolongWebView();
+			var prolongWebView = new TLRPC.TLMessagesProlongWebView();
 			prolongWebView.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
 			prolongWebView.peer = MessagesController.getInstance(currentAccount).getInputPeer(peerId);
-			prolongWebView.query_id = queryId;
+			prolongWebView.queryId = queryId;
 			prolongWebView.silent = silent;
 			if (replyToMsgId != 0) {
-				prolongWebView.reply_to_msg_id = replyToMsgId;
+				prolongWebView.replyToMsgId = replyToMsgId;
 				prolongWebView.flags |= 1;
 			}
 			ConnectionsManager.getInstance(currentAccount).sendRequest(prolongWebView, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
@@ -142,6 +138,7 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 		}
 	};
 
+	@SuppressLint("AppCompatCustomView")
 	public BotWebViewSheet(@NonNull Context context, Theme.ResourcesProvider resourcesProvider) {
 		super(context, R.style.TransparentDialog);
 		this.resourcesProvider = resourcesProvider;
@@ -203,15 +200,16 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 				}
 				sentWebViewData = true;
 
-				TLRPC.TL_messages_sendWebViewData sendWebViewData = new TLRPC.TL_messages_sendWebViewData();
+				var sendWebViewData = new TLRPC.TLMessagesSendWebViewData();
 				sendWebViewData.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
-				sendWebViewData.random_id = Utilities.random.nextLong();
-				sendWebViewData.button_text = buttonText;
+				sendWebViewData.randomId = Utilities.random.nextLong();
+				sendWebViewData.buttonText = buttonText;
 				sendWebViewData.data = data;
 				ConnectionsManager.getInstance(currentAccount).sendRequest(sendWebViewData, (response, error) -> {
-					if (response instanceof TLRPC.TL_updates) {
-						MessagesController.getInstance(currentAccount).processUpdates((TLRPC.TL_updates)response, false);
+					if (response instanceof TLRPC.Updates updates) {
+						MessagesController.getInstance(currentAccount).processUpdates(updates, false);
 					}
+
 					AndroidUtilities.runOnUIThread(BotWebViewSheet.this::dismiss);
 				});
 			}
@@ -219,12 +217,11 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 			@Override
 			public void onWebAppSetActionBarColor(int color) {
 				int from = actionBarColor;
-				int to = color;
 
 				ValueAnimator animator = ValueAnimator.ofFloat(0, 1).setDuration(200);
 				animator.setInterpolator(CubicBezierInterpolator.DEFAULT);
 				animator.addUpdateListener(animation -> {
-					actionBarColor = ColorUtils.blendARGB(from, to, (Float)animation.getAnimatedValue());
+					actionBarColor = ColorUtils.blendARGB(from, color, (Float)animation.getAnimatedValue());
 					frameLayout.invalidate();
 				});
 				animator.start();
@@ -247,37 +244,6 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 			@Override
 			public void onSetBackButtonVisible(boolean visible) {
 				AndroidUtilities.updateImageViewImageAnimated(actionBar.getBackButton(), visible ? R.drawable.ic_back_arrow : R.drawable.ic_close_white);
-			}
-
-			@Override
-			public void onWebAppOpenInvoice(String slug, TLObject response) {
-				BaseFragment parentFragment = ((LaunchActivity)parentActivity).getActionBarLayout().getLastFragment();
-				PaymentFormActivity paymentFormActivity = null;
-				if (response instanceof TLRPC.TL_payments_paymentForm) {
-					TLRPC.TL_payments_paymentForm form = (TLRPC.TL_payments_paymentForm)response;
-					MessagesController.getInstance(currentAccount).putUsers(form.users, false);
-					paymentFormActivity = new PaymentFormActivity(form, slug, parentFragment);
-				}
-				else if (response instanceof TLRPC.TL_payments_paymentReceipt) {
-					paymentFormActivity = new PaymentFormActivity((TLRPC.TL_payments_paymentReceipt)response);
-				}
-
-				if (paymentFormActivity != null) {
-					swipeContainer.stickTo(-swipeContainer.getOffsetY() + swipeContainer.getTopActionBarOffsetY());
-
-					AndroidUtilities.hideKeyboard(frameLayout);
-					OverlayActionBarLayoutDialog overlayActionBarLayoutDialog = new OverlayActionBarLayoutDialog(context);
-					overlayActionBarLayoutDialog.show();
-					paymentFormActivity.setPaymentFormCallback(status -> {
-						if (status != PaymentFormActivity.InvoiceStatus.PENDING) {
-							overlayActionBarLayoutDialog.dismiss();
-						}
-
-						webViewContainer.onInvoiceStatusUpdate(slug, status.name().toLowerCase(Locale.ROOT));
-					});
-					paymentFormActivity.setResourcesProvider(resourcesProvider);
-					overlayActionBarLayoutDialog.addFragment(paymentFormActivity);
-				}
 			}
 
 			@Override
@@ -343,7 +309,7 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 			}
 
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				super.onDraw(canvas);
 
 				if (!overrideBackgroundColor) {
@@ -362,7 +328,7 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 			}
 
 			@Override
-			public void draw(Canvas canvas) {
+			public void draw(@NonNull Canvas canvas) {
 				super.draw(canvas);
 
 				float transitionProgress = AndroidUtilities.isTablet() ? 0 : actionBarTransitionProgress;
@@ -696,7 +662,7 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 		webViewContainer.loadFlickerAndSettingsItem(currentAccount, botId, settingsItem);
 		switch (type) {
 			case TYPE_BOT_MENU_BUTTON: {
-				TLRPC.TL_messages_requestWebView req = new TLRPC.TL_messages_requestWebView();
+				var req = new TLRPC.TLMessagesRequestWebView();
 				req.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
 				req.peer = MessagesController.getInstance(currentAccount).getInputPeer(botId);
 				req.platform = "android";
@@ -705,15 +671,14 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 				req.flags |= 2;
 
 				if (hasThemeParams) {
-					req.theme_params = new TLRPC.TL_dataJSON();
-					req.theme_params.data = themeParams;
+					req.themeParams = new TLRPC.TLDataJSON();
+					req.themeParams.data = themeParams;
 					req.flags |= 4;
 				}
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-					if (response instanceof TLRPC.TL_webViewResultUrl) {
-						TLRPC.TL_webViewResultUrl resultUrl = (TLRPC.TL_webViewResultUrl)response;
-						queryId = resultUrl.query_id;
+					if (response instanceof TLRPC.TLWebViewResult resultUrl) {
+						queryId = resultUrl.queryId;
 						webViewContainer.loadUrl(currentAccount, resultUrl.url);
 						swipeContainer.setWebView(webViewContainer.getWebView());
 
@@ -725,19 +690,18 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 				break;
 			}
 			case TYPE_SIMPLE_WEB_VIEW_BUTTON: {
-				TLRPC.TL_messages_requestSimpleWebView req = new TLRPC.TL_messages_requestSimpleWebView();
+				var req = new TLRPC.TLMessagesRequestSimpleWebView();
 				req.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
 				req.platform = "android";
 				if (hasThemeParams) {
-					req.theme_params = new TLRPC.TL_dataJSON();
-					req.theme_params.data = themeParams;
+					req.themeParams = new TLRPC.TLDataJSON();
+					req.themeParams.data = themeParams;
 					req.flags |= 1;
 				}
 				req.url = buttonUrl;
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-					if (response instanceof TLRPC.TL_simpleWebViewResultUrl) {
-						TLRPC.TL_simpleWebViewResultUrl resultUrl = (TLRPC.TL_simpleWebViewResultUrl)response;
+					if (response instanceof TLRPC.TLSimpleWebViewResult resultUrl) {
 						queryId = 0;
 						webViewContainer.loadUrl(currentAccount, resultUrl.url);
 						swipeContainer.setWebView(webViewContainer.getWebView());
@@ -746,7 +710,7 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 				break;
 			}
 			case TYPE_WEB_VIEW_BUTTON: {
-				TLRPC.TL_messages_requestWebView req = new TLRPC.TL_messages_requestWebView();
+				var req = new TLRPC.TLMessagesRequestWebView();
 				req.peer = MessagesController.getInstance(currentAccount).getInputPeer(peerId);
 				req.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
 				req.platform = "android";
@@ -756,20 +720,19 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 				}
 
 				if (replyToMsgId != 0) {
-					req.reply_to_msg_id = replyToMsgId;
+					req.replyToMsgId = replyToMsgId;
 					req.flags |= 1;
 				}
 
 				if (hasThemeParams) {
-					req.theme_params = new TLRPC.TL_dataJSON();
-					req.theme_params.data = themeParams;
+					req.themeParams = new TLRPC.TLDataJSON();
+					req.themeParams.data = themeParams;
 					req.flags |= 4;
 				}
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-					if (response instanceof TLRPC.TL_webViewResultUrl) {
-						TLRPC.TL_webViewResultUrl resultUrl = (TLRPC.TL_webViewResultUrl)response;
-						queryId = resultUrl.query_id;
+					if (response instanceof TLRPC.TLWebViewResult resultUrl) {
+						queryId = resultUrl.queryId;
 						webViewContainer.loadUrl(currentAccount, resultUrl.url);
 						swipeContainer.setWebView(webViewContainer.getWebView());
 
@@ -828,7 +791,7 @@ public class BotWebViewSheet extends Dialog implements NotificationCenter.Notifi
 			String botName = null;
 			User user = MessagesController.getInstance(currentAccount).getUser(botId);
 			if (user != null) {
-				botName = ContactsController.formatName(user.getFirst_name(), user.getLast_name());
+				botName = ContactsController.formatName(user.firstName, user.lastName);
 			}
 
 			AlertDialog dialog = new AlertDialog.Builder(getContext()).setTitle(botName).setMessage(getContext().getString(R.string.BotWebViewChangesMayNotBeSaved)).setPositiveButton(getContext().getString(R.string.BotWebViewCloseAnyway), (dialog2, which) -> dismiss()).setNegativeButton(getContext().getString(R.string.Cancel), null).create();

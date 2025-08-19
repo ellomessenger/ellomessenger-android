@@ -50,6 +50,11 @@ class VideoEncodingService : Service(), NotificationCenter.NotificationCenterDel
 		NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.fileUploadProgressChanged)
 	}
 
+	override fun onTimeout(startId: Int) {
+		super.onTimeout(startId)
+		stopSelf(startId)
+	}
+
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {
 		@Suppress("NAME_SHADOWING") var account = account
 

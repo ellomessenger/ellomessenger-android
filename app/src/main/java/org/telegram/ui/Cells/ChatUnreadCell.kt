@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Cells
 
@@ -26,10 +26,9 @@ import org.telegram.ui.Components.LayoutHelper.createFrame
 class ChatUnreadCell(context: Context) : FrameLayout(context) {
 	val textView: TextView
 	val imageView: ImageView
-	private val backgroundLayout: FrameLayout
+	private val backgroundLayout = FrameLayout(context)
 
 	init {
-		backgroundLayout = FrameLayout(context)
 		backgroundLayout.setBackgroundResource(R.drawable.newmsg_divider)
 		backgroundLayout.background.colorFilter = PorterDuffColorFilter(ResourcesCompat.getColor(context.resources, R.color.background, null), PorterDuff.Mode.SRC_IN)
 

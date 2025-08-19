@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -142,9 +142,9 @@ import org.telegram.messenger.ChatObject.hasAdminRights
 import org.telegram.messenger.ChatObject.isActionBannedByDefault
 import org.telegram.messenger.ChatObject.isChannel
 import org.telegram.messenger.ChatObject.isChannelAndNotMegaGroup
+import org.telegram.messenger.ChatObject.isMasterclass
 import org.telegram.messenger.ChatObject.isMegagroup
 import org.telegram.messenger.ChatObject.isNotInChat
-import org.telegram.messenger.ChatObject.isOnlineCourse
 import org.telegram.messenger.ChatObject.isPaidChannel
 import org.telegram.messenger.ChatObject.reactionIsAvailable
 import org.telegram.messenger.ChatThemeController
@@ -170,7 +170,6 @@ import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.NotificationCenter.PostponeNotificationCallback
 import org.telegram.messenger.NotificationsController
 import org.telegram.messenger.R
-import org.telegram.messenger.SecretChatHelper
 import org.telegram.messenger.SendMessagesHelper
 import org.telegram.messenger.SendMessagesHelper.Companion.checkUpdateStickersOrder
 import org.telegram.messenger.SendMessagesHelper.Companion.createVideoThumbnail
@@ -201,164 +200,153 @@ import org.telegram.messenger.support.LongSparseIntArray
 import org.telegram.messenger.utils.LinkClickListener
 import org.telegram.messenger.utils.createCombinedChatPropertiesDrawable
 import org.telegram.messenger.utils.gone
-import org.telegram.messenger.utils.hasServiceMessagesOnly
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
 import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.messenger.voip.VoIPService.Companion.sharedInstance
-import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.ElloRpc
+import org.telegram.tgnet.*
 import org.telegram.tgnet.ElloRpc.RichVerifyResponse
 import org.telegram.tgnet.ElloRpc.readData
+import org.telegram.tgnet.ElloRpc.readString
 import org.telegram.tgnet.ElloRpc.subscribeRequest
 import org.telegram.tgnet.ElloRpc.userCheckHasDialog
-import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.BotInfo
 import org.telegram.tgnet.TLRPC.BotInlineResult
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
+import org.telegram.tgnet.TLRPC.ChatInvite
 import org.telegram.tgnet.TLRPC.EncryptedChat
 import org.telegram.tgnet.TLRPC.FileLocation
 import org.telegram.tgnet.TLRPC.InputStickerSet
 import org.telegram.tgnet.TLRPC.KeyboardButton
+import org.telegram.tgnet.TLRPC.Message
 import org.telegram.tgnet.TLRPC.MessageAction
+import org.telegram.tgnet.TLRPC.MessageEntity
 import org.telegram.tgnet.TLRPC.MessageExtendedMedia
 import org.telegram.tgnet.TLRPC.MessageMedia
-import org.telegram.tgnet.TLRPC.MessageReplies
+import org.telegram.tgnet.TLRPC.MessagesMessages
 import org.telegram.tgnet.TLRPC.PhotoSize
-import org.telegram.tgnet.TLRPC.PollResults
-import org.telegram.tgnet.TLRPC.TL_attachMenuBotsBot
-import org.telegram.tgnet.TLRPC.TL_biz_dataRaw
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaAuto
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaInvoice
-import org.telegram.tgnet.TLRPC.TL_channelForbidden
-import org.telegram.tgnet.TLRPC.TL_channelFull
-import org.telegram.tgnet.TLRPC.TL_channels_exportMessageLink
-import org.telegram.tgnet.TLRPC.TL_channels_sendAsPeers
-import org.telegram.tgnet.TLRPC.TL_channels_viewSponsoredMessage
-import org.telegram.tgnet.TLRPC.TL_chatFull
-import org.telegram.tgnet.TLRPC.TL_chatInviteExported
-import org.telegram.tgnet.TLRPC.TL_chatReactionsNone
-import org.telegram.tgnet.TLRPC.TL_contacts_resolveUsername
-import org.telegram.tgnet.TLRPC.TL_contacts_resolvedPeer
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionSetMessageTTL
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentEmpty
-import org.telegram.tgnet.TLRPC.TL_emojiStatus
-import org.telegram.tgnet.TLRPC.TL_emojiStatusUntil
-import org.telegram.tgnet.TLRPC.TL_encryptedChat
-import org.telegram.tgnet.TLRPC.TL_encryptedChatDiscarded
-import org.telegram.tgnet.TLRPC.TL_encryptedChatRequested
-import org.telegram.tgnet.TLRPC.TL_encryptedChatWaiting
-import org.telegram.tgnet.TLRPC.TL_fileLocationUnavailable
-import org.telegram.tgnet.TLRPC.TL_game
-import org.telegram.tgnet.TLRPC.TL_groupCall
-import org.telegram.tgnet.TLRPC.TL_inlineBotSwitchPM
-import org.telegram.tgnet.TLRPC.TL_inputMediaPoll
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetID
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetShortName
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonBuy
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonCallback
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonGame
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonSwitchInline
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonUrl
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonUrlAuth
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonUserProfile
-import org.telegram.tgnet.TLRPC.TL_messageActionChannelMigrateFrom
-import org.telegram.tgnet.TLRPC.TL_messageActionChatAddUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatCreate
-import org.telegram.tgnet.TLRPC.TL_messageActionChatDeleteUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatEditPhoto
-import org.telegram.tgnet.TLRPC.TL_messageActionChatJoinedByRequest
-import org.telegram.tgnet.TLRPC.TL_messageActionChatMigrateTo
-import org.telegram.tgnet.TLRPC.TL_messageActionEmpty
-import org.telegram.tgnet.TLRPC.TL_messageActionGameScore
-import org.telegram.tgnet.TLRPC.TL_messageActionGeoProximityReached
-import org.telegram.tgnet.TLRPC.TL_messageActionGiftPremium
-import org.telegram.tgnet.TLRPC.TL_messageActionGroupCall
-import org.telegram.tgnet.TLRPC.TL_messageActionGroupCallScheduled
-import org.telegram.tgnet.TLRPC.TL_messageActionInviteToGroupCall
-import org.telegram.tgnet.TLRPC.TL_messageActionPaymentSent
-import org.telegram.tgnet.TLRPC.TL_messageActionPhoneCall
-import org.telegram.tgnet.TLRPC.TL_messageActionPinMessage
-import org.telegram.tgnet.TLRPC.TL_messageActionSecureValuesSent
-import org.telegram.tgnet.TLRPC.TL_messageActionSetChatTheme
-import org.telegram.tgnet.TLRPC.TL_messageActionSetMessagesTTL
-import org.telegram.tgnet.TLRPC.TL_messageEmpty
-import org.telegram.tgnet.TLRPC.TL_messageEncryptedAction
-import org.telegram.tgnet.TLRPC.TL_messageMediaContact
-import org.telegram.tgnet.TLRPC.TL_messageMediaGame
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messageMediaPoll
-import org.telegram.tgnet.TLRPC.TL_messageMediaWebPage
-import org.telegram.tgnet.TLRPC.TL_messageReplies
-import org.telegram.tgnet.TLRPC.TL_messages_acceptUrlAuth
-import org.telegram.tgnet.TLRPC.TL_messages_discussionMessage
-import org.telegram.tgnet.TLRPC.TL_messages_getAttachMenuBot
-import org.telegram.tgnet.TLRPC.TL_messages_getDiscussionMessage
-import org.telegram.tgnet.TLRPC.TL_messages_getHistory
-import org.telegram.tgnet.TLRPC.TL_messages_getMessageEditData
-import org.telegram.tgnet.TLRPC.TL_messages_getReplies
-import org.telegram.tgnet.TLRPC.TL_messages_getUnreadMentions
-import org.telegram.tgnet.TLRPC.TL_messages_getWebPagePreview
-import org.telegram.tgnet.TLRPC.TL_messages_rateTranscribedAudio
-import org.telegram.tgnet.TLRPC.TL_messages_requestUrlAuth
-import org.telegram.tgnet.TLRPC.TL_messages_sendScheduledMessages
-import org.telegram.tgnet.TLRPC.TL_messages_toggleBotInAttachMenu
-import org.telegram.tgnet.TLRPC.TL_payments_bankCardData
-import org.telegram.tgnet.TLRPC.TL_payments_getBankCardData
-import org.telegram.tgnet.TLRPC.TL_payments_getPaymentReceipt
-import org.telegram.tgnet.TLRPC.TL_payments_paymentReceipt
-import org.telegram.tgnet.TLRPC.TL_peerChannel
-import org.telegram.tgnet.TLRPC.TL_peerChat
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonBusy
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonMissed
-import org.telegram.tgnet.TLRPC.TL_photoEmpty
-import org.telegram.tgnet.TLRPC.TL_photoSizeEmpty
-import org.telegram.tgnet.TLRPC.TL_poll
-import org.telegram.tgnet.TLRPC.TL_pollAnswer
-import org.telegram.tgnet.TLRPC.TL_premiumGiftOption
-import org.telegram.tgnet.TLRPC.TL_replyInlineMarkup
-import org.telegram.tgnet.TLRPC.TL_replyKeyboardForceReply
-import org.telegram.tgnet.TLRPC.TL_updates_channelDifferenceTooLong
-import org.telegram.tgnet.TLRPC.TL_urlAuthResultAccepted
-import org.telegram.tgnet.TLRPC.TL_urlAuthResultDefault
-import org.telegram.tgnet.TLRPC.TL_urlAuthResultRequest
-import org.telegram.tgnet.TLRPC.TL_user
-import org.telegram.tgnet.TLRPC.TL_webPage
-import org.telegram.tgnet.TLRPC.TL_webPageEmpty
-import org.telegram.tgnet.TLRPC.TL_webPagePending
-import org.telegram.tgnet.TLRPC.TL_webPageUrlPending
-import org.telegram.tgnet.TLRPC.Updates
+import org.telegram.tgnet.TLRPC.TLAttachMenuBotsBot
+import org.telegram.tgnet.TLRPC.TLBizDataRaw
+import org.telegram.tgnet.TLRPC.TLBotInfo
+import org.telegram.tgnet.TLRPC.TLBotInlineMessageMediaAuto
+import org.telegram.tgnet.TLRPC.TLBotInlineMessageMediaInvoice
+import org.telegram.tgnet.TLRPC.TLChannelForbidden
+import org.telegram.tgnet.TLRPC.TLChannelFull
+import org.telegram.tgnet.TLRPC.TLChannelsExportMessageLink
+import org.telegram.tgnet.TLRPC.TLChannelsSendAsPeers
+import org.telegram.tgnet.TLRPC.TLChannelsViewSponsoredMessage
+import org.telegram.tgnet.TLRPC.TLChatFull
+import org.telegram.tgnet.TLRPC.TLChatInviteExported
+import org.telegram.tgnet.TLRPC.TLChatReactionsNone
+import org.telegram.tgnet.TLRPC.TLContactsResolveUsername
+import org.telegram.tgnet.TLRPC.TLContactsResolvedPeer
+import org.telegram.tgnet.TLRPC.TLDocument
+import org.telegram.tgnet.TLRPC.TLDocumentEmpty
+import org.telegram.tgnet.TLRPC.TLEmojiStatus
+import org.telegram.tgnet.TLRPC.TLEmojiStatusUntil
+import org.telegram.tgnet.TLRPC.TLEncryptedChat
+import org.telegram.tgnet.TLRPC.TLEncryptedChatDiscarded
+import org.telegram.tgnet.TLRPC.TLEncryptedChatRequested
+import org.telegram.tgnet.TLRPC.TLEncryptedChatWaiting
+import org.telegram.tgnet.TLRPC.TLError
+import org.telegram.tgnet.TLRPC.TLFileLocationUnavailable
+import org.telegram.tgnet.TLRPC.TLGame
+import org.telegram.tgnet.TLRPC.TLGroupCall
+import org.telegram.tgnet.TLRPC.TLInlineBotSwitchPM
+import org.telegram.tgnet.TLRPC.TLInputMediaPoll
+import org.telegram.tgnet.TLRPC.TLInputMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLInputStickerSetID
+import org.telegram.tgnet.TLRPC.TLInputStickerSetShortName
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonBuy
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonCallback
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonGame
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonSwitchInline
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonUrl
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonUrlAuth
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonUserProfile
+import org.telegram.tgnet.TLRPC.TLMessage
+import org.telegram.tgnet.TLRPC.TLMessageActionChannelMigrateFrom
+import org.telegram.tgnet.TLRPC.TLMessageActionChatAddUser
+import org.telegram.tgnet.TLRPC.TLMessageActionChatCreate
+import org.telegram.tgnet.TLRPC.TLMessageActionChatDeleteUser
+import org.telegram.tgnet.TLRPC.TLMessageActionChatEditPhoto
+import org.telegram.tgnet.TLRPC.TLMessageActionChatJoinedByRequest
+import org.telegram.tgnet.TLRPC.TLMessageActionChatMigrateTo
+import org.telegram.tgnet.TLRPC.TLMessageActionEmpty
+import org.telegram.tgnet.TLRPC.TLMessageActionGameScore
+import org.telegram.tgnet.TLRPC.TLMessageActionGeoProximityReached
+import org.telegram.tgnet.TLRPC.TLMessageActionGiftPremium
+import org.telegram.tgnet.TLRPC.TLMessageActionGroupCall
+import org.telegram.tgnet.TLRPC.TLMessageActionGroupCallScheduled
+import org.telegram.tgnet.TLRPC.TLMessageActionInviteToGroupCall
+import org.telegram.tgnet.TLRPC.TLMessageActionPaymentSent
+import org.telegram.tgnet.TLRPC.TLMessageActionPhoneCall
+import org.telegram.tgnet.TLRPC.TLMessageActionPinMessage
+import org.telegram.tgnet.TLRPC.TLMessageActionSecureValuesSent
+import org.telegram.tgnet.TLRPC.TLMessageActionSetChatTheme
+import org.telegram.tgnet.TLRPC.TLMessageActionSetMessagesTTL
+import org.telegram.tgnet.TLRPC.TLMessageEmpty
+import org.telegram.tgnet.TLRPC.TLMessageEntityBold
+import org.telegram.tgnet.TLRPC.TLMessageEntityCode
+import org.telegram.tgnet.TLRPC.TLMessageEntityCustomEmoji
+import org.telegram.tgnet.TLRPC.TLMessageEntityItalic
+import org.telegram.tgnet.TLRPC.TLMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLMessageEntityPre
+import org.telegram.tgnet.TLRPC.TLMessageEntitySpoiler
+import org.telegram.tgnet.TLRPC.TLMessageEntityStrike
+import org.telegram.tgnet.TLRPC.TLMessageEntityTextUrl
+import org.telegram.tgnet.TLRPC.TLMessageEntityUnderline
+import org.telegram.tgnet.TLRPC.TLMessageMediaContact
+import org.telegram.tgnet.TLRPC.TLMessageMediaGame
+import org.telegram.tgnet.TLRPC.TLMessageMediaPhoto
+import org.telegram.tgnet.TLRPC.TLMessageMediaPoll
+import org.telegram.tgnet.TLRPC.TLMessageMediaWebPage
+import org.telegram.tgnet.TLRPC.TLMessageReactions
+import org.telegram.tgnet.TLRPC.TLMessageReplies
+import org.telegram.tgnet.TLRPC.TLMessagesAcceptUrlAuth
+import org.telegram.tgnet.TLRPC.TLMessagesDiscussionMessage
+import org.telegram.tgnet.TLRPC.TLMessagesEditMessage
+import org.telegram.tgnet.TLRPC.TLMessagesGetAttachMenuBot
+import org.telegram.tgnet.TLRPC.TLMessagesGetDiscussionMessage
+import org.telegram.tgnet.TLRPC.TLMessagesGetHistory
+import org.telegram.tgnet.TLRPC.TLMessagesGetMessageEditData
+import org.telegram.tgnet.TLRPC.TLMessagesGetReplies
+import org.telegram.tgnet.TLRPC.TLMessagesGetUnreadMentions
+import org.telegram.tgnet.TLRPC.TLMessagesGetWebPagePreview
+import org.telegram.tgnet.TLRPC.TLMessagesRateTranscribedAudio
+import org.telegram.tgnet.TLRPC.TLMessagesRequestUrlAuth
+import org.telegram.tgnet.TLRPC.TLMessagesSendScheduledMessages
+import org.telegram.tgnet.TLRPC.TLMessagesToggleBotInAttachMenu
+import org.telegram.tgnet.TLRPC.TLPeerChannel
+import org.telegram.tgnet.TLRPC.TLPeerChat
+import org.telegram.tgnet.TLRPC.TLPeerUser
+import org.telegram.tgnet.TLRPC.TLPhoneCallDiscardReasonBusy
+import org.telegram.tgnet.TLRPC.TLPhoneCallDiscardReasonMissed
+import org.telegram.tgnet.TLRPC.TLPhotoEmpty
+import org.telegram.tgnet.TLRPC.TLPhotoSizeEmpty
+import org.telegram.tgnet.TLRPC.TLPoll
+import org.telegram.tgnet.TLRPC.TLPollAnswer
+import org.telegram.tgnet.TLRPC.TLPollResults
+import org.telegram.tgnet.TLRPC.TLPremiumGiftOption
+import org.telegram.tgnet.TLRPC.TLReactionCount
+import org.telegram.tgnet.TLRPC.TLReactionEmoji
+import org.telegram.tgnet.TLRPC.TLReplyInlineMarkup
+import org.telegram.tgnet.TLRPC.TLReplyKeyboardForceReply
+import org.telegram.tgnet.TLRPC.TLUpdatesChannelDifferenceTooLong
+import org.telegram.tgnet.TLRPC.TLUrlAuthResultAccepted
+import org.telegram.tgnet.TLRPC.TLUrlAuthResultDefault
+import org.telegram.tgnet.TLRPC.TLUrlAuthResultRequest
+import org.telegram.tgnet.TLRPC.TLUser
+import org.telegram.tgnet.TLRPC.TLUserFull
 import org.telegram.tgnet.TLRPC.VideoSize
+import org.telegram.tgnet.TLRPC.TLWebPage
+import org.telegram.tgnet.TLRPC.TLWebPageEmpty
+import org.telegram.tgnet.TLRPC.TLWebPagePending
+import org.telegram.tgnet.TLRPC.Updates
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.tgnet.TLRPC.WebPage
-import org.telegram.tgnet.tlrpc.ChatInvite
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.MessageEntity
-import org.telegram.tgnet.tlrpc.ReactionCount
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.tlrpc.TL_inputMessageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_message
-import org.telegram.tgnet.tlrpc.TL_messageEntityBold
-import org.telegram.tgnet.tlrpc.TL_messageEntityCode
-import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_messageEntityItalic
-import org.telegram.tgnet.tlrpc.TL_messageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_messageEntityPre
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.TL_messageEntityStrike
-import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
-import org.telegram.tgnet.tlrpc.TL_messageEntityUnderline
-import org.telegram.tgnet.tlrpc.TL_messageReactions
-import org.telegram.tgnet.tlrpc.TL_messages_editMessage
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.UserFull
-import org.telegram.tgnet.tlrpc.messages_Messages
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -475,7 +463,6 @@ import org.telegram.ui.Components.RecyclerListView.OnMultiSelectionChanged
 import org.telegram.ui.Components.ReportAlert
 import org.telegram.ui.Components.SearchCounterView
 import org.telegram.ui.Components.ShareAlert
-import org.telegram.ui.Components.SharedMediaLayout
 import org.telegram.ui.Components.SizeNotifierFrameLayout
 import org.telegram.ui.Components.StickersAlert
 import org.telegram.ui.Components.SubscribeToChannelAlert
@@ -493,6 +480,8 @@ import org.telegram.ui.Components.URLSpanReplacement
 import org.telegram.ui.Components.URLSpanUserMention
 import org.telegram.ui.Components.UndoView
 import org.telegram.ui.Components.ViewHelper
+import org.telegram.ui.Components.sharedmedia.SharedMediaLayout
+import org.telegram.ui.Components.voip.VoIPHelper
 import org.telegram.ui.Components.voip.VoIPHelper.canRateCall
 import org.telegram.ui.Components.voip.VoIPHelper.permissionDenied
 import org.telegram.ui.Components.voip.VoIPHelper.showGroupCallAlert
@@ -506,17 +495,24 @@ import org.telegram.ui.PhotoAlbumPickerActivity.PhotoAlbumPickerActivityDelegate
 import org.telegram.ui.PhotoViewer.EmptyPhotoViewerProvider
 import org.telegram.ui.PhotoViewer.PhotoViewerProvider
 import org.telegram.ui.PhotoViewer.PlaceProviderObject
-import org.telegram.ui.aibot.AiSubscriptionPlansFragment
+import org.telegram.ui.aibot.AiPurchaseFragment
 import org.telegram.ui.channel.SubscriptionResultFragment
 import org.telegram.ui.group.GroupCallActivity
 import org.telegram.ui.group.GroupCreateActivity.ContactsAddActivityDelegate
+import org.telegram.ui.profile.wallet.PaymentMethodsFragment
+import org.telegram.ui.profile.wallet.PlayTopupFragment
+import org.telegram.ui.profile.wallet.WalletFragment
+import org.telegram.ui.profile.wallet.WalletFragment.Companion.ARG_WALLET_ID
 import org.telegram.ui.statistics.MessageStatisticActivity
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileOutputStream
 import java.io.FileWriter
 import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.Arrays
 import java.util.Calendar
 import java.util.Collections
@@ -568,7 +564,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	private val endReached = BooleanArray(2)
 	private val cacheEndReached = BooleanArray(2)
 	private val forwardEndReached = booleanArrayOf(true, true)
-	private val botInfo = LongSparseArray<BotInfo>()
+	private val botInfo = LongSparseArray<TLBotInfo>()
 	private val actionBarBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 	private val chatScrollHelperCallback = ChatScrollCallback()
 	var animatingMessageObjects = mutableListOf<MessageObject>()
@@ -610,7 +606,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	@JvmField
 	val messages = mutableListOf<MessageObject>()
 
-	var currentUserInfo: UserFull? = null
+	var currentUserInfo: TLUserFull? = null
 		protected set
 
 	protected var openKeyboardOnAttachMenuClose = false
@@ -623,6 +619,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	var updatePinnedProgressRunnable: Runnable? = null
 	var bulletinDelegate: Bulletin.Delegate? = null
 	var updateReactionRunnable: Runnable? = null
+	var retrySubscribe = false
 	private var forwardingPreviewView: ForwardingPreviewView? = null
 	private var userBlocked = false
 	private var chatInviterId: Long = 0
@@ -701,6 +698,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	private var reportSpamViewAnimator: AnimatorSet? = null
 	private var addToContactsButton: TextView? = null
 	private var botFreeBalanceView: TextView? = null
+	private var modelLogoImageView: ImageView? = null
 	private var botTopViewContainer: FrameLayout? = null
 	private var addToContactsButtonArchive = false
 	private var reportSpamButton: TextView? = null
@@ -720,6 +718,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	private var searchAsListHint: HintView? = null
 	private var scheduledOrNoSoundHint: HintView? = null
 	private var isCommandPromoCode = false
+	private var isPromoInFirstMessages = false
 
 	private val showScheduledOrNoSoundRunnable = Runnable {
 		val chatActivityEnterView = chatActivityEnterView
@@ -787,6 +786,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	private var searchUpButton: ImageView? = null
 	private var searchDownButton: ImageView? = null
 	private var searchCountText: SearchCounterView? = null
+	private var showListText: TextView? = null
 	private var floatingDateView: ChatActionCell? = null
 	private var infoTopView: ChatActionCell? = null
 	private var hideDateDelay = 500
@@ -965,7 +965,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				return
 			}
 
-			val remaining = max(0, selectedObject!!.messageOwner!!.ttl_period - (connectionsManager.currentTime - selectedObject!!.messageOwner!!.date))
+			val remaining = max(0, selectedObject!!.messageOwner!!.ttlPeriod - (connectionsManager.currentTime - selectedObject!!.messageOwner!!.date))
 
 			val remainingStr = if (remaining < 24 * 60 * 60) {
 				AndroidUtilities.formatDuration(remaining, false)
@@ -1123,7 +1123,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	private var chatThemeBottomSheet: ChatThemeBottomSheet? = null
 	private var pendingRequestsDelegate: ChatActivityMemberRequestsDelegate? = null
 
-	var sendAsPeers: TL_channels_sendAsPeers? = null
+	var sendAsPeers: TLChannelsSendAsPeers? = null
 		private set
 
 	private var chatEmojiViewPadding = 0
@@ -1210,8 +1210,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	private var commentRequestId = 0
 	private var commentMessagesRequestId = 0
 	private var commentLoadingMessageId = 0
-	private var savedDiscussionMessage: TL_messages_discussionMessage? = null
-	private var savedHistory: messages_Messages? = null
+	private var savedDiscussionMessage: TLMessagesDiscussionMessage? = null
+	private var savedHistory: MessagesMessages? = null
 	private var savedNoHistory = false
 	private var savedNoDiscussion = false
 	private var isChatBotStarted = false
@@ -1221,6 +1221,17 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 	private var botHelpCell: BotHelpCell? = null
 	private var showBotHelpCell = false
+
+	val logoDrawables = listOf(
+			R.drawable.default_purchase_logo,
+			R.drawable.open_ai_logo,
+			R.drawable.claude_logo,
+			R.drawable.gemini_logo,
+			R.drawable.llama_logo,
+			R.drawable.leonardo_logo,
+			R.drawable.stability_ai_logo,
+			R.drawable.dall_e_logo,
+	)
 
 	fun deleteHistory(dateSelectedStart: Int, dateSelectedEnd: Int, forAll: Boolean) {
 		chatAdapter?.frozenMessages?.clear()
@@ -1535,13 +1546,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 			}
 
-			currentUser = messagesController.getUser(currentEncryptedChat!!.user_id)
+			currentUser = messagesController.getUser(currentEncryptedChat!!.userId)
 
 			if (currentUser == null) {
 				val countDownLatch = CountDownLatch(1)
 
 				messagesStorage.storageQueue.postRunnable {
-					currentUser = messagesStorage.getUser(currentEncryptedChat!!.user_id)
+					currentUser = messagesStorage.getUser(currentEncryptedChat!!.userId)
 					countDownLatch.countDown()
 				}
 
@@ -1759,9 +1770,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				messagesStorage.loadChatInfo(currentChat!!.id, isChannel(currentChat), null, true, false)
 			}
 
-			if (chatMode == 0 && currentChatInfo != null && isChannel(currentChat) && currentChatInfo!!.migrated_from_chat_id != 0L && !isThreadChat) {
-				mergeDialogId = -currentChatInfo!!.migrated_from_chat_id
-				maxMessageId[1] = currentChatInfo!!.migrated_from_max_id
+			if (chatMode == 0 && currentChatInfo != null && isChannel(currentChat) && currentChatInfo!!.migratedFromChatId != 0L && !isThreadChat) {
+				mergeDialogId = -currentChatInfo!!.migratedFromChatId
+				maxMessageId[1] = currentChatInfo!!.migratedFromMaxId
 			}
 
 			loadInfo = currentChatInfo == null
@@ -1823,13 +1834,16 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			else {
 				val currentChatInfo = currentChatInfo
 
-				if (currentChatInfo is TL_chatFull) {
-					for (a in currentChatInfo.participants.participants.indices) {
-						val participant = currentChatInfo.participants.participants[a]
-						val user = messagesController.getUser(participant.user_id)
+				if (currentChatInfo is TLChatFull) {
+					val participants = currentChatInfo.participants?.participants
 
-						if (user != null && user.bot) {
-							mediaDataController.loadBotInfo(user.id, -currentChatInfo.id, true, classGuid)
+					if (!participants.isNullOrEmpty()) {
+						for (participant in participants) {
+							val user = messagesController.getUser(participant.userId)
+
+							if (user != null && user.bot) {
+								mediaDataController.loadBotInfo(user.id, -currentChatInfo.id, true, classGuid)
+							}
 						}
 					}
 				}
@@ -1843,13 +1857,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				userBlocked = messagesController.blockedPeers.indexOfKey(currentUser!!.id) >= 0
 			}
 
-			if (currentEncryptedChat != null && AndroidUtilities.getMyLayerVersion(currentEncryptedChat!!.layer) != SecretChatHelper.CURRENT_SECRET_CHAT_LAYER) {
-				secretChatHelper.sendNotifyLayerMessage(currentEncryptedChat, null)
-			}
+			// MARK: uncomment to enable secret chats
+//			if (currentEncryptedChat != null && AndroidUtilities.getMyLayerVersion(currentEncryptedChat!!.layer) != SecretChatHelper.CURRENT_SECRET_CHAT_LAYER) {
+//				secretChatHelper.sendNotifyLayerMessage(currentEncryptedChat, null)
+//			}
 		}
 
-		if (currentChatInfo != null && currentChatInfo!!.linked_chat_id != 0L) {
-			val chat = messagesController.getChat(currentChatInfo!!.linked_chat_id)
+		if (currentChatInfo != null && currentChatInfo!!.linkedChatId != 0L) {
+			val chat = messagesController.getChat(currentChatInfo!!.linkedChatId)
 
 			if (chat != null && chat.megagroup) {
 				messagesController.startShortPoll(chat, classGuid, false)
@@ -1905,21 +1920,23 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return
 		}
 
-		if (currentChatInfo.participants != null) {
-			if (currentChatInfo.participants.self_participant != null) {
-				chatInviterId = currentChatInfo.participants.self_participant.inviter_id
+		val curParticipants = currentChatInfo.participants
+
+		if (curParticipants != null) {
+			if (curParticipants.selfParticipant != null) {
+				chatInviterId = curParticipants.selfParticipant?.inviterId ?: 0L
 				return
 			}
 
 			val selfId = userConfig.getClientUserId()
 			var a = 0
-			val N = currentChatInfo.participants.participants.size
+			val N = curParticipants.participants?.size ?: 0
 
 			while (a < N) {
-				val participant = currentChatInfo.participants.participants[a]
+				val participant = curParticipants.participants?.get(a)
 
-				if (participant.user_id == selfId) {
-					chatInviterId = participant.inviter_id
+				if (participant?.userId == selfId) {
+					chatInviterId = participant.inviterId
 					return
 				}
 
@@ -2126,8 +2143,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		if (isChannel(currentChat)) {
 			messagesController.startShortPoll(currentChat, classGuid, true)
 
-			if (currentChatInfo != null && currentChatInfo!!.linked_chat_id != 0L) {
-				val chat = messagesController.getChat(currentChatInfo!!.linked_chat_id)
+			if (currentChatInfo != null && currentChatInfo!!.linkedChatId != 0L) {
+				val chat = messagesController.getChat(currentChatInfo!!.linkedChatId)
 				messagesController.startShortPoll(chat, classGuid, true)
 			}
 		}
@@ -2251,7 +2268,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 									str.append("\n\n")
 								}
 
-								str.append(getMessageContent(messageObject, previousUid, ids.size != 1 && (currentUser == null || !currentUser!!.self)))
+								str.append(getMessageContent(messageObject, previousUid, ids.size != 1 && (currentUser == null || !currentUser!!.isSelf)))
 
 								previousUid = messageObject.fromChatId
 							}
@@ -2318,9 +2335,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 
 					clear_history, delete_chat, auto_delete_timer -> {
-						val canDeleteHistory = currentChatInfo?.can_delete_channel == true
+						val canDeleteHistory = currentChatInfo?.canDeleteChannel == true
 
-						if (id == auto_delete_timer || id == clear_history && currentEncryptedChat == null && (currentUser != null && !isUserSelf(currentUser) && !isDeleted(currentUser) || currentChatInfo != null && currentChatInfo!!.can_delete_channel)) {
+						if (id == auto_delete_timer || id == clear_history && currentEncryptedChat == null && (currentUser != null && !isUserSelf(currentUser) && !isDeleted(currentUser) || currentChatInfo != null && currentChatInfo!!.canDeleteChannel)) {
 							AlertsCreator.createClearDaysDialogAlert(this@ChatActivity, -1, currentUser, currentChat, canDeleteHistory) { revoke: Boolean ->
 								if (revoke && (currentUser != null || canDeleteHistory)) {
 									messagesStorage.getMessagesCount(dialogId) { count: Int ->
@@ -2447,11 +2464,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 
 					bot_help -> {
-						sendMessagesHelper.sendMessage("/help", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+						sendMessagesHelper.sendMessage("/help", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 					}
 
 					bot_settings -> {
-						sendMessagesHelper.sendMessage("/settings", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+						sendMessagesHelper.sendMessage("/settings", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 					}
 
 					search -> {
@@ -2460,7 +2477,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					call, video_call -> {
 						if (currentUser != null && parentActivity != null) {
-							startCall(currentUser!!, id == video_call, currentUserInfo != null && currentUserInfo!!.video_calls_available, parentActivity!!, messagesController.getUserFull(currentUser!!.id), accountInstance)
+							startCall(currentUser!!, id == video_call, currentUserInfo != null && currentUserInfo!!.videoCallsAvailable, parentActivity!!, messagesController.getUserFull(currentUser!!.id), accountInstance)
 						}
 					}
 
@@ -2611,31 +2628,31 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			actionBar?.setTitle(LocaleController.formatDateChat(startLoadFromDate.toLong(), false))
 			actionBar?.setSubtitle(context.getString(R.string.Loading))
 
-			val gh1 = TL_messages_getHistory()
+			val gh1 = TLMessagesGetHistory()
 			gh1.peer = messagesController.getInputPeer(dialogId)
-			gh1.offset_date = startLoadFromDate
+			gh1.offsetDate = startLoadFromDate
 			gh1.limit = 1
-			gh1.add_offset = -1
+			gh1.addOffset = -1
 
 			val req = connectionsManager.sendRequest(gh1) { response, _ ->
-				if (response is messages_Messages) {
+				if (response is MessagesMessages) {
 					val l: List<Message> = response.messages
 
 					if (l.isNotEmpty()) {
-						val gh2 = TL_messages_getHistory()
+						val gh2 = TLMessagesGetHistory()
 						gh2.peer = messagesController.getInputPeer(dialogId)
-						gh2.offset_date = startLoadFromDate + 60 * 60 * 24
+						gh2.offsetDate = startLoadFromDate + 60 * 60 * 24
 						gh2.limit = 1
 
 						connectionsManager.sendRequest(gh2) { response1, _ ->
-							if (response1 is messages_Messages) {
+							if (response1 is MessagesMessages) {
 								val l2: List<Message> = response1.messages
 
 								val count = if (l2.isNotEmpty()) {
-									response.offset_id_offset - response1.offset_id_offset
+									response.offsetIdOffset - response1.offsetIdOffset
 								}
 								else {
-									response.offset_id_offset
+									response.offsetIdOffset
 								}
 
 								AndroidUtilities.runOnUIThread {
@@ -2875,15 +2892,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		editTextItem?.addSubItem(text_regular, context.getString(R.string.Regular))
 
 		if (chatMode == 0 && threadId == 0 && !isReplyUser(currentUser) && reportType < 0) {
-			var userFull: UserFull? = null
+			var userFull: TLUserFull? = null
 
-			if (currentUser != null && !currentUser!!.self && currentUser!!.id != 333000L && currentUser!!.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser!!.id != 42777L) {
+			if (currentUser != null && !currentUser!!.isSelf && currentUser!!.id != 333000L && currentUser!!.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser!!.id != 42777L) {
 				audioCallIconItem = menu.addItem(call, R.drawable.chat_calls_voice)
 				audioCallIconItem?.contentDescription = context.getString(R.string.Call)
 
 				userFull = messagesController.getUserFull(currentUser!!.id)
 
-				if (userFull != null && userFull.phone_calls_available) {
+				if (userFull != null && userFull.phoneCallsAvailable) {
 					showAudioCallAsIcon = !inPreviewMode
 					audioCallIconItem?.visible()
 				}
@@ -2902,7 +2919,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				headerItem.contentDescription = context.getString(R.string.AccDescrMoreOptions)
 
-				if (currentUser?.self != true) {
+				if (currentUser?.isSelf != true) {
 					chatNotificationsPopupWrapper = ChatNotificationsPopupWrapper(context, currentAccount, headerItem.getPopupLayout()!!.swipeBack, false, object : ChatNotificationsPopupWrapper.Callback {
 						override fun dismiss() {
 							headerItem.toggleSubMenu()
@@ -2983,14 +3000,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					muteItemGap = headerItem.addColoredGap()
 				}
 
-				if (currentUser != null && currentUser?.self != true) {
+				if (currentUser != null && currentUser?.isSelf != true) {
 					headerItem.addSubItem(call, R.drawable.msg_callback, context.getString(R.string.Call))
 					headerItem.addSubItem(video_call, R.drawable.msg_videocall, context.getString(R.string.VideoCall))
 
-					if (userFull != null && userFull.phone_calls_available) {
+					if (userFull != null && userFull.phoneCallsAvailable) {
 						headerItem.showSubItem(call)
 
-						if (userFull.video_calls_available) {
+						if (userFull.videoCallsAvailable) {
 							headerItem.showSubItem(video_call)
 						}
 						else {
@@ -3007,11 +3024,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					headerItem.addSubItem(search, R.drawable.ic_search_menu, context.getString(R.string.Search))
 				}
 
-				if (currentChat != null && currentChat?.creator != true && !hasAdminRights(currentChat)) {
+				if (isBot() || (currentChat != null && currentChat?.creator != true && !hasAdminRights(currentChat))) {
 					headerItem.addSubItem(report, R.drawable.ic_error, context.getString(R.string.ReportChat))
 				}
 
-				if (currentUser != null && currentUser?.self != true) {
+				if (currentUser != null && currentUser?.isSelf != true) {
 					addContactItem = headerItem.addSubItem(share_contact, R.drawable.msg_addcontact, "")
 				}
 				if (currentEncryptedChat != null) {
@@ -3041,13 +3058,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						val leaveItem = headerItem.addSubItem(delete_chat, R.drawable.msg_leave, context.getString(R.string.DeleteAndExit))
 						leaveItem.setColors(ResourcesCompat.getColor(context.resources, R.color.purple, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
-					else if (currentUser?.self != true && !isBot() && currentUser?.id != 333000L && currentUser?.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser?.id != 42777L) {
+					else if (currentUser?.isSelf != true && !isBot() && currentUser?.id != 333000L && currentUser?.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser?.id != 42777L) {
 						val deleteItem = headerItem.addSubItem(delete_chat, R.drawable.msg_delete, context.getString(R.string.DeleteChatUser))
 						deleteItem.setColors(ResourcesCompat.getColor(context.resources, R.color.dark, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
 				}
 
-				if (currentUser?.self == true) {
+				if (currentUser?.isSelf == true) {
 					headerItem.addSubItem(add_shortcut, R.drawable.msg_home, context.getString(R.string.AddShortcut))
 				}
 
@@ -4053,7 +4070,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					globalIgnoreLayout = true
 					lastWidth = widthMeasureSpec
 
-					showSearchAsIcon = if (!inPreviewMode && currentUser != null && currentUser!!.self) {
+					showSearchAsIcon = if (!inPreviewMode && currentUser != null && currentUser!!.isSelf) {
 						val textView = avatarContainer!!.titleTextView
 						val textWidth = textView.paint.measureText(textView.getText(), 0, textView.getText().length).toInt()
 
@@ -4097,7 +4114,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						if (showAudioCallAsIcon) {
 							headerItem?.hideSubItem(call)
 						}
-						else if (userInfo != null && userInfo.phone_calls_available) {
+						else if (userInfo != null && userInfo.phoneCallsAvailable) {
 							headerItem?.showSubItem(call)
 						}
 					}
@@ -4625,7 +4642,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			emptyViewContainer?.addView(greetingsViewContainer, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.CENTER_VERTICAL, 68f, 0f, 68f, 0f))
 		}
 		else if (currentEncryptedChat == null) {
-			if (!isThreadChat && chatMode == 0 && (currentUser != null && currentUser!!.self || currentChat != null && currentChat!!.creator && !isChannelAndNotMegaGroup(currentChat))) {
+			if (!isThreadChat && chatMode == 0 && (currentUser != null && currentUser!!.isSelf || currentChat != null && currentChat!!.creator && !isChannelAndNotMegaGroup(currentChat))) {
 				bigEmptyView = ChatBigEmptyView(context, contentView, if (currentChat != null) ChatBigEmptyView.EMPTY_VIEW_TYPE_GROUP else ChatBigEmptyView.EMPTY_VIEW_TYPE_SAVED)
 				emptyViewContainer?.addView(bigEmptyView, FrameLayout.LayoutParams(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER))
 
@@ -4650,7 +4667,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				else if (currentUser != null && currentUser!!.id != BuildConfig.NOTIFICATIONS_BOT_ID && currentUser!!.id != 429000L && currentUser!!.id != 4244000L && MessagesController.isSupportUser(currentUser)) {
 					emptyMessage = context.getString(R.string.GotAQuestion)
 				}
-				else if (currentUser == null || currentUser?.self == true || currentUser?.deleted == true || userBlocked) {
+				else if (currentUser == null || currentUser?.isSelf == true || currentUser?.deleted == true || userBlocked) {
 					emptyMessage = context.getString(R.string.NoMessages)
 				}
 
@@ -4670,24 +4687,19 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 
 						BuildConfig.SUPPORT_BOT_ID -> {
-							greetingsViewContainer?.background = ResourcesCompat.getDrawable(context.resources, R.drawable.ai_bot_greetings_background, null)
+							greetingsViewContainer?.background = ResourcesCompat.getDrawable(context.resources, R.drawable.ai_bot_greetings_light_background, null)
 						}
 
 						BuildConfig.PHOENIX_BOT_ID -> {
 							greetingsViewContainer?.background = ResourcesCompat.getDrawable(context.resources, R.drawable.ai_bot_greetings_background, null)
 						}
 
-						BuildConfig.BUSINESS_BOT_ID -> {
-							showBotHelpCell = true
-						}
-
-						BuildConfig.CANCER_BOT_ID -> {
-							showBotHelpCell = true
-						}
-
 						else -> {
 							if (isAiBot()) {
-								showBotHelpCell = true
+								greetingsViewContainer?.background = ResourcesCompat.getDrawable(context.resources, R.drawable.ai_bot_greetings_background, null)
+
+								val mBotInfo = currentUser?.id?.let { botInfo.get(it) }
+								greetingsViewContainer?.setBotTitleDescription(mBotInfo?.description ?: context.getString(R.string.default_ai_bot_welcome_message))
 							}
 							else {
 								paint.color = ResourcesCompat.getColor(context.resources, R.color.service_message_background, null)
@@ -4719,7 +4731,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		else {
 			bigEmptyView = ChatBigEmptyView(context, contentView, ChatBigEmptyView.EMPTY_VIEW_TYPE_SECRET)
 
-			if (currentEncryptedChat?.admin_id == userConfig.getClientUserId()) {
+			if (currentEncryptedChat?.adminId == userConfig.getClientUserId()) {
 				bigEmptyView?.setStatusText(LocaleController.formatString("EncryptedPlaceholderTitleOutgoing", R.string.EncryptedPlaceholderTitleOutgoing, getFirstName(currentUser)))
 			}
 			else {
@@ -7037,7 +7049,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					canPinMessages(currentChat)
 				}
 				else if (currentEncryptedChat == null) {
-					currentUserInfo?.can_pin_message == true
+					currentUserInfo?.canPinMessage == true
 				}
 				else {
 					false
@@ -7218,7 +7230,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			botTopViewContainer = botBalanceBinding.root
 			botTopViewContainer?.gone()
 
+			botBalanceBinding.modelLogo.setImageResource(getLogoDrawable(chatBotController?.lastSubscriptionInfo?.logo))
 			botFreeBalanceView = botBalanceBinding.text
+			modelLogoImageView = botBalanceBinding.modelLogo
 
 			topChatPanelView?.addView(botTopViewContainer, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 		}
@@ -7257,8 +7271,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				if (currentChatInfo?.participants != null) {
 					val users = LongSparseArray<TLObject?>()
 
-					for (a in currentChatInfo!!.participants.participants.indices) {
-						users.put(currentChatInfo!!.participants.participants[a].user_id, null)
+					currentChatInfo?.participants?.participants?.forEach {
+						users.put(it.userId, null)
 					}
 
 					val chatId = currentChatInfo!!.id
@@ -7407,14 +7421,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				else {
 					val messagesStorage = messagesStorage
 
-					val req = TL_messages_getUnreadMentions()
+					val req = TLMessagesGetUnreadMentions()
 					req.peer = messagesController.getInputPeer(dialogId)
 					req.limit = 1
-					req.add_offset = newMentionsCount - 1
+					req.addOffset = newMentionsCount - 1
 
 					connectionsManager.sendRequest(req) { response, error ->
 						AndroidUtilities.runOnUIThread {
-							val res = response as messages_Messages?
+							val res = response as MessagesMessages?
 
 							if (error != null || res?.messages.isNullOrEmpty()) {
 								newMentionsCount = res?.count ?: 0
@@ -7437,7 +7451,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								messagesStorage.markMessageAsMention(dialogId, id)
 
 								if (`object` != null) {
-									`object`.messageOwner?.media_unread = true
+									`object`.messageOwner?.mediaUnread = true
 									`object`.messageOwner?.mentioned = true
 								}
 
@@ -7538,10 +7552,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (result.type == "video" || result.type == "web_player_video") {
 					val size = MessageObject.getInlineResultWidthAndHeight(result)
-					EmbedBottomSheet.show(this@ChatActivity, null, botContextProvider, if (result.title != null) result.title else "", result.description, result.content.url, result.content.url, size[0], size[1], isKeyboardVisible)
+					EmbedBottomSheet.show(this@ChatActivity, null, botContextProvider, if (result.title != null) result.title else "", result.description, result.content?.url, result.content?.url, size[0], size[1], isKeyboardVisible)
 				}
 				else {
-					processExternalUrl(0, result.content.url, false)
+					processExternalUrl(0, result.content?.url, false)
 				}
 			}
 		}
@@ -7572,8 +7586,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				val parentActivity = parentActivity ?: return
 
-				val inputStickerSet = TL_inputStickerSetID()
-				inputStickerSet.access_hash = set.access_hash
+				val inputStickerSet = TLInputStickerSetID()
+				inputStickerSet.accessHash = (set as? TLInputStickerSetID)?.accessHash ?: 0
 				inputStickerSet.id = set.id
 
 				val alert = StickersAlert(parentActivity, this@ChatActivity, inputStickerSet, null, chatActivityEnterView)
@@ -7618,7 +7632,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			val start = mentionContainer.adapter.resultStartPosition
 			val len = mentionContainer.adapter.resultLength
 
-			if (`object` is TL_document) {
+			if (`object` is TLDocument) {
 				if (chatMode == 0 && checkSlowMode(view)) {
 					return@OnItemClickListener
 				}
@@ -7678,7 +7692,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				if (mentionContainer.adapter.isBotCommands) {
 					if (chatMode == MODE_SCHEDULED) {
 						AlertsCreator.createScheduleDatePickerDialog(parentActivity, dialogId) { notify, scheduleDate ->
-							sendMessagesHelper.sendMessage(`object` as String?, dialogId, replyMessage, threadMessage, null, false, null, null, null, notify, scheduleDate, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+							sendMessagesHelper.sendMessage(`object` as String?, dialogId, replyMessage, threadMessage, null, false, null, null, null, notify, scheduleDate, null, updateStickersOrder = false)
 							chatActivityEnterView?.fieldText = ""
 							hideFieldPanel(false)
 						}
@@ -7688,7 +7702,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							return@OnItemClickListener
 						}
 
-						sendMessagesHelper.sendMessage(`object` as String?, dialogId, replyMessage, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+						sendMessagesHelper.sendMessage(`object` as String?, dialogId, replyMessage, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 						chatActivityEnterView?.fieldText = ""
 						hideFieldPanel(false)
 					}
@@ -7705,10 +7719,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				if (currentEncryptedChat != null) {
 					var error = 0
 
-					if (`object`.send_message is TL_botInlineMessageMediaAuto && "game" == `object`.type) {
+					if (`object`.sendMessage is TLBotInlineMessageMediaAuto && "game" == `object`.type) {
 						error = 1
 					}
-					else if (`object`.send_message is TL_botInlineMessageMediaInvoice) {
+					else if (`object`.sendMessage is TLBotInlineMessageMediaInvoice) {
 						error = 2
 					}
 
@@ -7754,8 +7768,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 				}
 			}
-			else if (`object` is TL_inlineBotSwitchPM) {
-				processInlineBotContextPM(`object` as TL_inlineBotSwitchPM?)
+			else if (`object` is TLInlineBotSwitchPM) {
+				processInlineBotContextPM(`object` as TLInlineBotSwitchPM?)
 			}
 			else if (`object` is KeywordResult) {
 				val code = `object`.emoji
@@ -8022,7 +8036,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 		})
 
-		topUndoView = object : UndoView(context, this, true) {
+		topUndoView = object : UndoView(context, true) {
 			override fun didPressUrl(span: CharacterStyle) {
 				didPressMessageUrl(span, false, null, null)
 			}
@@ -8228,7 +8242,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			var isEditTextItemVisibilitySuppressed = false
 
 			override fun onBotCommandSelected(command: String) {
-				isCommandPromoCode = command == PROMO_CODE_COMMAND
+				isCommandPromoCode = command.startsWith(PROMO_CODE_COMMAND, ignoreCase = true)
 				updateChatBotTopPanel()
 			}
 
@@ -8897,13 +8911,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		val searchAsListTogglerView = View(context)
 
 		searchAsListTogglerView.setOnTouchListener { _, _ ->
-			mediaDataController.foundMessageObjects.size <= 1
+			mediaDataController.foundMessageObjects.size < 1
 		}
 
 		searchAsListTogglerView.background = Theme.getSelectorDrawable(context.getColor(R.color.brand), false)
 
 		searchAsListTogglerView.setOnClickListener {
-			if (mediaDataController.foundMessageObjects.size > 1) {
+			if (mediaDataController.foundMessageObjects.size >= 1) {
 				searchAsListHint?.hide()
 				toggleMessagesSearchListView()
 
@@ -9007,6 +9021,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		searchCountText = SearchCounterView(context, null)
 		searchCountText?.setGravity(Gravity.LEFT)
 
+		showListText = TextView(context)
+		showListText?.text = context.getString(R.string.show_as_list)
+
+		searchContainer?.addView( showListText, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.CENTER_VERTICAL, 140f, 0f, 0f, 0f))
+
 		searchContainer?.addView(searchCountText, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.CENTER_VERTICAL, 0f, 0f, 108f, 0f))
 
 		bottomOverlay = FrameLayout(context)
@@ -9034,7 +9053,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		bottomOverlay?.addView(bottomOverlayText, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.CENTER, 14f, 0f, 14f, 0f))
 
 		bottomOverlayChat = FrameLayout(context)
-		bottomOverlayChat?.setBackgroundResource(if (currentUser != null && currentUser!!.bot) R.color.brand else R.color.background)
+		bottomOverlayChat?.setBackgroundResource(if (currentUser != null && currentUser!!.bot) if(dialogId == BuildConfig.SUPPORT_BOT_ID) R.color.avatar_light_blue else R.color.brand else R.color.background)
 		bottomOverlayChat?.setWillNotDraw(false)
 		bottomOverlayChat?.visibility = View.INVISIBLE
 		bottomOverlayChat?.clipChildren = false
@@ -9049,7 +9068,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		if (currentUser != null && currentUser!!.bot) {
 			bottomOverlayChatText?.setTextColor(context.getColor(R.color.white))
-			bottomOverlayChatText?.setBackgroundResource(R.color.brand)
+			bottomOverlayChatText?.setBackgroundResource(if(dialogId == BuildConfig.SUPPORT_BOT_ID) R.color.avatar_light_blue else R.color.brand)
 		}
 		else {
 			bottomOverlayChatText?.setTextColor(context.resources.getColorStateList(R.color.chat_actions_text_color, null))
@@ -9106,7 +9125,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						messagesController.sendBotStart(currentUser, botUserLast)
 					}
 					else {
-						sendMessagesHelper.sendMessage("/start", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+						sendMessagesHelper.sendMessage("/start", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 					}
 				}
 				else {
@@ -9131,7 +9150,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					messagesController.sendBotStart(currentUser, botUser)
 				}
 				else {
-					sendMessagesHelper.sendMessage("/start", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+					sendMessagesHelper.sendMessage("/start", dialogId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 				}
 
 				botUser = null
@@ -9142,9 +9161,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				updateBottomOverlay()
 			}
 			else {
-				if (isChannel(currentChat) && currentChat !is TL_channelForbidden) {
+				if (isChannel(currentChat) && currentChat !is TLChannelForbidden) {
 					if (isNotInChat(currentChat)) {
-						if (currentChat!!.join_request) {
+						if (currentChat!!.joinRequest) {
 							showBottomOverlayProgress(show = true, animated = true)
 
 							MessagesController.getInstance(currentAccount).addUserToChat(currentChat!!.id, UserConfig.getInstance(currentAccount).getCurrentUser(), 0, null, null, true, {
@@ -9187,7 +9206,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 				}
 				else {
-					val canDeleteHistory = currentChatInfo?.can_delete_channel == true
+					val canDeleteHistory = currentChatInfo?.canDeleteChannel == true
 
 					AlertsCreator.createClearOrDeleteDialogAlert(this@ChatActivity, false, currentChat, currentUser, currentEncryptedChat != null, true, canDeleteHistory) {
 						notificationCenter.removeObserver(this@ChatActivity, NotificationCenter.closeChats)
@@ -9291,7 +9310,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		contentView?.addView(searchContainer, createFrame(LayoutHelper.MATCH_PARENT, 51, Gravity.BOTTOM))
 		contentView?.addView(MessageEnterTransitionContainer(contentView, currentAccount).also { messageEnterTransitionContainer = it })
 
-		undoView = UndoView(context, this, false)
+		undoView = UndoView(context, false)
 		undoView?.setAdditionalTranslationY(AndroidUtilities.dp(51f).toFloat())
 
 		contentView?.addView(undoView, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.BOTTOM or Gravity.LEFT, 8f, 0f, 8f, 8f))
@@ -9533,7 +9552,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		val dialog = messagesController.dialogs_dict[dialogId]
 
 		if (dialog != null) {
-			reactionsMentionCount = dialog.unread_reactions_count
+			reactionsMentionCount = dialog.unreadReactionsCount
 			updateReactionsMentionButton(false)
 		}
 
@@ -9542,6 +9561,34 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		return fragmentView
+	}
+
+	private fun performChatChecks() {
+		if (retrySubscribe) {
+			retrySubscribe = false
+			retrySubscribe(currentChat?.id ?: return)
+			return
+		}
+
+		currentChat?.let { currentChat ->
+			if (isPaidChannel(currentChat)) {
+				ioScope.launch {
+					checkSubscription(currentChat)
+				}
+			}
+			else if (currentChat.adult) {
+				ioScope.launch {
+					if (isChannel(currentChat) && currentChat !is TLChannelForbidden) {
+						if (isNotInChat(currentChat) && (!isThreadChat || currentChat.joinToSend)) {
+							checkAdultSubscription(currentChat)
+						}
+					}
+				}
+			}
+			else {
+				// stub
+			}
+		}
 	}
 
 	private suspend fun checkAdultSubscription(currentChat: Chat) {
@@ -9581,7 +9628,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			bottomOverlayChatText?.isEnabled = false
 		}
 
-		val currentSubscriptions = (connectionsManager.performRequest(ElloRpc.getSubscriptionsRequest(subscriptionType = ElloRpc.SubscriptionType.ACTIVE_CHANNELS)) as? TL_biz_dataRaw)?.readData<ElloRpc.Subscriptions>()
+		val currentSubscriptions = (connectionsManager.performRequest(ElloRpc.getSubscriptionsRequest(subscriptionType = ElloRpc.SubscriptionType.ACTIVE_CHANNELS)) as? TLBizDataRaw)?.readData<ElloRpc.Subscriptions>()
 
 		if (currentSubscriptions?.items?.find { it.channelId == currentChat.id && it.isActive } != null) {
 			withContext(mainScope.coroutineContext) {
@@ -9650,38 +9697,38 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				showBottomOverlayProgress(show = true, animated = true)
 
-				ioScope.launch {
-					val request = subscribeRequest(currentChat.id)
-					val resp = connectionsManager.performRequest(request)
-					val error = resp as? TL_error
+				runBlocking(ioScope.coroutineContext) {
+					walletHelper.fetchWallet()
 
-					mainScope.launch {
+					val availableAmount = walletHelper.wallet?.amount?.toDouble()
+
+					if (availableAmount != null && availableAmount >= currentChat.cost) {
+						sendPaidSubscriptionRequest(currentChat, context)
+					}
+					else {
+						val walletId = walletHelper.wallet?.id ?: return@runBlocking
+						val diff = if (availableAmount != null) currentChat.cost - availableAmount else currentChat.cost
+
 						visibleDialog?.setOnDismissListener {
+							showBottomOverlayProgress(show = false, animated = true)
+
 							val args = Bundle()
-							args.putBoolean(SubscriptionResultFragment.SUCCESS, error == null)
+							args.putLong(WalletFragment.ARG_WALLET_ID, walletId)
+							args.putBoolean(WalletFragment.ARG_IS_TOPUP, true)
+							args.putBoolean(PaymentMethodsFragment.ARG_SHOW_ELLO_CARD, false)
+							args.putLong(WalletFragment.ARG_CHANNEL_ID, currentChat.id)
+							args.putDouble(WalletFragment.ARG_AMOUNT, diff)
 
-							val originalError = error?.text?.lowercase()
+							val fragment = PlayTopupFragment(args)
 
-							if (originalError?.contains("enough") == true && originalError.contains("money")) {
-								args.putString(SubscriptionResultFragment.DESCRIPTION, v.context.getString(R.string.insufficient_funds_message))
-								args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, R.drawable.panda_payment_error)
-								args.putBoolean(SubscriptionResultFragment.SHOW_TOPUP, true)
-							}
-							else {
-								args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, if (error == null) R.drawable.panda_success else R.drawable.panda_error)
+							presentFragment(fragment)
 
-								if (isOnlineCourse(currentChat)) {
-									args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) v.context.getString(R.string.online_course_success) else (error.text ?: ""))
-								}
-								else {
-									args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) v.context.getString(R.string.subscription_success) else (error.text ?: ""))
-								}
-							}
-
-							presentFragment(SubscriptionResultFragment(args), true)
+							BulletinFactory.of(fragment).createSimpleBulletin(R.raw.chats_infotip, context.getString(R.string.insufficient_funds_message)).show()
 						}
 
-						visibleDialog?.dismiss()
+						mainScope.launch {
+							dismissCurrentDialog()
+						}
 					}
 				}
 			}
@@ -9702,6 +9749,57 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			showDialog(dialog) {
 				finishFragment()
 			}
+		}
+	}
+
+	private fun retrySubscribe(channelId: Long) {
+		val currentChat = currentChat ?: return
+
+		if (currentChat.id != channelId) {
+			return
+		}
+
+		val context = context ?: return
+
+		showBottomOverlayProgress(show = true, animated = true)
+
+		ioScope.launch {
+			sendPaidSubscriptionRequest(currentChat, context)
+		}
+	}
+
+	private suspend fun sendPaidSubscriptionRequest(currentChat: Chat, context: Context) {
+		val request = subscribeRequest(currentChat.id)
+		val resp = connectionsManager.performRequest(request)
+		val error = resp as? TLError
+
+		mainScope.launch {
+			visibleDialog?.setOnDismissListener {
+				val args = Bundle()
+				args.putBoolean(SubscriptionResultFragment.SUCCESS, error == null)
+
+				val originalError = error?.text?.lowercase()
+
+				if (originalError?.contains("enough") == true && originalError.contains("money")) {
+					args.putString(SubscriptionResultFragment.DESCRIPTION, context.getString(R.string.insufficient_funds_message))
+					args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, R.drawable.panda_payment_error)
+					args.putBoolean(SubscriptionResultFragment.SHOW_TOPUP, true)
+				}
+				else {
+					args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, if (error == null) R.drawable.panda_success else R.drawable.panda_error)
+
+					if (isMasterclass(currentChat)) {
+						args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) context.getString(R.string.online_course_success) else (error.text ?: ""))
+					}
+					else {
+						args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) context.getString(R.string.subscription_success) else (error.text ?: ""))
+					}
+				}
+
+				presentFragment(SubscriptionResultFragment(args), true)
+			}
+
+			visibleDialog?.dismiss()
 		}
 	}
 
@@ -9745,6 +9843,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		cell.markReactionsAsRead()
+	}
+
+	private fun getLogoDrawable(logo: Int?): Int {
+		if (logo == null) {
+			return R.drawable.default_purchase_logo
+		}
+
+		return logoDrawables.getOrNull(logo) ?: R.drawable.default_purchase_logo
 	}
 
 	private fun dimBehindView(view: View?, enable: Boolean) {
@@ -10000,7 +10106,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 		}
 
-		val defPeer = currentChatInfo?.default_send_as ?: sendAsPeers?.peers?.firstOrNull()?.peer
+		val defPeer = currentChatInfo?.defaultSendAs ?: sendAsPeers?.peers?.firstOrNull()?.peer
 
 //		if (defPeer == null && !sendAsPeers?.peers.isNullOrEmpty()) {
 //			defPeer = sendAsPeers!!.peers[0].peer
@@ -10085,10 +10191,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		var name: String?
 
 		if (searchingUserMessages != null) {
-			name = searchingUserMessages?.first_name
+			name = searchingUserMessages?.firstName
 
 			if (name.isNullOrEmpty()) {
-				name = searchingUserMessages?.last_name
+				name = searchingUserMessages?.lastName
 			}
 		}
 		else {
@@ -10131,10 +10237,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		var onClickListener: View.OnClickListener? = null
 
 		if (distanceToPeer >= 0 && currentUser != null) {
-			text = LocaleController.formatString("ChatDistanceToPeer", R.string.ChatDistanceToPeer, currentUser!!.first_name, LocaleController.formatDistance(distanceToPeer.toFloat(), 0))
+			text = LocaleController.formatString("ChatDistanceToPeer", R.string.ChatDistanceToPeer, currentUser!!.firstName, LocaleController.formatDistance(distanceToPeer.toFloat(), 0))
 
 			onClickListener = View.OnClickListener {
-				presentFragment(PeopleNearbyActivity())
+				// presentFragment(PeopleNearbyActivity())
 			}
 		}
 		else if (currentChat != null && chatInviterId != 0L) {
@@ -10239,7 +10345,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		val message = if (dialogId > 0) {
 			val user = messagesController.getUser(dialogId) ?: return
-			LocaleController.formatString("CancelForwardPrivate", R.string.CancelForwardPrivate, LocaleController.formatPluralString("MessagesBold", fwdMessages.size), formatName(user.first_name, user.last_name))
+			LocaleController.formatString("CancelForwardPrivate", R.string.CancelForwardPrivate, LocaleController.formatPluralString("MessagesBold", fwdMessages.size), formatName(user.firstName, user.lastName))
 		}
 		else {
 			val chat = messagesController.getChat(-dialogId) ?: return
@@ -10997,8 +11103,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		val uid = mentionContainer.adapter.contextBotId
 
 		val params = HashMap<String, String>()
-		params["id"] = result.id
-		params["query_id"] = "" + result.query_id
+		params["id"] = result.id ?: ""
+		params["query_id"] = "" // "" + result.queryId
 		params["bot"] = "" + uid
 		params["bot_name"] = mentionContainer.adapter.contextBotName
 
@@ -11019,19 +11125,22 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		if (currentUser?.bot == true) {
 			URLSpanBotCommand.enabled = !isReplyUser(currentUser)
 		}
-		else if (currentChatInfo is TL_chatFull) {
-			for (a in currentChatInfo.participants.participants.indices) {
-				val participant = currentChatInfo.participants.participants[a]
-				val user = messagesController.getUser(participant.user_id)
+		else if (currentChatInfo is TLChatFull) {
+			val participants = currentChatInfo.participants.participants
 
-				if (user != null && user.bot) {
-					URLSpanBotCommand.enabled = true
-					break
+			if (!participants.isNullOrEmpty()) {
+				for (participant in participants) {
+					val user = messagesController.getUser(participant.userId)
+
+					if (user != null && user.bot) {
+						URLSpanBotCommand.enabled = true
+						break
+					}
 				}
 			}
 		}
-		else if (currentChatInfo is TL_channelFull) {
-			URLSpanBotCommand.enabled = !currentChatInfo.bot_info.isNullOrEmpty() && currentChat?.megagroup == true
+		else if (currentChatInfo is TLChannelFull) {
+			URLSpanBotCommand.enabled = !currentChatInfo.botInfo.isNullOrEmpty() && currentChat?.megagroup == true
 		}
 	}
 
@@ -11118,7 +11227,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 	}
 
-	fun processInlineBotContextPM(`object`: TL_inlineBotSwitchPM?) {
+	fun processInlineBotContextPM(`object`: TLInlineBotSwitchPM?) {
 		if (`object` == null || mentionContainer == null) {
 			return
 		}
@@ -11129,12 +11238,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		if (dialogId == user.id) {
 			inlineReturn = dialogId
-			messagesController.sendBotStart(currentUser, `object`.start_param)
+			messagesController.sendBotStart(currentUser, `object`.startParam)
 		}
 		else {
 			val args = Bundle()
 			args.putLong("user_id", user.id)
-			args.putString("inline_query", `object`.start_param)
+			args.putString("inline_query", `object`.startParam)
 			args.putLong("inline_return", dialogId)
 
 			if (!messagesController.checkCanOpenChat(args, this@ChatActivity)) {
@@ -11235,7 +11344,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 									updateStickersOrder = photos[0].updateStickersOrder
 								}
 
-								prepareSendingMedia(accountInstance, photos, dialogId, replyMessage, threadMessage, null, button == 4 || forceDocument, arg, editingMessageObject, notify, scheduleDate, updateStickersOrder, false, null)
+								prepareSendingMedia(accountInstance, photos, dialogId, replyMessage, threadMessage, null, button == 4 || forceDocument, arg, editingMessageObject, notify, scheduleDate, updateStickersOrder)
 
 								++i
 							}
@@ -11346,7 +11455,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			var result = true
 
-			if (!actionBar!!.isActionModeShowed && (reportType < 0 || view is ChatActionCell && view.messageObject?.messageOwner?.action is TL_messageActionSetMessagesTTL)) {
+			if (!actionBar!!.isActionModeShowed && (reportType < 0 || view is ChatActionCell && view.messageObject?.messageOwner?.action is TLMessageActionSetMessagesTTL)) {
 				result = createMenu(view, single = false, listView = true, x = x, y = y)
 			}
 			else {
@@ -11449,6 +11558,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		if (show) {
 			messagesSearchListView?.visible()
+			showListText?.text = context?.getString(R.string.show_in_chat)
 		}
 
 		messagesSearchListView?.tag = if (show) 1 else null
@@ -11465,6 +11575,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					if (!show) {
 						messagesSearchListView?.gone()
+						showListText?.text = context?.getString(R.string.show_as_list)
 					}
 				}
 			}
@@ -11543,7 +11654,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 //				builder.setMessage(getContext().getString(R.string.AreYouSureShareMyContactInfoBot));
 //			}
 //			else {
-//				builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("AreYouSureShareMyContactInfoUser", R.string.AreYouSureShareMyContactInfoUser, PhoneFormat.getInstance().format("+" + getUserConfig().getCurrentUser().phone), ContactsController.formatName(currentUser.first_name, currentUser.last_name))));
+//				builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("AreYouSureShareMyContactInfoUser", R.string.AreYouSureShareMyContactInfoUser, PhoneFormat.getInstance().format("+" + getUserConfig().getCurrentUser().phone), ContactsController.formatName(currentUser.firstName, currentUser.lastName))));
 //			}
 //		}
 //		else {
@@ -11551,7 +11662,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 //		}
 //		builder.setPositiveButton(getContext().getString(R.string.ShareContact), (dialogInterface, i) -> {
 //			if (type == 1) {
-//				TLRPC.TL_contacts_acceptContact req = new TLRPC.TL_contacts_acceptContact();
+//				TLRPC.TLContactsAcceptContact req = new TLRPC.TLContactsAcceptContact();
 //				req.id = getMessagesController().getInputUser(currentUser);
 //				getConnectionsManager().sendRequest(req, (response, error) -> {
 //					if (error != null) {
@@ -11664,17 +11775,17 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			contentView?.addView(timerHintView, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.LEFT or Gravity.TOP, 19f, 0f, 19f, 0f))
 		}
 
-		val time = if (currentChatInfo!!.ttl_period > 24 * 60 * 60) {
-			LocaleController.formatPluralString("Days", currentChatInfo!!.ttl_period / (24 * 60 * 60))
+		val time = if (currentChatInfo!!.ttlPeriod > 24 * 60 * 60) {
+			LocaleController.formatPluralString("Days", currentChatInfo!!.ttlPeriod / (24 * 60 * 60))
 		}
-		else if (currentChatInfo!!.ttl_period >= 60 * 60) {
-			LocaleController.formatPluralString("Hours", currentChatInfo!!.ttl_period / (60 * 60))
+		else if (currentChatInfo!!.ttlPeriod >= 60 * 60) {
+			LocaleController.formatPluralString("Hours", currentChatInfo!!.ttlPeriod / (60 * 60))
 		}
-		else if (currentChatInfo!!.ttl_period >= 60) {
-			LocaleController.formatPluralString("Minutes", currentChatInfo!!.ttl_period / 60)
+		else if (currentChatInfo!!.ttlPeriod >= 60) {
+			LocaleController.formatPluralString("Minutes", currentChatInfo!!.ttlPeriod / 60)
 		}
 		else {
-			LocaleController.formatPluralString("Seconds", currentChatInfo!!.ttl_period)
+			LocaleController.formatPluralString("Seconds", currentChatInfo!!.ttlPeriod)
 		}
 
 		timerHintView?.setText(LocaleController.formatString("AutoDeleteSetInfo", R.string.AutoDeleteSetInfo, time))
@@ -11699,7 +11810,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	private fun showScheduledOrNoSoundHint() {
-		val disableNoSound = isUserSelf(currentUser) || currentChatInfo != null && currentChatInfo!!.slowmode_next_send_date > 0 && chatMode == 0
+		val disableNoSound = isUserSelf(currentUser) || currentChatInfo != null && currentChatInfo!!.slowmodeNextSendDate > 0 && chatMode == 0
 
 		if (SharedConfig.scheduledOrNoSoundHintShows >= 3 || System.currentTimeMillis() % 4 != 0L || disableNoSound) {
 			return
@@ -11735,22 +11846,22 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			frameLayout.addView(mediaBanTooltip, index + 1, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.LEFT or Gravity.TOP, 10f, 0f, 10f, 0f))
 		}
 
-		if (currentUserInfo != null && currentUserInfo!!.voice_messages_forbidden) {
-			mediaBanTooltip?.setText(AndroidUtilities.replaceTags(LocaleController.formatString(if (chatActivityEnterView!!.isInVideoMode) R.string.VideoMessagesRestrictedByPrivacy else R.string.VoiceMessagesRestrictedByPrivacy, currentUser!!.first_name)))
+		if (currentUserInfo != null && currentUserInfo!!.voiceMessagesForbidden) {
+			mediaBanTooltip?.setText(AndroidUtilities.replaceTags(LocaleController.formatString(if (chatActivityEnterView!!.isInVideoMode) R.string.VideoMessagesRestrictedByPrivacy else R.string.VoiceMessagesRestrictedByPrivacy, currentUser!!.firstName)))
 		}
 		else if (isActionBannedByDefault(currentChat, ChatObject.ACTION_SEND_MEDIA)) {
 			mediaBanTooltip?.setText(context!!.getString(R.string.GlobalAttachMediaRestricted))
 		}
 		else {
-			if (currentChat?.banned_rights == null) {
+			if (currentChat?.bannedRights == null) {
 				return
 			}
 
-			if (AndroidUtilities.isBannedForever(currentChat!!.banned_rights)) {
+			if (AndroidUtilities.isBannedForever(currentChat!!.bannedRights)) {
 				mediaBanTooltip?.setText(context!!.getString(R.string.AttachMediaRestrictedForever))
 			}
 			else {
-				mediaBanTooltip?.setText(LocaleController.formatString("AttachMediaRestricted", R.string.AttachMediaRestricted, LocaleController.formatDateForBan(currentChat!!.banned_rights.until_date.toLong())))
+				mediaBanTooltip?.setText(LocaleController.formatString("AttachMediaRestricted", R.string.AttachMediaRestricted, LocaleController.formatDateForBan(currentChat?.bannedRights?.untilDate?.toLong() ?: 0L)))
 			}
 		}
 
@@ -12123,7 +12234,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		chatAttachAlert?.photoLayout?.loadGalleryPhotos()
 
-		if (currentChat != null && !hasAdminRights(currentChat) && currentChat!!.slowmode_enabled) {
+		if (currentChat != null && !hasAdminRights(currentChat) && currentChat!!.slowmodeEnabled) {
 			chatAttachAlert?.setMaxSelectedPhotos(10, true)
 		}
 		else {
@@ -12357,7 +12468,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				return
 			}
 
-			if (view is ChatActionCell && view.messageObject?.messageOwner is TLRPC.TL_messageService) {
+			if (view is ChatActionCell && view.messageObject?.messageOwner is TLRPC.TLMessageService) {
 				return
 			}
 
@@ -12573,10 +12684,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					return
 				}
 
-				val allowGifs = !isChannel(currentChat) || currentChat!!.banned_rights == null || !currentChat!!.banned_rights.send_gifs
+				val allowGifs = !isChannel(currentChat) || currentChat!!.bannedRights == null || currentChat!!.bannedRights?.sendGifs == false
 				val fragment = PhotoAlbumPickerActivity(PhotoAlbumPickerActivity.SELECT_TYPE_ALL, allowGifs, true, this@ChatActivity, false)
 
-				if (currentChat != null && !hasAdminRights(currentChat) && currentChat!!.slowmode_enabled) {
+				if (currentChat != null && !hasAdminRights(currentChat) && currentChat!!.slowmodeEnabled) {
 					fragment.setMaxSelectedPhotos(10, true)
 				}
 				else {
@@ -12650,14 +12761,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	fun allowSendGifs(): Boolean {
-		return !isChannel(currentChat) || currentChat?.banned_rights == null || !currentChat!!.banned_rights.send_gifs
+		return !isChannel(currentChat) || currentChat?.bannedRights == null || !currentChat!!.bannedRights!!.sendGifs
 	}
 
 	fun openPollCreate(quiz: Boolean?) {
 		val pollCreateActivity = PollCreateActivity(this@ChatActivity, quiz)
 
 		pollCreateActivity.setDelegate { poll, params, notify, scheduleDate ->
-			sendMessagesHelper.sendMessage(poll, dialogId, replyMessage, threadMessage, null, params, notify, scheduleDate, false, null)
+			sendMessagesHelper.sendMessage(poll, dialogId, replyMessage, threadMessage, null, params, notify, scheduleDate)
 			afterMessageSend()
 		}
 
@@ -12670,13 +12781,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		fillEditingMediaWithCaption(caption, null)
 
 		if (!fmessages.isNullOrEmpty() && !caption.isNullOrEmpty()) {
-			sendMessagesHelper.sendMessage(caption, dialogId, null, null, null, true, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+			sendMessagesHelper.sendMessage(caption, dialogId, null, null, null, true, null, null, null, true, 0, null, updateStickersOrder = false)
 			caption = null
 		}
 
 		sendMessagesHelper.sendMessage(fmessages, dialogId, forwardFromMyName = false, hideCaption = false, notify = true, scheduleDate = 0)
 
-		prepareSendingDocuments(accountInstance, files, files, null, caption, null, dialogId, replyMessage, threadMessage, null, editingMessageObject, notify, scheduleDate, false, null)
+		prepareSendingDocuments(accountInstance, files, files, null, caption, null, dialogId, replyMessage, threadMessage, null, editingMessageObject, notify, scheduleDate)
 
 		afterMessageSend()
 	}
@@ -12687,7 +12798,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		fillEditingMediaWithCaption(photos[0].caption, photos[0].entities)
-		prepareSendingMedia(accountInstance, photos, dialogId, replyMessage, threadMessage, null, forceDocument = true, groupMedia = false, editingMessageObject = editingMessageObject, notify = notify, scheduleDate = scheduleDate, updateStickersOrder = photos[0].updateStickersOrder, isMediaSale = false, mediaSaleHash = null)
+		prepareSendingMedia(accountInstance, photos, dialogId, replyMessage, threadMessage, null, forceDocument = true, groupMedia = false, editingMessageObject = editingMessageObject, notify = notify, scheduleDate = scheduleDate, updateStickersOrder = photos[0].updateStickersOrder)
 		afterMessageSend()
 
 		if (scheduleDate != 0) {
@@ -12718,7 +12829,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		if (!hasNoGifs && !TextUtils.isEmpty(photos[0].caption)) {
-			SendMessagesHelper.getInstance(currentAccount).sendMessage(photos[0].caption, dialogId, replyMessage, threadMessage, null, false, photos[0].entities, null, null, notify, scheduleDate, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+			SendMessagesHelper.getInstance(currentAccount).sendMessage(photos[0].caption, dialogId, replyMessage, threadMessage, null, false, photos[0].entities, null, null, notify, scheduleDate, null, updateStickersOrder = false)
 		}
 
 		var a = 0
@@ -12740,7 +12851,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		fillEditingMediaWithCaption(photos[0].caption, photos[0].entities)
-		prepareSendingMedia(accountInstance, photos, dialogId, replyMessage, threadMessage, null, forceDocument = false, groupMedia = true, editingMessageObject = editingMessageObject, notify = notify, scheduleDate = scheduleDate, updateStickersOrder = photos[0].updateStickersOrder, isMediaSale = false, mediaSaleHash = null)
+		prepareSendingMedia(accountInstance, photos, dialogId, replyMessage, threadMessage, null, forceDocument = false, groupMedia = true, editingMessageObject = editingMessageObject, notify = notify, scheduleDate = scheduleDate, updateStickersOrder = photos[0].updateStickersOrder)
 		afterMessageSend()
 
 		if (scheduleDate != 0) {
@@ -12781,21 +12892,23 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		if (force && foundWebPage != null) {
-			if (foundWebPage!!.url != null) {
+			if (foundWebPage?.url != null) {
 				var index = TextUtils.indexOf(charSequence, foundWebPage!!.url)
 				var lastChar = 0.toChar()
 				var lenEqual = false
 
 				if (index == -1) {
-					if (foundWebPage!!.display_url != null) {
-						index = TextUtils.indexOf(charSequence, foundWebPage!!.display_url)
-						lenEqual = index != -1 && index + foundWebPage!!.display_url.length == charSequence.length
-						lastChar = if (index != -1 && !lenEqual) charSequence[index + foundWebPage!!.display_url.length] else 0.toChar()
+					val displayUrl = foundWebPage?.displayUrl
+
+					if (displayUrl != null) {
+						index = TextUtils.indexOf(charSequence, displayUrl)
+						lenEqual = index != -1 && index + displayUrl.length == charSequence.length
+						lastChar = if (index != -1 && !lenEqual) charSequence[index + displayUrl.length] else 0.toChar()
 					}
 				}
 				else {
-					lenEqual = index + foundWebPage!!.url.length == charSequence.length
-					lastChar = if (!lenEqual) charSequence[index + foundWebPage!!.url.length] else 0.toChar()
+					lenEqual = index + foundWebPage!!.url!!.length == charSequence.length
+					lastChar = if (!lenEqual) charSequence[index + foundWebPage!!.url!!.length] else 0.toChar()
 				}
 
 				if (index != -1 && (lenEqual || lastChar == ' ' || lastChar == ',' || lastChar == '.' || lastChar == '!' || lastChar == '/')) {
@@ -12928,7 +13041,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				return@postRunnable
 			}
 
-			val req = TL_messages_getWebPagePreview()
+			val req = TLMessagesGetWebPagePreview()
 
 			if (textToCheck is String) {
 				req.message = textToCheck
@@ -12942,15 +13055,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					linkSearchRequestId = 0
 
 					if (error == null) {
-						if (response is TL_messageMediaWebPage) {
+						if (response is TLMessageMediaWebPage) {
 							foundWebPage = response.webpage
 
-							if (foundWebPage is TL_webPage || foundWebPage is TL_webPagePending) {
-								if (foundWebPage is TL_webPagePending) {
+							if (foundWebPage is TLWebPage || foundWebPage is TLWebPagePending) {
+								if (foundWebPage is TLWebPagePending) {
 									pendingLinkSearchString = req.message
 								}
 
-								if (currentEncryptedChat != null && foundWebPage is TL_webPagePending) {
+								if (currentEncryptedChat != null && foundWebPage is TLWebPagePending) {
 									foundWebPage?.url = req.message
 								}
 
@@ -13014,7 +13127,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		val botButtons = botButtons ?: return
 		val chatActivityEnterView = chatActivityEnterView ?: return
 
-		if (botButtons.messageOwner?.reply_markup is TL_replyKeyboardForceReply) {
+		if (botButtons.messageOwner?.replyMarkup is TLReplyKeyboardForceReply) {
 			val preferences = MessagesController.getMainSettings(currentAccount)
 
 			if (preferences.getInt("answered_$dialogId", 0) != botButtons.id && (replyMessage == null || chatActivityEnterView.fieldText == null)) {
@@ -13198,28 +13311,28 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					return
 				}
 
-				val restrictionReason = MessagesController.getRestrictionReason(messageObjectToReply.messageOwner?.restriction_reason)
+				val restrictionReason = MessagesController.getRestrictionReason(messageObjectToReply.messageOwner?.restrictionReason)
 
 				chatActivityEnterView.setForceShowSendButton(value = false, animated = false)
 
-				val name: String
+				val name: String?
 
 				if (messageObjectToReply.isFromUser) {
-					name = if (messageObjectToReply.messageOwner?.from_id?.channel_id != 0L) {
-						val chat = messagesController.getChat(messageObjectToReply.messageOwner?.from_id?.channel_id) ?: return
+					name = if (messageObjectToReply.messageOwner?.fromId?.channelId != 0L) {
+						val chat = messagesController.getChat(messageObjectToReply.messageOwner?.fromId?.channelId) ?: return
 						chat.title
 					}
 					else {
-						val user = messagesController.getUser(messageObjectToReply.messageOwner?.from_id?.user_id) ?: return
+						val user = messagesController.getUser(messageObjectToReply.messageOwner?.fromId?.userId) ?: return
 						getUserName(user)
 					}
 				}
 				else {
 					val chat = if (isChannel(currentChat) && currentChat!!.megagroup && messageObjectToReply.isForwardedChannelPost) {
-						messagesController.getChat(messageObjectToReply.messageOwner?.fwd_from?.from_id?.channel_id)
+						messagesController.getChat(messageObjectToReply.messageOwner?.fwdFrom?.fromId?.channelId)
 					}
 					else if (isChannel(currentChat)) {
-						messagesController.getChat(-(messageObjectToReply.messageOwner?.dialog_id ?: 0))
+						messagesController.getChat(-(messageObjectToReply.messageOwner?.dialogId ?: 0L))
 					}
 					else {
 						messagesController.getChat(-messageObjectToReply.senderId)
@@ -13244,8 +13357,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					replyObjectText = restrictionReason
 					sourceText = restrictionReason
 				}
-				else if (messageObjectToReply.messageOwner?.media is TL_messageMediaGame) {
-					val media = messageObjectToReply.messageOwner?.media as TL_messageMediaGame
+				else if (messageObjectToReply.messageOwner?.media is TLMessageMediaGame) {
+					val media = messageObjectToReply.messageOwner?.media as TLMessageMediaGame
 
 					replyObjectText = Emoji.replaceEmoji(media.game?.title, replyObjectTextView?.paint?.fontMetricsInt, false)
 					sourceText = media.game?.title
@@ -13310,16 +13423,16 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				var `object` = messageObjectsToForward[0]
 
 				if (`object`.isFromUser) {
-					uids.add(`object`.messageOwner!!.from_id!!.user_id)
+					uids.add(`object`.messageOwner!!.fromId!!.userId)
 				}
 				else {
-					val chat = messagesController.getChat(`object`.messageOwner?.peer_id?.channel_id)
+					val chat = messagesController.getChat(`object`.messageOwner?.peerId?.channelId)
 
 					if (isChannel(chat) && chat.megagroup && `object`.isForwardedChannelPost) {
-						uids.add(-`object`.messageOwner!!.fwd_from!!.from_id.channel_id)
+						uids.add(-`object`.messageOwner!!.fwdFrom!!.fromId.channelId)
 					}
 					else {
-						uids.add(-`object`.messageOwner!!.peer_id!!.channel_id)
+						uids.add(-`object`.messageOwner!!.peerId!!.channelId)
 					}
 				}
 
@@ -13329,16 +13442,16 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					`object` = messageObjectsToForward[a]
 
 					val uid = if (`object`.isFromUser) {
-						`object`.messageOwner!!.from_id!!.user_id
+						`object`.messageOwner!!.fromId!!.userId
 					}
 					else {
-						val chat = messagesController.getChat(`object`.messageOwner?.peer_id?.channel_id)
+						val chat = messagesController.getChat(`object`.messageOwner?.peerId?.channelId)
 
 						if (isChannel(chat) && chat.megagroup && `object`.isForwardedChannelPost) {
-							-`object`.messageOwner!!.fwd_from!!.from_id.channel_id
+							-`object`.messageOwner!!.fwdFrom!!.fromId.channelId
 						}
 						else {
-							-`object`.messageOwner!!.peer_id!!.channel_id
+							-`object`.messageOwner!!.peerId!!.channelId
 						}
 					}
 
@@ -13382,11 +13495,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 
 						if (user != null) {
-							if (!user.first_name.isNullOrEmpty()) {
-								userNames.append(user.first_name)
+							if (!user.firstName.isNullOrEmpty()) {
+								userNames.append(user.firstName)
 							}
-							else if (!user.last_name.isNullOrEmpty()) {
-								userNames.append(user.last_name)
+							else if (!user.lastName.isNullOrEmpty()) {
+								userNames.append(user.lastName)
 							}
 							else {
 								userNames.append(" ")
@@ -13491,13 +13604,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			else {
 				replyIconImageView?.setImageResource(R.drawable.msg_link)
 
-				if (webPage is TL_webPagePending) {
+				if (webPage is TLWebPagePending) {
 					replyNameTextView?.setText(context!!.getString(R.string.GettingLinkInfo))
 					replyObjectTextView?.setText(pendingLinkSearchString)
 				}
 				else {
-					if (webPage?.site_name != null) {
-						replyNameTextView?.setText(webPage.site_name)
+					if (webPage?.siteName != null) {
+						replyNameTextView?.setText(webPage.siteName)
 					}
 					else if (webPage?.title != null) {
 						replyNameTextView?.setText(webPage.title)
@@ -13516,7 +13629,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						replyObjectTextView?.setText(webPage.author)
 					}
 					else {
-						replyObjectTextView?.setText(webPage?.display_url)
+						replyObjectTextView?.setText(webPage?.displayUrl)
 					}
 
 					chatActivityEnterView.setWebPage(webPage, true)
@@ -13544,7 +13657,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			var thumbPhotoSize: PhotoSize? = null
 			var photoSizeObject: TLObject? = null
 
-			if (thumbMediaMessageObject != null && MessagesController.getRestrictionReason(thumbMediaMessageObject.messageOwner?.restriction_reason).isNullOrEmpty()) {
+			if (thumbMediaMessageObject != null && MessagesController.getRestrictionReason(thumbMediaMessageObject.messageOwner?.restrictionReason).isNullOrEmpty()) {
 				photoSize = FileLoader.getClosestPhotoSizeWithSize(thumbMediaMessageObject.photoThumbs2, 320)
 				thumbPhotoSize = FileLoader.getClosestPhotoSizeWithSize(thumbMediaMessageObject.photoThumbs2, AndroidUtilities.dp(40f))
 				photoSizeObject = thumbMediaMessageObject.photoThumbsObject2
@@ -13572,7 +13685,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				thumbPhotoSize = null
 			}
 
-			if (photoSize == null || photoSize is TL_photoSizeEmpty || photoSize.location is TL_fileLocationUnavailable || thumbMediaMessageObject!!.isAnyKindOfSticker || thumbMediaMessageObject.isSecretMedia || thumbMediaMessageObject.isWebpageDocument) {
+			if (photoSize == null || photoSize is TLPhotoSizeEmpty || photoSize.location is TLFileLocationUnavailable || thumbMediaMessageObject!!.isAnyKindOfSticker || thumbMediaMessageObject.isSecretMedia || thumbMediaMessageObject.isWebpageDocument) {
 				replyImageView?.setImageBitmap(null)
 				replyImageLocation = null
 				replyImageLocationObject = null
@@ -13614,7 +13727,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				return
 			}
 
-			if (replyMessage?.messageOwner?.reply_markup is TL_replyKeyboardForceReply) {
+			if (replyMessage?.messageOwner?.replyMarkup is TLReplyKeyboardForceReply) {
 				val preferences = MessagesController.getMainSettings(currentAccount)
 				preferences.edit().putInt("answered_$dialogId", replyMessage!!.id).commit()
 			}
@@ -13705,7 +13818,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		return if (readNow) {
 			if (currentEncryptedChat != null) {
-				messagesController.markMessageAsRead(dialogId, messageObject.messageOwner!!.random_id, messageObject.messageOwner!!.ttl)
+				messagesController.markMessageAsRead(dialogId, messageObject.messageOwner!!.randomId, messageObject.messageOwner!!.ttl)
 			}
 			else {
 				messagesController.markMessageAsRead2(dialogId, messageObject.id, null, messageObject.messageOwner!!.ttl, 0)
@@ -13715,7 +13828,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		else {
 			Runnable {
 				if (currentEncryptedChat != null) {
-					messagesController.markMessageAsRead(dialogId, messageObject.messageOwner!!.random_id, messageObject.messageOwner!!.ttl)
+					messagesController.markMessageAsRead(dialogId, messageObject.messageOwner!!.randomId, messageObject.messageOwner!!.ttl)
 				}
 				else {
 					messagesController.markMessageAsRead2(dialogId, messageObject.id, null, messageObject.messageOwner!!.ttl, 0)
@@ -14224,7 +14337,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			if (chatMode != MODE_SCHEDULED && messageObject != null) {
 				val id = messageObject.id
 
-				if (!isThreadChat && (!messageObject.isOut && messageObject.isUnread || messageObject.messageOwner!!.from_scheduled && id > currentReadMaxId) || id > 0 && isThreadChat && id > currentReadMaxId && id > replyMaxReadId) {
+				if (!isThreadChat && (!messageObject.isOut && messageObject.isUnread || messageObject.messageOwner!!.fromScheduled && id > currentReadMaxId) || id > 0 && isThreadChat && id > currentReadMaxId && id > replyMaxReadId) {
 					if (id > 0) {
 						maxPositiveUnreadId = max(maxPositiveUnreadId, messageObject.id)
 					}
@@ -14538,8 +14651,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val id = messageObject.id
 
 					if (maxPositiveUnreadId != Int.MIN_VALUE) {
-						if (id in 1..maxPositiveUnreadId && (messageObject.messageOwner!!.from_scheduled && id > currentReadMaxId || messageObject.isUnread && !messageObject.isOut)) {
-							if (messageObject.messageOwner!!.from_scheduled) {
+						if (id in 1..maxPositiveUnreadId && (messageObject.messageOwner!!.fromScheduled && id > currentReadMaxId || messageObject.isUnread && !messageObject.isOut)) {
+							if (messageObject.messageOwner!!.fromScheduled) {
 								scheduledRead++
 							}
 							else {
@@ -15117,14 +15230,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		var hideKeyboard = false
 
 		if (currentChat != null && !canSendMessages(currentChat) && !currentChat!!.gigagroup && (!isChannel(currentChat) || currentChat!!.megagroup)) {
-			if (currentChat?.default_banned_rights != null && currentChat!!.default_banned_rights.send_messages) {
+			if (currentChat?.defaultBannedRights?.sendMessages == true) {
 				bottomOverlayText?.text = context!!.getString(R.string.GlobalSendMessageRestricted)
 			}
-			else if (AndroidUtilities.isBannedForever(currentChat!!.banned_rights)) {
+			else if (AndroidUtilities.isBannedForever(currentChat!!.bannedRights)) {
 				bottomOverlayText?.text = context!!.getString(R.string.SendMessageRestrictedForever)
 			}
 			else {
-				bottomOverlayText?.text = LocaleController.formatString("SendMessageRestricted", R.string.SendMessageRestricted, LocaleController.formatDateForBan(currentChat!!.banned_rights.until_date.toLong()))
+				bottomOverlayText?.text = LocaleController.formatString("SendMessageRestricted", R.string.SendMessageRestricted, LocaleController.formatDateForBan(currentChat?.bannedRights?.untilDate?.toLong() ?: 0))
 			}
 
 			bottomOverlay?.visible()
@@ -15163,21 +15276,21 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				return
 			}
 
-			if (currentEncryptedChat is TL_encryptedChatRequested) {
+			if (currentEncryptedChat is TLEncryptedChatRequested) {
 				bottomOverlayText?.text = context!!.getString(R.string.EncryptionProcessing)
 				bottomOverlay?.visible()
 				chatActivityEnterView?.invisible()
 
 				hideKeyboard = true
 			}
-			else if (currentEncryptedChat is TL_encryptedChatWaiting) {
-				bottomOverlayText?.text = AndroidUtilities.replaceTags(LocaleController.formatString("AwaitingEncryption", R.string.AwaitingEncryption, "<b>" + currentUser!!.first_name + "</b>"))
+			else if (currentEncryptedChat is TLEncryptedChatWaiting) {
+				bottomOverlayText?.text = AndroidUtilities.replaceTags(LocaleController.formatString("AwaitingEncryption", R.string.AwaitingEncryption, "<b>" + currentUser!!.firstName + "</b>"))
 				bottomOverlay?.visible()
 				chatActivityEnterView?.invisible()
 
 				hideKeyboard = true
 			}
-			else if (currentEncryptedChat is TL_encryptedChatDiscarded) {
+			else if (currentEncryptedChat is TLEncryptedChatDiscarded) {
 				bottomOverlayText?.text = context!!.getString(R.string.EncryptionRejected)
 
 				bottomOverlay?.visible()
@@ -15189,7 +15302,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				hideKeyboard = true
 			}
-			else if (currentEncryptedChat is TL_encryptedChat) {
+			else if (currentEncryptedChat is TLEncryptedChat) {
 				bottomOverlay?.invisible()
 
 				if (!inPreviewMode) {
@@ -15221,8 +15334,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		if (requestCode == BasePermissionsActivity.REQUEST_CODE_EXTERNAL_STORAGE && chatAttachAlert != null) {
 			chatAttachAlert?.photoLayout?.checkStorage()
 		}
-		else if (requestCode == 30 && chatAttachAlert != null) {
-			chatAttachAlert?.onRequestPermissionsResultFragment(requestCode)
+		else if (requestCode == ChatAttachAlert.REQUEST_CODE_LIVE_LOCATION && chatAttachAlert != null) {
+			chatAttachAlert?.onRequestPermissionsResultFragment(requestCode, grantResults?.firstOrNull() == PackageManager.PERMISSION_GRANTED)
 		}
 		else if ((requestCode == 17 || requestCode == 18) && chatAttachAlert != null) {
 			chatAttachAlert?.photoLayout?.checkCamera(grantResults?.firstOrNull() == PackageManager.PERMISSION_GRANTED)
@@ -15257,18 +15370,18 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		else if (requestCode == BasePermissionsActivity.REQUEST_CODE_OPEN_CAMERA && grantResults != null && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
 			processSelectedAttach(attach_video)
 		}
-		else if ((requestCode == 101 || requestCode == 102) && currentUser != null || requestCode == 103 && currentChat != null) {
+		else if ((requestCode == VoIPHelper.REQUEST_CODE_RECORD_AUDIO || requestCode == VoIPHelper.REQUEST_CODE_CAMERA) && currentUser != null || requestCode == 103 && currentChat != null) {
 			val parentActivity = parentActivity ?: return
 			val allGranted = grantResults != null && grantResults.isNotEmpty() && grantResults.firstOrNull { it != PackageManager.PERMISSION_GRANTED } == null
 
 			if (allGranted) {
-				if (requestCode == 103) {
+				if (requestCode == VoIPHelper.REQUEST_CODE_MERGED) {
 					val currentChat = currentChat ?: return
 					startCall(currentChat, null, createGroupCall, parentActivity, this@ChatActivity, accountInstance)
 				}
 				else {
 					val currentUser = currentUser ?: return
-					startCall(currentUser, requestCode == 102, currentUserInfo?.video_calls_available == true, parentActivity, messagesController.getUserFull(currentUser.id), accountInstance)
+					startCall(currentUser, requestCode == VoIPHelper.REQUEST_CODE_CAMERA, currentUserInfo?.videoCallsAvailable == true, parentActivity, messagesController.getUserFull(currentUser.id), accountInstance)
 				}
 			}
 			else {
@@ -15278,7 +15391,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	private fun checkActionBarMenu(animated: Boolean) {
-		if (currentEncryptedChat != null && currentEncryptedChat !is TL_encryptedChat || currentChat != null && (chatMode != 0 || threadId != 0 || currentChatInfo == null || currentChatInfo!!.ttl_period == 0) || currentUser != null && (isDeleted(currentUser) || currentEncryptedChat == null && (currentUserInfo == null || currentUserInfo!!.ttl_period == 0))) {
+		if (currentEncryptedChat != null && currentEncryptedChat !is TLEncryptedChat || currentChat != null && (chatMode != 0 || threadId != 0 || currentChatInfo == null || currentChatInfo!!.ttlPeriod == 0) || currentUser != null && (isDeleted(currentUser) || currentEncryptedChat == null && (currentUserInfo == null || currentUserInfo!!.ttlPeriod == 0))) {
 			timeItem2?.gone()
 			avatarContainer?.hideTimeItem(animated)
 		}
@@ -15292,15 +15405,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				avatarContainer?.setTime(currentEncryptedChat!!.ttl, animated)
 			}
 			else if (currentUserInfo != null) {
-				avatarContainer?.setTime(currentUserInfo!!.ttl_period, animated)
+				avatarContainer?.setTime(currentUserInfo!!.ttlPeriod, animated)
 			}
 			else if (currentChatInfo != null) {
-				avatarContainer?.setTime(currentChatInfo!!.ttl_period, animated)
+				avatarContainer?.setTime(currentChatInfo!!.ttlPeriod, animated)
 			}
 		}
 
 		if (clearHistoryItem != null && currentChatInfo != null) {
-			val visible = currentChatInfo!!.can_delete_channel || !isChannel(currentChat) || currentChat!!.megagroup && TextUtils.isEmpty(currentChat!!.username)
+			val visible = currentChatInfo!!.canDeleteChannel || !isChannel(currentChat) || currentChat!!.megagroup && TextUtils.isEmpty(currentChat!!.username)
 			clearHistoryItem?.visibility = if (visible) View.VISIBLE else View.GONE
 		}
 
@@ -15351,19 +15464,19 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					else if (messageObject.isSticker || messageObject.isAnimatedSticker) {
 						val inputStickerSet = messageObject.inputStickerSet
 
-						if (inputStickerSet is TL_inputStickerSetID) {
+						if (inputStickerSet is TLInputStickerSetID) {
 							if (!mediaDataController.isStickerPackInstalled(inputStickerSet.id)) {
 								return 7
 							}
 						}
-						else if (inputStickerSet is TL_inputStickerSetShortName) {
-							if (!mediaDataController.isStickerPackInstalled(inputStickerSet.short_name)) {
+						else if (inputStickerSet is TLInputStickerSetShortName) {
+							if (!mediaDataController.isStickerPackInstalled(inputStickerSet.shortName)) {
 								return 7
 							}
 						}
 						return 9
 					}
-					else if (!messageObject.isRoundVideo && (messageObject.messageOwner?.media is TL_messageMediaPhoto || messageObject.document != null || messageObject.isMusic || messageObject.isVideo)) {
+					else if (!messageObject.isRoundVideo && (messageObject.messageOwner?.media is TLMessageMediaPhoto || messageObject.document != null || messageObject.isMusic || messageObject.isVideo)) {
 						var canSave = false
 						val path = messageObject.messageOwner?.attachPath
 
@@ -15383,7 +15496,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 						if (canSave) {
 							if (messageObject.document != null && !messageObject.isMusic) {
-								val mime = messageObject.document?.mime_type
+								val mime = messageObject.document?.mimeType
 
 								if (mime != null) {
 									if (messageObject.documentName?.lowercase()?.endsWith("attheme") == true) {
@@ -15444,13 +15557,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				else if (!messageObject.isAnimatedEmoji && (messageObject.isSticker || messageObject.isAnimatedSticker)) {
 					val inputStickerSet = messageObject.inputStickerSet
 
-					if (inputStickerSet is TL_inputStickerSetShortName) {
-						if (!mediaDataController.isStickerPackInstalled(inputStickerSet.short_name)) {
+					if (inputStickerSet is TLInputStickerSetShortName) {
+						if (!mediaDataController.isStickerPackInstalled(inputStickerSet.shortName)) {
 							return 7
 						}
 					}
 				}
-				else if (!messageObject.isRoundVideo && (messageObject.messageOwner?.media is TL_messageMediaPhoto || messageObject.document != null || messageObject.isMusic || messageObject.isVideo)) {
+				else if (!messageObject.isRoundVideo && (messageObject.messageOwner?.media is TLMessageMediaPhoto || messageObject.document != null || messageObject.isMusic || messageObject.isVideo)) {
 					var canSave = false
 					val path = messageObject.messageOwner?.attachPath
 
@@ -15472,7 +15585,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					if (canSave) {
 						if (messageObject.document != null) {
-							val mime = messageObject.document?.mime_type
+							val mime = messageObject.document?.mimeType
 
 							if (mime != null && mime.endsWith("text/xml")) {
 								return 5
@@ -15717,7 +15830,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							forwardButton?.background = null
 						}
 						else if (forwardButton?.background == null) {
-							forwardButton?.background = Theme.createSelectorDrawable(context!!.getColor(R.color.light_background), 3)
+							forwardButton?.background = Theme.createSelectorDrawable(context?.getColor(R.color.light_background) ?: 0, 3)
 						}
 
 						forwardButton?.alpha = if (cantForwardMessagesCount == 0) 1.0f else 0.5f
@@ -15726,7 +15839,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (saveItem != null) {
 					saveItem.visibility = if ((canSaveMusicCount > 0 && canSaveDocumentsCount == 0 || canSaveMusicCount == 0 && canSaveDocumentsCount > 0) && cantSaveMessagesCount == 0) View.VISIBLE else View.GONE
-					saveItem.contentDescription = if (canSaveMusicCount > 0) context!!.getString(R.string.SaveToMusic) else context!!.getString(R.string.SaveToDownloads)
+					saveItem.contentDescription = if (canSaveMusicCount > 0) context?.getString(R.string.SaveToMusic) else context?.getString(R.string.SaveToDownloads)
 				}
 
 				val copyVisible = copyItem!!.visibility
@@ -16000,19 +16113,19 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 		else if (currentChat != null) {
 			avatarContainer?.setTitle(currentChat!!.title, currentChat!!.scam, currentChat!!.fake, false, null, animated)
-			avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, dialogId)
+			avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, messagesController.isPremiumUser(currentUser), isUserSelf(currentUser))
 		}
 		else if (currentUser != null) {
-			if (currentUser?.self == true) {
+			if (currentUser?.isSelf == true) {
 				avatarContainer?.setTitle(context!!.getString(R.string.SavedMessages))
 			}
 			else if (!MessagesController.isSupportUser(currentUser) && contactsController.contactsDict[currentUser!!.id] == null && (contactsController.contactsDict.size != 0 || !contactsController.isLoadingContacts())) {
-				avatarContainer?.setTitle(getUserName(currentUser), currentUser!!.scam, currentUser!!.fake, messagesController.isPremiumUser(currentUser), currentUser!!.emoji_status, animated)
-				avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, dialogId)
+				avatarContainer?.setTitle(getUserName(currentUser), currentUser!!.scam, currentUser!!.fake, messagesController.isPremiumUser(currentUser), currentUser!!.emojiStatus, animated)
+				avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, messagesController.isPremiumUser(currentUser), isUserSelf(currentUser))
 			}
 			else {
-				avatarContainer?.setTitle(getUserName(currentUser), currentUser!!.scam, currentUser!!.fake, messagesController.isPremiumUser(currentUser), currentUser!!.emoji_status, animated)
-				avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, dialogId)
+				avatarContainer?.setTitle(getUserName(currentUser), currentUser!!.scam, currentUser!!.fake, messagesController.isPremiumUser(currentUser), currentUser!!.emojiStatus, animated)
+				avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, messagesController.isPremiumUser(currentUser), isUserSelf(currentUser))
 			}
 		}
 
@@ -16081,7 +16194,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		avatarContainer?.titleTextView?.setLeftDrawableTopPadding(AndroidUtilities.dp(1f))
 		avatarContainer?.setTitleIcons(combinedDrawable)
-		avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, dialogId)
+		avatarContainer?.setVerifiedMuteIcon(isMuted, currentUser?.verified == true || currentChat?.verified == true, messagesController.isPremiumUser(currentUser), isUserSelf(currentUser))
 
 		if (!forceToggleMuted && muteItem != null) {
 			if (isMuted) {
@@ -16145,7 +16258,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 		else {
 			fillEditingMediaWithCaption(caption, null)
-			prepareSendingVideo(accountInstance, videoPath, null, dialogId, replyMessage, threadMessage, null, null, 0, editingMessageObject, true, 0, forceDocument = false, isMediaSale = false, mediaSaleHash = null)
+			prepareSendingVideo(accountInstance, videoPath, null, dialogId, replyMessage, threadMessage, null, null, 0, editingMessageObject, true, 0, forceDocument = false)
 			afterMessageSend()
 		}
 	}
@@ -16290,7 +16403,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			fillEditingMediaWithCaption(photos[0].caption, photos[0].entities)
 
-			prepareSendingMedia(accountInstance, photos, dialogId, null, threadMessage, null, forceDocument, true, null, notify, scheduleDate, photos[0].updateStickersOrder, false, null)
+			prepareSendingMedia(accountInstance, photos, dialogId, null, threadMessage, null, forceDocument, true, null, notify, scheduleDate, photos[0].updateStickersOrder)
 
 			afterMessageSend()
 
@@ -16423,7 +16536,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						for (b in message.photoThumbs!!.indices) {
 							val photoSize = message.photoThumbs?.getOrNull(b)
 
-							if (photoSize?.location != null && photoSize.location?.volume_id == fileLocation.volume_id && photoSize.location?.local_id == fileLocation.local_id) {
+							if (photoSize?.location != null && photoSize.location?.volumeId == fileLocation.volumeId && photoSize.location?.localId == fileLocation.localId) {
 								imageReceiver = view.photoImage
 								break
 							}
@@ -16536,10 +16649,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		fillEditingMediaWithCaption(null, null)
 
 		if (sendAsUri) {
-			prepareSendingDocument(accountInstance, null, null, uri, null, null, dialogId, replyMessage, threadMessage, null, editingMessageObject, true, 0, false, null)
+			prepareSendingDocument(accountInstance, null, null, uri, null, null, dialogId, replyMessage, threadMessage, null, editingMessageObject, true, 0)
 		}
 		else {
-			prepareSendingDocument(accountInstance, tempPath, originalPath, null, null, null, dialogId, replyMessage, threadMessage, null, editingMessageObject, true, 0, false, null)
+			prepareSendingDocument(accountInstance, tempPath, originalPath, null, null, null, dialogId, replyMessage, threadMessage, null, editingMessageObject, true, 0)
 		}
 
 		hideFieldPanel(false)
@@ -16587,12 +16700,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						if (editingMessageObject == null && chatMode == MODE_SCHEDULED) {
 							AlertsCreator.createScheduleDatePickerDialog(parentActivity, dialogId) { notify, scheduleDate ->
 								fillEditingMediaWithCaption(null, null)
-								prepareSendingPhoto(accountInstance, null, uri, dialogId, replyMessage, threadMessage, null, null, null, null, 0, editingMessageObject, notify, scheduleDate, false, null)
+								prepareSendingPhoto(accountInstance, null, uri, dialogId, replyMessage, threadMessage, null, null, null, null, 0, editingMessageObject, notify, scheduleDate)
 							}
 						}
 						else {
 							fillEditingMediaWithCaption(null, null)
-							prepareSendingPhoto(accountInstance, null, uri, dialogId, replyMessage, threadMessage, null, null, null, null, 0, editingMessageObject, true, 0, false, null)
+							prepareSendingPhoto(accountInstance, null, uri, dialogId, replyMessage, threadMessage, null, null, null, null, 0, editingMessageObject, true, 0)
 						}
 					}
 
@@ -17138,7 +17251,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		if (!threadMessageAdded && isThreadChat && (load_type == 0 && messArr.size < count || (load_type == 2 || load_type == 3) && endReached[0])) {
-			val msg: Message = TL_message()
+			val msg: Message = TLMessage()
 
 			if (threadMessage!!.repliesCount == 0) {
 				if (isComments) {
@@ -17202,13 +17315,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val obj = messArr[N - a - 1]
 				val action = obj.messageOwner?.action
 
-				if (a == 0 && action is TL_messageActionChatCreate) {
+				if (a == 0 && action is TLMessageActionChatCreate) {
 					createdWas = true
 				}
 				else if (!createdWas) {
 					break
 				}
-				else if (a < 2 && action is TL_messageActionChatEditPhoto) {
+				else if (a < 2 && action is TLMessageActionChatEditPhoto) {
 					dropPhotoAction = action
 				}
 
@@ -17235,7 +17348,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			approximateHeightSum += obj.approximateHeight
 
 			if (currentUser != null) {
-				if (currentUser!!.self) {
+				if (currentUser!!.isSelf) {
 					obj.messageOwner?.out = true
 				}
 
@@ -17248,7 +17361,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				continue
 			}
 
-			if (threadId != 0 && obj.messageOwner is TL_messageEmpty) {
+			if (threadId != 0 && obj.messageOwner is TLMessageEmpty) {
 				continue
 			}
 
@@ -17297,15 +17410,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			val action = obj.messageOwner?.action
 
-			if (obj.type < 0 || loadIndex == 1 && action is TL_messageActionChatMigrateTo) {
+			if (obj.type < 0 || loadIndex == 1 && action is TLMessageActionChatMigrateTo) {
 				continue
 			}
 
-			if (currentChat != null && currentChat!!.creator && (action is TL_messageActionChatCreate || dropPhotoAction != null && action === dropPhotoAction)) {
+			if (currentChat != null && currentChat!!.creator && (action is TLMessageActionChatCreate || dropPhotoAction != null && action === dropPhotoAction)) {
 				continue
 			}
 
-			if (obj.messageOwner?.action is TL_messageActionChannelMigrateFrom) {
+			if (obj.messageOwner?.action is TLMessageActionChannelMigrateFrom) {
 				continue
 			}
 
@@ -17324,7 +17437,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				messagesByDays[obj.dateKey!!] = dayArray
 
-				val dateMsg: Message = TL_message()
+				val dateMsg: Message = TLMessage()
 
 				if (chatMode == MODE_SCHEDULED) {
 					if (obj.messageOwner?.date == 0x7ffffffe) {
@@ -17423,7 +17536,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 			}
 			else if (obj.groupIdForUse != 0L) {
-				obj.messageOwner?.groupId = 0
+				obj.messageOwner?.groupedId = 0
 				obj.localSentGroupId = 0
 			}
 
@@ -17447,7 +17560,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				if (createUnreadMessageAfterId != 0 && load_type != 1 && a + 1 < messArr.size) {
 					prevObj = messArr[a + 1]
 
-					if (obj.isOut && !obj.messageOwner!!.from_scheduled || prevObj.id >= createUnreadMessageAfterId) {
+					if (obj.isOut && !obj.messageOwner!!.fromScheduled || prevObj.id >= createUnreadMessageAfterId) {
 						prevObj = null
 					}
 				}
@@ -17459,7 +17572,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				if (createUnreadMessageAfterId != 0 && load_type != 1 && a - 1 >= 0) {
 					prevObj = messArr[a - 1]
 
-					if (obj.isOut && !obj.messageOwner!!.from_scheduled || prevObj.id >= createUnreadMessageAfterId) {
+					if (obj.isOut && !obj.messageOwner!!.fromScheduled || prevObj.id >= createUnreadMessageAfterId) {
 						prevObj = null
 					}
 				}
@@ -17471,7 +17584,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			if (load_type == 2 && messageId != 0 && messageId == first_unread_id) {
 				if (approximateHeightSum > AndroidUtilities.displaySize.y / 2 || isThreadChat || !forwardEndReached[0]) {
 					if (!isThreadChat || threadMaxInboxReadId != 0) {
-						val dateMsg: Message = TL_message()
+						val dateMsg: Message = TLMessage()
 						dateMsg.message = ""
 						dateMsg.id = 0
 
@@ -17519,8 +17632,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 			}
 
-			if (load_type != 2 && unreadMessageObject == null && createUnreadMessageAfterId != 0 && (currentEncryptedChat == null && (!obj.isOut || obj.messageOwner!!.from_scheduled) && messageId >= createUnreadMessageAfterId || currentEncryptedChat != null && (!obj.isOut || obj.messageOwner!!.from_scheduled) && messageId <= createUnreadMessageAfterId) && (load_type == 1 || prevObj != null || createUnreadLoading && a == messArr.size - 1)) {
-				val dateMsg: Message = TL_message()
+			if (load_type != 2 && unreadMessageObject == null && createUnreadMessageAfterId != 0 && (currentEncryptedChat == null && (!obj.isOut || obj.messageOwner!!.fromScheduled) && messageId >= createUnreadMessageAfterId || currentEncryptedChat != null && (!obj.isOut || obj.messageOwner!!.fromScheduled) && messageId <= createUnreadMessageAfterId) && (load_type == 1 || prevObj != null || createUnreadLoading && a == messArr.size - 1)) {
+				val dateMsg: Message = TLMessage()
 				dateMsg.message = ""
 				dateMsg.id = 0
 
@@ -17985,7 +18098,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					return
 				}
 
-				val errorText = if (isOnlineCourse(currentChat)) {
+				val errorText = if (isMasterclass(currentChat)) {
 					context?.getString(R.string.banned_course_message)
 				}
 				else if (isMegagroup(currentChat)) {
@@ -18046,7 +18159,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					return
 				}
 
-				currentChatInfo?.online_count = (args[1] as Int)
+				currentChatInfo?.onlineCount = (args[1] as Int)
 
 				avatarContainer?.updateOnlineCount()
 				avatarContainer?.updateSubtitle()
@@ -18183,10 +18296,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					processNewMessages(arr.toMutableList())
 
 					if (isAiBot()) {
-						chatBotController.updateSubscriptionsInfo(dialogId)
+						chatBotController.updateSubscriptionInfo(dialogId)
 					}
 				}
-				else if (isChannel(currentChat) && !currentChat!!.megagroup && currentChatInfo != null && did == -currentChatInfo!!.linked_chat_id) {
+				else if (isChannel(currentChat) && !currentChat!!.megagroup && currentChatInfo != null && did == -currentChatInfo!!.linkedChatId) {
 					var a = 0
 					val N = arr.size
 
@@ -18245,12 +18358,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								delayedReadRunnable = null
 							}
 
-							obj.messageOwner?.replies?.read_max_id = maxReadId
+							obj.messageOwner?.replies?.readMaxId = maxReadId
 						}
 						else {
 							AndroidUtilities.runOnUIThread(Runnable {
 								delayedReadRunnable = null
-								obj.messageOwner?.replies?.read_max_id = maxReadId
+								obj.messageOwner?.replies?.readMaxId = maxReadId
 							}.also {
 								delayedReadRunnable = it
 							}, 500)
@@ -18274,18 +18387,18 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						if (count > 0) {
 							val peer = messagesController.getPeer(getSendAsPeerId(currentChat, messagesController.getChatFull(currentChat!!.id)))
 							var c = 0
-							val N = obj.messageOwner!!.replies!!.recent_repliers.size
+							val N = obj.messageOwner!!.replies!!.recentRepliers.size
 
 							while (c < N) {
-								if (MessageObject.getPeerId(obj.messageOwner!!.replies!!.recent_repliers[c]) == MessageObject.getPeerId(peer)) {
-									obj.messageOwner?.replies?.recent_repliers?.removeAt(c)
+								if (MessageObject.getPeerId(obj.messageOwner!!.replies!!.recentRepliers[c]) == MessageObject.getPeerId(peer)) {
+									obj.messageOwner?.replies?.recentRepliers?.removeAt(c)
 									break
 								}
 
 								c++
 							}
 
-							obj.messageOwner?.replies?.recent_repliers?.add(0, peer)
+							obj.messageOwner?.replies?.recentRepliers?.add(0, peer)
 						}
 
 						if ((obj.messageOwner?.replies?.replies ?: 0) < 0) {
@@ -18651,36 +18764,36 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					if (newMsgObj != null) {
 						try {
-							updatedForward = obj.isForwarded && (obj.messageOwner?.reply_markup == null && newMsgObj.reply_markup != null || obj.messageOwner?.message != newMsgObj.message)
+							updatedForward = obj.isForwarded && (obj.messageOwner?.replyMarkup == null && newMsgObj.replyMarkup != null || obj.messageOwner?.message != newMsgObj.message)
 							mediaUpdated = updatedForward || obj.messageOwner?.params != null && obj.messageOwner!!.params!!.containsKey("query_id") || newMsgObj.media != null && obj.messageOwner?.media != null && newMsgObj.media?.javaClass != obj.messageOwner?.media?.javaClass
 						}
 						catch (e: Exception) {
 							FileLog.e(e)
 						}
 
-						if (obj.groupId != 0L && newMsgObj.groupId != 0L) {
+						if (obj.groupId != 0L && newMsgObj.groupedId != 0L) {
 							val oldGroup = groupedMessagesMap[obj.groupId]
 
 							if (oldGroup != null) {
-								groupedMessagesMap.put(newMsgObj.groupId, oldGroup)
+								groupedMessagesMap.put(newMsgObj.groupedId, oldGroup)
 							}
 
-							obj.localSentGroupId = obj.messageOwner!!.groupId
-							obj.messageOwner?.groupId = grouped_id
+							obj.localSentGroupId = obj.messageOwner?.groupedId ?: 0L
+							obj.messageOwner?.groupedId = grouped_id
 						}
 
-						val fwdHeader = obj.messageOwner?.fwd_from
+						val fwdHeader = obj.messageOwner?.fwdFrom
 
 						obj.messageOwner = newMsgObj
 
-						if (fwdHeader != null && newMsgObj.fwd_from != null && !newMsgObj.fwd_from?.from_name.isNullOrEmpty()) {
-							obj.messageOwner?.fwd_from = fwdHeader
+						if (fwdHeader != null && newMsgObj.fwdFrom != null && !newMsgObj.fwdFrom?.fromName.isNullOrEmpty()) {
+							obj.messageOwner?.fwdFrom = fwdHeader
 						}
 
 						obj.generateThumbs(true)
 						obj.setType()
 
-						if (newMsgObj.media is TL_messageMediaGame) {
+						if (newMsgObj.media is TLMessageMediaGame) {
 							obj.applyNewText()
 						}
 					}
@@ -18693,7 +18806,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					messagesDict[0].put(newMsgId, obj)
 
 					obj.messageOwner?.id = newMsgId
-					obj.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
+					obj.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
 					obj.forceUpdate = mediaUpdated
 
 					addReplyMessageOwner(obj, msgId)
@@ -18730,7 +18843,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val obj = messagesDict[0][msgId]
 
 				if (obj != null) {
-					obj.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
+					obj.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
 					chatAdapter?.updateRowWithMessageObject(obj, false)
 				}
 			}
@@ -18740,7 +18853,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val obj = messagesDict[0][msgId]
 
 				if (obj != null) {
-					obj.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
+					obj.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR
 					updateVisibleRows()
 				}
 			}
@@ -18769,13 +18882,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val chatFull = args[0] as ChatFull
 
 				if (currentChat != null && chatFull.id == currentChat!!.id) {
-					if (chatFull is TL_channelFull) {
+					if (chatFull is TLChannelFull) {
 						if (currentChat!!.megagroup) {
 							var lastDate = 0
 
-							if (chatFull.participants != null) {
-								for (a in chatFull.participants.participants.indices) {
-									lastDate = max(chatFull.participants.participants[a].date, lastDate)
+							val chatFullParticipants = chatFull.participants?.participants
+
+							if (chatFullParticipants != null) {
+								for (a in chatFullParticipants.indices) {
+									lastDate = max(chatFullParticipants[a].date, lastDate)
 								}
 							}
 
@@ -18791,29 +18906,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					showGigagroupConvertAlert()
 
-					val prevLinkedChatId = currentChatInfo?.linked_chat_id ?: 0
+					val prevLinkedChatId = currentChatInfo?.linkedChatId ?: 0
 
 					currentChatInfo = chatFull
 
-					currentChat?.let { currentChat ->
-						if (isPaidChannel(currentChat)) {
-							ioScope.launch {
-								checkSubscription(currentChat)
-							}
-						}
-						else if (currentChat.adult) {
-							ioScope.launch {
-								if (isChannel(currentChat) && currentChat !is TL_channelForbidden) {
-									if (isNotInChat(currentChat) && (!isThreadChat || currentChat.join_to_send)) {
-										checkAdultSubscription(currentChat)
-									}
-								}
-							}
-						}
-						else {
-							// stub
-						}
-					}
+					performChatChecks()
 
 					groupCall = messagesController.getGroupCall(currentChat!!.id, true)
 
@@ -18828,14 +18925,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					chatAdapter?.notifyDataSetChanged(true)
 
-					if (prevLinkedChatId != currentChatInfo!!.linked_chat_id) {
+					if (prevLinkedChatId != currentChatInfo!!.linkedChatId) {
 						if (prevLinkedChatId != 0L) {
 							val chat = messagesController.getChat(prevLinkedChatId)
 							messagesController.startShortPoll(chat, classGuid, true)
 						}
 
-						if (currentChatInfo!!.linked_chat_id != 0L) {
-							val chat = messagesController.getChat(currentChatInfo!!.linked_chat_id)
+						if (currentChatInfo!!.linkedChatId != 0L) {
+							val chat = messagesController.getChat(currentChatInfo!!.linkedChatId)
 
 							if (chat != null && chat.megagroup) {
 								messagesController.startShortPoll(chat, classGuid, false)
@@ -18860,13 +18957,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						avatarContainer?.updateOnlineCount()
 						avatarContainer?.updateSubtitle()
 
-						if (!inMenuMode && !loadingPinnedMessagesList && pinnedMessageIds.isNotEmpty() && currentChatInfo!!.pinned_msg_id > pinnedMessageIds[0]) {
-							mediaDataController.loadPinnedMessages(dialogId, 0, currentChatInfo!!.pinned_msg_id)
+						if (!inMenuMode && !loadingPinnedMessagesList && pinnedMessageIds.isNotEmpty() && currentChatInfo!!.pinnedMsgId > pinnedMessageIds[0]) {
+							mediaDataController.loadPinnedMessages(dialogId, 0, currentChatInfo!!.pinnedMsgId)
 							loadingPinnedMessagesList = true
 						}
 					}
 
-					if (currentChatInfo is TL_chatFull) {
+					if (currentChatInfo is TLChatFull) {
 						hasBotsCommands = false
 
 						botInfo.clear()
@@ -18875,43 +18972,46 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 						URLSpanBotCommand.enabled = false
 
-						for (a in currentChatInfo!!.participants.participants.indices) {
-							val participant = currentChatInfo!!.participants.participants[a]
-							val user = messagesController.getUser(participant.user_id)
+						val curParticipants = currentChatInfo?.participants?.participants
 
-							if (user != null && user.bot) {
-								URLSpanBotCommand.enabled = true
+						if (!curParticipants.isNullOrEmpty()) {
+							for (participant in curParticipants) {
+								val user = messagesController.getUser(participant.userId)
 
-								botsCount++
+								if (user != null && user.bot) {
+									URLSpanBotCommand.enabled = true
 
-								if (!isThreadChat) {
-									hasBotsCommands = true
+									botsCount++
+
+									if (!isThreadChat) {
+										hasBotsCommands = true
+									}
+
+									mediaDataController.loadBotInfo(user.id, -currentChatInfo!!.id, true, classGuid)
 								}
-
-								mediaDataController.loadBotInfo(user.id, -currentChatInfo!!.id, true, classGuid)
 							}
 						}
 
 						chatListView?.invalidateViews()
 					}
-					else if (currentChatInfo is TL_channelFull) {
+					else if (currentChatInfo is TLChannelFull) {
 						hasBotsCommands = false
 
 						botInfo.clear()
 
 						botsCount = 0
 
-						URLSpanBotCommand.enabled = currentChatInfo!!.bot_info.isNotEmpty() && currentChat != null && currentChat!!.megagroup
+						URLSpanBotCommand.enabled = currentChatInfo!!.botInfo.isNotEmpty() && currentChat != null && currentChat!!.megagroup
 
-						botsCount = currentChatInfo!!.bot_info.size
+						botsCount = currentChatInfo!!.botInfo.size
 
-						for (a in currentChatInfo!!.bot_info.indices) {
-							val bot = currentChatInfo!!.bot_info[a]
+						for (a in currentChatInfo!!.botInfo.indices) {
+							val bot = currentChatInfo!!.botInfo[a]
 							if (!isThreadChat && bot.commands.isNotEmpty() && (!isChannel(currentChat) || currentChat != null && currentChat!!.megagroup)) {
 								hasBotsCommands = true
 							}
 
-							botInfo.put(bot.user_id, bot)
+							botInfo.put(bot.userId, bot)
 						}
 
 						chatListView?.invalidateViews()
@@ -18926,9 +19026,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					mentionContainer?.adapter?.setBotsCount(botsCount)
 
-					if (chatMode == 0 && isChannel(currentChat) && mergeDialogId == 0L && currentChatInfo!!.migrated_from_chat_id != 0L && !isThreadChat) {
-						mergeDialogId = -currentChatInfo!!.migrated_from_chat_id
-						maxMessageId[1] = currentChatInfo!!.migrated_from_max_id
+					if (chatMode == 0 && isChannel(currentChat) && mergeDialogId == 0L && currentChatInfo!!.migratedFromChatId != 0L && !isThreadChat) {
+						mergeDialogId = -currentChatInfo!!.migratedFromChatId
+						maxMessageId[1] = currentChatInfo!!.migratedFromMaxId
 
 						chatAdapter?.notifyDataSetChanged(true)
 
@@ -18958,7 +19058,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					builder.setTitle(context!!.getString(R.string.AppName))
 
 					if (reason == 0) {
-						if (currentChat is TL_channelForbidden) {
+						if (currentChat is TLChannelForbidden) {
 							builder.setMessage(context!!.getString(R.string.ChannelCantOpenBannedByAdmin))
 						}
 						else {
@@ -19057,7 +19157,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					}
 					else {
-						clearHistory(args[1] as Boolean, args[2] as? TL_updates_channelDifferenceTooLong)
+						clearHistory(args[1] as Boolean, args[2] as? TLUpdatesChannelDifferenceTooLong)
 					}
 				}
 			}
@@ -19367,22 +19467,22 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val pollId = args[0] as Long
 				val arrayList = polls[pollId] ?: return
 
-				val poll = args[1] as? TL_poll
-				val results = args[2] as? PollResults
+				val poll = args[1] as? TLPoll
+				val results = args[2] as? TLPollResults
 				var pollView: View? = null
 				var isVotedChanged = false
 				var isQuiz = false
 
 				for (`object` in arrayList) {
 					val isVoted = `object`.isVoted
-					val media = `object`.messageOwner?.media as? TL_messageMediaPoll
+					val media = `object`.messageOwner?.media as? TLMessageMediaPoll
 
 					if (poll != null) {
 						media?.poll = poll
 						isQuiz = poll.quiz
 					}
 					else if (media?.poll != null) {
-						isQuiz = media.poll.quiz
+						isQuiz = media.poll?.quiz ?: false
 					}
 
 					MessageObject.updatePollResults(media, results)
@@ -19435,7 +19535,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val messageObject = messagesDict[if (did == dialogId) 0 else 1][msgId]
 
 					if (messageObject != null) {
-						messageObject.messageOwner?.media?.extended_media = args[2] as MessageExtendedMedia
+						messageObject.messageOwner?.media?.extendedMedia = args[2] as MessageExtendedMedia
 						messageObject.forceUpdate = true
 						messageObject.setType()
 						updateMessageAnimated(messageObject, false)
@@ -19451,7 +19551,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val messageObject = messagesDict[if (did == dialogId) 0 else 1][msgId]
 
 					if (messageObject != null) {
-						MessageObject.updateReactions(messageObject.messageOwner, args[2] as TL_messageReactions)
+						MessageObject.updateReactions(messageObject.messageOwner, args[2] as TLMessageReactions)
 						messageObject.forceUpdate = true
 						messageObject.reactionsChanged = true
 						updateMessageAnimated(messageObject, true)
@@ -19531,7 +19631,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 				}
 
-				if (message.media!!.ttl_seconds != 0 && (message.media!!.photo is TL_photoEmpty || message.media!!.document is TL_documentEmpty)) {
+				if (message.media!!.ttlSeconds != 0 && (message.media!!.photo is TLPhotoEmpty || message.media!!.document is TLDocumentEmpty)) {
 					existMessageObject.setType()
 					chatAdapter?.updateRowWithMessageObject(existMessageObject, false)
 				}
@@ -19678,7 +19778,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					updateVisibleRows()
 				}
-				else if (waitingForReplies.size() != 0 && isChannel(currentChat) && !currentChat!!.megagroup && currentChatInfo != null && did == -currentChatInfo!!.linked_chat_id) {
+				else if (waitingForReplies.size() != 0 && isChannel(currentChat) && !currentChat!!.megagroup && currentChatInfo != null && did == -currentChatInfo!!.linkedChatId) {
 					checkWaitingForReplies()
 				}
 
@@ -19880,7 +19980,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val currentMessage = messagesDict[if (did == dialogId) 0 else 1][message.id]
 
 					if (currentMessage != null) {
-						currentMessage.messageOwner?.media = TL_messageMediaWebPage()
+						currentMessage.messageOwner?.media = TLMessageMediaWebPage()
 						currentMessage.messageOwner?.media?.webpage = message.media?.webpage
 
 						currentMessage.generateThumbs(true)
@@ -19902,7 +20002,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						val webPage = hashMap.valueAt(a)
 
 						if (webPage.id == foundWebPage?.id) {
-							showFieldPanelForWebPage(webPage !is TL_webPageEmpty, webPage, false)
+							showFieldPanelForWebPage(webPage !is TLWebPageEmpty, webPage, false)
 							break
 						}
 					}
@@ -19947,18 +20047,18 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val guid = args[1] as Int
 
 				if (classGuid == guid || guid == 0) {
-					val info = args[0] as BotInfo
+					val info = args[0] as TLBotInfo
 
 					if (currentEncryptedChat == null) {
 						if (info.commands.isNotEmpty() && !isChannel(currentChat) && !isThreadChat) {
 							hasBotsCommands = true
 						}
 
-						if (info.user_id == 0L && currentUser != null) {
-							info.user_id = currentUser!!.id
+						if (info.userId == 0L && currentUser != null) {
+							info.userId = currentUser!!.id
 						}
 
-						botInfo.put(info.user_id, info)
+						botInfo.put(info.userId, info)
 
 						if (chatAdapter != null) {
 							val prevRow = chatAdapter!!.botInfoRow
@@ -19984,7 +20084,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						if (chatActivityEnterView != null) {
 							chatActivityEnterView?.setBotsCount(botsCount, hasBotsCommands, true)
 
-							// val hasBotWebView = messagesController.getUser(info.user_id)!!.bot_menu_webview
+							// val hasBotWebView = messagesController.getUser(info.userId)!!.bot_menu_webview
 
 							chatActivityEnterView?.updateBotWebView(true)
 						}
@@ -20051,7 +20151,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			NotificationCenter.didUpdateMessagesViews -> {
 				val channelViews = args[0] as? LongSparseArray<SparseIntArray>
 				val channelForwards = args[1] as? LongSparseArray<SparseIntArray>
-				val channelReplies = args[2] as? LongSparseArray<SparseArray<MessageReplies>>
+				val channelReplies = args[2] as? LongSparseArray<SparseArray<TLMessageReplies>>
 				val addingReplies = args[3] as Boolean
 				var updated = false
 				var newGroups: LongSparseArray<GroupedMessages>? = null
@@ -20132,36 +20232,36 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							if (messageObject != null && messageObject !== threadMessage) {
 								val newValue = array[messageId]
 
-								if (newValue == null || !addingReplies && messageObject.messageOwner?.replies != null && newValue.replies_pts <= messageObject.messageOwner!!.replies!!.replies_pts && newValue.read_max_id <= messageObject.messageOwner!!.replies!!.read_max_id && newValue.max_id <= messageObject.messageOwner!!.replies!!.max_id) {
+								if (newValue == null || !addingReplies && messageObject.messageOwner?.replies != null && newValue.repliesPts <= messageObject.messageOwner!!.replies!!.repliesPts && newValue.readMaxId <= messageObject.messageOwner!!.replies!!.readMaxId && newValue.maxId <= messageObject.messageOwner!!.replies!!.maxId) {
 									continue
 								}
 
 								if (addingReplies) {
 									if (!hasChatInBack) {
 										if (messageObject.messageOwner?.replies == null) {
-											messageObject.messageOwner?.replies = TL_messageReplies()
+											messageObject.messageOwner?.replies = TLMessageReplies()
 										}
 
 										messageObject.messageOwner!!.replies!!.replies += newValue.replies
 
 										var c = 0
-										val N = newValue.recent_repliers.size
+										val N = newValue.recentRepliers.size
 
 										while (c < N) {
-											messageObject.messageOwner?.replies?.recent_repliers?.remove(newValue.recent_repliers[c])
+											messageObject.messageOwner?.replies?.recentRepliers?.remove(newValue.recentRepliers[c])
 											c++
 										}
 
-										messageObject.messageOwner?.replies?.recent_repliers?.addAll(0, newValue.recent_repliers)
+										messageObject.messageOwner?.replies?.recentRepliers?.addAll(0, newValue.recentRepliers)
 
-										while (messageObject.messageOwner!!.replies!!.recent_repliers.size > 3) {
-											messageObject.messageOwner!!.replies!!.recent_repliers.removeAt(0)
+										while (messageObject.messageOwner!!.replies!!.recentRepliers.size > 3) {
+											messageObject.messageOwner!!.replies!!.recentRepliers.removeAt(0)
 										}
 									}
 								}
 								else {
-									if (messageObject.messageOwner?.replies != null && messageObject.messageOwner!!.replies!!.read_max_id > newValue.read_max_id) {
-										newValue.read_max_id = messageObject.messageOwner!!.replies!!.read_max_id
+									if (messageObject.messageOwner?.replies != null && messageObject.messageOwner!!.replies!!.readMaxId > newValue.readMaxId) {
+										newValue.readMaxId = messageObject.messageOwner!!.replies!!.readMaxId
 									}
 
 									messageObject.messageOwner?.replies = newValue
@@ -20289,18 +20389,18 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val uid = args[0] as Long
 
 				if (currentUser != null && currentUser?.id == uid) {
-					currentUserInfo = args[1] as UserFull
+					currentUserInfo = args[1] as TLUserFull
 
 					checkThemeEmoticon()
 
 					chatActivityEnterView?.checkChannelRights()
 
 					if (headerItem != null) {
-						showAudioCallAsIcon = currentUserInfo!!.phone_calls_available && !inPreviewMode
+						showAudioCallAsIcon = currentUserInfo!!.phoneCallsAvailable && !inPreviewMode
 
 						avatarContainer?.setTitleExpand(showAudioCallAsIcon)
 
-						if (currentUserInfo!!.phone_calls_available) {
+						if (currentUserInfo!!.phoneCallsAvailable) {
 							if (showAudioCallAsIcon) {
 								if (audioCallIconItem != null) {
 									if (openAnimationStartTime != 0L && audioCallIconItem!!.visibility != View.VISIBLE) {
@@ -20315,7 +20415,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								headerItem?.showSubItem(call)
 							}
 
-							if (currentUserInfo!!.video_calls_available) {
+							if (currentUserInfo!!.videoCallsAvailable) {
 								headerItem?.showSubItem(video_call)
 							}
 							else {
@@ -20332,15 +20432,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					checkActionBarMenu(fragmentOpened)
 
-					if (!inMenuMode && !loadingPinnedMessagesList && pinnedMessageIds.isNotEmpty() && currentUserInfo!!.pinned_msg_id > pinnedMessageIds[0]) {
-						mediaDataController.loadPinnedMessages(dialogId, 0, currentUserInfo!!.pinned_msg_id)
+					if (!inMenuMode && !loadingPinnedMessagesList && pinnedMessageIds.isNotEmpty() && currentUserInfo!!.pinnedMsgId > pinnedMessageIds[0]) {
+						mediaDataController.loadPinnedMessages(dialogId, 0, currentUserInfo!!.pinnedMsgId)
 						loadingPinnedMessagesList = true
 					}
 				}
 				else if (uid == callToThisUser) {
 					callToThisUser = 0
 
-					val uf = args[1] as? UserFull
+					val uf = args[1] as? TLUserFull
 
 					if (uf != null) {
 						val u = messagesController.getUser(uf.id)
@@ -20349,7 +20449,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							val activity = parentActivity
 
 							if (activity != null) {
-								startCall(u, false, uf.video_calls_available, activity, uf, accountInstance)
+								startCall(u, false, uf.videoCallsAvailable, activity, uf, accountInstance)
 							}
 						}
 					}
@@ -20546,7 +20646,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 
 			NotificationCenter.aiBotRequestFailed -> {
-				// TLRPC.TL_error error = (TLRPC.TL_error)args[0];
+				// TLRPC.TLError error = (TLRPC.TLError)args[0];
 				// FileLog.e("aiBotRequestFailed " + error.text);
 			}
 
@@ -20600,7 +20700,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		for (messageObject in arrayList) {
 			messageObject.resetLayout()
 
-			val dialogId = MessageObject.getPeerId(messageObject.messageOwner?.from_id)
+			val dialogId = MessageObject.getPeerId(messageObject.messageOwner?.fromId)
 			var messageId = 0
 
 			if (messageObject.sponsoredChannelPost != 0) {
@@ -20627,7 +20727,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return
 		}
 
-		startCall(currentChat!!, voiceChatHash, createGroupCall, !groupCall!!.call!!.rtmp_stream, parentActivity, this@ChatActivity, accountInstance)
+		startCall(currentChat!!, voiceChatHash, createGroupCall, !groupCall!!.call!!.rtmpStream, parentActivity, this@ChatActivity, accountInstance)
 
 		voiceChatHash = null
 	}
@@ -20653,38 +20753,40 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				idsToRemove.add(waitingForReplies.keyAt(a))
 
-				if (`object`.messageOwner?.action !is TL_messageActionPinMessage && `object`.replyMessageObject?.messageOwner?.fwd_from != null && MessageObject.getPeerId(`object`.replyMessageObject?.messageOwner?.fwd_from?.saved_from_peer) == dialogId && `object`.replyMessageObject?.messageOwner?.fwd_from?.channel_post != 0) {
-					val obj = messagesDict[0][`object`.replyMessageObject!!.messageOwner!!.fwd_from!!.channel_post]
+				if (`object`.messageOwner?.action !is TLMessageActionPinMessage && `object`.replyMessageObject?.messageOwner?.fwdFrom != null && MessageObject.getPeerId(`object`.replyMessageObject?.messageOwner?.fwdFrom?.savedFromPeer) == dialogId && `object`.replyMessageObject?.messageOwner?.fwdFrom?.channelPost != 0) {
+					val obj = messagesDict[0][`object`.replyMessageObject!!.messageOwner!!.fwdFrom!!.channelPost]
 
 					if (obj?.messageOwner?.replies != null) {
 						obj.messageOwner!!.replies!!.replies += 1
 						obj.animateComments = true
 
-						var peer = `object`.messageOwner?.from_id
+						var peer = `object`.messageOwner?.fromId
 
 						if (peer == null) {
-							peer = `object`.messageOwner?.peer_id
+							peer = `object`.messageOwner?.peerId
 						}
 
 						var c = 0
-						val N2 = obj.messageOwner!!.replies!!.recent_repliers.size
+						val N2 = obj.messageOwner!!.replies!!.recentRepliers.size
 
 						while (c < N2) {
-							if (MessageObject.getPeerId(obj.messageOwner?.replies?.recent_repliers?.get(c)) == MessageObject.getPeerId(peer)) {
-								obj.messageOwner?.replies?.recent_repliers?.removeAt(c)
+							if (MessageObject.getPeerId(obj.messageOwner?.replies?.recentRepliers?.get(c)) == MessageObject.getPeerId(peer)) {
+								obj.messageOwner?.replies?.recentRepliers?.removeAt(c)
 								break
 							}
 
 							c++
 						}
 
-						obj.messageOwner?.replies?.recent_repliers?.add(0, peer)
-
-						if (!`object`.isOut) {
-							obj.messageOwner?.replies?.max_id = `object`.id
+						if (peer != null) {
+							obj.messageOwner?.replies?.recentRepliers?.add(0, peer)
 						}
 
-						messagesStorage.updateRepliesCount(currentChat!!.id, obj.id, obj.messageOwner!!.replies!!.recent_repliers, obj.messageOwner!!.replies!!.max_id, 1)
+						if (!`object`.isOut) {
+							obj.messageOwner?.replies?.maxId = `object`.id
+						}
+
+						messagesStorage.updateRepliesCount(currentChat!!.id, obj.id, obj.messageOwner!!.replies!!.recentRepliers, obj.messageOwner!!.replies!!.maxId, 1)
 
 						if (obj.hasValidGroupId()) {
 							val groupedMessages = groupedMessagesMap[obj.groupId]
@@ -20751,12 +20853,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 	}
 
-	private fun clearHistory(overwrite: Boolean, differenceTooLong: TL_updates_channelDifferenceTooLong?) {
+	private fun clearHistory(overwrite: Boolean, differenceTooLong: TLUpdatesChannelDifferenceTooLong?) {
 		if (overwrite) {
-			FileLog.d("clear history by overwrite firstLoading=" + firstLoading + " minMessage=" + minMessageId[0] + " topMessage=" + differenceTooLong!!.dialog.top_message)
+			FileLog.d("clear history by overwrite firstLoading=" + firstLoading + " minMessage=" + minMessageId[0] + " topMessage=" + differenceTooLong?.dialog?.topMessage)
 
-			if (differenceTooLong.dialog.top_message > minMessageId[0]) {
-				createUnreadMessageAfterId = max(minMessageId[0] + 1, differenceTooLong.dialog.read_inbox_max_id)
+			if ((differenceTooLong?.dialog?.topMessage ?: 0) > minMessageId[0]) {
+				createUnreadMessageAfterId = max(minMessageId[0] + 1, differenceTooLong?.dialog?.readInboxMaxId ?: 0)
 			}
 
 			forwardEndReached[0] = false
@@ -20766,8 +20868,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				chatAdapter?.notifyItemInserted(0)
 			}
 
-			newUnreadMessageCount = differenceTooLong.dialog.unread_count
-			newMentionsCount = differenceTooLong.dialog.unread_mentions_count
+			newUnreadMessageCount = differenceTooLong?.dialog?.unreadCount ?: 0
+			newMentionsCount = differenceTooLong?.dialog?.unreadMentionsCount ?: 0
 
 			if (prevSetUnreadCount != newUnreadMessageCount) {
 				pagedownButtonCounter?.setCount(newUnreadMessageCount, openAnimationEnded)
@@ -20775,8 +20877,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				updatePagedownButtonVisibility(true)
 			}
 
-			if (newMentionsCount != differenceTooLong.dialog.unread_mentions_count) {
-				newMentionsCount = differenceTooLong.dialog.unread_mentions_count
+			if (newMentionsCount != differenceTooLong?.dialog?.unreadMentionsCount) {
+				newMentionsCount = differenceTooLong?.dialog?.unreadMentionsCount ?: 0
 
 				if (newMentionsCount <= 0) {
 					newMentionsCount = 0
@@ -20843,8 +20945,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 	}
 
-	fun processSwitchButton(button: TL_keyboardButtonSwitchInline): Boolean {
-		if (inlineReturn == 0L || button.same_peer || parentLayout == null) {
+	fun processSwitchButton(button: TLKeyboardButtonSwitchInline): Boolean {
+		if (inlineReturn == 0L || button.samePeer || parentLayout == null) {
 			return false
 		}
 
@@ -20887,9 +20989,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	private fun showGigagroupConvertAlert() {
-		if (currentChatInfo != null && !paused && currentChat!!.creator && currentChat!!.megagroup && !currentChat!!.gigagroup && currentChatInfo!!.pending_suggestions.contains("CONVERT_GIGAGROUP") && visibleDialog == null) {
+		if (currentChatInfo != null && !paused && currentChat!!.creator && currentChat!!.megagroup && !currentChat!!.gigagroup && currentChatInfo!!.pendingSuggestions.contains("CONVERT_GIGAGROUP") && visibleDialog == null) {
 			AndroidUtilities.runOnUIThread({
-				if (currentChatInfo != null && !paused && currentChat!!.creator && currentChat!!.megagroup && !currentChat!!.gigagroup && currentChatInfo!!.pending_suggestions.contains("CONVERT_GIGAGROUP") && visibleDialog == null) {
+				if (currentChatInfo != null && !paused && currentChat!!.creator && currentChat!!.megagroup && !currentChat!!.gigagroup && currentChatInfo!!.pendingSuggestions.contains("CONVERT_GIGAGROUP") && visibleDialog == null) {
 					val preferences = MessagesController.getNotificationsSettings(currentAccount)
 					val lastShowTime = preferences.getInt("group_convert_time", 0)
 					val timeout = if (BuildConfig.DEBUG_PRIVATE_VERSION) 120 else 60 * 60 * 24 * 7
@@ -20952,7 +21054,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 	private fun updateReplyMessageOwners(id: Int, update: MessageObject?) {
 		val ids = replyMessageOwners[id] ?: return
-		val emptyMessage = if (update == null) MessageObject(currentAccount, TL_messageEmpty(), generateLayout = false, checkMediaExists = false) else null
+		val emptyMessage = if (update == null) MessageObject(currentAccount, TLMessageEmpty(), generateLayout = false, checkMediaExists = false) else null
 
 		for (@Suppress("NAME_SHADOWING") id in ids) {
 			val `object` = messagesDict[0][id]
@@ -21012,7 +21114,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				pendingSendMessages.add(0, messageObject)
 			}
 
-			if (messageObject.isDice && !messageObject.isForwarded || messageObject.messageOwner?.action is TL_messageActionGiftPremium) {
+			if (messageObject.isDice && !messageObject.isForwarded || messageObject.messageOwner?.action is TLMessageActionGiftPremium) {
 				messageObject.wasUnread = true
 			}
 
@@ -21045,14 +21147,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					if (newChat != null) {
 						currentChat = newChat
 
-						if (!newChat.gigagroup && newChat.slowmode_enabled && messageObject.isSent && chatMode != MODE_SCHEDULED) {
+						if (!newChat.gigagroup && newChat.slowmodeEnabled && messageObject.isSent && chatMode != MODE_SCHEDULED) {
 							if (currentChatInfo != null) {
-								val date = messageObject.messageOwner!!.date + currentChatInfo!!.slowmode_seconds
+								val date = messageObject.messageOwner!!.date + currentChatInfo!!.slowmodeSeconds
 								val currentTime = connectionsManager.currentTime
 
 								if (date > connectionsManager.currentTime) {
-									currentChatInfo?.slowmode_next_send_date = max(currentChatInfo!!.slowmode_next_send_date, min(currentTime + currentChatInfo!!.slowmode_seconds, date))
-									chatActivityEnterView?.setSlowModeTimer(currentChatInfo!!.slowmode_next_send_date)
+									currentChatInfo?.slowmodeNextSendDate = max(currentChatInfo!!.slowmodeNextSendDate, min(currentTime + currentChatInfo!!.slowmodeSeconds, date))
+									chatActivityEnterView?.setSlowModeTimer(currentChatInfo!!.slowmodeNextSendDate)
 								}
 							}
 							messagesController.loadFullChat(currentChat!!.id, 0, true)
@@ -21066,7 +21168,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 
 			if (currentChat != null) {
-				if (messageObject.messageOwner?.action is TL_messageActionChatDeleteUser && messageObject.messageOwner?.action?.user_id == currentUserId || messageObject.messageOwner?.action is TL_messageActionChatAddUser && messageObject.messageOwner?.action?.users?.contains(currentUserId) == true) {
+				if (messageObject.messageOwner?.action is TLMessageActionChatDeleteUser && messageObject.messageOwner?.action?.userId == currentUserId || messageObject.messageOwner?.action is TLMessageActionChatAddUser && messageObject.messageOwner?.action?.users?.contains(currentUserId) == true) {
 					val newChat = messagesController.getChat(currentChat!!.id)
 
 					if (newChat != null) {
@@ -21080,14 +21182,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 			}
 			else if (inlineReturn != 0L) {
-				if (messageObject.messageOwner?.reply_markup != null) {
-					for (b in messageObject.messageOwner!!.reply_markup!!.rows.indices) {
-						val row = messageObject.messageOwner!!.reply_markup!!.rows[b]
+				if (messageObject.messageOwner?.replyMarkup != null) {
+					for (b in messageObject.messageOwner!!.replyMarkup!!.rows.indices) {
+						val row = messageObject.messageOwner!!.replyMarkup!!.rows[b]
 
 						for (c in row.buttons.indices) {
 							val button = row.buttons[c]
 
-							if (button is TL_keyboardButtonSwitchInline) {
+							if (button is TLKeyboardButtonSwitchInline) {
 								processSwitchButton(button)
 								break
 							}
@@ -21104,15 +21206,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 
 				when (messageObject.messageOwner?.action) {
-					is TL_messageActionPinMessage -> {
+					is TLMessageActionPinMessage -> {
 						messageObject.generatePinMessageText(null, null)
 					}
 
-					is TL_messageActionGameScore -> {
+					is TLMessageActionGameScore -> {
 						messageObject.generateGameMessageText(null)
 					}
 
-					is TL_messageActionPaymentSent -> {
+					is TLMessageActionPaymentSent -> {
 						messageObject.generatePaymentSentMessageText(null)
 					}
 				}
@@ -21161,15 +21263,16 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				val action = obj.messageOwner?.action
 
-				if (avatarContainer != null && currentEncryptedChat != null && action is TL_messageEncryptedAction && action.encryptedAction is TL_decryptedMessageActionSetMessageTTL) {
-					avatarContainer?.setTime(action.encryptedAction.ttl_seconds, true)
-				}
+				// MARK: uncomment to enable secret chats
+//				if (avatarContainer != null && currentEncryptedChat != null && action is TLMessageEncryptedAction && action.encryptedAction is TLDecryptedMessageActionSetMessageTTL) {
+//					avatarContainer?.setTime(action.encryptedAction.ttlSeconds, true)
+//				}
 
-				if (action is TL_messageActionChatMigrateTo) {
+				if (action is TLMessageActionChatMigrateTo) {
 					migrateToNewChat(obj)
 					return
 				}
-				else if (currentChat != null && currentChat!!.megagroup && (action is TL_messageActionChatAddUser || action is TL_messageActionChatDeleteUser)) {
+				else if (currentChat != null && currentChat!!.megagroup && (action is TLMessageActionChatAddUser || action is TLMessageActionChatDeleteUser)) {
 					reloadMegagroup = true
 				}
 
@@ -21186,19 +21289,19 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					continue
 				}
 
-				if (currentChat != null && currentChat!!.creator && (!isChannel(currentChat) || currentChat!!.megagroup) && (action is TL_messageActionChatCreate || action is TL_messageActionChatEditPhoto && messages.size < 2)) {
+				if (currentChat != null && currentChat!!.creator && (!isChannel(currentChat) || currentChat!!.megagroup) && (action is TLMessageActionChatCreate || action is TLMessageActionChatEditPhoto && messages.size < 2)) {
 					continue
 				}
 
-				if (action is TL_messageActionChannelMigrateFrom) {
+				if (action is TLMessageActionChannelMigrateFrom) {
 					continue
 				}
 
-				if (threadId != 0 && obj.messageOwner is TL_messageEmpty) {
+				if (threadId != 0 && obj.messageOwner is TLMessageEmpty) {
 					continue
 				}
 
-				if (threadMessage != null && obj.isReply && obj.messageOwner?.action !is TL_messageActionPinMessage) {
+				if (threadMessage != null && obj.isReply && obj.messageOwner?.action !is TLMessageActionPinMessage) {
 					val mid = obj.replyAnyMsgId
 
 					if (threadMessage?.id == mid) {
@@ -21320,27 +21423,28 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				val action = obj.messageOwner?.action
 
-				if (avatarContainer != null && currentEncryptedChat != null && action is TL_messageEncryptedAction && action.encryptedAction is TL_decryptedMessageActionSetMessageTTL) {
-					avatarContainer?.setTime(action.encryptedAction.ttl_seconds, true)
-				}
+				// MARK: uncomment to enable secret chats
+//				if (avatarContainer != null && currentEncryptedChat != null && action is TLMessageEncryptedAction && action.encryptedAction is TLDecryptedMessageActionSetMessageTTL) {
+//					avatarContainer?.setTime(action.encryptedAction.ttlSeconds, true)
+//				}
 
 				if (obj.type < 0 || messagesDict[0].indexOfKey(messageId) >= 0) {
 					continue
 				}
 
-				if (currentChat != null && currentChat!!.creator && (!isChannel(currentChat) || currentChat!!.megagroup) && (action is TL_messageActionChatCreate || action is TL_messageActionChatEditPhoto && messages.size < 2)) {
+				if (currentChat != null && currentChat!!.creator && (!isChannel(currentChat) || currentChat!!.megagroup) && (action is TLMessageActionChatCreate || action is TLMessageActionChatEditPhoto && messages.size < 2)) {
 					continue
 				}
 
-				if (action is TL_messageActionChannelMigrateFrom) {
+				if (action is TLMessageActionChannelMigrateFrom) {
 					continue
 				}
 
-				if (threadId != 0 && obj.messageOwner is TL_messageEmpty) {
+				if (threadId != 0 && obj.messageOwner is TLMessageEmpty) {
 					continue
 				}
 
-				if (threadMessage != null && threadMessage!!.messageOwner?.replies != null && obj.isReply && obj.messageOwner?.action !is TL_messageActionPinMessage) {
+				if (threadMessage != null && threadMessage!!.messageOwner?.replies != null && obj.isReply && obj.messageOwner?.action !is TLMessageActionPinMessage) {
 					val mid = obj.replyAnyMsgId
 
 					if (threadMessage?.id == mid) {
@@ -21429,7 +21533,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 				}
 
-				if (currentEncryptedChat != null && obj.messageOwner?.media is TL_messageMediaWebPage && obj.messageOwner?.media?.webpage is TL_webPageUrlPending) {
+				if (currentEncryptedChat != null && obj.messageOwner?.media is TLMessageMediaWebPage && obj.messageOwner?.media?.webpage is TLWebPagePending) {
 					if (webpagesToReload == null) {
 						webpagesToReload = mutableMapOf()
 					}
@@ -21438,7 +21542,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					if (arrayList == null) {
 						arrayList = mutableListOf()
-						webpagesToReload[obj.messageOwner!!.media!!.webpage.url] = arrayList
+
+						obj.messageOwner?.media?.webpage?.url?.let {
+							webpagesToReload[it] = arrayList
+						}
 					}
 
 					arrayList.add(obj)
@@ -21446,7 +21553,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				obj.checkLayout()
 
-				if (action is TL_messageActionChatMigrateTo) {
+				if (action is TLMessageActionChatMigrateTo) {
 					migrateToNewChat(obj)
 
 					if (newGroups != null) {
@@ -21457,7 +21564,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					return
 				}
-				else if (currentChat != null && currentChat!!.megagroup && (action is TL_messageActionChatAddUser || action is TL_messageActionChatDeleteUser)) {
+				else if (currentChat != null && currentChat!!.megagroup && (action is TLMessageActionChatAddUser || action is TLMessageActionChatDeleteUser)) {
 					reloadMegagroup = true
 				}
 
@@ -21465,7 +21572,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					minDate[0] = obj.messageOwner!!.date
 				}
 
-				if (obj.isOut && !obj.messageOwner!!.from_scheduled) {
+				if (obj.isOut && !obj.messageOwner!!.fromScheduled) {
 					removeUnreadPlane(true)
 					hideInfoView()
 					hasFromMe = true
@@ -21506,7 +21613,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					messagesByDays[obj.dateKey!!] = dayArray
 
-					val dateMsg: Message = TL_message()
+					val dateMsg: Message = TLMessage()
 
 					if (chatMode == MODE_SCHEDULED) {
 						if (obj.messageOwner?.date == 0x7ffffffe) {
@@ -21540,7 +21647,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					chatAdapter?.notifyItemInserted(placeToPaste)
 				}
 
-				if (obj.messageOwner?.action !is TL_messageActionGeoProximityReached && (!obj.isOut || obj.messageOwner!!.from_scheduled)) {
+				if (obj.messageOwner?.action !is TLMessageActionGeoProximityReached && (!obj.isOut || obj.messageOwner!!.fromScheduled)) {
 					if (paused && placeToPaste == 0) {
 						if (!scrollToTopUnReadOnResume && unreadMessageObject != null) {
 							removeMessageObject(unreadMessageObject)
@@ -21548,7 +21655,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 
 						if (unreadMessageObject == null) {
-							val dateMsg: Message = TL_message()
+							val dateMsg: Message = TLMessage()
 							dateMsg.message = ""
 							dateMsg.id = 0
 
@@ -21619,12 +21726,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					updateChat = true
 				}
 
-				if (obj.messageOwner?.action is TL_messageActionSetChatTheme) {
+				if (obj.messageOwner?.action is TLMessageActionSetChatTheme) {
 					lastActionSetChatThemeMessageObject = obj
 				}
 			}
 
-			(lastActionSetChatThemeMessageObject?.messageOwner?.action as? TL_messageActionSetChatTheme)?.let {
+			(lastActionSetChatThemeMessageObject?.messageOwner?.action as? TLMessageActionSetChatTheme)?.let {
 				setChatThemeEmoticon(it.emoticon)
 			}
 
@@ -21862,7 +21969,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 
 			if (obj != null) {
-				if (obj.messageOwner?.reply_to != null && obj.messageOwner?.action !is TL_messageActionPinMessage) {
+				if (obj.messageOwner?.replyTo != null && obj.messageOwner?.action !is TLMessageActionPinMessage) {
 					val replyId = obj.replyAnyMsgId
 
 					if (threadMessage != null && threadMessage!!.id == replyId) {
@@ -22143,10 +22250,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				if (old.replyMessageObject != null) {
 					messageObject.replyMessageObject = old.replyMessageObject
 
-					if (messageObject.messageOwner?.action is TL_messageActionGameScore) {
+					if (messageObject.messageOwner?.action is TLMessageActionGameScore) {
 						messageObject.generateGameMessageText(null)
 					}
-					else if (messageObject.messageOwner?.action is TL_messageActionPaymentSent) {
+					else if (messageObject.messageOwner?.action is TLMessageActionPaymentSent) {
 						messageObject.generatePaymentSentMessageText(null)
 					}
 				}
@@ -22305,7 +22412,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 	private fun migrateToNewChat(obj: MessageObject) {
 		val actionBarLayout = parentLayout ?: return
-		val channelId = obj.messageOwner?.action?.channel_id ?: 0L
+		val channelId = obj.messageOwner?.action?.channelId ?: 0L
 		val lastFragment = actionBarLayout.fragmentsStack.lastOrNull()
 		val index = actionBarLayout.fragmentsStack.indexOf(this@ChatActivity)
 
@@ -22360,7 +22467,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				notificationCenter.postNotificationName(NotificationCenter.closeChats)
 
 				val bundle = Bundle()
-				bundle.putLong("chat_id", obj.messageOwner?.action?.channel_id ?: 0L)
+				bundle.putLong("chat_id", obj.messageOwner?.action?.channelId ?: 0L)
 
 				actionBarLayout.addFragmentToStack(ChatActivity(bundle), actionBarLayout.fragmentsStack.size - 1)
 
@@ -22420,19 +22527,19 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		hintMessageType = type
 	}
 
-	private fun showPollSolution(messageObject: MessageObject?, results: PollResults?) {
+	private fun showPollSolution(messageObject: MessageObject?, results: TLPollResults?) {
 		if (results == null || results.solution.isNullOrEmpty()) {
 			return
 		}
 
 		val text: CharSequence
 
-		if (results.solution_entities.isNotEmpty()) {
+		if (results.solutionEntities.isNotEmpty()) {
 			text = SpannableStringBuilder(results.solution)
-			MessageObject.addEntitiesToText(text, results.solution_entities, out = false, usernames = true, photoViewer = true, useManualParse = false)
+			MessageObject.addEntitiesToText(text, results.solutionEntities, out = false, usernames = true, photoViewer = true, useManualParse = false)
 		}
 		else {
-			text = results.solution
+			text = results.solution ?: return
 		}
 
 		showInfoHint(messageObject, text, 0)
@@ -22447,12 +22554,15 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			if (count < 0) {
 				searchCountText?.setCount("", 0, false)
+				showListText?.gone()
 			}
 			else if (count == 0) {
 				searchCountText?.setCount(context!!.getString(R.string.NoResult), 0, false)
+				showListText?.gone()
 			}
 			else {
 				searchCountText?.setCount(LocaleController.formatString("OfCounted", R.string.OfCounted, num + 1, count), num + 1, true)
+				showListText?.visible()
 			}
 		}
 	}
@@ -22697,73 +22807,75 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		contentView?.invalidate()
 
 		if (!attachMenuBotToOpen.isNullOrEmpty()) {
-			val req = TL_contacts_resolveUsername()
+			val req = TLContactsResolveUsername()
 			req.username = attachMenuBotToOpen
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
 					if (response != null) {
-						val resolvedPeer = response as TL_contacts_resolvedPeer
+						val resolvedPeer = response as TLContactsResolvedPeer
 
 						if (resolvedPeer.users.isNotEmpty()) {
 							val user = resolvedPeer.users[0]
 
-							if (user.bot && user.bot_attach_menu) {
-								val getAttachMenuBot = TL_messages_getAttachMenuBot()
+							if (user.bot && user.botAttachMenu) {
+								val getAttachMenuBot = TLMessagesGetAttachMenuBot()
 								getAttachMenuBot.bot = MessagesController.getInstance(currentAccount).getInputUser(user.id)
 
 								connectionsManager.sendRequest(getAttachMenuBot) { response1, _ ->
 									AndroidUtilities.runOnUIThread {
-										if (response1 is TL_attachMenuBotsBot) {
+										if (response1 is TLAttachMenuBotsBot) {
 											messagesController.putUsers(response1.users, false)
 
 											val attachMenuBot = response1.bot
 
-											if (!MediaDataController.canShowAttachMenuBot(attachMenuBot, if (currentUser != null) currentUser else currentChat)) {
-												if (currentUser != null && currentUser!!.bot && user.id == attachMenuBot.bot_id) {
-													BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuSameBot)).show()
-												}
-												else if (currentUser != null && currentUser!!.bot && user.id != attachMenuBot.bot_id) {
-													BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuBot)).show()
-												}
-												else if (currentUser != null && !currentUser!!.bot) {
-													BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuUser)).show()
-												}
-												else if (currentChat != null && !isChannelAndNotMegaGroup(currentChat)) {
-													BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuGroup)).show()
-												}
-												else if (currentChat != null && isChannelAndNotMegaGroup(currentChat)) {
-													BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuChannel)).show()
+											if (attachMenuBot != null) {
+												if (!MediaDataController.canShowAttachMenuBot(attachMenuBot, if (currentUser != null) currentUser else currentChat)) {
+													if (currentUser != null && currentUser!!.bot && user.id == attachMenuBot.botId) {
+														BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuSameBot)).show()
+													}
+													else if (currentUser != null && currentUser!!.bot && user.id != attachMenuBot.botId) {
+														BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuBot)).show()
+													}
+													else if (currentUser != null && !currentUser!!.bot) {
+														BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuUser)).show()
+													}
+													else if (currentChat != null && !isChannelAndNotMegaGroup(currentChat)) {
+														BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuGroup)).show()
+													}
+													else if (currentChat != null && isChannelAndNotMegaGroup(currentChat)) {
+														BulletinFactory.of(this).createErrorBulletin(context!!.getString(R.string.BotCantOpenAttachMenuChannel)).show()
+													}
+
+													return@runOnUIThread
 												}
 
-												return@runOnUIThread
-											}
+												if (!attachMenuBot.inactive) {
+													openAttachBotLayout(user.id, attachMenuBotStartCommand)
+												}
+												else {
+													val parentActivity = parentActivity ?: return@runOnUIThread
 
-											if (!attachMenuBot.inactive) {
-												openAttachBotLayout(user.id, attachMenuBotStartCommand)
-											}
-											else {
-												val parentActivity = parentActivity ?: return@runOnUIThread
+													val introTopView = AttachBotIntroTopView(parentActivity)
+													introTopView.setColor(ResourcesCompat.getColor(parentActivity.resources, R.color.white, null))
+													introTopView.setBackgroundColor(ResourcesCompat.getColor(parentActivity.resources, R.color.brand, null))
+													introTopView.setAttachBot(attachMenuBot)
 
-												val introTopView = AttachBotIntroTopView(parentActivity)
-												introTopView.setColor(ResourcesCompat.getColor(parentActivity.resources, R.color.white, null))
-												introTopView.setBackgroundColor(ResourcesCompat.getColor(parentActivity.resources, R.color.brand, null))
-												introTopView.setAttachBot(attachMenuBot)
+													AlertDialog.Builder(parentActivity).setTopView(introTopView).setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("BotRequestAttachPermission", R.string.BotRequestAttachPermission, getUserName(user)))).setPositiveButton(context!!.getString(R.string.BotAddToMenu)) { _, _ ->
+														val botRequest = TLMessagesToggleBotInAttachMenu()
+														botRequest.bot = MessagesController.getInstance(currentAccount).getInputUser(user.id)
+														botRequest.enabled = true
 
-												AlertDialog.Builder(parentActivity).setTopView(introTopView).setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("BotRequestAttachPermission", R.string.BotRequestAttachPermission, getUserName(user)))).setPositiveButton(context!!.getString(R.string.BotAddToMenu)) { _, _ ->
-													val botRequest = TL_messages_toggleBotInAttachMenu()
-													botRequest.bot = MessagesController.getInstance(currentAccount).getInputUser(user.id)
-													botRequest.enabled = true
-
-													connectionsManager.sendRequest(botRequest, { _, error2 ->
-														AndroidUtilities.runOnUIThread {
-															if (error2 == null) {
-																mediaDataController.loadAttachMenuBots(cache = false, force = true)
-																openAttachBotLayout(user.id, attachMenuBotStartCommand)
+														connectionsManager.sendRequest(botRequest, { _, error2 ->
+															AndroidUtilities.runOnUIThread {
+																if (error2 == null) {
+																	mediaDataController.loadAttachMenuBots(cache = false, force = true)
+																	openAttachBotLayout(user.id, attachMenuBotStartCommand)
+																}
 															}
-														}
-													}, ConnectionsManager.RequestFlagInvokeAfter or ConnectionsManager.RequestFlagFailOnServerErrors)
-												}.setNegativeButton(context!!.getString(R.string.Cancel), null).show()
+														}, ConnectionsManager.RequestFlagInvokeAfter or ConnectionsManager.RequestFlagFailOnServerErrors)
+													}.setNegativeButton(context!!.getString(R.string.Cancel), null).show()
+												}
 											}
 										}
 									}
@@ -22884,7 +22996,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				canPinMessages(currentChat)
 			}
 			else {
-				currentUserInfo?.can_pin_message ?: false
+				currentUserInfo?.canPinMessage ?: false
 			}
 
 			if (allowPin) {
@@ -22902,13 +23014,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			val requestedTime = MessagesController.getNotificationsSettings(currentAccount).getLong("dialog_join_requested_time_$dialogId", -1)
 			var shouldApply = false
 
-			if (isChannel(currentChat) && currentChat !is TL_channelForbidden) {
-				if (isNotInChat(currentChat) && (!isThreadChat || currentChat.join_to_send)) {
+			if (isChannel(currentChat) && currentChat !is TLChannelForbidden) {
+				if (isNotInChat(currentChat) && (!isThreadChat || currentChat.joinToSend)) {
 					if (messagesController.isJoiningChannel(currentChat.id)) {
 						showBottomOverlayProgress(show = true, animated = false)
 					}
 					else {
-						if (currentChat.join_request) {
+						if (currentChat.joinRequest) {
 							shouldApply = true
 
 							if (requestedTime > 0 && System.currentTimeMillis() - requestedTime < 1000 * 60 * 2) {
@@ -23149,7 +23261,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				bottomOverlayChat?.visible()
 				chatActivityEnterView?.invisible()
 			}
-			else if (chatMode == MODE_PINNED || currentChat != null && (isNotInChat(currentChat) || !canWriteToChat(currentChat)) && (currentChat.join_to_send || !isThreadChat) || currentUser != null && (isDeleted(currentUser) || userBlocked || isReplyUser(currentUser))) {
+			else if (chatMode == MODE_PINNED || currentChat != null && (isNotInChat(currentChat) || !canWriteToChat(currentChat)) && (currentChat.joinToSend || !isThreadChat) || currentUser != null && (isDeleted(currentUser) || userBlocked || isReplyUser(currentUser))) {
 				if (chatActivityEnterView!!.isEditingMessage) {
 					chatActivityEnterView?.visible()
 					bottomOverlayChat?.invisible()
@@ -23484,7 +23596,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	private fun pinnedButton(message: MessageObject?): KeyboardButton? {
-		return message?.messageOwner?.reply_markup?.rows?.firstOrNull()?.buttons?.firstOrNull()
+		return message?.messageOwner?.replyMarkup?.rows?.firstOrNull()?.buttons?.firstOrNull()
 	}
 
 	private fun updatePinnedMessageView(animated: Boolean, animateToNext: Int = 0) {
@@ -23613,7 +23725,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val buttonMessage: MessageObject = pinnedMessageObject
 
 					buttonTextView?.setOnClickListener {
-						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && botButton !is TL_keyboardButtonSwitchInline && botButton !is TL_keyboardButtonCallback && botButton !is TL_keyboardButtonGame && botButton !is TL_keyboardButtonUrl && botButton !is TL_keyboardButtonBuy && botButton !is TL_keyboardButtonUrlAuth && botButton !is TL_keyboardButtonUserProfile) {
+						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && botButton !is TLKeyboardButtonSwitchInline && botButton !is TLKeyboardButtonCallback && botButton !is TLKeyboardButtonGame && botButton !is TLKeyboardButtonUrl && botButton !is TLKeyboardButtonBuy && botButton !is TLKeyboardButtonUrlAuth && botButton !is TLKeyboardButtonUserProfile) {
 							return@setOnClickListener
 						}
 
@@ -23621,12 +23733,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 
 					buttonTextView?.setOnLongClickListener {
-						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && botButton !is TL_keyboardButtonSwitchInline && botButton !is TL_keyboardButtonCallback && botButton !is TL_keyboardButtonGame && botButton !is TL_keyboardButtonUrl && botButton !is TL_keyboardButtonBuy && botButton !is TL_keyboardButtonUrlAuth && botButton !is TL_keyboardButtonUserProfile) {
+						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && botButton !is TLKeyboardButtonSwitchInline && botButton !is TLKeyboardButtonCallback && botButton !is TLKeyboardButtonGame && botButton !is TLKeyboardButtonUrl && botButton !is TLKeyboardButtonBuy && botButton !is TLKeyboardButtonUrlAuth && botButton !is TLKeyboardButtonUserProfile) {
 							return@setOnLongClickListener false
 						}
 
-						if (botButton is TL_keyboardButtonUrl) {
-							openClickableLink(null, botButton.url, true, null, buttonMessage)
+						if (botButton is TLKeyboardButtonUrl) {
+							botButton.url?.let {
+								openClickableLink(null, it, true, null, buttonMessage)
+							}
 
 							runCatching {
 								buttonTextView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
@@ -23685,7 +23799,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				var noImage: Boolean
 				val prevMargin = layoutParams1.leftMargin
 
-				if ((photoSize == null || photoSize is TL_photoSizeEmpty || photoSize.location is TL_fileLocationUnavailable || pinnedMessageObject.isAnyKindOfSticker || pinnedMessageObject.isSecretMedia).also { noImage = it }) {
+				if ((photoSize == null || photoSize is TLPhotoSizeEmpty || photoSize.location is TLFileLocationUnavailable || pinnedMessageObject.isAnyKindOfSticker || pinnedMessageObject.isSecretMedia).also { noImage = it }) {
 					pinnedImageLocation = null
 					pinnedImageLocationObject = null
 
@@ -23745,51 +23859,51 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (threadId != 0) {
 					val messagesController = messagesController
-					val fwd_from = threadMessage?.messageOwner?.fwd_from
+					val fwd_from = threadMessage?.messageOwner?.fwdFrom
 					var user: User? = null
 					var chat: Chat? = null
 
-					if (fwd_from?.saved_from_peer != null) {
-						if (fwd_from.saved_from_peer.user_id != 0L) {
-							user = if (fwd_from.from_id is TL_peerUser) {
-								messagesController.getUser(fwd_from.from_id.user_id)
+					if (fwd_from?.savedFromPeer != null) {
+						if (fwd_from.savedFromPeer.userId != 0L) {
+							user = if (fwd_from.fromId is TLPeerUser) {
+								messagesController.getUser(fwd_from.fromId.userId)
 							}
 							else {
-								messagesController.getUser(fwd_from.saved_from_peer.user_id)
+								messagesController.getUser(fwd_from.savedFromPeer.userId)
 							}
 						}
-						else if (fwd_from.saved_from_peer.channel_id != 0L) {
-							if (threadMessage!!.isSavedFromMegagroup && fwd_from.from_id is TL_peerUser) {
-								user = messagesController.getUser(fwd_from.from_id.user_id)
+						else if (fwd_from.savedFromPeer.channelId != 0L) {
+							if (threadMessage!!.isSavedFromMegagroup && fwd_from.fromId is TLPeerUser) {
+								user = messagesController.getUser(fwd_from.fromId.userId)
 							}
 							else {
-								chat = messagesController.getChat(fwd_from.saved_from_peer.channel_id)
+								chat = messagesController.getChat(fwd_from.savedFromPeer.channelId)
 							}
 						}
-						else if (fwd_from.saved_from_peer.chat_id != 0L) {
-							when (fwd_from.from_id) {
-								is TL_peerUser -> user = messagesController.getUser(fwd_from.from_id.user_id)
-								is TL_peerChat -> chat = messagesController.getChat(fwd_from.from_id.chat_id)
-								is TL_peerChannel -> chat = messagesController.getChat(fwd_from.from_id.channel_id)
-								else -> chat = messagesController.getChat(fwd_from.saved_from_peer.chat_id)
+						else if (fwd_from.savedFromPeer.chatId != 0L) {
+							when (fwd_from.fromId) {
+								is TLPeerUser -> user = messagesController.getUser(fwd_from.fromId.userId)
+								is TLPeerChat -> chat = messagesController.getChat(fwd_from.fromId.chatId)
+								is TLPeerChannel -> chat = messagesController.getChat(fwd_from.fromId.channelId)
+								else -> chat = messagesController.getChat(fwd_from.savedFromPeer.chatId)
 							}
 						}
 					}
 					else if (threadMessage?.isFromUser == true) {
-						user = messagesController.getUser(threadMessage?.messageOwner?.from_id?.user_id)
+						user = messagesController.getUser(threadMessage?.messageOwner?.fromId?.userId)
 					}
-					else if (threadMessage?.messageOwner?.from_id is TL_peerChannel) {
-						chat = messagesController.getChat(threadMessage?.messageOwner?.from_id?.channel_id)
+					else if (threadMessage?.messageOwner?.fromId is TLPeerChannel) {
+						chat = messagesController.getChat(threadMessage?.messageOwner?.fromId?.channelId)
 					}
-					else if (threadMessage?.messageOwner?.from_id is TL_peerChat) {
-						chat = messagesController.getChat(threadMessage?.messageOwner?.from_id?.chat_id)
+					else if (threadMessage?.messageOwner?.fromId is TLPeerChat) {
+						chat = messagesController.getChat(threadMessage?.messageOwner?.fromId?.chatId)
 					}
 					else if (threadMessage?.messageOwner?.post == true) {
-						chat = messagesController.getChat(threadMessage?.messageOwner?.peer_id?.channel_id)
+						chat = messagesController.getChat(threadMessage?.messageOwner?.peerId?.channelId)
 					}
 
 					if (user != null) {
-						nameTextView?.setText(formatName(user.first_name, user.last_name))
+						nameTextView?.setText(formatName(user.firstName, user.lastName))
 					}
 					else if (chat != null) {
 						nameTextView?.setText(chat.title)
@@ -23825,7 +23939,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					pinnedText = String.format("%s - %s", pinnedMessageObject.musicAuthor, pinnedMessageObject.musicTitle)
 				}
 				else if (pinnedMessageObject.type == MessageObject.TYPE_POLL) {
-					val poll = pinnedMessageObject.messageOwner?.media as? TL_messageMediaPoll
+					val poll = pinnedMessageObject.messageOwner?.media as? TLMessageMediaPoll
 					var mess = poll?.poll?.question ?: ""
 
 					if (mess.length > 150) {
@@ -23835,7 +23949,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					mess = mess.replace('\n', ' ')
 					pinnedText = mess
 				}
-				else if (pinnedMessageObject.messageOwner?.media is TL_messageMediaGame) {
+				else if (pinnedMessageObject.messageOwner?.media is TLMessageMediaGame) {
 					pinnedText = Emoji.replaceEmoji(pinnedMessageObject.messageOwner?.media?.game?.title, messageTextView?.paint?.fontMetricsInt, false)
 				}
 				else if (!TextUtils.isEmpty(pinnedMessageObject.caption)) {
@@ -24311,10 +24425,16 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		if ((isAiBot()) && !chatBotController.userSettingsUpdated) {
 			showAiFreeRequests = (chatBotController.lastSubscriptionInfo?.realState ?: ElloRpc.SubscriptionInfoAiBotState.NONE) != ElloRpc.SubscriptionInfoAiBotState.NONE
-			show = if (chatBotController.lastSubscriptionInfo?.promoListActive?.contains(dialogId) == true) { false } else { showAiFreeRequests }
+
+			show = if (chatBotController.lastSubscriptionInfo?.promoListActive?.contains(dialogId) == true) {
+				false
+			}
+			else {
+				showAiFreeRequests
+			}
 		}
 		else if (currentEncryptedChat != null) {
-			show = !(currentEncryptedChat!!.admin_id == userConfig.getClientUserId() || contactsController.isLoadingContacts()) && contactsController.contactsDict[currentUser!!.id] == null
+			show = !(currentEncryptedChat!!.adminId == userConfig.getClientUserId() || contactsController.isLoadingContacts()) && contactsController.contactsDict[currentUser!!.id] == null
 			did = currentUser!!.id
 
 			val vis = preferences.getInt("dialog_bar_vis3$did", 0)
@@ -24337,7 +24457,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		val chatWithAdminChannel = preferences.getBoolean("dialog_bar_chat_with_channel$did", false)
 		val chatWithAdminDate = preferences.getInt("dialog_bar_chat_with_date$did", 0)
 		val showAddMembersToGroup = preferences.getBoolean("dialog_bar_invite$did", false)
-		val showEmojiStatusReport = if (currentUser != null && (showReport || showBlock) && (currentUser!!.emoji_status is TL_emojiStatus || currentUser!!.emoji_status is TL_emojiStatusUntil && (currentUser!!.emoji_status as TL_emojiStatusUntil?)!!.until > (System.currentTimeMillis() / 1000).toInt())) currentUser!!.emoji_status else null
+		val showEmojiStatusReport = if (currentUser != null && (showReport || showBlock) && (currentUser!!.emojiStatus is TLEmojiStatus || currentUser!!.emojiStatus is TLEmojiStatusUntil && (currentUser!!.emojiStatus as TLEmojiStatusUntil?)!!.until > (System.currentTimeMillis() / 1000).toInt())) currentUser!!.emojiStatus else null
 
 		if (showReport || showBlock || showGeo) {
 			reportSpamButton?.visibility = View.VISIBLE
@@ -24370,10 +24490,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 
 			val str = if (chatWithAdminChannel) {
-				LocaleController.formatString("ChatWithGroupAdmin", R.string.ChatWithGroupAdmin, user.first_name, chatWithAdmin)
+				LocaleController.formatString("ChatWithGroupAdmin", R.string.ChatWithGroupAdmin, user.firstName, chatWithAdmin)
 			}
 			else {
-				LocaleController.formatString("ChatWithChannelAdmin", R.string.ChatWithChannelAdmin, user.first_name, chatWithAdmin)
+				LocaleController.formatString("ChatWithChannelAdmin", R.string.ChatWithChannelAdmin, user.firstName, chatWithAdmin)
 			}
 
 			reportSpamButton?.gone()
@@ -24392,7 +24512,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			if (isReplyUser(user)) {
 				addToContactsButton?.visibility = View.GONE
 			}
-			else if (!user.contact && !user.self && showAdd) {
+			else if (!user.contact && !user.isSelf && showAdd) {
 				addContactItem?.visibility = View.VISIBLE
 				addContactItem?.setText(context.getString(R.string.AddToContacts))
 
@@ -24416,7 +24536,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				addToContactsButton?.tag = null
 				addToContactsButton?.visibility = View.VISIBLE
 			}
-			else if (showShare && !user.self) {
+			else if (showShare && !user.isSelf) {
 				addContactItem?.visibility = View.VISIBLE
 
 				addToContactsButton?.visibility = View.VISIBLE
@@ -24429,7 +24549,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 			else {
 				// MARK: disabled ability to share contact (because we do not have phone numbers)
-//				if (!user.contact && !user.self && !show) {
+//				if (!user.contact && !user.isSelf && !show) {
 //					addContactItem.setVisibility(View.VISIBLE);
 //					addContactItem.setText(getContext().getString(R.string.ShareMyContactInfo));
 //					addToContactsButton.setTag(2);
@@ -24494,11 +24614,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			val emoji = SpannableString("d")
 			var docid: Long? = null
 
-			if (currentUser!!.emoji_status is TL_emojiStatus) {
-				docid = (currentUser!!.emoji_status as TL_emojiStatus?)!!.document_id
+			if (currentUser!!.emojiStatus is TLEmojiStatus) {
+				docid = (currentUser?.emojiStatus as? TLEmojiStatus)?.documentId
 			}
-			else if (currentUser!!.emoji_status is TL_emojiStatusUntil && (currentUser!!.emoji_status as TL_emojiStatusUntil?)!!.until > (System.currentTimeMillis() / 1000).toInt()) {
-				docid = (currentUser!!.emoji_status as TL_emojiStatusUntil?)!!.document_id
+			else if (currentUser!!.emojiStatus is TLEmojiStatusUntil && (currentUser!!.emojiStatus as TLEmojiStatusUntil?)!!.until > (System.currentTimeMillis() / 1000).toInt()) {
+				docid = (currentUser?.emojiStatus as? TLEmojiStatusUntil)?.documentId
 			}
 
 			if (docid != null) {
@@ -24557,16 +24677,48 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			if (lastResponse != null) {
 				var promptsLeft = 0
 				var type: String? = null
+				var subscriptionIsActive = false
+				var daysLeft = 0L
 
 				when (lastResponse.realState) {
 					ElloRpc.SubscriptionInfoAiBotState.TEXT -> {
-						promptsLeft = lastResponse.textTotal
-						type = context.getString(R.string.prompt_text)
+						when {
+							!lastResponse.doubleSubExpired -> {
+								subscriptionIsActive = true
+								daysLeft = lastResponse.doubleExpirationDate
+							}
+
+							!lastResponse.textSubExpired -> {
+								subscriptionIsActive = true
+								daysLeft = lastResponse.textExpirationDate
+							}
+
+							else -> {
+								subscriptionIsActive = false
+								promptsLeft = lastResponse.textTotal
+								type = context.getString(R.string.prompt_text)
+							}
+						}
 					}
 
 					ElloRpc.SubscriptionInfoAiBotState.IMAGE -> {
-						promptsLeft = lastResponse.imgTotal
-						type = context.getString(R.string.prompt_image)
+						when {
+							!lastResponse.doubleSubExpired -> {
+								subscriptionIsActive = true
+								daysLeft = lastResponse.doubleExpirationDate
+							}
+
+							!lastResponse.imgSubExpired -> {
+								subscriptionIsActive = true
+								daysLeft = lastResponse.imgExpirationDate
+							}
+
+							else -> {
+								subscriptionIsActive = false
+								promptsLeft = lastResponse.imgTotal
+								type = context.getString(R.string.prompt_image)
+							}
+						}
 					}
 
 					else -> {
@@ -24575,17 +24727,34 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 				}
 
+				modelLogoImageView?.setImageResource(getLogoDrawable(lastResponse.logo))
+
 				if (show) {
-					val topViewText = if (promptsLeft > 0) {
-						botFreeBalanceView?.setOnClickListener(null)
-						context.getString(R.string.ai_bot_chat_prompts_left, promptsLeft, type, context.resources.getQuantityString(R.plurals.prompts, promptsLeft))
-					}
-					else {
-						botFreeBalanceView?.setOnClickListener {
-							presentFragment(AiSubscriptionPlansFragment())
+					val topViewText = when {
+						subscriptionIsActive -> {
+							botFreeBalanceView?.setOnClickListener(null)
+							formatTimeLeft(context, lastResponse.currentUnix, daysLeft)
 						}
 
-						Html.fromHtml(context.getString(R.string.no_prompts_left, type))
+						promptsLeft > 0 -> {
+							botFreeBalanceView?.setOnClickListener(null)
+							context.getString(R.string.ai_bot_chat_prompts_left, promptsLeft, context.resources.getQuantityString(R.plurals.prompts, promptsLeft))
+						}
+
+						else -> {
+							botFreeBalanceView?.setOnClickListener {
+								val args = Bundle()
+								args.putSerializable("subs_info", chatBotController?.lastSubscriptionInfo)
+								presentFragment(AiPurchaseFragment(args))
+							}
+
+							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+								Html.fromHtml(context.getString(R.string.no_prompts_left, type), Html.FROM_HTML_MODE_LEGACY)
+							}
+							else {
+								Html.fromHtml(context.getString(R.string.no_prompts_left, type))
+							}
+						}
 					}
 
 					botFreeBalanceView?.text = topViewText
@@ -24687,6 +24856,20 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		checkListViewPaddings()
 	}
 
+	private fun formatTimeLeft(context: Context, currentDate: Long, expirationDate: Long): String {
+		val currentDate = LocalDateTime.ofInstant(Instant.ofEpochMilli(currentDate * 1000), ZoneId.systemDefault())
+		val expirationDate = LocalDateTime.ofInstant(Instant.ofEpochMilli(expirationDate * 1000), ZoneId.systemDefault())
+
+		val duration = Duration.between(currentDate, expirationDate)
+
+		return when {
+			duration.toDays() > 0 -> context.resources.getQuantityString(R.plurals.subscription_days_left, duration.toDays().toInt(), duration.toDays().toInt())
+			duration.toHours() > 0 -> context.resources.getQuantityString(R.plurals.subscription_hours_left, duration.toHours().toInt(), duration.toHours().toInt())
+			duration.toMinutes() > 0 -> context.resources.getQuantityString(R.plurals.subscription_minutes_left, duration.toMinutes().toInt(), duration.toMinutes().toInt())
+			else -> context.resources.getQuantityString(R.plurals.subscription_days_left, duration.toDays().toInt())
+		}
+	}
+
 	private fun getAdditionalInfo(): ElloRpc.AdditionalInfoResponse? {
 		val req = ElloRpc.getAdditionalInfo(dialogId)
 
@@ -24695,9 +24878,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				connectionsManager.performRequest(req)
 			}
 
-			val error = response as? TL_error
+			val error = response as? TLError
 
-			if (error == null && response is TL_biz_dataRaw) {
+			if (error == null && response is TLBizDataRaw) {
 				response.readData<ElloRpc.AdditionalInfoResponse>()
 			}
 			else {
@@ -24706,7 +24889,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 	}
 
-	fun isAiPromptsDepleted(): Boolean {
+	fun isAiPromptsDepleted(command: String? = null): Boolean {
 		if (!isAiBot()) {
 			return false
 		}
@@ -24715,13 +24898,34 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return false
 		}
 
-		if (isCommandPromoCode) {
+		if (isCommandPromoCode || isPromoInFirstMessages) {
 			isCommandPromoCode = false
 			return false
 		}
 
 		val lastSubscriptionInfo = chatBotController.lastSubscriptionInfo
 		val additionalInfo = getAdditionalInfo()
+
+		//MARK: temporary solution for processing commands until the backend implements it
+		if (command == AI_CHAT_COMMAND && (lastSubscriptionInfo?.textTotal ?: 0) > 0 || command == AI_IMAGES_COMMAND && (lastSubscriptionInfo?.imgTotal ?: 0) > 0) {
+			return false
+		}
+
+		when (lastSubscriptionInfo?.realState) {
+			ElloRpc.SubscriptionInfoAiBotState.TEXT -> {
+				if (!lastSubscriptionInfo.doubleSubExpired || !lastSubscriptionInfo.textSubExpired) {
+					return false
+				}
+			}
+
+			ElloRpc.SubscriptionInfoAiBotState.IMAGE -> {
+				if (!lastSubscriptionInfo.doubleSubExpired || !lastSubscriptionInfo.imgSubExpired) {
+					return false
+				}
+			}
+
+			else -> {}
+		}
 
 		if (lastSubscriptionInfo != null) {
 			var aiPromptsDepleted: String? = null
@@ -24759,7 +24963,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}, it.getColor(R.color.brand))
 
 					builder?.setPositiveButton(it.getString(R.string.purchase)) { _, _ ->
-						presentFragment(AiSubscriptionPlansFragment())
+						val args = Bundle()
+						args.putSerializable("subs_info", chatBotController?.lastSubscriptionInfo)
+						presentFragment(AiPurchaseFragment(args))
 					}
 
 					builder?.setPositiveButtonColor(it.getColor(R.color.purple))
@@ -24835,7 +25041,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		if (currentUser != null && audioCallIconItem != null) {
 			val userFull = messagesController.getUserFull(currentUser!!.id)
 
-			if (userFull != null && userFull.phone_calls_available) {
+			if (userFull != null && userFull.phoneCallsAvailable) {
 				showAudioCallAsIcon = !inPreviewMode
 				audioCallIconItem?.visibility = View.VISIBLE
 			}
@@ -24872,7 +25078,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					message = view.messageObject
 				}
 
-				if (message?.messageOwner?.media_unread == true && message.messageOwner?.mentioned == true) {
+				if (message?.messageOwner?.mediaUnread == true && message.messageOwner?.mentioned == true) {
 					if (!message.isVoice && !message.isRoundVideo) {
 						newMentionsCount--
 
@@ -24938,6 +25144,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		contentView?.onResume()
 
 		checkChecksHint()
+
 		Bulletin.addDelegate(this, object : Bulletin.Delegate {
 			override fun getBottomOffset(tag: Int): Int {
 				if (tag == 1) {
@@ -25064,6 +25271,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		if (pullingDownOffset != 0f) {
 			pullingDownOffset = 0f
 			chatListView?.invalidate()
+		}
+
+		performChatChecks()
+
+		val currentChat = currentChat
+
+		if (isChannel(currentChat)) {
+			messagesController.getChannelDifference(channelId = currentChat.id)
 		}
 	}
 
@@ -25197,7 +25412,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 									continue
 								}
 
-								if ((!messageObject.isOut || messageObject.messageOwner?.from_scheduled == true) && messageObject.isUnread) {
+								if ((!messageObject.isOut || messageObject.messageOwner?.fromScheduled == true) && messageObject.isUnread) {
 									ignore = true
 									messageId = 0
 								}
@@ -25265,27 +25480,29 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		}
 
 		val draftMessage = mediaDataController.getDraft(dialogId, threadId)
-		val draftReplyMessage = if (draftMessage != null && draftMessage.reply_to_msg_id != 0) mediaDataController.getDraftMessage(dialogId, threadId) else null
+		val draftReplyMessage = if (draftMessage != null && (draftMessage as? TLRPC.TLDraftMessage)?.replyToMsgId != 0) mediaDataController.getDraftMessage(dialogId, threadId) else null
 
 		if (chatActivityEnterView!!.fieldText == null) {
 			if (draftMessage != null) {
-				chatActivityEnterView!!.setWebPage(null, !draftMessage.no_webpage)
+				chatActivityEnterView?.setWebPage(null, (draftMessage as? TLRPC.TLDraftMessage)?.noWebpage != true)
 
 				val message: CharSequence
 
-				if (draftMessage.entities.isNotEmpty()) {
+				val draftMessageEntities = draftMessage.entities
+
+				if (!draftMessageEntities.isNullOrEmpty()) {
 					val stringBuilder = SpannableStringBuilder.valueOf(draftMessage.message)
 
-					MediaDataController.sortEntities(draftMessage.entities)
+					MediaDataController.sortEntities(draftMessageEntities)
 
-					for (a in draftMessage.entities.indices) {
-						when (val entity = draftMessage.entities[a]) {
-							is TL_inputMessageEntityMentionName, is TL_messageEntityMentionName -> {
-								val userId = if (entity is TL_inputMessageEntityMentionName) {
-									entity.userId?.user_id ?: 0L
+					for (a in draftMessageEntities.indices) {
+						when (val entity = draftMessageEntities[a]) {
+							is TLInputMessageEntityMentionName, is TLMessageEntityMentionName -> {
+								val userId = if (entity is TLInputMessageEntityMentionName) {
+									entity.userId?.userId ?: 0L
 								}
 								else {
-									(entity as TL_messageEntityMentionName).userId
+									(entity as TLMessageEntityMentionName).userId
 								}
 
 								if (entity.offset + entity.length < stringBuilder.length && stringBuilder[entity.offset + entity.length] == ' ') {
@@ -25295,47 +25512,47 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								stringBuilder.setSpan(URLSpanUserMention("" + userId, 3), entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 							}
 
-							is TL_messageEntityCode, is TL_messageEntityPre -> {
+							is TLMessageEntityCode, is TLMessageEntityPre -> {
 								val run = TextStyleRun()
 								run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_MONO
 								MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 							}
 
-							is TL_messageEntityBold -> {
+							is TLMessageEntityBold -> {
 								val run = TextStyleRun()
 								run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_BOLD
 								MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 							}
 
-							is TL_messageEntityItalic -> {
+							is TLMessageEntityItalic -> {
 								val run = TextStyleRun()
 								run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_ITALIC
 								MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 							}
 
-							is TL_messageEntityStrike -> {
+							is TLMessageEntityStrike -> {
 								val run = TextStyleRun()
 								run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_STRIKE
 								MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 							}
 
-							is TL_messageEntityUnderline -> {
+							is TLMessageEntityUnderline -> {
 								val run = TextStyleRun()
 								run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_UNDERLINE
 								MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 							}
 
-							is TL_messageEntityTextUrl -> {
+							is TLMessageEntityTextUrl -> {
 								stringBuilder.setSpan(URLSpanReplacement(entity.url), entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 							}
 
-							is TL_messageEntitySpoiler -> {
+							is TLMessageEntitySpoiler -> {
 								val run = TextStyleRun()
 								run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_SPOILER
 								MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 							}
 
-							is TL_messageEntityCustomEmoji -> {
+							is TLMessageEntityCustomEmoji -> {
 								var fontMetrics: FontMetricsInt? = null
 
 								try {
@@ -25345,12 +25562,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 									FileLog.e(e)
 								}
 
-								val span = if (entity.document != null) {
-									AnimatedEmojiSpan(entity.document!!, fontMetrics)
-								}
-								else {
-									AnimatedEmojiSpan(entity.documentId, fontMetrics)
-								}
+								val span = AnimatedEmojiSpan(entity.documentId, fontMetrics)
 
 								stringBuilder.setSpan(span, entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 							}
@@ -25360,13 +25572,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					message = stringBuilder
 				}
 				else {
-					message = draftMessage.message
+					message = draftMessage.message ?: ""
 				}
 
 				chatActivityEnterView?.fieldText = message
 
 				if (getArguments()?.getBoolean("hasUrl", false) == true) {
-					chatActivityEnterView?.setSelection(draftMessage.message.indexOf('\n') + 1)
+					chatActivityEnterView?.setSelection((draftMessage.message?.indexOf('\n') ?: -1) + 1)
 
 					AndroidUtilities.runOnUIThread({
 						chatActivityEnterView?.setFieldFocused(true)
@@ -25407,8 +25619,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						`object` = view.getMessageObject()
 					}
 
-					if (`object` != null && `object`.id < 0 && `object`.messageOwner?.random_id != 0L) {
-						visibleMessages.add(`object`.messageOwner!!.random_id)
+					if (`object` != null && `object`.id < 0 && `object`.messageOwner?.randomId != 0L) {
+						visibleMessages.add(`object`.messageOwner!!.randomId)
 					}
 				}
 			}
@@ -25671,7 +25883,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return null
 		}
 
-		val restrictionReason = MessagesController.getRestrictionReason(messageObject.messageOwner?.restriction_reason)
+		val restrictionReason = MessagesController.getRestrictionReason(messageObject.messageOwner?.restrictionReason)
 
 		if (!restrictionReason.isNullOrEmpty()) {
 			return restrictionReason
@@ -25740,11 +25952,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return false
 		}
 
-		if (!single && message.messageOwner?.action is TL_messageActionGiftPremium) {
+		if (!single && message.messageOwner?.action is TLMessageActionGiftPremium) {
 			return false
 		}
 
-		if (message.messageOwner is TLRPC.TL_messageService) {
+		if (message.messageOwner is TLRPC.TLMessageService) {
 			return false
 		}
 
@@ -25753,7 +25965,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		val context = contentView?.context ?: return false
 
 		if (single) {
-			if (message.messageOwner?.action is TL_messageActionPinMessage) {
+			if (message.messageOwner?.action is TLMessageActionPinMessage) {
 				if (message.replyMsgId != 0) {
 					scrollToMessageId(message.replyMsgId, message.messageOwner!!.id, true, if (message.dialogId == mergeDialogId) 1 else 0, false, 0)
 				}
@@ -25763,22 +25975,23 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				return true
 			}
-			else if (message.messageOwner?.action is TL_messageActionPaymentSent && message.replyMessageObject?.isInvoice == true) {
-				val req = TL_payments_getPaymentReceipt()
-				req.msg_id = message.id
-				req.peer = messagesController.getInputPeer(message.messageOwner?.peer_id)
-
-				connectionsManager.sendRequest(req, { response, _ ->
-					AndroidUtilities.runOnUIThread {
-						if (response is TL_payments_paymentReceipt) {
-							presentFragment(PaymentFormActivity(response as TL_payments_paymentReceipt?))
-						}
-					}
-				}, ConnectionsManager.RequestFlagFailOnServerErrors)
-
-				return true
+			else if (message.messageOwner?.action is TLMessageActionPaymentSent && message.replyMessageObject?.isInvoice == true) {
+//				val req = TLPaymentsGetPaymentReceipt()
+//				req.msgId = message.id
+//				req.peer = messagesController.getInputPeer(message.messageOwner?.peerId)
+//
+//				connectionsManager.sendRequest(req, { response, _ ->
+//					AndroidUtilities.runOnUIThread {
+//						if (response is TLPaymentsPaymentReceipt) {
+//							presentFragment(PaymentFormActivity(response as TLPaymentsPaymentReceipt?))
+//						}
+//					}
+//				}, ConnectionsManager.RequestFlagFailOnServerErrors)
+//
+//				return true
+				return false
 			}
-			else if (message.messageOwner?.action is TL_messageActionGroupCall || message.messageOwner?.action is TL_messageActionInviteToGroupCall || message.messageOwner?.action is TL_messageActionGroupCallScheduled) {
+			else if (message.messageOwner?.action is TLMessageActionGroupCall || message.messageOwner?.action is TLMessageActionInviteToGroupCall || message.messageOwner?.action is TLMessageActionGroupCallScheduled) {
 				if (parentActivity == null) {
 					return false
 				}
@@ -25820,7 +26033,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					return true
 				}
 			}
-			else if (message.messageOwner?.action is TL_messageActionSetChatTheme) {
+			else if (message.messageOwner?.action is TLMessageActionSetChatTheme) {
 				showChatThemeBottomSheet()
 				return true
 			}
@@ -25866,7 +26079,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				false
 			}
 			else if (currentUserInfo != null) {
-				currentUserInfo!!.can_pin_message
+				currentUserInfo!!.canPinMessage
 			}
 			else {
 				false
@@ -25876,7 +26089,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			false
 		}
 
-		allowPin = allowPin && message.id > 0 && (message.messageOwner?.action == null || message.messageOwner?.action is TL_messageActionEmpty)
+		allowPin = allowPin && message.id > 0 && (message.messageOwner?.action == null || message.messageOwner?.action is TLMessageActionEmpty)
 
 		val noforwards = messagesController.isChatNoForwards(currentChat) || message.messageOwner?.noforwards == true
 		val allowUnpin = message.dialogId != mergeDialogId && allowPin && (pinnedMessageObjects.containsKey(message.id) || groupedMessages != null && groupedMessages.messages.isNotEmpty() && pinnedMessageObjects.containsKey(groupedMessages.messages[0].id))
@@ -25904,7 +26117,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			allowEdit = captionsCount < 2
 		}
 
-		if (chatMode == MODE_SCHEDULED || threadMessageObjects != null && threadMessageObjects!!.contains(message) || message.isSponsored || type == 1 && message.dialogId == mergeDialogId || message.messageOwner?.action is TL_messageActionSecureValuesSent || currentEncryptedChat == null && message.id < 0 || bottomOverlayChat != null && bottomOverlayChat!!.visibility == View.VISIBLE || currentChat != null && (isNotInChat(currentChat) && !isThreadChat || isChannel(currentChat) && !canPost(currentChat) && !currentChat!!.megagroup || !canSendMessages(currentChat))) {
+		if (chatMode == MODE_SCHEDULED || threadMessageObjects != null && threadMessageObjects!!.contains(message) || message.isSponsored || type == 1 && message.dialogId == mergeDialogId || message.messageOwner?.action is TLMessageActionSecureValuesSent || currentEncryptedChat == null && message.id < 0 || bottomOverlayChat != null && bottomOverlayChat!!.visibility == View.VISIBLE || currentChat != null && (isNotInChat(currentChat) && !isThreadChat || isChannel(currentChat) && !canPost(currentChat) && !currentChat!!.megagroup || !canSendMessages(currentChat))) {
 			allowChatActions = false
 		}
 
@@ -25919,7 +26132,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			var optionsView: View? = null
 			var messageTextToTranslate: CharSequence? = null
 
-			if (message.messageOwner?.action is TL_messageActionSetMessagesTTL && single && (dialogId >= 0 || currentChat != null && canUserDoAdminAction(currentChat, ChatObject.ACTION_DELETE_MESSAGES))) {
+			if (message.messageOwner?.action is TLMessageActionSetMessagesTTL && single && (dialogId >= 0 || currentChat != null && canUserDoAdminAction(currentChat, ChatObject.ACTION_DELETE_MESSAGES))) {
 				val autoDeletePopupWrapper = AutoDeletePopupWrapper(context, null, object : AutoDeletePopupWrapper.Callback {
 					override fun dismiss() {
 						scrimPopupWindow?.dismiss()
@@ -25929,12 +26142,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						messagesController.setDialogHistoryTTL(dialogId, time)
 
 						if (currentUserInfo != null || currentChatInfo != null) {
-							undoView?.showWithAction(dialogId, action, currentUser, if (currentUserInfo != null) currentUserInfo!!.ttl_period else currentChatInfo!!.ttl_period, null, null)
+							undoView?.showWithAction(dialogId, action, currentUser, if (currentUserInfo != null) currentUserInfo!!.ttlPeriod else currentChatInfo!!.ttlPeriod, null, null)
 						}
 					}
 				}, true)
 
-				autoDeletePopupWrapper.updateItems(if (currentUserInfo != null) currentUserInfo!!.ttl_period else currentChatInfo!!.ttl_period)
+				autoDeletePopupWrapper.updateItems(if (currentUserInfo != null) currentUserInfo!!.ttlPeriod else currentChatInfo!!.ttlPeriod)
 
 				optionsView = autoDeletePopupWrapper.windowLayout
 			}
@@ -25945,7 +26158,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (messageTextToTranslate == null && selectedObject!!.isPoll) {
 					runCatching {
-						val poll = (selectedObject?.messageOwner?.media as? TL_messageMediaPoll)?.poll
+						val poll = (selectedObject?.messageOwner?.media as? TLMessageMediaPoll)?.poll
 						val pollText = StringBuilder(poll?.question ?: "").append("\n")
 
 						for (answer in poll!!.answers) {
@@ -25987,7 +26200,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					icons.add(R.drawable.msg_retry)
 					items.add(context.getString(R.string.Delete))
 					options.add(OPTION_DELETE)
-					icons.add(if (selectedObject?.messageOwner?.ttl_period != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
+					icons.add(if (selectedObject?.messageOwner?.ttlPeriod != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
 				}
 				else if (type == 1) {
 					if (currentChat != null) {
@@ -26043,7 +26256,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					if (message.canDeleteMessage(chatMode == MODE_SCHEDULED, currentChat) && (threadMessageObjects == null || !threadMessageObjects!!.contains(message))) {
 						items.add(context.getString(R.string.Delete))
 						options.add(OPTION_DELETE)
-						icons.add(if (selectedObject?.messageOwner?.ttl_period != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
+						icons.add(if (selectedObject?.messageOwner?.ttlPeriod != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
 					}
 				}
 				else if (type == 20) {
@@ -26059,7 +26272,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					items.add(context.getString(R.string.Delete))
 					options.add(OPTION_DELETE)
-					icons.add(if (selectedObject?.messageOwner?.ttl_period != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
+					icons.add(if (selectedObject?.messageOwner?.ttlPeriod != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
 				}
 				else {
 					if (currentEncryptedChat == null) {
@@ -26069,10 +26282,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							icons.add(R.drawable.msg_send)
 						}
 
-						if (selectedObject?.messageOwner?.action is TL_messageActionPhoneCall) {
-							val call = message.messageOwner?.action as? TL_messageActionPhoneCall
+						if (selectedObject?.messageOwner?.action is TLMessageActionPhoneCall) {
+							val call = message.messageOwner?.action as? TLMessageActionPhoneCall
 
-							items.add(if ((call?.reason is TL_phoneCallDiscardReasonMissed || call?.reason is TL_phoneCallDiscardReasonBusy) && !message.isOutOwner) context.getString(R.string.CallBack) else context.getString(R.string.CallAgain))
+							items.add(if ((call?.reason is TLPhoneCallDiscardReasonMissed || call?.reason is TLPhoneCallDiscardReasonBusy) && !message.isOutOwner) context.getString(R.string.CallBack) else context.getString(R.string.CallAgain))
 							options.add(OPTION_CALL_AGAIN)
 							icons.add(R.drawable.msg_callback)
 
@@ -26101,7 +26314,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							icons.add(R.drawable.msg_copy)
 						}
 
-						if (!isThreadChat && chatMode != MODE_SCHEDULED && currentChat != null && (currentChat!!.has_link || message.hasReplies()) && currentChat!!.megagroup && message.canViewThread()) {
+						if (!isThreadChat && chatMode != MODE_SCHEDULED && currentChat != null && (currentChat!!.hasLink || message.hasReplies()) && currentChat!!.megagroup && message.canViewThread()) {
 							if (message.hasReplies()) {
 								items.add(LocaleController.formatPluralString("ViewReplies", message.repliesCount))
 							}
@@ -26128,7 +26341,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 										icons.add(R.drawable.msg_unvote)
 									}
 
-									if (!message.isForwarded && (message.isOut && (!isChannel(currentChat) || currentChat!!.megagroup) || isChannel(currentChat) && !currentChat!!.megagroup && (currentChat!!.creator || currentChat!!.admin_rights != null && currentChat!!.admin_rights.edit_messages))) {
+									if (!message.isForwarded && (message.isOut && (!isChannel(currentChat) || currentChat!!.megagroup) || isChannel(currentChat) && !currentChat!!.megagroup && (currentChat!!.creator || currentChat?.adminRights?.editMessages == true))) {
 										if (message.isQuiz) {
 											items.add(context.getString(R.string.StopQuiz))
 										}
@@ -26153,7 +26366,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							}
 						}
 						else if (type == 3 && !noforwards) {
-							if (selectedObject?.messageOwner?.media is TL_messageMediaWebPage && MessageObject.isNewGifDocument(selectedObject?.messageOwner?.media?.webpage?.document)) {
+							if (selectedObject?.messageOwner?.media is TLMessageMediaWebPage && MessageObject.isNewGifDocument(selectedObject?.messageOwner?.media?.webpage?.document)) {
 								items.add(context.getString(R.string.SaveToGIFs))
 								options.add(OPTION_ADD_TO_GIFS)
 								icons.add(R.drawable.msg_gif)
@@ -26268,7 +26481,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							}
 						}
 						else if (type == 8) {
-							val uid = selectedObject?.messageOwner?.media?.user_id ?: 0L
+							val uid = selectedObject?.messageOwner?.media?.userId ?: 0L
 							var user: User? = null
 
 							if (uid != 0L) {
@@ -26281,7 +26494,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								icons.add(R.drawable.msg_addcontact)
 							}
 
-							if (!selectedObject?.messageOwner?.media?.phone_number.isNullOrEmpty()) { // MARK: we use phone number for username, so check if this works properly
+							if (!selectedObject?.messageOwner?.media?.phoneNumber.isNullOrEmpty()) { // MARK: we use phone number for username, so check if this works properly
 								if (!noforwards) {
 									items.add(context.getString(R.string.Copy))
 									options.add(OPTION_COPY_PHONE_NUMBER)
@@ -26355,7 +26568,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						if (message.canDeleteMessage(chatMode == MODE_SCHEDULED, currentChat) && (threadMessageObjects == null || !threadMessageObjects!!.contains(message))) {
 							items.add(context.getString(R.string.Delete))
 							options.add(OPTION_DELETE)
-							icons.add(if (selectedObject?.messageOwner?.ttl_period != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
+							icons.add(if (selectedObject?.messageOwner?.ttlPeriod != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
 						}
 					}
 					else {
@@ -26371,7 +26584,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							icons.add(R.drawable.msg_copy)
 						}
 
-						if (!isThreadChat && chatMode != MODE_SCHEDULED && currentChat != null && (currentChat!!.has_link || message.hasReplies()) && currentChat!!.megagroup && message.canViewThread()) {
+						if (!isThreadChat && chatMode != MODE_SCHEDULED && currentChat != null && (currentChat!!.hasLink || message.hasReplies()) && currentChat!!.megagroup && message.canViewThread()) {
 							if (message.hasReplies()) {
 								items.add(LocaleController.formatPluralString("ViewReplies", message.repliesCount))
 							}
@@ -26430,7 +26643,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							icons.add(R.drawable.msg_sticker)
 						}
 						else if (type == 8) {
-							val uid = selectedObject?.messageOwner?.media?.user_id ?: 0L
+							val uid = selectedObject?.messageOwner?.media?.userId ?: 0L
 							var user: User? = null
 
 							if (uid != 0L) {
@@ -26443,7 +26656,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								icons.add(R.drawable.msg_addcontact)
 							}
 
-							if (!selectedObject?.messageOwner?.media?.phone_number.isNullOrEmpty()) {
+							if (!selectedObject?.messageOwner?.media?.phoneNumber.isNullOrEmpty()) {
 								if (!noforwards) {
 									items.add(context.getString(R.string.Copy))
 									options.add(OPTION_COPY_PHONE_NUMBER)
@@ -26458,7 +26671,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 						items.add(context.getString(R.string.Delete))
 						options.add(OPTION_DELETE)
-						icons.add(if (selectedObject?.messageOwner?.ttl_period != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
+						icons.add(if (selectedObject?.messageOwner?.ttlPeriod != 0) R.drawable.msg_delete_auto else R.drawable.msg_delete)
 					}
 				}
 			}
@@ -26478,7 +26691,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			val onLangDetectionDone = AtomicReference<Runnable?>(null)
 			val rect = Rect()
 			val availableReacts = mediaDataController.enabledReactionsList
-			val isReactionsViewAvailable = !isSecretChat && !isInScheduleMode && currentUser == null && message.hasReactions() && (!isChannel(currentChat) || currentChat!!.megagroup) && availableReacts.isNotEmpty() && message.messageOwner!!.originalReactions!!.canSeeList && !message.isSecretMedia
+			val isReactionsViewAvailable = !isSecretChat && !isInScheduleMode && currentUser == null && message.hasReactions() && (!isChannel(currentChat) || currentChat!!.megagroup) && availableReacts.isNotEmpty() && message.messageOwner!!.reactions!!.canSeeList && !message.isSecretMedia
 
 			val isReactionsAvailable = if (currentUser != null) {
 				false // MARK: this disables reactions for private chats
@@ -26490,14 +26703,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					true
 				}
 				else {
-					!isSecretChat && !isInScheduleMode && message.isReactionsAvailable && chatInfo.available_reactions !is TL_chatReactionsNone && availableReacts.isNotEmpty()
+					!isSecretChat && !isInScheduleMode && message.isReactionsAvailable && chatInfo.availableReactions !is TLChatReactionsNone && availableReacts.isNotEmpty()
 				}
 			}
 			else {
-				!message.isSecretMedia && !isSecretChat && !isInScheduleMode && message.isReactionsAvailable && (currentChatInfo != null && currentChatInfo!!.available_reactions !is TL_chatReactionsNone || currentChatInfo == null && !isChannel(currentChat) || currentUser != null) && availableReacts.isNotEmpty()
+				!message.isSecretMedia && !isSecretChat && !isInScheduleMode && message.isReactionsAvailable && (currentChatInfo != null && currentChatInfo!!.availableReactions !is TLChatReactionsNone || currentChatInfo == null && !isChannel(currentChat) || currentUser != null) && availableReacts.isNotEmpty()
 			}
 
-			val showMessageSeen = !isReactionsViewAvailable && !isInScheduleMode && currentChat != null && message.isOutOwner && message.isSent && !message.isEditing && !message.isSending && !message.isSendError && !message.isContentUnread && !message.isUnread && ConnectionsManager.getInstance(currentAccount).currentTime - message.messageOwner!!.date < messagesController.chatReadMarkExpirePeriod && (isMegagroup(currentChat) || !isChannel(currentChat)) && currentChatInfo != null && currentChatInfo!!.participants_count <= messagesController.chatReadMarkSizeThreshold && message.messageOwner!!.action !is TL_messageActionChatJoinedByRequest && v is ChatMessageCell
+			val showMessageSeen = !isReactionsViewAvailable && !isInScheduleMode && currentChat != null && message.isOutOwner && message.isSent && !message.isEditing && !message.isSending && !message.isSendError && !message.isContentUnread && !message.isUnread && ConnectionsManager.getInstance(currentAccount).currentTime - message.messageOwner!!.date < messagesController.chatReadMarkExpirePeriod && (isMegagroup(currentChat) || !isChannel(currentChat)) && currentChatInfo != null && currentChatInfo!!.participantsCount <= messagesController.chatReadMarkSizeThreshold && message.messageOwner!!.action !is TLMessageActionChatJoinedByRequest && v is ChatMessageCell
 			var flags = 0
 
 			if (isReactionsViewAvailable || showMessageSeen) {
@@ -26522,13 +26735,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val reactedView = ReactedHeaderView(context, currentAccount, message)
 					var count = 0
 
-					if (message.messageOwner?.originalReactions != null) {
-						for (r in message.messageOwner!!.originalReactions!!.results) {
+					if (message.messageOwner?.reactions != null) {
+						for (r in message.messageOwner!!.reactions!!.results) {
 							count += r.count
 						}
 					}
 
-					val hasHeader = count > 10 && message.messageOwner!!.originalReactions!!.results.size > 1
+					val hasHeader = count > 10 && message.messageOwner!!.reactions!!.results.size > 1
 
 					val linearLayout = ContainerLinerLayout(context)
 					linearLayout.hasHeader = hasHeader
@@ -26550,7 +26763,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					var reactedUsersListView: ReactedUsersListView? = null
 
 					if (hasHeader) {
-						val counters: List<ReactionCount> = message.messageOwner?.originalReactions?.results ?: listOf()
+						val counters: List<TLReactionCount> = message.messageOwner?.reactions?.results ?: listOf()
 
 						val tabsView = LinearLayout(context)
 						tabsView.orientation = LinearLayout.HORIZONTAL
@@ -26651,7 +26864,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 									index--
 								}
 
-								var reactionCount: ReactionCount? = null
+								var reactionCount: TLReactionCount? = null
 
 								if (index >= 0) {
 									reactionCount = counters[index]
@@ -26847,7 +27060,6 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						if (messageSeenView.users.size == 1) {
 							val user = messageSeenView.users[0] ?: return@setOnClickListener
 
-							// MARK: open profile
 							val args = Bundle()
 							args.putLong("user_id", user.id)
 
@@ -26889,7 +27101,6 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					listView2.setOnItemClickListener { _, position ->
 						val user = messageSeenView.users[position] ?: return@setOnItemClickListener
 
-						// MARK: open profile
 						val args = Bundle()
 						args.putLong("user_id", user.id)
 
@@ -27015,10 +27226,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							lva.start()
 						}
 
-						val req = TL_messages_rateTranscribedAudio()
-						req.msg_id = selectedObject!!.id
-						req.peer = messagesController.getInputPeer(selectedObject?.messageOwner?.peer_id)
-						req.transcription_id = selectedObject?.messageOwner?.voiceTranscriptionId ?: 0L
+						val req = TLMessagesRateTranscribedAudio()
+						req.msgId = selectedObject!!.id
+						req.peer = messagesController.getInputPeer(selectedObject?.messageOwner?.peerId)
+						req.transcriptionId = selectedObject?.messageOwner?.voiceTranscriptionId ?: 0L
 						req.good = ratePositively[0]
 
 						connectionsManager.sendRequest(req) { _, _ ->
@@ -27111,7 +27322,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					val option = options[a]
 
-					if (option == 1 && selectedObject!!.messageOwner!!.ttl_period != 0) {
+					if (option == 1 && selectedObject!!.messageOwner!!.ttlPeriod != 0) {
 						menuDeleteItem = cell
 						updateDeleteItemRunnable.run()
 						cell.setSubtextColor(context.getColor(R.color.dark_gray))
@@ -27151,7 +27362,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							LanguageDetector.detectLanguage(finalMessageText.toString(), { lang ->
 								fromLang[0] = lang
 
-								if (fromLang[0] != null && (fromLang[0] != toLang || fromLang[0] == "und") && (translateButtonEnabled && !RestrictedLanguagesSelectActivity.getRestrictedLanguages().contains(fromLang[0]) || currentChat != null && (currentChat!!.has_link || currentChat!!.username != null) && ("uk" == fromLang[0] || "ru" == fromLang[0]))) {
+								if (fromLang[0] != null && (fromLang[0] != toLang || fromLang[0] == "und") && (translateButtonEnabled && !RestrictedLanguagesSelectActivity.getRestrictedLanguages().contains(fromLang[0]) || currentChat != null && (currentChat!!.hasLink || currentChat!!.username != null) && ("uk" == fromLang[0] || "ru" == fromLang[0]))) {
 									cell.visibility = View.VISIBLE
 								}
 
@@ -27324,12 +27535,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						else context.getString(R.string.ForwardsRestrictedInfoGroup)
 					}
 					else {
-						if (message.messageOwner?.is_media_sale == true || message.messageOwner?.is_media_sale_info == true) {
-							tv.text = context.getString(R.string.ForwardsRestrictedInfoMessage)
-						}
-						else {
-							tv.text = context.getString(R.string.ForwardsRestrictedInfoBot)
-						}
+//						if (message.messageOwner?.is_media_sale == true || message.messageOwner?.is_media_sale_info == true) {
+//							tv.text = context.getString(R.string.ForwardsRestrictedInfoMessage)
+//						}
+//						else {
+						tv.text = context.getString(R.string.ForwardsRestrictedInfoBot)
+//						}
 					}
 
 					tv.maxWidth = popupLayout.measuredWidth - AndroidUtilities.dp(38f)
@@ -27706,7 +27917,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 						if (messageInDict != null && messageInDict !== primaryMessage) {
 							messageToUpdate = messagesDict[0][primaryMessage.id]
-							messageToUpdate.messageOwner?.reactions = primaryMessage.messageOwner?.originalReactions
+							messageToUpdate.messageOwner?.reactions = primaryMessage.messageOwner?.reactions
 						}
 
 						updateMessageAnimated(messageToUpdate, true)
@@ -27813,7 +28024,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		updateVisibleRows()
 
 		if (!messageObject.scheduled) {
-			val req = TL_messages_getMessageEditData()
+			val req = TLMessagesGetMessageEditData()
 			req.peer = messagesController.getInputPeer(dialogId)
 			req.id = messageObject.id
 
@@ -27925,7 +28136,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val user = messagesController.getUser(fromId)
 
 					if (user != null) {
-						str.append(formatName(user.first_name, user.last_name)).append(":\n")
+						str.append(formatName(user.firstName, user.lastName)).append(":\n")
 					}
 				}
 				else if (fromId < 0) {
@@ -27938,7 +28149,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 		}
 
-		val restrictionReason = MessagesController.getRestrictionReason(messageObject.messageOwner?.restriction_reason)
+		val restrictionReason = MessagesController.getRestrictionReason(messageObject.messageOwner?.restrictionReason)
 
 		if (!restrictionReason.isNullOrEmpty()) {
 			str.append(restrictionReason)
@@ -28257,7 +28468,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 
 				val intent = Intent(Intent.ACTION_SEND)
-				intent.type = selectedObject?.document?.mime_type
+				intent.type = selectedObject?.document?.mimeType
 
 				val f = File(path)
 
@@ -28379,7 +28590,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						path = fileLoader.getPathToMessage(selectedObject?.messageOwner).toString()
 					}
 
-					MediaController.saveFile(path, parentActivity, 2, fileName, selectedObject?.document?.mime_type ?: "") {
+					MediaController.saveFile(path, parentActivity, 2, fileName, selectedObject?.document?.mimeType ?: "") {
 						if (parentActivity == null) {
 							return@saveFile
 						}
@@ -28556,31 +28767,31 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			OPTION_ADD_CONTACT -> {
 				val args = Bundle()
-				args.putLong("user_id", selectedObject!!.messageOwner!!.media!!.user_id)
-				args.putString("phone", selectedObject!!.messageOwner!!.media!!.phone_number)
+				args.putLong("user_id", selectedObject!!.messageOwner!!.media!!.userId)
+				args.putString("phone", selectedObject!!.messageOwner!!.media!!.phoneNumber)
 				args.putBoolean("addContact", true)
 
 				presentFragment(ContactAddActivity(args))
 			}
 
 			OPTION_COPY_PHONE_NUMBER -> {
-				AndroidUtilities.addToClipboard(selectedObject?.messageOwner?.media?.phone_number)
+				AndroidUtilities.addToClipboard(selectedObject?.messageOwner?.media?.phoneNumber)
 			}
 
 			OPTION_CALL -> {
-				(selectedObject?.messageOwner?.media as? TL_messageMediaContact)?.let {
+				(selectedObject?.messageOwner?.media as? TLMessageMediaContact)?.let {
 					performVoipCallToContact(it)
 				}
 			}
 
 			OPTION_CALL_AGAIN -> {
 				if (currentUser != null) {
-					startCall(currentUser!!, selectedObject!!.isVideoCall, currentUserInfo != null && currentUserInfo!!.video_calls_available, parentActivity!!, messagesController.getUserFull(currentUser!!.id), accountInstance)
+					startCall(currentUser!!, selectedObject!!.isVideoCall, currentUserInfo != null && currentUserInfo!!.videoCallsAvailable, parentActivity!!, messagesController.getUserFull(currentUser!!.id), accountInstance)
 				}
 			}
 
 			OPTION_RATE_CALL -> {
-				showRateAlert(parentActivity!!, (selectedObject?.messageOwner?.action as? TL_messageActionPhoneCall))
+				showRateAlert(parentActivity!!, (selectedObject?.messageOwner?.action as? TLMessageActionPhoneCall))
 			}
 
 			OPTION_ADD_STICKER_TO_FAVORITES -> {
@@ -28592,7 +28803,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 
 			OPTION_COPY_LINK -> run {
-				val req = TL_channels_exportMessageLink()
+				val req = TLChannelsExportMessageLink()
 
 				if (selectedObject === replyMessage && isComments) {
 					req.id = replyOriginalMessageId
@@ -28606,7 +28817,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					AndroidUtilities.runOnUIThread {
-						var link: String? = (response as? TLRPC.TL_exportedMessageLink)?.link
+						var link: String? = (response as? TLRPC.TLExportedMessageLink)?.link
 
 						if (link.isNullOrEmpty()) {
 							val sourceChat = if (selectedObject === replyMessage && isComments) {
@@ -28643,9 +28854,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 			OPTION_REPORT_CHAT -> {
 				if (isReplyUser(currentUser)) {
-					if (selectedObject?.messageOwner?.fwd_from != null) {
+					if (selectedObject?.messageOwner?.fwdFrom != null) {
 						preserveDim = true
-						AlertsCreator.showBlockReportSpamReplyAlert(this@ChatActivity, selectedObject, MessageObject.getPeerId(selectedObject?.messageOwner?.fwd_from?.from_id)) { dimBehindView(false) }
+						AlertsCreator.showBlockReportSpamReplyAlert(this@ChatActivity, selectedObject, MessageObject.getPeerId(selectedObject?.messageOwner?.fwdFrom?.fromId)) { dimBehindView(false) }
 					}
 				}
 				else {
@@ -28714,15 +28925,21 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				builder.setPositiveButton(context!!.getString(R.string.Stop)) { _, _ ->
 					var progressDialog: AlertDialog? = AlertDialog(parentActivity!!, 3)
-					val req = TL_messages_editMessage()
-					val mediaPoll = `object`.messageOwner?.media as TL_messageMediaPoll
+					val req = TLMessagesEditMessage()
+					val mediaPoll = `object`.messageOwner?.media as TLMessageMediaPoll
 
-					val poll = TL_inputMediaPoll()
-					poll.poll = TL_poll()
-					poll.poll.id = mediaPoll.poll.id
-					poll.poll.question = mediaPoll.poll.question
-					poll.poll.answers = mediaPoll.poll.answers
-					poll.poll.closed = true
+					val poll = TLInputMediaPoll()
+
+					poll.poll = TLPoll().also {
+						it.id = mediaPoll.poll?.id ?: 0L
+						it.question = mediaPoll.poll?.question
+
+						mediaPoll.poll?.answers?.let { answers ->
+							it.answers.addAll(answers)
+						}
+
+						it.closed = true
+					}
 
 					req.media = poll
 					req.peer = messagesController.getInputPeer(dialogId)
@@ -28780,7 +28997,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							mediaController.cleanupPlayer(true, true)
 						}
 
-						val req = TL_messages_sendScheduledMessages()
+						val req = TLMessagesSendScheduledMessages()
 						req.peer = messagesController.getInputPeer(this.dialogId)
 
 						if (selectedObjectGroup != null) {
@@ -28875,11 +29092,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 	private var callToThisUser: Long = 0
 
-	private fun performVoipCallToContact(contact: TL_messageMediaContact) {
-		val user = TL_user()
-		user.id = contact.user_id
+	private fun performVoipCallToContact(contact: TLMessageMediaContact) {
+		val user = TLUser()
+		user.id = contact.userId
 
-		callToThisUser = contact.user_id
+		callToThisUser = contact.userId
 
 		messagesController.loadFullUser(user, classGuid, true)
 	}
@@ -28940,7 +29157,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val did = dids[a]
 
 				if (message != null) {
-					sendMessagesHelper.sendMessage(message.toString(), did, null, null, null, true, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+					sendMessagesHelper.sendMessage(message.toString(), did, null, null, null, true, null, null, null, true, 0, null, updateStickersOrder = false)
 				}
 
 				sendMessagesHelper.sendMessage(fmessages, did, forwardFromMyName = false, hideCaption = false, notify = true, scheduleDate = 0)
@@ -29120,7 +29337,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		threadId = threadMessage?.id ?: 0
 		replyOriginalMessageId = originalMessage
 		replyOriginalChat = originalChat
-		isComments = replyMessage?.messageOwner?.fwd_from != null && replyMessage?.messageOwner?.fwd_from?.channel_post != 0
+		isComments = replyMessage?.messageOwner?.fwdFrom != null && replyMessage?.messageOwner?.fwdFrom?.channelPost != 0
 	}
 
 	fun setHighlightMessageId(id: Int) {
@@ -29160,7 +29377,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		val count = chatListView.childCount
 		// MessageObject editingMessageObject = chatActivityEnterView != null ? chatActivityEnterView.getEditingMessageObject() : null;
-		val linkedChatId = currentChatInfo?.linked_chat_id ?: 0
+		val linkedChatId = currentChatInfo?.linkedChatId ?: 0
 
 		for (a in 0 until count) {
 			val view = chatListView.getChildAt(a)
@@ -29194,7 +29411,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (!view.getMessageObject()!!.deleted || view.linkedChatId != linkedChatId) {
 					view.setIsUpdating(true)
-					view.linkedChatId = if (currentChatInfo != null) currentChatInfo!!.linked_chat_id else 0
+					view.linkedChatId = if (currentChatInfo != null) currentChatInfo!!.linkedChatId else 0
 					view.setMessageObject(view.getMessageObject(), view.currentMessagesGroup, view.isPinnedBottom, view.isPinnedTop)
 					view.setIsUpdating(false)
 				}
@@ -29221,7 +29438,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			else if (view is ChatActionCell) {
 				val actionMessageObject = view.messageObject!!
 
-				view.setMessageObject(actionMessageObject, collapseForDate = messagesByDays[actionMessageObject.dateKey]?.filter { it.messageOwner?.action == null }.isNullOrEmpty())
+				view.setMessageObject(actionMessageObject)
 				view.setSpoilersSuppressed(chatListView.scrollState != RecyclerView.SCROLL_STATE_IDLE)
 			}
 		}
@@ -29238,7 +29455,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			return
 		}
 
-		if (currentUser != null && currentUser!!.self) {
+		if (currentUser != null && currentUser!!.isSelf) {
 			return
 		}
 
@@ -29293,7 +29510,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			builder.setMessage(parentActivity.getString(R.string.NoPlayerInstalled))
 		}
 		else {
-			builder.setMessage(LocaleController.formatString("NoHandleAppInstalled", R.string.NoHandleAppInstalled, message.document?.mime_type))
+			builder.setMessage(LocaleController.formatString("NoHandleAppInstalled", R.string.NoHandleAppInstalled, message.document?.mimeType))
 		}
 
 		showDialog(builder.create())
@@ -29338,7 +29555,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	override fun didSelectLocation(location: MessageMedia, locationType: Int, notify: Boolean, scheduleDate: Int) {
-		sendMessagesHelper.sendMessage(location, dialogId, replyMessage, threadMessage, null, null, notify, scheduleDate, false, null)
+		sendMessagesHelper.sendMessage(location, dialogId, replyMessage, threadMessage, null, null, notify, scheduleDate)
 
 		if (chatMode == 0) {
 			moveScrollToLastMessage(false)
@@ -29373,22 +29590,22 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	fun getGroupCall(): ChatObject.Call? {
-		return if (chatMode == 0 && groupCall != null && groupCall!!.call is TL_groupCall) groupCall else null
+		return if (chatMode == 0 && groupCall != null && groupCall!!.call is TLGroupCall) groupCall else null
 	}
 
 	fun sendAudio(audios: ArrayList<MessageObject>, caption: CharSequence?, notify: Boolean, scheduleDate: Int) {
 		fillEditingMediaWithCaption(caption, null)
-		prepareSendingAudioDocuments(accountInstance, audios, caption, dialogId, replyMessage, threadMessage, editingMessageObject, notify, scheduleDate, false, null)
+		prepareSendingAudioDocuments(accountInstance, audios, caption, dialogId, replyMessage, threadMessage, editingMessageObject, notify, scheduleDate)
 		afterMessageSend()
 	}
 
 	fun sendContact(user: User?, notify: Boolean, scheduleDate: Int) {
-		sendMessagesHelper.sendMessage(user, dialogId, replyMessage, threadMessage, null, null, notify, scheduleDate, false, null)
+		sendMessagesHelper.sendMessage(user, dialogId, replyMessage, threadMessage, null, null, notify, scheduleDate)
 		afterMessageSend()
 	}
 
-	fun sendPoll(poll: TL_messageMediaPoll?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int) {
-		sendMessagesHelper.sendMessage(poll, dialogId, replyMessage, threadMessage, null, params, notify, scheduleDate, false, null)
+	fun sendPoll(poll: TLMessageMediaPoll?, params: HashMap<String, String>?, notify: Boolean, scheduleDate: Int) {
+		sendMessagesHelper.sendMessage(poll, dialogId, replyMessage, threadMessage, null, params, notify, scheduleDate)
 		afterMessageSend()
 	}
 
@@ -29401,25 +29618,25 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		if (photoEntry.isVideo) {
 			if (videoEditedInfo != null) {
-				prepareSendingVideo(accountInstance, photoEntry.path, videoEditedInfo, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.ttl, editingMessageObject, notify, scheduleDate, forceDocument, false, null)
+				prepareSendingVideo(accountInstance, photoEntry.path, videoEditedInfo, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.ttl, editingMessageObject, notify, scheduleDate, forceDocument)
 			}
 			else {
-				prepareSendingVideo(accountInstance, photoEntry.path, null, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.ttl, editingMessageObject, notify, scheduleDate, forceDocument, false, null)
+				prepareSendingVideo(accountInstance, photoEntry.path, null, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.ttl, editingMessageObject, notify, scheduleDate, forceDocument)
 			}
 		}
 		else {
 			if (photoEntry.imagePath != null) {
-				prepareSendingPhoto(accountInstance, photoEntry.imagePath, photoEntry.thumbPath, null, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.stickers, null, photoEntry.ttl, editingMessageObject, videoEditedInfo, notify, scheduleDate, forceDocument, false, null)
+				prepareSendingPhoto(accountInstance, photoEntry.imagePath, photoEntry.thumbPath, null, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.stickers, null, photoEntry.ttl, editingMessageObject, videoEditedInfo, notify, scheduleDate, forceDocument)
 			}
 			else if (photoEntry.path != null) {
-				prepareSendingPhoto(accountInstance, photoEntry.path, photoEntry.thumbPath, null, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.stickers, null, photoEntry.ttl, editingMessageObject, videoEditedInfo, notify, scheduleDate, forceDocument, false, null)
+				prepareSendingPhoto(accountInstance, photoEntry.path, photoEntry.thumbPath, null, dialogId, replyMessage, threadMessage, photoEntry.caption, photoEntry.entities, photoEntry.stickers, null, photoEntry.ttl, editingMessageObject, videoEditedInfo, notify, scheduleDate, forceDocument)
 			}
 		}
 
 		afterMessageSend()
 	}
 
-	fun showOpenGameAlert(game: TL_game, messageObject: MessageObject?, urlStr: String?, ask: Boolean, uid: Long) {
+	fun showOpenGameAlert(game: TLGame, messageObject: MessageObject?, urlStr: String?, ask: Boolean, uid: Long) {
 		val user = messagesController.getUser(uid)
 
 		if (ask) {
@@ -29428,7 +29645,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			builder.setTitle(parentActivity.getString(R.string.AppName))
 
 			val name = if (user != null) {
-				formatName(user.first_name, user.last_name)
+				formatName(user.firstName, user.lastName)
 			}
 			else {
 				""
@@ -29448,26 +29665,26 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		else {
 			if (!AndroidUtilities.isTablet() && WebviewActivity.supportWebview()) {
 				if (parentLayout!!.fragmentsStack[parentLayout!!.fragmentsStack.size - 1] === this) {
-					presentFragment(WebviewActivity(urlStr, user?.username ?: "", game.title, game.short_name, messageObject))
+					presentFragment(WebviewActivity(urlStr, user?.username ?: "", game.title, game.shortName, messageObject))
 				}
 			}
 			else {
-				WebviewActivity.openGameInBrowser(urlStr, messageObject, parentActivity, game.short_name, user?.username ?: "")
+				WebviewActivity.openGameInBrowser(urlStr, messageObject, parentActivity, game.shortName, user?.username ?: "")
 			}
 		}
 	}
 
-	private fun processLoadedDiscussionMessage(discussionMessage: TL_messages_discussionMessage?, history: messages_Messages?, maxReadId: Int, fallbackMessage: MessageObject?, req: TL_messages_getDiscussionMessage, originalChat: Chat?, highlightMsgId: Int, originalMessage: MessageObject?) {
+	private fun processLoadedDiscussionMessage(discussionMessage: TLMessagesDiscussionMessage?, history: MessagesMessages?, maxReadId: Int, fallbackMessage: MessageObject?, req: TLMessagesGetDiscussionMessage, originalChat: Chat?, highlightMsgId: Int, originalMessage: MessageObject?) {
 		@Suppress("NAME_SHADOWING") var history = history
 		val thisCommentLoadingMessageId = commentLoadingMessageId
 
 		if (history != null) {
-			if (maxReadId != 1 && maxReadId != 0 && discussionMessage != null && maxReadId != discussionMessage.read_inbox_max_id && highlightMsgId <= 0) {
+			if (maxReadId != 1 && maxReadId != 0 && discussionMessage != null && maxReadId != discussionMessage.readInboxMaxId && highlightMsgId <= 0) {
 				history = null
 			}
 			else if (history.messages.isNotEmpty() && discussionMessage != null && discussionMessage.messages.isNotEmpty()) {
 				val message = history.messages.first()
-				val replyId = message.reply_to?.reply_to_top_id?.takeIf { it != 0 } ?: message.reply_to?.reply_to_msg_id ?: 0
+				val replyId = message.replyTo?.replyToTopId?.takeIf { it != 0 } ?: message.replyTo?.replyToMsgId ?: 0
 
 				if (replyId != discussionMessage.messages?.lastOrNull()?.id) {
 					history = null
@@ -29479,7 +29696,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		if (discussionMessage != null) {
 			for (message in discussionMessage.messages) {
-				if (message is TL_messageEmpty) {
+				if (message is TLMessageEmpty) {
 					continue
 				}
 
@@ -29495,12 +29712,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			val dialogId = arrayList.first().dialogId
 
 			args.putLong("chat_id", -dialogId)
-			args.putInt("message_id", max(1, discussionMessage.read_inbox_max_id))
-			args.putInt("unread_count", discussionMessage.unread_count)
+			args.putInt("message_id", max(1, discussionMessage.readInboxMaxId))
+			args.putInt("unread_count", discussionMessage.unreadCount)
 			args.putBoolean("historyPreloaded", history != null)
 
 			val chatActivity = ChatActivity(args)
-			chatActivity.setThreadMessages(arrayList, originalChat, req.msg_id, discussionMessage.read_inbox_max_id, discussionMessage.read_outbox_max_id)
+			chatActivity.setThreadMessages(arrayList, originalChat, req.msgId, discussionMessage.readInboxMaxId, discussionMessage.readOutboxMaxId)
 
 			if (highlightMsgId != 0) {
 				chatActivity.highlightMessageId = highlightMsgId
@@ -29510,8 +29727,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				originalMessage?.messageOwner?.replies?.replies = chatActivity.threadMessage?.messageOwner?.replies?.replies ?: 0
 			}
 
-			if (originalMessage?.messageOwner?.originalReactions != null) {
-				chatActivity.threadMessage?.messageOwner?.reactions = originalMessage.messageOwner?.originalReactions
+			if (originalMessage?.messageOwner?.reactions != null) {
+				chatActivity.threadMessage?.messageOwner?.reactions = originalMessage.messageOwner?.reactions
 			}
 
 			val chatOpened = AtomicBoolean(false)
@@ -29549,7 +29766,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 				}
 
-				val historyFinal: messages_Messages = history
+				val historyFinal: MessagesMessages = history
 				val fnidFinal = fnid
 				val commentsClassGuid = chatActivity.getClassGuid()
 
@@ -29599,9 +29816,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		val chat = messagesController.getChat(chatId)
 
-		val req = TL_messages_getDiscussionMessage()
+		val req = TLMessagesGetDiscussionMessage()
 		req.peer = MessagesController.getInputPeer(chat)
-		req.msg_id = messageId
+		req.msgId = messageId
 
 		FileLog.d("getDiscussionMessage chat = " + chat!!.id + " msg_id = " + messageId)
 
@@ -29635,7 +29852,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				commentRequestId = -1
 
-				if (response is TL_messages_discussionMessage) {
+				if (response is TLMessagesDiscussionMessage) {
 					savedDiscussionMessage = response
 					messagesController.putUsers(savedDiscussionMessage?.users, false)
 					messagesController.putChats(savedDiscussionMessage?.chats, false)
@@ -29649,7 +29866,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				if (savedDiscussionMessageMessages != null) {
 					for (message in savedDiscussionMessageMessages) {
-						if (message is TL_messageEmpty) {
+						if (message is TLMessageEmpty) {
 							continue
 						}
 
@@ -29660,19 +29877,19 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				if (msgs.isNotEmpty()) {
 					val message = msgs.first()
 
-					val getReplies = TL_messages_getReplies()
-					getReplies.peer = messagesController.getInputPeer(message.peer_id)
-					getReplies.msg_id = message.id
-					getReplies.offset_date = 0
+					val getReplies = TLMessagesGetReplies()
+					getReplies.peer = messagesController.getInputPeer(message.peerId)
+					getReplies.msgId = message.id
+					getReplies.offsetDate = 0
 					getReplies.limit = 30
 
 					if (highlightMsgId > 0) {
-						getReplies.offset_id = highlightMsgId
-						getReplies.add_offset = -getReplies.limit / 2
+						getReplies.offsetId = highlightMsgId
+						getReplies.addOffset = -getReplies.limit / 2
 					}
 					else {
-						getReplies.offset_id = if (maxReadId == 0) 1 else maxReadId
-						getReplies.add_offset = -getReplies.limit + 10
+						getReplies.offsetId = if (maxReadId == 0) 1 else maxReadId
+						getReplies.addOffset = -getReplies.limit + 10
 					}
 
 					val guid2 = ++commentMessagesLoadingGuid
@@ -29687,7 +29904,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								commentMessagesRequestId = -1
 
 								if (response2 != null) {
-									savedHistory = response2 as? messages_Messages
+									savedHistory = response2 as? MessagesMessages
 								}
 								else {
 									if ("CHANNEL_PRIVATE" == error2?.text) {
@@ -29730,31 +29947,31 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 	}
 
 	private fun openOriginalReplyChat(messageObject: MessageObject?) {
-		if (isUserSelf(currentUser) && messageObject?.messageOwner?.fwd_from?.saved_from_peer?.user_id == currentUser?.id) {
-			scrollToMessageId(messageObject!!.messageOwner!!.fwd_from!!.saved_from_msg_id, messageObject.id, true, 0, true, 0)
+		if (isUserSelf(currentUser) && messageObject?.messageOwner?.fwdFrom?.savedFromPeer?.userId == currentUser?.id) {
+			scrollToMessageId(messageObject!!.messageOwner!!.fwdFrom!!.savedFromMsgId, messageObject.id, true, 0, true, 0)
 			return
 		}
 
 		val args = Bundle()
 
-		if (messageObject!!.messageOwner!!.fwd_from!!.saved_from_peer.channel_id != 0L) {
-			args.putLong("chat_id", messageObject.messageOwner!!.fwd_from!!.saved_from_peer.channel_id)
+		if (messageObject!!.messageOwner!!.fwdFrom!!.savedFromPeer.channelId != 0L) {
+			args.putLong("chat_id", messageObject.messageOwner!!.fwdFrom!!.savedFromPeer.channelId)
 		}
-		else if (messageObject.messageOwner!!.fwd_from!!.saved_from_peer.chat_id != 0L) {
-			args.putLong("chat_id", messageObject.messageOwner!!.fwd_from!!.saved_from_peer.chat_id)
+		else if (messageObject.messageOwner!!.fwdFrom!!.savedFromPeer.chatId != 0L) {
+			args.putLong("chat_id", messageObject.messageOwner!!.fwdFrom!!.savedFromPeer.chatId)
 		}
-		else if (messageObject.messageOwner!!.fwd_from!!.saved_from_peer.user_id != 0L) {
-			args.putLong("user_id", messageObject.messageOwner!!.fwd_from!!.saved_from_peer.user_id)
+		else if (messageObject.messageOwner!!.fwdFrom!!.savedFromPeer.userId != 0L) {
+			args.putLong("user_id", messageObject.messageOwner!!.fwdFrom!!.savedFromPeer.userId)
 		}
 
-		args.putInt("message_id", messageObject.messageOwner!!.fwd_from!!.saved_from_msg_id)
+		args.putInt("message_id", messageObject.messageOwner!!.fwdFrom!!.savedFromMsgId)
 
 		if (messagesController.checkCanOpenChat(args, this@ChatActivity)) {
 			presentFragment(ChatActivity(args))
 		}
 	}
 
-	fun showRequestUrlAlert(request: TL_urlAuthResultRequest, buttonReq: TL_messages_requestUrlAuth, url: String, ask: Boolean) {
+	fun showRequestUrlAlert(request: TLUrlAuthResultRequest, buttonReq: TLMessagesRequestUrlAuth, url: String, ask: Boolean) {
 		val parentActivity = parentActivity ?: return
 
 		val builder = AlertDialog.Builder(parentActivity)
@@ -29779,18 +29996,18 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		val selfUser = userConfig.getCurrentUser()
 
-		for (a in 0 until if (request.request_write_access) 2 else 1) {
+		for (a in 0 until if (request.requestWriteAccess) 2 else 1) {
 			cells[a] = CheckBoxCell(parentActivity, 5)
 			cells[a]?.background = Theme.getSelectorDrawable(false)
 			cells[a]?.setMultiline(true)
 			cells[a]?.tag = a
 
 			if (a == 0) {
-				stringBuilder = AndroidUtilities.replaceTags(LocaleController.formatString("OpenUrlOption1", R.string.OpenUrlOption1, request.domain, formatName(selfUser!!.first_name, selfUser.last_name)))
+				stringBuilder = AndroidUtilities.replaceTags(LocaleController.formatString("OpenUrlOption1", R.string.OpenUrlOption1, request.domain, formatName(selfUser!!.firstName, selfUser.lastName)))
 				index = TextUtils.indexOf(stringBuilder, request.domain)
 
 				if (index >= 0) {
-					stringBuilder.setSpan(URLSpan(""), index, index + request.domain.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+					stringBuilder.setSpan(URLSpan(""), index, index + (request.domain?.length ?: 0), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
 
 				cells[a]?.setText(stringBuilder, "", checked = true, divider = false)
@@ -29833,21 +30050,21 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 			else {
 				val progressDialog = arrayOf<AlertDialog?>(AlertDialog(parentActivity, 3))
-				val req = TL_messages_acceptUrlAuth()
+				val req = TLMessagesAcceptUrlAuth()
 
 				if (buttonReq.url != null) {
 					req.url = buttonReq.url
 					req.flags = req.flags or 4
 				}
 				else {
-					req.button_id = buttonReq.button_id
-					req.msg_id = buttonReq.msg_id
+					req.buttonId = buttonReq.buttonId
+					req.msgId = buttonReq.msgId
 					req.peer = buttonReq.peer
 					req.flags = req.flags or 2
 				}
 
-				if (request.request_write_access) {
-					req.write_allowed = cells[1]!!.isChecked
+				if (request.requestWriteAccess) {
+					req.writeAllowed = cells[1]!!.isChecked
 				}
 
 				runCatching {
@@ -29858,14 +30075,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 				val requestId = connectionsManager.sendRequest(req) { response, _ ->
 					AndroidUtilities.runOnUIThread {
-						if (response is TL_urlAuthResultAccepted) {
+						if (response is TLUrlAuthResultAccepted) {
 							Browser.openUrl(parentActivity, response.url, false)
 						}
-						else if (response is TL_urlAuthResultDefault) {
+						else if (response is TLUrlAuthResultDefault) {
 							Browser.openUrl(parentActivity, url, false)
 						}
 						else if (buttonReq.url != null) {
-							AlertsCreator.showOpenUrlAlert(this@ChatActivity, buttonReq.url, false, ask)
+							AlertsCreator.showOpenUrlAlert(this@ChatActivity, buttonReq.url!!, false, ask)
 						}
 					}
 				}
@@ -29992,14 +30209,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						var messageId = messageObject1.id
 						var link: String? = null
 
-						if (messageObject1.messageOwner?.fwd_from != null) {
-							if (messageObject1.messageOwner?.fwd_from?.saved_from_peer != null) {
-								dialogId = MessageObject.getPeerId(messageObject1.messageOwner?.fwd_from?.saved_from_peer)
-								messageId = messageObject1.messageOwner!!.fwd_from!!.saved_from_msg_id
+						if (messageObject1.messageOwner?.fwdFrom != null) {
+							if (messageObject1.messageOwner?.fwdFrom?.savedFromPeer != null) {
+								dialogId = MessageObject.getPeerId(messageObject1.messageOwner?.fwdFrom?.savedFromPeer)
+								messageId = messageObject1.messageOwner!!.fwdFrom!!.savedFromMsgId
 							}
-							else if (messageObject1.messageOwner?.fwd_from?.from_id != null) {
-								dialogId = MessageObject.getPeerId(messageObject1.messageOwner?.fwd_from?.from_id)
-								messageId = messageObject1.messageOwner!!.fwd_from!!.channel_post
+							else if (messageObject1.messageOwner?.fwdFrom?.fromId != null) {
+								dialogId = MessageObject.getPeerId(messageObject1.messageOwner?.fwdFrom?.fromId)
+								messageId = messageObject1.messageOwner!!.fwdFrom!!.channelPost
 							}
 						}
 
@@ -30052,7 +30269,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			if (str.startsWith("@")) {
 				val username = str.substring(1).lowercase()
 
-				if (currentChat != null && !TextUtils.isEmpty(currentChat!!.username) && username == currentChat!!.username.lowercase() || currentUser != null && !TextUtils.isEmpty(currentUser!!.username) && username == currentUser!!.username!!.lowercase()) {
+				if (currentChat != null && !currentChat?.username.isNullOrEmpty() && username == currentChat?.username?.lowercase() || currentUser != null && !TextUtils.isEmpty(currentUser!!.username) && username == currentUser!!.username!!.lowercase()) {
 					val args = Bundle()
 
 					if (currentChat != null) {
@@ -30201,7 +30418,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 
 				if (webPage != null) {
-					EmbedBottomSheet.show(this@ChatActivity, messageObject, photoViewerProvider, webPage.site_name, webPage.title, webPage.url, webPage.embed_url, webPage.embed_width, webPage.embed_height, seekTime, isKeyboardVisible)
+					EmbedBottomSheet.show(this@ChatActivity, messageObject, photoViewerProvider, webPage.siteName, webPage.title, webPage.url, webPage.embedUrl, webPage.embedWidth, webPage.embedHeight, seekTime, isKeyboardVisible)
 				}
 				else {
 					if (!messageObject!!.isVideo && messageObject.replyMessageObject != null) {
@@ -30243,74 +30460,74 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 			}
 			else if (str.startsWith("card:")) {
-				val finalCell = cell
-				val number = str.substring(5)
-				val progressDialog = arrayOf<AlertDialog?>(AlertDialog(parentActivity!!, 3))
-
-				val req = TL_payments_getBankCardData()
-				req.number = number
-
-				val requestId = connectionsManager.sendRequest(req, { response, _ ->
-					AndroidUtilities.runOnUIThread {
-						runCatching {
-							progressDialog[0]?.dismiss()
-						}
-
-						progressDialog[0] = null
-
-						if (response is TL_payments_bankCardData) {
-							if (parentActivity == null) {
-								return@runOnUIThread
-							}
-
-							val builder = BottomSheet.Builder(parentActivity, false)
-							val arrayList = ArrayList<CharSequence>()
-							var a = 0
-							val N = response.open_urls.size
-
-							while (a < N) {
-								arrayList.add(response.open_urls[a].name)
-								a++
-							}
-
-							arrayList.add(context!!.getString(R.string.CopyCardNumber))
-
-							builder.setTitle(response.title)
-
-							builder.setItems(arrayList.toTypedArray()) { _, which ->
-								if (which < response.open_urls.size) {
-									Browser.openUrl(parentActivity, response.open_urls[which].url, inlineReturn == 0L, false)
-								}
-								else {
-									AndroidUtilities.addToClipboard(number)
-									Toast.makeText(ApplicationLoader.applicationContext, context!!.getString(R.string.CardNumberCopied), Toast.LENGTH_SHORT).show()
-								}
-							}
-
-							builder.setOnPreDismissListener {
-								finalCell?.resetPressedLink(-1)
-							}
-
-							showDialog(builder.create())
-						}
-						else {
-							finalCell?.resetPressedLink(-1)
-						}
-					}
-				}, null, null, 0, messagesController.webFileDatacenterId, ConnectionsManager.ConnectionTypeGeneric, true)
-
-				AndroidUtilities.runOnUIThread({
-					if (progressDialog[0] == null) {
-						return@runOnUIThread
-					}
-
-					progressDialog[0]?.setOnCancelListener {
-						connectionsManager.cancelRequest(requestId, true)
-						finalCell?.resetPressedLink(-1)
-					}
-
-					showDialog(progressDialog[0])
-				}, 500)
+//				val finalCell = cell
+//				val number = str.substring(5)
+//				val progressDialog = arrayOf<AlertDialog?>(AlertDialog(parentActivity!!, 3))
+//
+//				val req = TLPaymentsGetBankCardData()
+//				req.number = number
+//
+//				val requestId = connectionsManager.sendRequest(req, { response, _ ->
+//					AndroidUtilities.runOnUIThread {
+//						runCatching {
+//							progressDialog[0]?.dismiss()
+//						}
+//
+//						progressDialog[0] = null
+//
+//						if (response is TLPaymentsBankCardData) {
+//							if (parentActivity == null) {
+//								return@runOnUIThread
+//							}
+//
+//							val builder = BottomSheet.Builder(parentActivity, false)
+//							val arrayList = ArrayList<CharSequence>()
+//							var a = 0
+//							val N = response.open_urls.size
+//
+//							while (a < N) {
+//								arrayList.add(response.open_urls[a].name)
+//								a++
+//							}
+//
+//							arrayList.add(context!!.getString(R.string.CopyCardNumber))
+//
+//							builder.setTitle(response.title)
+//
+//							builder.setItems(arrayList.toTypedArray()) { _, which ->
+//								if (which < response.open_urls.size) {
+//									Browser.openUrl(parentActivity, response.open_urls[which].url, inlineReturn == 0L, false)
+//								}
+//								else {
+//									AndroidUtilities.addToClipboard(number)
+//									Toast.makeText(ApplicationLoader.applicationContext, context!!.getString(R.string.CardNumberCopied), Toast.LENGTH_SHORT).show()
+//								}
+//							}
+//
+//							builder.setOnPreDismissListener {
+//								finalCell?.resetPressedLink(-1)
+//							}
+//
+//							showDialog(builder.create())
+//						}
+//						else {
+//							finalCell?.resetPressedLink(-1)
+//						}
+//					}
+//				}, null, null, 0, messagesController.webFileDatacenterId, ConnectionsManager.ConnectionTypeGeneric, true)
+//
+//				AndroidUtilities.runOnUIThread({
+//					if (progressDialog[0] == null) {
+//						return@runOnUIThread
+//					}
+//
+//					progressDialog[0]?.setOnCancelListener {
+//						connectionsManager.cancelRequest(requestId, true)
+//						finalCell?.resetPressedLink(-1)
+//					}
+//
+//					showDialog(progressDialog[0])
+//				}, 500)
 			}
 			else {
 				openClickableLink(url, str, longPress, cell, messageObject)
@@ -30382,14 +30599,17 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					forceAlert = true
 				}
 				else {
-					if (messageObject != null && messageObject.messageOwner?.media is TL_messageMediaWebPage && messageObject.messageOwner?.media?.webpage != null && messageObject.messageOwner?.media?.webpage?.cached_page != null) {
+					if (messageObject != null && messageObject.messageOwner?.media is TLMessageMediaWebPage && messageObject.messageOwner?.media?.webpage != null && messageObject.messageOwner?.media?.webpage?.cachedPage != null) {
 						val lowerUrl = urlFinal?.lowercase() ?: ""
 						val lowerUrl2 = messageObject.messageOwner?.media?.webpage?.url?.lowercase() ?: ""
 						val domainUrl = String.format(Locale.getDefault(), "%s/iv", ApplicationLoader.applicationContext.getString(R.string.domain))
 
 						if ((lowerUrl.contains("www.ello.team/blog") || Browser.isTelegraphUrl(lowerUrl, false) || lowerUrl.contains(domainUrl)) && (lowerUrl.contains(lowerUrl2) || lowerUrl2.contains(lowerUrl))) {
-							ArticleViewer.getInstance().setParentActivity(parentActivity, this@ChatActivity)
-							ArticleViewer.getInstance().open(messageObject)
+							parentActivity?.let {
+								ArticleViewer.getInstance().setParentActivity(it, this@ChatActivity)
+								ArticleViewer.getInstance().open(messageObject)
+							}
+
 							return
 						}
 					}
@@ -30487,9 +30707,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 		`object`.viewsReloaded = true
 
-		val req = TL_channels_viewSponsoredMessage()
+		val req = TLChannelsViewSponsoredMessage()
 		req.channel = MessagesController.getInputChannel(currentChat)
-		req.random_id = `object`.sponsoredId
+		req.randomId = `object`.sponsoredId
 
 		connectionsManager.sendRequest(req)
 
@@ -30847,11 +31067,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		var emoticon: String? = null
 
 		if (currentUserInfo != null) {
-			emoticon = currentUserInfo?.theme_emoticon
+			emoticon = currentUserInfo?.themeEmoticon
 		}
 
 		if (emoticon == null && currentChatInfo != null) {
-			emoticon = currentChatInfo?.theme_emoticon
+			emoticon = currentChatInfo?.themeEmoticon
 		}
 
 		setChatThemeEmoticon(emoticon)
@@ -31009,7 +31229,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			botInfoEmptyRow = -5
 
 			if (clearingHistory) {
-				if (currentUser != null && currentUser!!.bot && currentUser!!.id != BuildConfig.AI_BOT_ID && chatMode == 0 && (botInfo.size() > 0 && (botInfo[currentUser!!.id]!!.description != null || botInfo[currentUser!!.id]!!.description_photo != null || botInfo[currentUser!!.id]!!.description_document != null) || isReplyUser(currentUser))) {
+				if (currentUser != null && currentUser!!.bot && currentUser!!.id != BuildConfig.AI_BOT_ID && chatMode == 0 && (botInfo.size() > 0 && (botInfo[currentUser!!.id]!!.description != null || botInfo[currentUser!!.id]!!.descriptionPhoto != null || botInfo[currentUser!!.id]!!.descriptionDocument != null) || isReplyUser(currentUser))) {
 					botInfoEmptyRow = 0
 					return 1
 				}
@@ -31072,17 +31292,17 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						@Suppress("NAME_SHADOWING") var cell = cell
 
 						if (type == 0) {
-							val media = cell.getMessageObject()?.messageOwner?.media as? TL_messageMediaPoll
+							val media = cell.getMessageObject()?.messageOwner?.media as? TLMessageMediaPoll
 							showPollSolution(cell.getMessageObject(), media?.results)
 						}
 						else if (type == 1) {
 							var messageObject = cell.getMessageObject()
 
-							if (messageObject?.messageOwner?.fwd_from == null || messageObject.messageOwner?.fwd_from?.psa_type.isNullOrEmpty()) {
+							if (messageObject?.messageOwner?.fwdFrom == null || messageObject.messageOwner?.fwdFrom?.psaType.isNullOrEmpty()) {
 								return
 							}
 
-							var text: CharSequence? = LocaleController.getString("PsaMessageInfo_" + messageObject.messageOwner?.fwd_from?.psa_type)
+							var text: CharSequence? = LocaleController.getString("PsaMessageInfo_" + messageObject.messageOwner?.fwdFrom?.psaType)
 
 							if (text.isNullOrEmpty()) {
 								text = mContext.getString(R.string.PsaMessageInfoDefault)
@@ -31163,9 +31383,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							chatActivityDelegate?.openReplyMessage(messageObject.id)
 							finishFragment()
 						}
-						else if ((isReplyUser(currentUser) || isUserSelf(currentUser)) && messageObject.messageOwner?.fwd_from?.saved_from_peer != null) {
-							if (isReplyUser(currentUser) && messageObject.messageOwner?.reply_to != null && messageObject.messageOwner?.reply_to?.reply_to_top_id != 0) {
-								openDiscussionMessageChat(messageObject.messageOwner!!.reply_to!!.reply_to_peer_id.channel_id, null, messageObject.messageOwner!!.reply_to!!.reply_to_top_id, 0, -1, messageObject.messageOwner!!.fwd_from!!.saved_from_msg_id, messageObject)
+						else if ((isReplyUser(currentUser) || isUserSelf(currentUser)) && messageObject.messageOwner?.fwdFrom?.savedFromPeer != null) {
+							if (isReplyUser(currentUser) && messageObject.messageOwner?.replyTo != null && messageObject.messageOwner?.replyTo?.replyToTopId != 0) {
+								openDiscussionMessageChat(messageObject.messageOwner!!.replyTo!!.replyToPeerId.channelId, null, messageObject.messageOwner!!.replyTo!!.replyToTopId, 0, -1, messageObject.messageOwner!!.fwdFrom!!.savedFromMsgId, messageObject)
 							}
 							else {
 								openOriginalReplyChat(messageObject)
@@ -31261,7 +31481,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 						if (messageObject?.type == 16) {
 							if (currentUser != null) {
-								startCall(currentUser!!, messageObject.isVideoCall, currentUserInfo != null && currentUserInfo!!.video_calls_available, parentActivity!!, messagesController.getUserFull(currentUser!!.id), accountInstance)
+								startCall(currentUser!!, messageObject.isVideoCall, currentUserInfo != null && currentUserInfo!!.videoCallsAvailable, parentActivity!!, messagesController.getUserFull(currentUser!!.id), accountInstance)
 							}
 						}
 						else {
@@ -31409,7 +31629,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 					private fun openProfile(user: User?) {
 						if (user != null && user.id != userConfig.getClientUserId()) {
-							if (user.is_public) {
+							if (user.isPublic) {
 								val args = Bundle()
 								args.putLong("user_id", user.id)
 
@@ -31426,15 +31646,17 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								val req = connectionsManager.sendRequest(request) { response, _ ->
 									var allowed = false
 
-									if (response is TL_biz_dataRaw) {
-										val s = String(response.data, StandardCharsets.UTF_8)
+									if (response is TLBizDataRaw) {
+										val s = response.readString()
 										var richVerifyResponse: RichVerifyResponse? = null
 
-										try {
-											richVerifyResponse = Gson().fromJson(s, RichVerifyResponse::class.java)
-										}
-										catch (e: Exception) {
-											FileLog.e(e)
+										if (!s.isNullOrEmpty()) {
+											try {
+												richVerifyResponse = Gson().fromJson(s, RichVerifyResponse::class.java)
+											}
+											catch (e: Exception) {
+												FileLog.e(e)
+											}
 										}
 
 										if (richVerifyResponse != null && richVerifyResponse.status) {
@@ -31479,7 +31701,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							args.putLong("user_id", user.id)
 
 							if (messagesController.checkCanOpenChat(args, this@ChatActivity, cell.getMessageObject())) {
-								if (user.is_public) {
+								if (user.isPublic) {
 									presentFragment(ChatActivity(args))
 								}
 								else {
@@ -31487,12 +31709,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 									val req = connectionsManager.sendRequest(request) { response, _ ->
 										var allowed = false
 
-										if (response is TL_biz_dataRaw) {
-											val s = String(response.data, StandardCharsets.UTF_8)
+										if (response is TLBizDataRaw) {
+											val s = response.readString()
 											var richVerifyResponse: RichVerifyResponse? = null
 
 											try {
-												richVerifyResponse = Gson().fromJson(s, RichVerifyResponse::class.java)
+												if (!s.isNullOrEmpty()) {
+													richVerifyResponse = Gson().fromJson(s, RichVerifyResponse::class.java)
+												}
 											}
 											catch (e: Exception) {
 												FileLog.e(e)
@@ -31542,7 +31766,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						get() = isUserSelf(currentUser) || currentChat != null && (!isChannel(currentChat) || currentChat!!.megagroup)
 
 					override fun didPressBotButton(cell: ChatMessageCell, button: KeyboardButton) {
-						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && button !is TL_keyboardButtonSwitchInline && button !is TL_keyboardButtonCallback && button !is TL_keyboardButtonGame && button !is TL_keyboardButtonUrl && button !is TL_keyboardButtonBuy && button !is TL_keyboardButtonUrlAuth && button !is TL_keyboardButtonUserProfile) {
+						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && button !is TLKeyboardButtonSwitchInline && button !is TLKeyboardButtonCallback && button !is TLKeyboardButtonGame && button !is TLKeyboardButtonUrl && button !is TLKeyboardButtonBuy && button !is TLKeyboardButtonUrlAuth && button !is TLKeyboardButtonUserProfile) {
 							return
 						}
 
@@ -31560,12 +31784,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 
 					override fun didLongPressBotButton(cell: ChatMessageCell, button: KeyboardButton) {
-						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && button !is TL_keyboardButtonSwitchInline && button !is TL_keyboardButtonCallback && button !is TL_keyboardButtonGame && button !is TL_keyboardButtonUrl && button !is TL_keyboardButtonBuy && button !is TL_keyboardButtonUrlAuth && button !is TL_keyboardButtonUserProfile) {
+						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && button !is TLKeyboardButtonSwitchInline && button !is TLKeyboardButtonCallback && button !is TLKeyboardButtonGame && button !is TLKeyboardButtonUrl && button !is TLKeyboardButtonBuy && button !is TLKeyboardButtonUrlAuth && button !is TLKeyboardButtonUserProfile) {
 							return
 						}
 
-						if (button is TL_keyboardButtonUrl) {
-							openClickableLink(null, button.url, true, cell, cell.getMessageObject())
+						if (button is TLKeyboardButtonUrl) {
+							button.url?.let {
+								openClickableLink(null, it, true, cell, cell.getMessageObject())
+							}
 
 							runCatching {
 								cell.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
@@ -31573,7 +31799,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 					}
 
-					override fun didPressReaction(cell: ChatMessageCell, reaction: ReactionCount?, longpress: Boolean) {
+					override fun didPressReaction(cell: ChatMessageCell, reaction: TLReactionCount?, longpress: Boolean) {
 						val parentActivity = parentActivity ?: return
 
 						if (longpress) {
@@ -31713,7 +31939,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								chatListView?.stopScroll()
 								chatLayoutManager?.setCanScrollVertically(false)
 
-								scrimViewReaction = (reaction?.reaction as? TL_reactionEmoji)?.emoticon
+								scrimViewReaction = (reaction?.reaction as? TLReactionEmoji)?.emoticon
 
 								dimBehindView(cell, true)
 								hideHints(false)
@@ -31729,11 +31955,11 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 					}
 
-					override fun didPressVoteButtons(cell: ChatMessageCell, buttons: ArrayList<TL_pollAnswer>, showCount: Int, x: Int, y: Int) {
+					override fun didPressVoteButtons(cell: ChatMessageCell?, buttons: MutableList<TLPollAnswer>?, showCount: Int, x: Int, y: Int) {
 						@Suppress("NAME_SHADOWING") var x = x
 						@Suppress("NAME_SHADOWING") var y = y
 
-						if (showCount >= 0 || buttons.isEmpty()) {
+						if (showCount >= 0 || buttons.isNullOrEmpty()) {
 							if (parentActivity == null) {
 								return
 							}
@@ -31752,27 +31978,23 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 								contentView?.addView(pollHintView, index + 1, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.LEFT or Gravity.TOP, 19f, 0f, 19f, 0f))
 							}
 
-							if (buttons.isEmpty() && showCount < 0) {
-								val pollButtons = cell.pollButtons
+							if (buttons.isNullOrEmpty() && showCount < 0) {
+								val pollButtons = cell?.pollButtons
 								var lastDiff = 0f
-								var a = 0
-								val N = pollButtons.size
 
-								while (a < N) {
-									val button = pollButtons[a]
+								if (!pollButtons.isNullOrEmpty()) {
+									for (button in pollButtons) {
+										lastDiff = cell.y + button.y - AndroidUtilities.dp(4f) - chatListViewPadding
+										pollHintX = button.x + AndroidUtilities.dp(13.3f)
+										pollHintY = button.y - AndroidUtilities.dp(6f) + y
 
-									lastDiff = cell.y + button.y - AndroidUtilities.dp(4f) - chatListViewPadding
-									pollHintX = button.x + AndroidUtilities.dp(13.3f)
-									pollHintY = button.y - AndroidUtilities.dp(6f) + y
-
-									if (lastDiff > 0) {
-										lastDiff = 0f
-										x = pollHintX
-										y = pollHintY
-										break
+										if (lastDiff > 0) {
+											lastDiff = 0f
+											x = pollHintX
+											y = pollHintY
+											break
+										}
 									}
-
-									a++
 								}
 
 								if (lastDiff != 0f) {
@@ -31785,14 +32007,14 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							pollHintView?.showForMessageCell(cell, showCount, x, y, true)
 						}
 						else {
-							sendMessagesHelper.sendVote(cell.getMessageObject(), buttons, null)
+							sendMessagesHelper.sendVote(cell?.getMessageObject(), buttons, null)
 						}
 					}
 
 					override fun didPressCancelSendButton(cell: ChatMessageCell) {
 						val message = cell.getMessageObject() ?: return
 
-						if (message.messageOwner?.send_state != 0) {
+						if (message.messageOwner?.sendState != 0) {
 							sendMessagesHelper.cancelSendingMessage(message)
 						}
 					}
@@ -31824,7 +32046,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							return false
 						}
 
-						BulletinFactory.of(this@ChatActivity).createEmojiBulletin(document, AndroidUtilities.replaceTags(LocaleController.formatString("MessageContainsEmojiPackSingle", R.string.MessageContainsEmojiPackSingle, set.set.title)), context!!.getString(R.string.ViewAction)) {
+						BulletinFactory.of(this@ChatActivity).createEmojiBulletin(document, AndroidUtilities.replaceTags(LocaleController.formatString("MessageContainsEmojiPackSingle", R.string.MessageContainsEmojiPackSingle, set.set?.title)), context!!.getString(R.string.ViewAction)) {
 							val inputSets = ArrayList<InputStickerSet>(1)
 							inputSets.add(inputStickerSet)
 							val alert = EmojiPacksAlert(this@ChatActivity, parentActivity, inputSets)
@@ -31910,7 +32132,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 
 						if (message.isDice) {
 							undoView?.showWithAction(0, if (chatActivityEnterView!!.visibility == View.VISIBLE && bottomOverlay!!.visibility != View.VISIBLE) UndoView.ACTION_DICE_INFO else UndoView.ACTION_DICE_NO_SEND_INFO, message.diceEmoji, null) {
-								sendMessagesHelper.sendMessage(message.diceEmoji, dialogId, replyMessage, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+								sendMessagesHelper.sendMessage(message.diceEmoji, dialogId, replyMessage, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 							}
 						}
 						else if (message.isAnimatedEmoji && (!message.isAnimatedAnimatedEmoji || emojiAnimationsOverlay!!.supports(MessageObject.findAnimatedEmojiEmoticon(message.document)) && currentUser != null) || message.isPremiumSticker) {
@@ -32054,30 +32276,32 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 							PollVotesAlert.showForPoll(this@ChatActivity, messageObject)
 						}
 						else if (type == 0) {
-							if (messageObject?.messageOwner?.media?.webpage?.cached_page != null) {
-								ArticleViewer.getInstance().setParentActivity(parentActivity, this@ChatActivity)
-								ArticleViewer.getInstance().open(messageObject)
+							if (messageObject?.messageOwner?.media?.webpage?.cachedPage != null) {
+								parentActivity?.let {
+									ArticleViewer.getInstance().setParentActivity(it, this@ChatActivity)
+									ArticleViewer.getInstance().open(messageObject)
+								}
 							}
 						}
 						else if (type == 5) {
-							val uid = messageObject!!.messageOwner!!.media!!.user_id
+							val uid = messageObject?.messageOwner?.media?.userId ?: 0L
 							var user: User? = null
 
 							if (uid != 0L) {
 								user = MessagesController.getInstance(currentAccount).getUser(uid)
 							}
 
-							openVCard(user, messageObject.messageOwner!!.media!!.vcard, messageObject.messageOwner!!.media!!.first_name, messageObject.messageOwner!!.media!!.last_name)
+							openVCard(user, messageObject?.messageOwner?.media?.vcard, messageObject?.messageOwner?.media?.firstName, messageObject?.messageOwner?.media?.lastName)
 						}
 						else {
-							if (messageObject!!.isSponsored) {
+							if (messageObject?.isSponsored == true) {
 								val args = Bundle()
 
 								if (messageObject.sponsoredChatInvite != null) {
 									showDialog(JoinGroupAlert(mContext, messageObject.sponsoredChatInvite, messageObject.sponsoredChatInviteHash!!, this@ChatActivity))
 								}
 								else {
-									val peerId = MessageObject.getPeerId(messageObject.messageOwner?.from_id)
+									val peerId = MessageObject.getPeerId(messageObject.messageOwner?.fromId)
 
 									if (peerId < 0) {
 										args.putLong("chat_id", -peerId)
@@ -32099,9 +32323,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 									}
 								}
 							}
-							else if (messageObject.messageOwner?.media?.webpage != null) {
-								if (!openLinkInternally(messageObject.messageOwner?.media?.webpage?.url, messageObject.id)) {
-									Browser.openUrl(parentActivity, messageObject.messageOwner?.media?.webpage?.url)
+							else if (messageObject?.messageOwner?.media?.webpage != null) {
+								if (!openLinkInternally(messageObject?.messageOwner?.media?.webpage?.url, messageObject?.id ?: 0)) {
+									Browser.openUrl(parentActivity, messageObject?.messageOwner?.media?.webpage?.url)
 								}
 							}
 						}
@@ -32121,8 +32345,8 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						val linkedChatId: Long
 
 						if (message?.messageOwner?.replies != null) {
-							maxReadId = message.messageOwner!!.replies!!.read_max_id
-							linkedChatId = message.messageOwner!!.replies!!.channel_id
+							maxReadId = message.messageOwner!!.replies!!.readMaxId
+							linkedChatId = message.messageOwner!!.replies!!.channelId
 						}
 						else {
 							maxReadId = -1
@@ -32217,12 +32441,13 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				(view as ChatActionCell).setInvalidateColors(true)
 
 				(view as ChatActionCell).setDelegate(object : ChatActionCellDelegate {
-					override fun needOpenInviteLink(invite: TL_chatInviteExported?) {
+					override fun needOpenInviteLink(invite: TLChatInviteExported?) {
 						// unused
 					}
 
-					override fun didOpenPremiumGift(cell: ChatActionCell?, giftOption: TL_premiumGiftOption?, animateConfetti: Boolean) {
-						showDialog(PremiumPreviewBottomSheet(this@ChatActivity, currentAccount, currentUser, GiftTier(giftOption)).setAnimateConfetti(animateConfetti).setOutboundGift(cell!!.messageObject!!.isOut))
+					override fun didOpenPremiumGift(cell: ChatActionCell?, giftOption: TLRPC.TLPremiumGiftOption?, animateConfetti: Boolean) {
+						//MARK: disabled clicking on premium button
+//						showDialog(PremiumPreviewBottomSheet(this@ChatActivity, currentAccount, currentUser, GiftTier(giftOption)).setAnimateConfetti(animateConfetti).setOutboundGift(cell!!.messageObject!!.isOut))
 					}
 
 					override fun needShowEffectOverlay(cell: ChatActionCell?, document: TLRPC.Document?, videoSize: VideoSize?) {
@@ -32281,7 +32506,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 
 					override fun didPressBotButton(messageObject: MessageObject?, button: KeyboardButton?) {
-						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && button !is TL_keyboardButtonSwitchInline && button !is TL_keyboardButtonCallback && button !is TL_keyboardButtonGame && button !is TL_keyboardButtonUrl && button !is TL_keyboardButtonBuy && button !is TL_keyboardButtonUrlAuth && button !is TL_keyboardButtonUserProfile) {
+						if (parentActivity == null || bottomOverlayChat!!.visibility == View.VISIBLE && button !is TLKeyboardButtonSwitchInline && button !is TLKeyboardButtonCallback && button !is TLKeyboardButtonGame && button !is TLKeyboardButtonUrl && button !is TLKeyboardButtonBuy && button !is TLKeyboardButtonUrlAuth && button !is TLKeyboardButtonUserProfile) {
 							return
 						}
 
@@ -32343,7 +32568,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				}
 				else {
 					val mBotInfo = if (botInfo.size() != 0) botInfo[currentUser!!.id] else null
-					helpView?.setText(true, mBotInfo?.description, if (mBotInfo != null) if (mBotInfo.description_document != null) mBotInfo.description_document else mBotInfo.description_photo else null, mBotInfo)
+					helpView?.setText(true, mBotInfo?.description, if (mBotInfo != null) if (mBotInfo.descriptionDocument != null) mBotInfo.descriptionDocument else mBotInfo.descriptionPhoto else null, mBotInfo)
 				}
 			}
 			else if (position == loadingDownRow || position == loadingUpRow) {
@@ -32352,6 +32577,10 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 			}
 			else if (position in messagesStartRow until messagesEndRow) {
 				val messages = if (isFrozen) frozenMessages else messages
+
+				//MARK: temporary solution so that the user can exit the bot and return to enter the promo code
+				isPromoInFirstMessages = messages.take(2).any { it.messageText?.contains("promo", ignoreCase = true) == true }
+
 				val message = messages[position - messagesStartRow]
 				val view = holder.itemView
 
@@ -32362,9 +32591,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					view.isBot = currentUser != null && currentUser!!.bot
 					view.isMegagroup = isChannel(currentChat) && currentChat!!.megagroup
 					view.isThreadChat = threadId != 0
-					view.hasDiscussion = chatMode != MODE_SCHEDULED && isChannel(currentChat) && currentChat!!.has_link && !currentChat!!.megagroup
+					view.hasDiscussion = chatMode != MODE_SCHEDULED && isChannel(currentChat) && currentChat!!.hasLink && !currentChat!!.megagroup
 					view.isPinned = chatMode == 0 && (pinnedMessageObjects.containsKey(message.id) || groupedMessages != null && groupedMessages.messages.isNotEmpty() && pinnedMessageObjects.containsKey(groupedMessages.messages[0].id))
-					view.linkedChatId = if (chatMode != MODE_SCHEDULED && currentChatInfo != null) currentChatInfo!!.linked_chat_id else 0
+					view.linkedChatId = if (chatMode != MODE_SCHEDULED && currentChatInfo != null) currentChatInfo!!.linkedChatId else 0
 					view.isRepliesChat = isReplyUser(currentUser)
 					view.isPinnedChat = chatMode == MODE_PINNED
 
@@ -32416,7 +32645,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					val nextType = getItemViewType(nextPosition)
 					val prevType = getItemViewType(prevPosition)
 
-					if (message.messageOwner?.reply_markup !is TL_replyInlineMarkup && nextType == holder.itemViewType) {
+					if (message.messageOwner?.replyMarkup !is TLReplyInlineMarkup && nextType == holder.itemViewType) {
 						val nextMessage = messages[nextPosition - messagesStartRow]
 
 						pinnedBottom = nextMessage.isOutOwner == message.isOutOwner && abs(nextMessage.messageOwner!!.date - message.messageOwner!!.date) <= 5 * 60
@@ -32424,12 +32653,12 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						if (pinnedBottom) {
 							if (message.isImportedForward || nextMessage.isImportedForward) {
 								pinnedBottom = if (message.isImportedForward && nextMessage.isImportedForward) {
-									if (abs(nextMessage.messageOwner!!.fwd_from!!.date - message.messageOwner!!.fwd_from!!.date) <= 5 * 60) {
-										if (nextMessage.messageOwner!!.fwd_from!!.from_name != null && message.messageOwner!!.fwd_from!!.from_name != null) {
-											nextMessage.messageOwner!!.fwd_from!!.from_name == message.messageOwner!!.fwd_from!!.from_name
+									if (abs(nextMessage.messageOwner!!.fwdFrom!!.date - message.messageOwner!!.fwdFrom!!.date) <= 5 * 60) {
+										if (nextMessage.messageOwner!!.fwdFrom!!.fromName != null && message.messageOwner!!.fwdFrom!!.fromName != null) {
+											nextMessage.messageOwner!!.fwdFrom!!.fromName == message.messageOwner!!.fwdFrom!!.fromName
 										}
-										else if (nextMessage.messageOwner!!.fwd_from!!.from_id != null && message.messageOwner!!.fwd_from!!.from_id != null) {
-											MessageObject.getPeerId(nextMessage.messageOwner?.fwd_from?.from_id) == MessageObject.getPeerId(message.messageOwner?.fwd_from?.from_id)
+										else if (nextMessage.messageOwner!!.fwdFrom!!.fromId != null && message.messageOwner!!.fwdFrom!!.fromId != null) {
+											MessageObject.getPeerId(nextMessage.messageOwner?.fwdFrom?.fromId) == MessageObject.getPeerId(message.messageOwner?.fwdFrom?.fromId)
 										}
 										else {
 											false
@@ -32466,17 +32695,17 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					if (prevType == holder.itemViewType) {
 						val prevMessage = messages[prevPosition - messagesStartRow]
 
-						pinnedTop = prevMessage.messageOwner?.reply_markup !is TL_replyInlineMarkup && prevMessage.isOutOwner == message.isOutOwner && abs(prevMessage.messageOwner!!.date - message.messageOwner!!.date) <= 5 * 60
+						pinnedTop = prevMessage.messageOwner?.replyMarkup !is TLReplyInlineMarkup && prevMessage.isOutOwner == message.isOutOwner && abs(prevMessage.messageOwner!!.date - message.messageOwner!!.date) <= 5 * 60
 
 						if (pinnedTop) {
 							if (message.isImportedForward || prevMessage.isImportedForward) {
 								pinnedTop = if (message.isImportedForward && prevMessage.isImportedForward) {
-									if (abs(message.messageOwner!!.fwd_from!!.date - prevMessage.messageOwner!!.fwd_from!!.date) <= 5 * 60) {
-										if (prevMessage.messageOwner!!.fwd_from!!.from_name != null && message.messageOwner!!.fwd_from!!.from_name != null) {
-											prevMessage.messageOwner!!.fwd_from!!.from_name == message.messageOwner!!.fwd_from!!.from_name
+									if (abs(message.messageOwner!!.fwdFrom!!.date - prevMessage.messageOwner!!.fwdFrom!!.date) <= 5 * 60) {
+										if (prevMessage.messageOwner!!.fwdFrom!!.fromName != null && message.messageOwner!!.fwdFrom!!.fromName != null) {
+											prevMessage.messageOwner!!.fwdFrom!!.fromName == message.messageOwner!!.fwdFrom!!.fromName
 										}
-										else if (prevMessage.messageOwner!!.fwd_from!!.from_id != null && message.messageOwner!!.fwd_from!!.from_id != null) {
-											MessageObject.getPeerId(prevMessage.messageOwner?.fwd_from?.from_id) == MessageObject.getPeerId(message.messageOwner?.fwd_from?.from_id)
+										else if (prevMessage.messageOwner!!.fwdFrom!!.fromId != null && message.messageOwner!!.fwdFrom!!.fromId != null) {
+											MessageObject.getPeerId(prevMessage.messageOwner?.fwdFrom?.fromId) == MessageObject.getPeerId(message.messageOwner?.fwdFrom?.fromId)
 										}
 										else {
 											false
@@ -32510,7 +32739,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 						}
 					}
 
-					if (isChannel(currentChat) && currentChat!!.megagroup && message.fromChatId <= 0 && message.messageOwner!!.fwd_from != null && message.messageOwner!!.fwd_from!!.saved_from_peer is TL_peerChannel) {
+					if (isChannel(currentChat) && currentChat!!.megagroup && message.fromChatId <= 0 && message.messageOwner!!.fwdFrom != null && message.messageOwner!!.fwdFrom!!.savedFromPeer is TLPeerChannel) {
 						if (!pinnedTopByGroup) {
 							pinnedTop = false
 						}
@@ -32740,7 +32969,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 					}
 				}
 				else if (view is ChatActionCell) {
-					view.setMessageObject(message, collapseForDate = messagesByDays[message.dateKey]?.hasServiceMessagesOnly() == true)
+					view.setMessageObject(message)
 					view.alpha = 1.0f
 					view.setSpoilersSuppressed(chatListView?.scrollState != RecyclerView.SCROLL_STATE_IDLE)
 				}
@@ -32881,7 +33110,7 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 				val message = messages[position - messagesStartRow]
 				val view = holder.itemView
 
-				if (message.messageOwner != null && message.messageOwner?.media_unread == true && message.messageOwner?.mentioned == true) {
+				if (message.messageOwner != null && message.messageOwner?.mediaUnread == true && message.messageOwner?.mentioned == true) {
 					if (!inPreviewMode && chatMode == 0) {
 						if (!message.isVoice && !message.isRoundVideo) {
 							newMentionsCount--
@@ -33287,7 +33516,9 @@ open class ChatActivity(args: Bundle?) : BaseFragment(args), NotificationCenterD
 		private var replacingChatActivity = false
 		private const val REGENERATE = "regenerate"
 		const val MAX_VISIBLE_LENGTH = 130
-		private const val PROMO_CODE_COMMAND = "/promoPromo code"
+		private const val PROMO_CODE_COMMAND = "/promo"
+		private const val AI_CHAT_COMMAND = "AI chat"
+		private const val AI_IMAGES_COMMAND = "AI images"
 
 		fun isClickableLink(str: String): Boolean {
 			return str.startsWith("https://") || str.startsWith("@") || str.startsWith("#") || str.startsWith("$") || str.startsWith("video?")

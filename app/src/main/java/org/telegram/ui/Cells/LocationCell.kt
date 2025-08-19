@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -23,7 +23,7 @@ import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.BackupImageView
 import org.telegram.ui.Components.FlickerLoadingView
@@ -50,11 +50,11 @@ class LocationCell(context: Context, private val wrapContent: Boolean) : FrameLa
 		}
 	}
 
-	fun setLocation(location: TL_messageMediaVenue?, icon: String?, pos: Int, divider: Boolean) {
+	fun setLocation(location: TLRPC.TLMessageMediaVenue?, icon: String?, pos: Int, divider: Boolean) {
 		setLocation(location, icon, null, pos, divider)
 	}
 
-	private fun setLocation(location: TL_messageMediaVenue?, icon: String?, label: String?, pos: Int, divider: Boolean) {
+	private fun setLocation(location: TLRPC.TLMessageMediaVenue?, icon: String?, label: String?, pos: Int, divider: Boolean) {
 		needDivider = divider
 		circleDrawable.paint.color = getColorForIndex(pos)
 

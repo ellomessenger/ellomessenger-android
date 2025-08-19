@@ -4,27 +4,21 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
 import org.telegram.messenger.messageobject.MessageObject
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.FileLocation
-import org.telegram.tgnet.TLRPC.InputPeer
-import org.telegram.tgnet.TLRPC.InputStickerSet
-import org.telegram.tgnet.TLRPC.PhotoSize
-import org.telegram.tgnet.TLRPC.TL_fileLocationToBeDeprecated
-import org.telegram.tgnet.TLRPC.TL_inputPeerChannel
-import org.telegram.tgnet.TLRPC.TL_inputPeerChat
-import org.telegram.tgnet.TLRPC.TL_inputPeerUser
-import org.telegram.tgnet.TLRPC.TL_photoPathSize
-import org.telegram.tgnet.TLRPC.TL_photoStrippedSize
-import org.telegram.tgnet.TLRPC.VideoSize
-import org.telegram.tgnet.TLRPC.WebPage
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.accessHash
+import org.telegram.tgnet.dcId
+import org.telegram.tgnet.fileReference
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoBig
+import org.telegram.tgnet.photoId
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.videoSizes
 import org.telegram.ui.ActionBar.Theme
 
 class ImageLocation {
@@ -36,8 +30,8 @@ class ImageLocation {
 	var document: TLRPC.Document? = null
 	var videoSeekTo = 0L
 	var photoPeerType = 0
-	var photoPeer: InputPeer? = null
-	var stickerSet: InputStickerSet? = null
+	var photoPeer: TLRPC.InputPeer? = null
+	var stickerSet: TLRPC.InputStickerSet? = null
 	var thumbVersion = 0
 	var documentId = 0L
 	var thumbSize: String? = null
@@ -47,13 +41,13 @@ class ImageLocation {
 	var dcId = 0
 
 	@JvmField
-	var location: TL_fileLocationToBeDeprecated? = null
+	var location: TLRPC.FileLocation? = null
 
 	@JvmField
 	var path: String? = null
 
 	@JvmField
-	var photoSize: PhotoSize? = null
+	var photoSize: TLRPC.PhotoSize? = null
 
 	@JvmField
 	var photo: TLRPC.Photo? = null
@@ -75,15 +69,15 @@ class ImageLocation {
 		val document = document
 
 		if (secureDocument != null) {
-			return secureDocument.secureFile.dc_id.toString() + "_" + secureDocument.secureFile.id
+			return secureDocument.secureFile.dcId.toString() + "_" + secureDocument.secureFile.id
 		}
-		else if (photoSize is TL_photoStrippedSize || photoSize is TL_photoPathSize) {
-			if (photoSize.bytes.isNotEmpty()) {
+		else if (photoSize is TLRPC.TLPhotoStrippedSize || photoSize is TLRPC.TLPhotoPathSize) {
+			if (photoSize.bytes?.isNotEmpty() == true) {
 				return getStrippedKey(parentObject, fullObject, photoSize)
 			}
 		}
 		else if (location != null) {
-			return location.volume_id.toString() + "_" + location.local_id
+			return location.volumeId.toString() + "_" + location.localId
 		}
 		else if (webFile != null) {
 			return Utilities.MD5(webFile.url)
@@ -91,10 +85,10 @@ class ImageLocation {
 		else if (document != null) {
 			if (!url && document is DocumentObject.ThemeDocument) {
 				val themeDocument = document
-				return document.dc_id.toString() + "_" + document.id + "_" + Theme.getBaseThemeKey(themeDocument.themeSettings) + "_" + themeDocument.themeSettings.accent_color + "_" + (if (themeDocument.themeSettings.message_colors.size > 1) themeDocument.themeSettings.message_colors[1] else 0) + "_" + (if (themeDocument.themeSettings.message_colors.size > 0) themeDocument.themeSettings.message_colors[0] else 0)
+				return document.dcId.toString() + "_" + document.id + "_" + Theme.getBaseThemeKey(themeDocument.themeSettings) + "_" + themeDocument.themeSettings.accentColor + "_" + (if (themeDocument.themeSettings.messageColors.size > 1) themeDocument.themeSettings.messageColors[1] else 0) + "_" + (if (themeDocument.themeSettings.messageColors.size > 0) themeDocument.themeSettings.messageColors[0] else 0)
 			}
-			else if (document.id != 0L && document.dc_id != 0) {
-				return document.dc_id.toString() + "_" + document.id
+			else if (document.id != 0L && document.dcId != 0) {
+				return document.dcId.toString() + "_" + document.id
 			}
 		}
 		else if (path != null) {
@@ -168,8 +162,8 @@ class ImageLocation {
 
 			val imageLocation = ImageLocation()
 			imageLocation.document = document
-			imageLocation.key = document.key
-			imageLocation.iv = document.iv
+			// imageLocation.key = document.key
+			// imageLocation.iv = document.iv
 			imageLocation.currentSize = document.size
 			return imageLocation
 		}
@@ -187,7 +181,7 @@ class ImageLocation {
 		}
 
 		@JvmStatic
-		fun getForObject(photoSize: PhotoSize?, `object`: TLObject?): ImageLocation? {
+		fun getForObject(photoSize: TLRPC.PhotoSize?, `object`: TLObject?): ImageLocation? {
 			if (`object` is TLRPC.Photo) {
 				return getForPhoto(photoSize, `object` as TLRPC.Photo?)
 			}
@@ -199,8 +193,8 @@ class ImageLocation {
 		}
 
 		@JvmStatic
-		fun getForPhoto(photoSize: PhotoSize?, photo: TLRPC.Photo?): ImageLocation? {
-			if (photoSize is TL_photoStrippedSize || photoSize is TL_photoPathSize) {
+		fun getForPhoto(photoSize: TLRPC.PhotoSize?, photo: TLRPC.Photo?): ImageLocation? {
+			if (photoSize is TLRPC.TLPhotoStrippedSize || photoSize is TLRPC.TLPhotoPathSize) {
 				val imageLocation = ImageLocation()
 				imageLocation.photoSize = photoSize
 				return imageLocation
@@ -209,11 +203,11 @@ class ImageLocation {
 				return null
 			}
 
-			val dcId = if (photo.dc_id != 0) {
-				photo.dc_id
+			val dcId = if (photo.dcId != 0) {
+				photo.dcId
 			}
 			else {
-				photoSize.location.dc_id
+				photoSize.location?.dcId ?: 0
 			}
 
 			return getForPhoto(photoSize.location, photoSize.size, photo, null, null, TYPE_SMALL, dcId, null, photoSize.type)
@@ -221,10 +215,10 @@ class ImageLocation {
 
 		@JvmStatic
 		fun getForUserOrChat(`object`: TLObject?, type: Int): ImageLocation? {
-			if (`object` is User) {
+			if (`object` is TLRPC.User) {
 				return getForUser(`object`, type)
 			}
-			else if (`object` is Chat) {
+			else if (`object` is TLRPC.Chat) {
 				return getForChat(`object`, type)
 			}
 
@@ -232,19 +226,19 @@ class ImageLocation {
 		}
 
 		@JvmStatic
-		fun getForUser(user: User?, type: Int): ImageLocation? {
-			if (user == null || user.access_hash == 0L || user.photo == null) {
+		fun getForUser(user: TLRPC.User?, type: Int): ImageLocation? {
+			if (user == null || user.accessHash == 0L || user.photo == null) {
 				return null
 			}
 
 			if (type == TYPE_VIDEO_THUMB) {
 				val currentAccount = UserConfig.selectedAccount
 
-				if (MessagesController.getInstance(currentAccount).isPremiumUser(user) && user.photo!!.has_video) {
+				if (MessagesController.getInstance(currentAccount).isPremiumUser(user) && user.photo?.hasVideo == true) {
 					val userFull = MessagesController.getInstance(currentAccount).getUserFull(user.id)
 
-					return userFull?.profile_photo?.video_sizes?.find { it.type == "p" }?.let {
-						getForPhoto(it, userFull.profile_photo)
+					return userFull?.profilePhoto?.videoSizes?.find { it.type == "p" }?.let {
+						getForPhoto(it, userFull.profilePhoto)
 					}
 				}
 
@@ -252,93 +246,93 @@ class ImageLocation {
 			}
 
 			if (type == TYPE_STRIPPED) {
-				if (user.photo?.stripped_thumb == null) {
+				if (user.photo?.strippedThumb == null) {
 					return null
 				}
 				val imageLocation = ImageLocation()
-				imageLocation.photoSize = TL_photoStrippedSize()
+				imageLocation.photoSize = TLRPC.TLPhotoStrippedSize()
 				imageLocation.photoSize?.type = "s"
-				imageLocation.photoSize?.bytes = user.photo?.stripped_thumb
+				imageLocation.photoSize?.bytes = user.photo?.strippedThumb
 				return imageLocation
 			}
 
-			val fileLocation = if (type == TYPE_BIG) user.photo?.photo_big else user.photo?.photo_small
+			val fileLocation = if (type == TYPE_BIG) user.photo?.photoBig else user.photo?.photoSmall
 
 			if (fileLocation == null) {
 				return null
 			}
 
-			val inputPeer = TL_inputPeerUser()
-			inputPeer.user_id = user.id
-			inputPeer.access_hash = user.access_hash
+			val inputPeer = TLRPC.TLInputPeerUser()
+			inputPeer.userId = user.id
+			inputPeer.accessHash = user.accessHash
 
-			val dcId = if (user.photo?.dc_id != 0) {
-				user.photo?.dc_id
+			val dcId = if (user.photo?.dcId != 0) {
+				user.photo?.dcId
 			}
 			else {
-				fileLocation.dc_id
+				fileLocation.dcId
 			} ?: 0
 
 			val location = getForPhoto(fileLocation, 0, null, null, inputPeer, type, dcId, null, null)
-			location?.photoId = user.photo?.photo_id ?: 0
+			location?.photoId = user.photo?.photoId ?: 0
 			return location
 		}
 
 		@JvmStatic
-		fun getForChat(chat: Chat?, type: Int): ImageLocation? {
+		fun getForChat(chat: TLRPC.Chat?, type: Int): ImageLocation? {
 			if (chat?.photo == null) {
 				return null
 			}
 
 			if (type == TYPE_STRIPPED) {
-				if (chat.photo.stripped_thumb == null) {
+				if (chat.photo?.strippedThumb == null) {
 					return null
 				}
 
 				val imageLocation = ImageLocation()
-				imageLocation.photoSize = TL_photoStrippedSize()
+				imageLocation.photoSize = TLRPC.TLPhotoStrippedSize()
 				imageLocation.photoSize?.type = "s"
-				imageLocation.photoSize?.bytes = chat.photo.stripped_thumb
+				imageLocation.photoSize?.bytes = chat.photo?.strippedThumb
 				return imageLocation
 			}
 
-			val fileLocation = if (type == TYPE_BIG) chat.photo.photo_big else chat.photo.photo_small
+			val fileLocation = if (type == TYPE_BIG) chat.photo?.photoBig else chat.photo?.photoSmall
 
 			if (fileLocation == null) {
 				return null
 			}
 
-			val inputPeer: InputPeer
+			val inputPeer: TLRPC.InputPeer
 
 			if (ChatObject.isChannel(chat)) {
-				if (chat.access_hash == 0L) {
+				if (chat.accessHash == 0L) {
 					return null
 				}
 
-				inputPeer = TL_inputPeerChannel()
-				inputPeer.channel_id = chat.id
-				inputPeer.access_hash = chat.access_hash
+				inputPeer = TLRPC.TLInputPeerChannel()
+				inputPeer.channelId = chat.id
+				inputPeer.accessHash = chat.accessHash
 			}
 			else {
-				inputPeer = TL_inputPeerChat()
-				inputPeer.chat_id = chat.id
+				inputPeer = TLRPC.TLInputPeerChat()
+				inputPeer.chatId = chat.id
 			}
 
-			val dcId = if (chat.photo.dc_id != 0) {
-				chat.photo.dc_id
+			val dcId = if (chat.photo?.dcId != 0) {
+				chat.photo?.dcId
 			}
 			else {
-				fileLocation.dc_id
-			}
+				fileLocation.dcId
+			} ?: 0
 
 			val location = getForPhoto(fileLocation, 0, null, null, inputPeer, type, dcId, null, null)
-			location?.photoId = chat.photo.photo_id
+			location?.photoId = chat.photo?.photoId ?: 0L
 			return location
 		}
 
 		@JvmStatic
-		fun getForSticker(photoSize: PhotoSize?, sticker: TLRPC.Document?, thumbVersion: Int): ImageLocation? {
-			if (photoSize is TL_photoStrippedSize || photoSize is TL_photoPathSize) {
+		fun getForSticker(photoSize: TLRPC.PhotoSize?, sticker: TLRPC.Document?, thumbVersion: Int): ImageLocation? {
+			if (photoSize is TLRPC.TLPhotoStrippedSize || photoSize is TLRPC.TLPhotoPathSize) {
 				val imageLocation = ImageLocation()
 				imageLocation.photoSize = photoSize
 				return imageLocation
@@ -348,7 +342,7 @@ class ImageLocation {
 			}
 
 			val stickerSet = MessageObject.getInputStickerSet(sticker) ?: return null
-			val imageLocation = getForPhoto(photoSize.location, photoSize.size, null, null, null, TYPE_SMALL, sticker.dc_id, stickerSet, photoSize.type)
+			val imageLocation = getForPhoto(photoSize.location, photoSize.size, null, null, null, TYPE_SMALL, sticker.dcId, stickerSet, photoSize.type)
 
 			if (MessageObject.isAnimatedStickerDocument(sticker, true)) {
 				imageLocation?.imageType = FileLoader.IMAGE_TYPE_LOTTIE
@@ -360,12 +354,12 @@ class ImageLocation {
 		}
 
 		@JvmStatic
-		fun getForDocument(videoSize: VideoSize?, document: TLRPC.Document?): ImageLocation? {
+		fun getForDocument(videoSize: TLRPC.VideoSize?, document: TLRPC.Document?): ImageLocation? {
 			if (videoSize == null || document == null) {
 				return null
 			}
 
-			val location = getForPhoto(videoSize.location, videoSize.size, null, document, null, TYPE_SMALL, document.dc_id, null, videoSize.type)
+			val location = getForPhoto(videoSize.location, videoSize.size, null, document, null, TYPE_SMALL, document.dcId, null, videoSize.type)
 
 			if ("f" == videoSize.type) {
 				location?.imageType = FileLoader.IMAGE_TYPE_LOTTIE
@@ -378,24 +372,24 @@ class ImageLocation {
 		}
 
 		@JvmStatic
-		fun getForPhoto(videoSize: VideoSize?, photo: TLRPC.Photo?): ImageLocation? {
+		fun getForPhoto(videoSize: TLRPC.VideoSize?, photo: TLRPC.Photo?): ImageLocation? {
 			if (videoSize == null || photo == null) {
 				return null
 			}
 
-			val location = getForPhoto(videoSize.location, videoSize.size, photo, null, null, TYPE_SMALL, photo.dc_id, null, videoSize.type)
+			val location = getForPhoto(videoSize.location, videoSize.size, photo, null, null, TYPE_SMALL, photo.dcId, null, videoSize.type)
 			location?.imageType = FileLoader.IMAGE_TYPE_ANIMATION
 
 			if ((videoSize.flags and 1) != 0) {
-				location?.videoSeekTo = (videoSize.video_start_ts * 1000).toLong()
+				location?.videoSeekTo = (videoSize.videoStartTs * 1000).toLong()
 			}
 
 			return location
 		}
 
 		@JvmStatic
-		fun getForDocument(photoSize: PhotoSize?, document: TLRPC.Document?): ImageLocation? {
-			if (photoSize is TL_photoStrippedSize || photoSize is TL_photoPathSize) {
+		fun getForDocument(photoSize: TLRPC.PhotoSize?, document: TLRPC.Document?): ImageLocation? {
+			if (photoSize is TLRPC.TLPhotoStrippedSize || photoSize is TLRPC.TLPhotoPathSize) {
 				val imageLocation = ImageLocation()
 				imageLocation.photoSize = photoSize
 				return imageLocation
@@ -404,25 +398,25 @@ class ImageLocation {
 				return null
 			}
 
-			return getForPhoto(photoSize.location, photoSize.size, null, document, null, TYPE_SMALL, document.dc_id, null, photoSize.type)
+			return getForPhoto(photoSize.location, photoSize.size, null, document, null, TYPE_SMALL, document.dcId, null, photoSize.type)
 		}
 
 		@JvmStatic
-		fun getForLocal(location: FileLocation?): ImageLocation? {
+		fun getForLocal(location: TLRPC.FileLocation?): ImageLocation? {
 			if (location == null) {
 				return null
 			}
 
 			val imageLocation = ImageLocation()
-			imageLocation.location = TL_fileLocationToBeDeprecated()
-			imageLocation.location!!.local_id = location.local_id
-			imageLocation.location!!.volume_id = location.volume_id
-			imageLocation.location!!.secret = location.secret
-			imageLocation.location!!.dc_id = location.dc_id
+			imageLocation.location = TLRPC.TLFileLocation()
+			imageLocation.location?.localId = location.localId
+			imageLocation.location?.volumeId = location.volumeId
+			// imageLocation.location?.secret = location.secret
+			imageLocation.location?.dcId = location.dcId
 			return imageLocation
 		}
 
-		private fun getForPhoto(location: FileLocation?, size: Int, photo: TLRPC.Photo?, document: TLRPC.Document?, photoPeer: InputPeer?, photoPeerType: Int, dcId: Int, stickerSet: InputStickerSet?, thumbSize: String?): ImageLocation? {
+		private fun getForPhoto(location: TLRPC.FileLocation?, size: Int, photo: TLRPC.Photo?, document: TLRPC.Document?, photoPeer: TLRPC.InputPeer?, photoPeerType: Int, dcId: Int, stickerSet: TLRPC.InputStickerSet?, thumbSize: String?): ImageLocation? {
 			if (location == null || photo == null && photoPeer == null && stickerSet == null && document == null) {
 				return null
 			}
@@ -435,32 +429,32 @@ class ImageLocation {
 			imageLocation.photoPeerType = photoPeerType
 			imageLocation.stickerSet = stickerSet
 
-			if (location is TL_fileLocationToBeDeprecated) {
+			if (location is TLRPC.TLFileLocation) {
 				imageLocation.location = location
 
 				if (photo != null) {
-					imageLocation.fileReference = photo.file_reference
-					imageLocation.accessHash = photo.access_hash
+					imageLocation.fileReference = photo.fileReference
+					imageLocation.accessHash = photo.accessHash
 					imageLocation.photoId = photo.id
 					imageLocation.thumbSize = thumbSize
 				}
 				else if (document != null) {
-					imageLocation.fileReference = document.file_reference
-					imageLocation.accessHash = document.access_hash
+					imageLocation.fileReference = document.fileReference
+					imageLocation.accessHash = document.accessHash
 					imageLocation.documentId = document.id
 					imageLocation.thumbSize = thumbSize
 				}
 			}
 			else {
-				imageLocation.location = TL_fileLocationToBeDeprecated()
-				imageLocation.location?.local_id = location.local_id
-				imageLocation.location?.volume_id = location.volume_id
-				imageLocation.location?.secret = location.secret
-				imageLocation.dcId = location.dc_id
-				imageLocation.fileReference = location.file_reference
-				imageLocation.key = location.key
-				imageLocation.iv = location.iv
-				imageLocation.accessHash = location.secret
+				imageLocation.location = TLRPC.TLFileLocation()
+				imageLocation.location?.localId = location.localId
+				imageLocation.location?.volumeId = location.volumeId
+				// imageLocation.location?.secret = location.secret
+				imageLocation.dcId = location.dcId
+				//imageLocation.fileReference = location.fileReference
+				//imageLocation.key = location.key
+				//imageLocation.iv = location.iv
+				// imageLocation.accessHash = location.secret
 			}
 
 			return imageLocation
@@ -469,7 +463,7 @@ class ImageLocation {
 		fun getStrippedKey(parentObject: Any?, fullObject: Any?, strippedObject: Any): String {
 			@Suppress("NAME_SHADOWING") var fullObject = fullObject
 
-			if (parentObject is WebPage) {
+			if (parentObject is TLRPC.WebPage) {
 				if (fullObject is ImageLocation) {
 					val imageLocation = fullObject
 
@@ -497,20 +491,20 @@ class ImageLocation {
 						return "stripped" + FileRefController.getKeyForParentObject(parentObject) + "_" + fullObject.id
 					}
 
-					is PhotoSize -> {
+					is TLRPC.PhotoSize -> {
 						val size = fullObject
 
 						return if (size.location != null) {
-							"stripped" + FileRefController.getKeyForParentObject(parentObject) + "_" + size.location.local_id + "_" + size.location.volume_id
+							"stripped" + FileRefController.getKeyForParentObject(parentObject) + "_" + size.location?.localId + "_" + size.location?.volumeId
 						}
 						else {
 							"stripped" + FileRefController.getKeyForParentObject(parentObject)
 						}
 					}
 
-					is FileLocation -> {
+					is TLRPC.FileLocation -> {
 						val loc = fullObject
-						return "stripped" + FileRefController.getKeyForParentObject(parentObject) + "_" + loc.local_id + "_" + loc.volume_id
+						return "stripped" + FileRefController.getKeyForParentObject(parentObject) + "_" + loc.localId + "_" + loc.volumeId
 					}
 				}
 			}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -13,11 +13,9 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.text.TextPaint
 import android.util.SparseArray
@@ -34,8 +32,12 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.util.size
 import androidx.core.util.valueIterator
 import androidx.core.view.children
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AndroidUtilities
@@ -49,13 +51,9 @@ import org.telegram.messenger.R
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterPhotoVideo
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterPhotos
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterVideo
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messages_getSearchResultsCalendar
-import org.telegram.tgnet.TLRPC.TL_messages_searchResultsCalendar
-import org.telegram.tgnet.TLRPC.TL_searchResultsCalendarPeriod
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.media
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem
@@ -70,7 +68,7 @@ import org.telegram.ui.Components.HideViewAfterAnimation
 import org.telegram.ui.Components.HintView
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.RecyclerListView
-import org.telegram.ui.Components.SharedMediaLayout
+import org.telegram.ui.Components.sharedmedia.SharedMediaLayout
 import java.time.YearMonth
 import java.util.Calendar
 import kotlin.math.abs
@@ -342,16 +340,16 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 
 		loading = true
 
-		val req = TL_messages_getSearchResultsCalendar()
+		val req = TLRPC.TLMessagesGetSearchResultsCalendar()
 
 		when (photosVideosTypeFilter) {
-			SharedMediaLayout.FILTER_PHOTOS_ONLY -> req.filter = TL_inputMessagesFilterPhotos()
-			SharedMediaLayout.FILTER_VIDEOS_ONLY -> req.filter = TL_inputMessagesFilterVideo()
-			else -> req.filter = TL_inputMessagesFilterPhotoVideo()
+			SharedMediaLayout.FILTER_PHOTOS_ONLY -> req.filter = TLRPC.TLInputMessagesFilterPhotos()
+			SharedMediaLayout.FILTER_VIDEOS_ONLY -> req.filter = TLRPC.TLInputMessagesFilterVideo()
+			else -> req.filter = TLRPC.TLInputMessagesFilterPhotoVideo()
 		}
 
 		req.peer = messagesController.getInputPeer(dialogId)
-		req.offset_id = lastId
+		req.offsetId = lastId
 
 		val calendar = Calendar.getInstance()
 
@@ -359,9 +357,9 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TL_messages_searchResultsCalendar) {
+				if (response is TLRPC.TLMessagesSearchResultsCalendar) {
 					for (i in response.periods.indices) {
-						val period: TL_searchResultsCalendarPeriod = response.periods[i]
+						val period: TLRPC.TLSearchResultsCalendarPeriod = response.periods[i]
 
 						calendar.timeInMillis = period.date * 1000L
 
@@ -397,9 +395,9 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 
 					val maxDate = (System.currentTimeMillis() / 1000L).toInt()
 
-					minDate = response.min_date
+					minDate = response.minDate
 
-					var date = response.min_date
+					var date = response.minDate
 
 					while (date < maxDate) {
 						calendar.timeInMillis = date * 1000L
@@ -445,7 +443,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 
 					listView?.invalidate()
 
-					val newMonthCount: Int = (((calendar.timeInMillis / 1000) - response.min_date) / 2629800).toInt() + 1
+					val newMonthCount: Int = (((calendar.timeInMillis / 1000) - response.minDate) / 2629800).toInt() + 1
 
 					adapter.notifyItemRangeChanged(0, monthCount)
 
@@ -884,7 +882,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 		}
 
 		fun dismissRowAnimations(animate: Boolean) {
-			for (i in 0 until rowSelectionPos.size()) {
+			for (i in 0 until rowSelectionPos.size) {
 				animateRow(rowSelectionPos.keyAt(i), 0, 0, false, animate)
 			}
 		}
@@ -975,7 +973,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 
 			if (dateChanged) {
 				imagesByDays?.let {
-					for (i in 0 until it.size()) {
+					for (i in 0 until it.size) {
 						it.valueAt(i)?.onDetachedFromWindow()
 						it.valueAt(i)?.setParentView(null)
 					}
@@ -989,7 +987,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 					imagesByDays = SparseArray()
 				}
 
-				for (i in 0 until messagesByDays.size()) {
+				for (i in 0 until messagesByDays.size) {
 					val key = messagesByDays.keyAt(i)
 
 					if (imagesByDays!![key, null] != null || !messagesByDays[key]!!.hasImage) {
@@ -1004,8 +1002,8 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 					if (messageObject != null) {
 						if (messageObject.isVideo) {
 							val document = messageObject.document
-							val thumb = FileLoader.getClosestPhotoSizeWithSize(document!!.thumbs, 50)
-							var qualityThumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 320)
+							val thumb = FileLoader.getClosestPhotoSizeWithSize(document?.thumbs, 50)
+							var qualityThumb = FileLoader.getClosestPhotoSizeWithSize(document?.thumbs, 320)
 
 							if (thumb === qualityThumb) {
 								qualityThumb = null
@@ -1019,7 +1017,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 								}
 							}
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaPhoto && messageObject.messageOwner?.media?.photo != null && !messageObject.photoThumbs.isNullOrEmpty()) {
+						else if ((messageObject.messageOwner?.media as? TLRPC.TLMessageMediaPhoto)?.photo != null && !messageObject.photoThumbs.isNullOrEmpty()) {
 							var currentPhotoObjectThumb = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 50)
 							val currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 320, false, currentPhotoObjectThumb, false)
 
@@ -1404,7 +1402,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 
 		val blurredView = blurredView ?: return
 
-		if (blurredView.visibility == View.VISIBLE) {
+		if (blurredView.isVisible) {
 			if (isOpen) {
 				blurredView.alpha = 1.0f - progress
 			}
@@ -1417,7 +1415,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 	override fun onTransitionAnimationEnd(isOpen: Boolean, backward: Boolean) {
 		val blurredView = blurredView ?: return
 
-		if (isOpen && blurredView.visibility == View.VISIBLE) {
+		if (isOpen && blurredView.isVisible) {
 			blurredView.visibility = View.GONE
 			blurredView.background = null
 		}
@@ -1543,7 +1541,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 		val parentLayout = parentLayout ?: return
 		val w = (parentLayout.measuredWidth / 6.0f).toInt()
 		val h = (parentLayout.measuredHeight / 6.0f).toInt()
-		val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+		val bitmap = createBitmap(w, h)
 
 		val canvas = Canvas(bitmap)
 		canvas.scale(1.0f / 6.0f, 1.0f / 6.0f)
@@ -1552,7 +1550,7 @@ class CalendarActivity(args: Bundle?, private val photosVideosTypeFilter: Int, s
 
 		Utilities.stackBlurBitmap(bitmap, max(7.0, (max(w.toDouble(), h.toDouble()) / 180)).toInt())
 
-		blurredView.background = BitmapDrawable(blurredView.context.resources, bitmap)
+		blurredView.background = bitmap.toDrawable(blurredView.context.resources)
 		blurredView.alpha = 0.0f
 		blurredView.visibility = View.VISIBLE
 	}

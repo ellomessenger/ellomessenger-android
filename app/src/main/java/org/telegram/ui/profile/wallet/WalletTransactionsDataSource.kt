@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -13,7 +13,6 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TL_error
 import java.io.Serializable
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -61,7 +60,7 @@ class WalletTransactionsDataSource {
 
 		reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TLRPC.TL_biz_dataRaw) {
+				if (response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.TransactionsHistoryResponse>()
 					processResponse(transactions = data?.transactions, offset = offset, error = null, isFailure = false)
 				}
@@ -75,7 +74,7 @@ class WalletTransactionsDataSource {
 	}
 
 	@Synchronized
-	private fun processResponse(transactions: List<ElloRpc.TransactionHistoryEntry>?, offset: Int, error: TL_error?, isFailure: Boolean) {
+	private fun processResponse(transactions: List<ElloRpc.TransactionHistoryEntry>?, offset: Int, error: TLRPC.TLError?, isFailure: Boolean) {
 		if (offset == 0) {
 			this.transactions.clear()
 		}
@@ -117,7 +116,7 @@ class WalletTransactionsDataSource {
 
 	interface WalletTransactionsListener {
 		fun onTransactionsLoaded()
-		fun onTransactionsLoadError(error: TL_error?)
+		fun onTransactionsLoadError(error: TLRPC.TLError?)
 	}
 
 	companion object {

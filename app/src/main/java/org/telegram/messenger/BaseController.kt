@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -37,8 +37,6 @@ open class BaseController(@JvmField protected val currentAccount: Int) {
 		get() = accountInstance.downloadController
 	protected val sendMessagesHelper: SendMessagesHelper
 		get() = accountInstance.sendMessagesHelper
-	protected val secretChatHelper: SecretChatHelper
-		get() = accountInstance.secretChatHelper
 	protected val statsController: StatsController
 		get() = accountInstance.statsController
 	protected val fileLoader: FileLoader

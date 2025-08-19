@@ -1,18 +1,26 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Cells;
 
 import android.os.Bundle;
 import android.text.style.CharacterStyle;
 
-import androidx.annotation.Nullable;
-
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.ReactionCount;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.TLReactionCount;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.Components.AnimatedEmojiSpan;
 import org.telegram.ui.PinchToZoomHelper;
 
-import java.util.ArrayList;
+import java.util.List;
+
+import androidx.annotation.Nullable;
 
 public interface ChatMessageCellDelegate {
 	default void didPressExtendedMediaPreview(ChatMessageCell cell, TLRPC.KeyboardButton button) {
@@ -74,10 +82,10 @@ public interface ChatMessageCellDelegate {
 	default void didLongPressBotButton(ChatMessageCell cell, TLRPC.KeyboardButton button) {
 	}
 
-	default void didPressReaction(ChatMessageCell cell, ReactionCount reaction, boolean longpress) {
+	default void didPressReaction(ChatMessageCell cell, TLReactionCount reaction, boolean longpress) {
 	}
 
-	default void didPressVoteButtons(ChatMessageCell cell, ArrayList<TLRPC.TL_pollAnswer> buttons, int showCount, int x, int y) {
+	default void didPressVoteButtons(ChatMessageCell cell, List<TLRPC.TLPollAnswer> buttons, int showCount, int x, int y) {
 	}
 
 	default void didPressInstantButton(ChatMessageCell cell, int type) {

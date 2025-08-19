@@ -49,9 +49,9 @@ class BottomNavigationPanel @JvmOverloads constructor(context: Context, private 
 		setBackgroundResource(R.color.feed_audio_background)
 
 		val images = listOf(R.drawable.chat_calls_voice, R.drawable.ic_contacts, R.drawable.chats_new_tab, R.drawable.ic_feeds, R.drawable.ic_profile)
-		val titles = listOf(context.getString(R.string.Calls), context.getString(R.string.Contacts), context.getString(R.string.chats), context.getString(R.string.feed), context.getString(R.string.my_profile))
+		val titles = listOf(context.getString(R.string.Calls), context.getString(R.string.Contacts), context.getString(R.string.chats), context.getString(R.string.connect), context.getString(R.string.Settings))
 
-		this.items = Item.values().mapIndexed { index, i ->
+		this.items = Item.entries.toTypedArray().mapIndexed { index, i ->
 			val button = ConstraintLayout(context)
 			button.isClickable = true
 			button.isFocusable = true
@@ -85,6 +85,8 @@ class BottomNavigationPanel @JvmOverloads constructor(context: Context, private 
 				})
 
 				text = titles[index]
+
+				setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
 			}
 
 			button.addView(image, ConstraintLayout.LayoutParams(ConstraintLayout.LayoutParams.WRAP_CONTENT, ConstraintLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -184,11 +186,14 @@ class BottomNavigationPanel @JvmOverloads constructor(context: Context, private 
 	}
 
 	companion object {
-		const val height = 56 // dp
+		/**
+		 * The height of the bottom navigation panel, in `dp`.
+		 */
+		const val HEIGHT = 56
 
 		@JvmStatic
 		fun createLayoutParams(): FrameLayout.LayoutParams {
-			return LayoutHelper.createFrame(LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM).apply {
+			return LayoutHelper.createFrame(LayoutParams.MATCH_PARENT, HEIGHT, Gravity.BOTTOM).apply {
 				updateMargins(0, 0, 0, 0)
 			}
 		}

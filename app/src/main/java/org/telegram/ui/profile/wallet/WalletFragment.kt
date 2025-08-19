@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -28,6 +28,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.children
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -36,7 +37,12 @@ import androidx.viewpager2.widget.ViewPager2
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
-import org.telegram.messenger.databinding.*
+import org.telegram.messenger.databinding.EmptyWalletContainerViewBinding
+import org.telegram.messenger.databinding.NoWalletContainerViewBinding
+import org.telegram.messenger.databinding.WalletContainerViewBinding
+import org.telegram.messenger.databinding.WalletSearchHeaderBinding
+import org.telegram.messenger.databinding.WalletTransactionDateHeaderBinding
+import org.telegram.messenger.databinding.WalletTransactionViewBinding
 import org.telegram.messenger.utils.dp
 import org.telegram.messenger.utils.fillElloCoinLogos
 import org.telegram.messenger.utils.getDimensionRaw
@@ -45,7 +51,6 @@ import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.WalletHelper
-import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.BaseFragment
@@ -96,18 +101,25 @@ class WalletFragment : BaseFragment(), WalletHelper.OnWalletChangedListener, Wal
 		val binding = WalletContainerViewBinding.inflate(LayoutInflater.from(parentActivity), recyclerView, false)
 
 		binding.topupButton.setOnClickListener {
-			val walletId = when (selectedWallet) {
-				is ElloRpc.UserWallet -> walletHelper.wallet?.id
-				is ElloRpc.Earnings -> walletHelper.earningsWallet?.id
-				else -> null
-			} ?: return@setOnClickListener
+			val walletId = walletHelper.wallet?.id ?: return@setOnClickListener
 
 			val args = Bundle()
 			args.putLong(ARG_WALLET_ID, walletId)
-			args.putBoolean(ARG_IS_TOPUP, true)
-			args.putBoolean(PaymentMethodsFragment.ARG_SHOW_ELLO_CARD, false)
 
-			presentFragment(PaymentMethodsFragment(args))
+			presentFragment(PlayTopupFragment(args))
+
+//			val walletId = when (selectedWallet) {
+//				is ElloRpc.UserWallet -> walletHelper.wallet?.id
+//				is ElloRpc.Earnings -> walletHelper.earningsWallet?.id
+//				else -> null
+//			} ?: return@setOnClickListener
+//
+//			val args = Bundle()
+//			args.putLong(ARG_WALLET_ID, walletId)
+//			args.putBoolean(ARG_IS_TOPUP, true)
+//			args.putBoolean(PaymentMethodsFragment.ARG_SHOW_ELLO_CARD, false)
+//
+//			presentFragment(PaymentMethodsFragment(args))
 		}
 
 		binding.transferOutButton.setOnClickListener {
@@ -173,14 +185,21 @@ class WalletFragment : BaseFragment(), WalletHelper.OnWalletChangedListener, Wal
 		val binding = EmptyWalletContainerViewBinding.inflate(LayoutInflater.from(parentActivity))
 
 		binding.topUpWalletButton.setOnClickListener {
+//			val walletId = walletHelper.wallet?.id ?: return@setOnClickListener
+//
+//			val args = Bundle()
+//			args.putLong(ARG_WALLET_ID, walletId)
+//			args.putBoolean(ARG_IS_TOPUP, true)
+//			args.putBoolean(PaymentMethodsFragment.ARG_SHOW_ELLO_CARD, false)
+//
+//			presentFragment(PaymentMethodsFragment(args))
+
 			val walletId = walletHelper.wallet?.id ?: return@setOnClickListener
 
 			val args = Bundle()
 			args.putLong(ARG_WALLET_ID, walletId)
-			args.putBoolean(ARG_IS_TOPUP, true)
-			args.putBoolean(PaymentMethodsFragment.ARG_SHOW_ELLO_CARD, false)
 
-			presentFragment(PaymentMethodsFragment(args))
+			presentFragment(PlayTopupFragment(args))
 		}
 
 		binding.skipEmptyWalletButton.setOnClickListener {
@@ -307,7 +326,7 @@ class WalletFragment : BaseFragment(), WalletHelper.OnWalletChangedListener, Wal
 					ActionBar.BACK_BUTTON -> {
 						if (emptyWalletVisited) {
 							val mainSettings = MessagesController.getMainSettings(currentAccount)
-							mainSettings.edit().putBoolean("emptyWalletScreen_$currentAccount", true).commit()
+							mainSettings.edit { putBoolean("emptyWalletScreen_$currentAccount", true) }
 						}
 
 						finishFragment()
@@ -805,7 +824,7 @@ class WalletFragment : BaseFragment(), WalletHelper.OnWalletChangedListener, Wal
 		recyclerView?.adapter?.notifyDataSetChanged()
 	}
 
-	override fun onTransactionsLoadError(error: TL_error?) {
+	override fun onTransactionsLoadError(error: TLRPC.TLError?) {
 		val context = context ?: return
 		val message = context.getString(R.string.failed_to_load_transactions_history_format, error?.text ?: context.getString(R.string.unknown_error_occurred))
 		Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -820,6 +839,7 @@ class WalletFragment : BaseFragment(), WalletHelper.OnWalletChangedListener, Wal
 		const val CARD = 1
 		const val MY_BALANCE = 2
 		const val BANK = 3
+		const val GOOGLE = 4
 		const val ARG_AMOUNT = "amount"
 		const val ARG_CURRENCY = "currency"
 		const val ARG_WALLET_ID = "wallet_id"
@@ -831,6 +851,7 @@ class WalletFragment : BaseFragment(), WalletHelper.OnWalletChangedListener, Wal
 		const val ARG_WALLET_PAYMENT_ID = "wallet_payment_id"
 		const val ARG_VERIFICATION_CODE = "verification_code"
 		const val ARG_IS_TOPUP = "is_topup"
+		const val ARG_CHANNEL_ID = "channel_id"
 
 		// const val ARG_TRANSFER_OUT_PAYMENT_ID = "transfer_out_payment_id"
 		const val ARG_BANK_WITHDRAW_REQUISITES_ID = "bank_withdraw_requisites_id"

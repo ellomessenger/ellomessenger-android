@@ -1,6 +1,13 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Cells;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.BlendMode;
 import android.graphics.Canvas;
@@ -33,263 +40,283 @@ import org.telegram.ui.Components.RadialProgress2;
 
 import java.io.File;
 
+import androidx.annotation.NonNull;
+
 public class PatternCell extends BackupImageView implements DownloadController.FileDownloadProgressListener {
+	private final int SIZE = 100;
+	private final RectF rect = new RectF();
+	private final RadialProgress2 radialProgress;
+	private TLRPC.TLWallPaper currentPattern;
+	private final int currentAccount = UserConfig.selectedAccount;
+	private LinearGradient gradientShader;
+	private int currentBackgroundColor;
+	private int currentGradientColor1;
+	private int currentGradientColor2;
+	private int currentGradientColor3;
+	private int currentGradientAngle;
+	private final Paint backgroundPaint;
+	private MotionBackgroundDrawable backgroundDrawable;
+	private final int TAG;
+	private final PatternCellDelegate delegate;
+	private final int maxWallpaperSize;
 
-    private final int SIZE = 100;
+	public interface PatternCellDelegate {
+		TLRPC.TLWallPaper getSelectedPattern();
 
-    private RectF rect = new RectF();
-    private RadialProgress2 radialProgress;
-    private boolean wasSelected;
-    private TLRPC.TL_wallPaper currentPattern;
-    private int currentAccount = UserConfig.selectedAccount;
-    private LinearGradient gradientShader;
-    private int currentBackgroundColor;
-    private int currentGradientColor1;
-    private int currentGradientColor2;
-    private int currentGradientColor3;
-    private int currentGradientAngle;
+		int getBackgroundGradientColor1();
 
-    private Paint backgroundPaint;
-    private MotionBackgroundDrawable backgroundDrawable;
+		int getBackgroundGradientColor2();
 
-    private int TAG;
+		int getBackgroundGradientColor3();
 
-    private PatternCellDelegate delegate;
-    private int maxWallpaperSize;
+		int getBackgroundGradientAngle();
 
-    public interface PatternCellDelegate {
-        TLRPC.TL_wallPaper getSelectedPattern();
-        int getBackgroundGradientColor1();
-        int getBackgroundGradientColor2();
-        int getBackgroundGradientColor3();
-        int getBackgroundGradientAngle();
-        int getBackgroundColor();
-        int getPatternColor();
-        int getCheckColor();
-        float getIntensity();
-    }
+		int getBackgroundColor();
 
-    public PatternCell(Context context, int maxSize, PatternCellDelegate patternCellDelegate) {
-        super(context);
-        setRoundRadius(AndroidUtilities.dp(6));
-        maxWallpaperSize = maxSize;
-        delegate = patternCellDelegate;
+		int getPatternColor();
 
-        radialProgress = new RadialProgress2(this);
-        radialProgress.setProgressRect(AndroidUtilities.dp(30), AndroidUtilities.dp(30), AndroidUtilities.dp(70), AndroidUtilities.dp(70));
+		int getCheckColor();
 
-        backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+		float getIntensity();
+	}
 
-        TAG = DownloadController.getInstance(currentAccount).generateObserverTag();
+	public PatternCell(Context context, int maxSize, PatternCellDelegate patternCellDelegate) {
+		super(context);
+		setRoundRadius(AndroidUtilities.dp(6));
+		maxWallpaperSize = maxSize;
+		delegate = patternCellDelegate;
 
-        if (Build.VERSION.SDK_INT >= 21) {
-            setOutlineProvider(new ViewOutlineProvider() {
-                @Override
-                public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(AndroidUtilities.dp(1), AndroidUtilities.dp(1), view.getMeasuredWidth() - AndroidUtilities.dp(1), view.getMeasuredHeight() - AndroidUtilities.dp(1), AndroidUtilities.dp(6));
-                }
-            });
-            setClipToOutline(true);
-        }
-    }
+		radialProgress = new RadialProgress2(this);
+		radialProgress.setProgressRect(AndroidUtilities.dp(30), AndroidUtilities.dp(30), AndroidUtilities.dp(70), AndroidUtilities.dp(70));
 
-    public void setPattern(TLRPC.TL_wallPaper wallPaper) {
-        currentPattern = wallPaper;
-        if (wallPaper != null) {
-            TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(wallPaper.document.thumbs, AndroidUtilities.dp(SIZE));
-            setImage(ImageLocation.getForDocument(thumb, wallPaper.document), SIZE + "_" + SIZE, null, null, "png", 0, 1, wallPaper);
-        } else {
-            setImageDrawable(null);
-        }
-        updateSelected(false);
-    }
+		backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
 
-    @Override
-    protected void onAttachedToWindow() {
-        super.onAttachedToWindow();
-        updateSelected(false);
-    }
+		TAG = DownloadController.getInstance(currentAccount).generateObserverTag();
 
-    public void updateSelected(boolean animated) {
-        TLRPC.TL_wallPaper selectedPattern = delegate.getSelectedPattern();
-        boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
-        if (isSelected) {
-            updateButtonState(selectedPattern, false, animated);
-        } else {
-            radialProgress.setIcon(MediaActionDrawable.ICON_NONE, false, animated);
-        }
-        invalidate();
-    }
+		setOutlineProvider(new ViewOutlineProvider() {
+			@Override
+			public void getOutline(View view, Outline outline) {
+				outline.setRoundRect(AndroidUtilities.dp(1), AndroidUtilities.dp(1), view.getMeasuredWidth() - AndroidUtilities.dp(1), view.getMeasuredHeight() - AndroidUtilities.dp(1), AndroidUtilities.dp(6));
+			}
+		});
 
-    @Override
-    public void invalidate() {
-        super.invalidate();
-    }
+		setClipToOutline(true);
+	}
 
-    private void updateButtonState(Object image, boolean ifSame, boolean animated) {
-        if (image instanceof TLRPC.TL_wallPaper || image instanceof MediaController.SearchImage) {
-            File path;
-            int size;
-            String fileName;
-            if (image instanceof TLRPC.TL_wallPaper) {
-                TLRPC.TL_wallPaper wallPaper = (TLRPC.TL_wallPaper) image;
-                fileName = FileLoader.getAttachFileName(wallPaper.document);
-                if (TextUtils.isEmpty(fileName)) {
-                    return;
-                }
-                path = FileLoader.getInstance(currentAccount).getPathToAttach(wallPaper.document, true);
-            } else {
-                MediaController.SearchImage wallPaper = (MediaController.SearchImage) image;
-                if (wallPaper.photo != null) {
-                    TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(wallPaper.photo.sizes, maxWallpaperSize, true);
-                    path = FileLoader.getInstance(currentAccount).getPathToAttach(photoSize, true);
-                    fileName = FileLoader.getAttachFileName(photoSize);
-                } else {
-                    path = ImageLoader.getHttpFilePath(wallPaper.imageUrl, "jpg");
-                    fileName = path.getName();
-                }
-                if (TextUtils.isEmpty(fileName)) {
-                    return;
-                }
-            }
-            if (path.exists()) {
-                DownloadController.getInstance(currentAccount).removeLoadingFileObserver(this);
-                radialProgress.setProgress(1, animated);
-                radialProgress.setIcon(MediaActionDrawable.ICON_CHECK, ifSame, animated);
-            } else {
-                DownloadController.getInstance(currentAccount).addLoadingFileObserver(fileName, null, this);
-                boolean isLoading = FileLoader.getInstance(currentAccount).isLoadingFile(fileName);
-                Float progress = ImageLoader.getInstance().getFileProgress(fileName);
-                if (progress != null) {
-                    radialProgress.setProgress(progress, animated);
-                } else {
-                    radialProgress.setProgress(0, animated);
-                }
-                radialProgress.setIcon(MediaActionDrawable.ICON_EMPTY, ifSame, animated);
-            }
-        } else {
-            radialProgress.setIcon(MediaActionDrawable.ICON_CHECK, ifSame, animated);
-        }
-    }
+	public void setPattern(TLRPC.TLWallPaper wallPaper) {
+		currentPattern = wallPaper;
 
-    @SuppressLint("DrawAllocation")
-    @Override
-    protected void onDraw(Canvas canvas) {
-        float intensity = delegate.getIntensity();
-        //imageReceiver.setAlpha(Math.abs(intensity));
-        imageReceiver.setBlendMode(null);
+		if (wallPaper != null) {
+			if (wallPaper.document instanceof TLRPC.TLDocument document) {
+				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, AndroidUtilities.dp(SIZE));
+				setImage(ImageLocation.getForDocument(thumb, document), SIZE + "_" + SIZE, null, null, "png", 0, 1, wallPaper);
+			}
+			else {
+				setImageDrawable(null);
+			}
+		}
+		else {
+			setImageDrawable(null);
+		}
 
-        int backgroundColor = delegate.getBackgroundColor();
-        int backgroundGradientColor1 = delegate.getBackgroundGradientColor1();
-        int backgroundGradientColor2 = delegate.getBackgroundGradientColor2();
-        int backgroundGradientColor3 = delegate.getBackgroundGradientColor3();
-        int backgroundGradientAngle = delegate.getBackgroundGradientAngle();
-        int checkColor = delegate.getCheckColor();
+		updateSelected(false);
+	}
 
-        if (backgroundGradientColor1 != 0) {
-            if (gradientShader == null || backgroundColor != currentBackgroundColor || backgroundGradientColor1 != currentGradientColor1 || backgroundGradientColor2 != currentGradientColor2 || backgroundGradientColor3 != currentGradientColor3 || backgroundGradientAngle != currentGradientAngle) {
-                currentBackgroundColor = backgroundColor;
-                currentGradientColor1 = backgroundGradientColor1;
-                currentGradientColor2 = backgroundGradientColor2;
-                currentGradientColor3 = backgroundGradientColor3;
-                currentGradientAngle = backgroundGradientAngle;
+	@Override
+	protected void onAttachedToWindow() {
+		super.onAttachedToWindow();
+		updateSelected(false);
+	}
 
-                if (backgroundGradientColor2 != 0) {
-                    gradientShader = null;
-                    if (backgroundDrawable != null) {
-                        backgroundDrawable.setColors(backgroundColor, backgroundGradientColor1, backgroundGradientColor2, backgroundGradientColor3, 0, false);
-                    } else {
-                        backgroundDrawable = new MotionBackgroundDrawable(backgroundColor, backgroundGradientColor1, backgroundGradientColor2, backgroundGradientColor3, true);
-                        backgroundDrawable.setRoundRadius(AndroidUtilities.dp(6));
-                        backgroundDrawable.setParentView(this);
-                    }
-                    if (intensity < 0) {
-                        imageReceiver.setGradientBitmap(backgroundDrawable.getBitmap());
-                    } else {
-                        imageReceiver.setGradientBitmap(null);
-                        if (Build.VERSION.SDK_INT >= 29) {
-                            imageReceiver.setBlendMode(BlendMode.SOFT_LIGHT);
-                        } else {
-                            imageReceiver.setColorFilter(new PorterDuffColorFilter(delegate.getPatternColor(), PorterDuff.Mode.SRC_IN));
-                        }
-                    }
-                } else {
-                    final Rect r = BackgroundGradientDrawable.getGradientPoints(currentGradientAngle, getMeasuredWidth(), getMeasuredHeight());
-                    gradientShader = new LinearGradient(r.left, r.top, r.right, r.bottom, new int[]{backgroundColor, backgroundGradientColor1}, null, Shader.TileMode.CLAMP);
-                    backgroundDrawable = null;
-                    imageReceiver.setGradientBitmap(null);
-                }
-            }
-        } else {
-            gradientShader = null;
-            backgroundDrawable = null;
-            imageReceiver.setGradientBitmap(null);
-        }
-        if (backgroundDrawable != null) {
-            backgroundDrawable.setBounds(0, 0, getMeasuredWidth(), getMeasuredHeight());
-            backgroundDrawable.draw(canvas);
-        } else {
-            backgroundPaint.setShader(gradientShader);
-            if (gradientShader == null) {
-                backgroundPaint.setColor(backgroundColor);
-            }
-            rect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
-            canvas.drawRoundRect(rect, AndroidUtilities.dp(6), AndroidUtilities.dp(6), backgroundPaint);
-        }
+	public void updateSelected(boolean animated) {
+		TLRPC.TLWallPaper selectedPattern = delegate.getSelectedPattern();
+		boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
+		if (isSelected) {
+			updateButtonState(selectedPattern, false, animated);
+		}
+		else {
+			radialProgress.setIcon(MediaActionDrawable.ICON_NONE, false, animated);
+		}
+		invalidate();
+	}
 
-        super.onDraw(canvas);
+	@Override
+	public void invalidate() {
+		super.invalidate();
+	}
 
-        if (radialProgress.getIcon() != MediaActionDrawable.ICON_NONE) {
-            radialProgress.setColors(checkColor, checkColor, 0xffffffff, 0xffffffff);
-            radialProgress.draw(canvas);
-        }
-    }
+	private void updateButtonState(Object image, boolean ifSame, boolean animated) {
+		if (image instanceof TLRPC.TLWallPaper || image instanceof MediaController.SearchImage) {
+			File path;
+			String fileName;
+			if (image instanceof TLRPC.TLWallPaper wallPaper) {
+				fileName = FileLoader.getAttachFileName(wallPaper.document);
+				if (TextUtils.isEmpty(fileName)) {
+					return;
+				}
+				path = FileLoader.getInstance(currentAccount).getPathToAttach(wallPaper.document, true);
+			}
+			else {
+				MediaController.SearchImage wallPaper = (MediaController.SearchImage)image;
+				if (wallPaper.photo instanceof TLRPC.TLPhoto tlPhoto) {
+					TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(tlPhoto.sizes, maxWallpaperSize, true);
+					path = FileLoader.getInstance(currentAccount).getPathToAttach(photoSize, true);
+					fileName = FileLoader.getAttachFileName(photoSize);
+				}
+				else {
+					path = ImageLoader.getHttpFilePath(wallPaper.imageUrl, "jpg");
+					fileName = path.getName();
+				}
+				if (TextUtils.isEmpty(fileName)) {
+					return;
+				}
+			}
+			if (path.exists()) {
+				DownloadController.getInstance(currentAccount).removeLoadingFileObserver(this);
+				radialProgress.setProgress(1, animated);
+				radialProgress.setIcon(MediaActionDrawable.ICON_CHECK, ifSame, animated);
+			}
+			else {
+				DownloadController.getInstance(currentAccount).addLoadingFileObserver(fileName, null, this);
+				Float progress = ImageLoader.getInstance().getFileProgress(fileName);
+				if (progress != null) {
+					radialProgress.setProgress(progress, animated);
+				}
+				else {
+					radialProgress.setProgress(0, animated);
+				}
+				radialProgress.setIcon(MediaActionDrawable.ICON_EMPTY, ifSame, animated);
+			}
+		}
+		else {
+			radialProgress.setIcon(MediaActionDrawable.ICON_CHECK, ifSame, animated);
+		}
+	}
 
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        setMeasuredDimension(AndroidUtilities.dp(SIZE), AndroidUtilities.dp(SIZE));
-    }
+	@Override
+	protected void onDraw(@NonNull Canvas canvas) {
+		float intensity = delegate.getIntensity();
+		//imageReceiver.setAlpha(Math.abs(intensity));
+		imageReceiver.setBlendMode(null);
 
-    @Override
-    public void onFailedDownload(String fileName, boolean canceled) {
-        TLRPC.TL_wallPaper selectedPattern = delegate.getSelectedPattern();
-        boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
-        if (isSelected) {
-            if (canceled) {
-                radialProgress.setIcon(MediaActionDrawable.ICON_NONE, false, true);
-            } else {
-                updateButtonState(currentPattern, true, canceled);
-            }
-        }
-    }
+		int backgroundColor = delegate.getBackgroundColor();
+		int backgroundGradientColor1 = delegate.getBackgroundGradientColor1();
+		int backgroundGradientColor2 = delegate.getBackgroundGradientColor2();
+		int backgroundGradientColor3 = delegate.getBackgroundGradientColor3();
+		int backgroundGradientAngle = delegate.getBackgroundGradientAngle();
+		int checkColor = delegate.getCheckColor();
 
-    @Override
-    public void onSuccessDownload(String fileName) {
-        radialProgress.setProgress(1, true);
-        TLRPC.TL_wallPaper selectedPattern = delegate.getSelectedPattern();
-        boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
-        if (isSelected) {
-            updateButtonState(currentPattern, false, true);
-        }
-    }
+		if (backgroundGradientColor1 != 0) {
+			if (gradientShader == null || backgroundColor != currentBackgroundColor || backgroundGradientColor1 != currentGradientColor1 || backgroundGradientColor2 != currentGradientColor2 || backgroundGradientColor3 != currentGradientColor3 || backgroundGradientAngle != currentGradientAngle) {
+				currentBackgroundColor = backgroundColor;
+				currentGradientColor1 = backgroundGradientColor1;
+				currentGradientColor2 = backgroundGradientColor2;
+				currentGradientColor3 = backgroundGradientColor3;
+				currentGradientAngle = backgroundGradientAngle;
 
-    @Override
-    public void onProgressDownload(String fileName, long downloadedSize, long totalSize) {
-        radialProgress.setProgress(Math.min(1f, downloadedSize / (float) totalSize), true);
-        TLRPC.TL_wallPaper selectedPattern = delegate.getSelectedPattern();
-        boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
-        if (isSelected && radialProgress.getIcon() != MediaActionDrawable.ICON_EMPTY) {
-            updateButtonState(currentPattern, false, true);
-        }
-    }
+				if (backgroundGradientColor2 != 0) {
+					gradientShader = null;
+					if (backgroundDrawable != null) {
+						backgroundDrawable.setColors(backgroundColor, backgroundGradientColor1, backgroundGradientColor2, backgroundGradientColor3, 0, false);
+					}
+					else {
+						backgroundDrawable = new MotionBackgroundDrawable(backgroundColor, backgroundGradientColor1, backgroundGradientColor2, backgroundGradientColor3, true);
+						backgroundDrawable.setRoundRadius(AndroidUtilities.dp(6));
+						backgroundDrawable.setParentView(this);
+					}
+					if (intensity < 0) {
+						imageReceiver.setGradientBitmap(backgroundDrawable.getBitmap());
+					}
+					else {
+						imageReceiver.setGradientBitmap(null);
+						if (Build.VERSION.SDK_INT >= 29) {
+							imageReceiver.setBlendMode(BlendMode.SOFT_LIGHT);
+						}
+						else {
+							imageReceiver.setColorFilter(new PorterDuffColorFilter(delegate.getPatternColor(), PorterDuff.Mode.SRC_IN));
+						}
+					}
+				}
+				else {
+					final Rect r = BackgroundGradientDrawable.getGradientPoints(currentGradientAngle, getMeasuredWidth(), getMeasuredHeight());
+					gradientShader = new LinearGradient(r.left, r.top, r.right, r.bottom, new int[]{backgroundColor, backgroundGradientColor1}, null, Shader.TileMode.CLAMP);
+					backgroundDrawable = null;
+					imageReceiver.setGradientBitmap(null);
+				}
+			}
+		}
+		else {
+			gradientShader = null;
+			backgroundDrawable = null;
+			imageReceiver.setGradientBitmap(null);
+		}
+		if (backgroundDrawable != null) {
+			backgroundDrawable.setBounds(0, 0, getMeasuredWidth(), getMeasuredHeight());
+			backgroundDrawable.draw(canvas);
+		}
+		else {
+			backgroundPaint.setShader(gradientShader);
+			if (gradientShader == null) {
+				backgroundPaint.setColor(backgroundColor);
+			}
+			rect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
+			canvas.drawRoundRect(rect, AndroidUtilities.dp(6), AndroidUtilities.dp(6), backgroundPaint);
+		}
 
-    @Override
-    public void onProgressUpload(String fileName, long uploadedSize, long totalSize, boolean isEncrypted) {
+		super.onDraw(canvas);
 
-    }
+		if (radialProgress.getIcon() != MediaActionDrawable.ICON_NONE) {
+			radialProgress.setColors(checkColor, checkColor, 0xffffffff, 0xffffffff);
+			radialProgress.draw(canvas);
+		}
+	}
 
-    @Override
-    public int getObserverTag() {
-        return TAG;
-    }
+	@Override
+	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+		setMeasuredDimension(AndroidUtilities.dp(SIZE), AndroidUtilities.dp(SIZE));
+	}
+
+	@Override
+	public void onFailedDownload(String fileName, boolean canceled) {
+		TLRPC.TLWallPaper selectedPattern = delegate.getSelectedPattern();
+		boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
+		if (isSelected) {
+			if (canceled) {
+				radialProgress.setIcon(MediaActionDrawable.ICON_NONE, false, true);
+			}
+			else {
+				updateButtonState(currentPattern, true, canceled);
+			}
+		}
+	}
+
+	@Override
+	public void onSuccessDownload(String fileName) {
+		radialProgress.setProgress(1, true);
+		TLRPC.TLWallPaper selectedPattern = delegate.getSelectedPattern();
+		boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
+		if (isSelected) {
+			updateButtonState(currentPattern, false, true);
+		}
+	}
+
+	@Override
+	public void onProgressDownload(String fileName, long downloadedSize, long totalSize) {
+		radialProgress.setProgress(Math.min(1f, downloadedSize / (float)totalSize), true);
+		TLRPC.TLWallPaper selectedPattern = delegate.getSelectedPattern();
+		boolean isSelected = currentPattern == null && selectedPattern == null || selectedPattern != null && currentPattern != null && currentPattern.id == selectedPattern.id;
+		if (isSelected && radialProgress.getIcon() != MediaActionDrawable.ICON_EMPTY) {
+			updateButtonState(currentPattern, false, true);
+		}
+	}
+
+	@Override
+	public void onProgressUpload(String fileName, long uploadedSize, long totalSize, boolean isEncrypted) {
+
+	}
+
+	@Override
+	public int getObserverTag() {
+		return TAG;
+	}
 }

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.profile.referral
 
@@ -48,8 +48,8 @@ import org.telegram.messenger.utils.fillElloCoinLogos
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
-import org.telegram.tgnet.TLRPC.TL_biz_dataRaw
-import org.telegram.tgnet.tlrpc.TL_error
+import org.telegram.tgnet.TLRPC.TLBizDataRaw
+import org.telegram.tgnet.TLRPC.TLError
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.AvatarImageView
@@ -249,7 +249,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 			val req = ElloRpc.getLoyaltyBonusDataWithSum()
 
 			when (val res = connectionsManager.performRequest(req, ConnectionsManager.RequestFlagFailOnServerErrors)) {
-				is TL_biz_dataRaw -> {
+				is TLBizDataRaw -> {
 					val loyaltyDataWithSum = res.readData<ElloRpc.LoyaltyDataWithSum>()
 					val loyaltyData = loyaltyDataWithSum?.loyaltyData
 
@@ -271,7 +271,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 					}
 				}
 
-				is TL_error -> {
+				is TLError -> {
 					withContext(mainScope.coroutineContext) {
 						Toast.makeText(parentActivity, res.text ?: parentActivity?.getString(R.string.failed_to_load_loyalty_data), Toast.LENGTH_SHORT).show()
 						finishFragment()
@@ -291,7 +291,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 			val req = ElloRpc.getLoyaltyCode()
 			val res = connectionsManager.performRequest(req, ConnectionsManager.RequestFlagFailOnServerErrors)
 
-			if (res is TL_biz_dataRaw) {
+			if (res is TLBizDataRaw) {
 				val code = res.readData<ElloRpc.LoyaltyCode>()
 
 				loyaltyCode = code?.code?.trim()
@@ -300,7 +300,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 					referralProgressFragmentBinding?.referralCodeLabel?.text = loyaltyCode
 				}
 			}
-			else if (res is TL_error) {
+			else if (res is TLError) {
 				withContext(mainScope.coroutineContext) {
 					Toast.makeText(context, res.text, Toast.LENGTH_SHORT).show()
 				}
@@ -317,7 +317,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 			val req = ElloRpc.getLoyaltyUsersRequest(currentPage, 10)
 			val res = connectionsManager.performRequest(req, ConnectionsManager.RequestFlagFailOnServerErrors)
 
-			if (res is TL_biz_dataRaw) {
+			if (res is TLBizDataRaw) {
 				val users = res.readData<ElloRpc.LoyaltyUsersList>()
 				val usersList = users?.users
 
@@ -333,7 +333,7 @@ class ReferralProgressFragment(args: Bundle? = null) : BaseFragment(args) {
 					}
 				}
 			}
-			else if (res is TL_error) {
+			else if (res is TLError) {
 				withContext(mainScope.coroutineContext) {
 					Toast.makeText(context, res.text, Toast.LENGTH_SHORT).show()
 				}

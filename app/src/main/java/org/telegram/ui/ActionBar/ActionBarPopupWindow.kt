@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.ActionBar
 
@@ -16,7 +16,6 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
@@ -35,6 +34,9 @@ import android.widget.PopupWindow
 import android.widget.ScrollView
 import androidx.annotation.Keep
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withSave
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.FileLog
 import org.telegram.messenger.NotificationCenter
@@ -522,7 +524,7 @@ open class ActionBarPopupWindow : PopupWindow {
 						while (a < n) {
 							val view = getChildAt(a)
 
-							if (view.visibility == GONE) {
+							if (view.isGone) {
 								a++
 								continue
 							}
@@ -770,7 +772,7 @@ open class ActionBarPopupWindow : PopupWindow {
 			var hasGap = false
 
 			for (i in 0 until linearLayout.childCount) {
-				if (linearLayout.getChildAt(i) is GapView && linearLayout.getChildAt(i).visibility == VISIBLE) {
+				if (linearLayout.getChildAt(i) is GapView && linearLayout.getChildAt(i).isVisible) {
 					hasGap = true
 					break
 				}
@@ -828,38 +830,38 @@ open class ActionBarPopupWindow : PopupWindow {
 				backgroundDrawable.draw(canvas)
 
 				if (hasGap) {
-					canvas.save()
+					canvas.withSave {
 
-					AndroidUtilities.rectTmp2.set(backgroundDrawable.bounds)
-					AndroidUtilities.rectTmp2.inset(AndroidUtilities.dp(8f), AndroidUtilities.dp(8f))
+						AndroidUtilities.rectTmp2.set(backgroundDrawable.bounds)
+						AndroidUtilities.rectTmp2.inset(AndroidUtilities.dp(8f), AndroidUtilities.dp(8f))
 
-					canvas.clipRect(AndroidUtilities.rectTmp2)
+						clipRect(AndroidUtilities.rectTmp2)
 
-					for (i in 0 until linearLayout.childCount) {
-						if (linearLayout.getChildAt(i) is GapView && linearLayout.getChildAt(i).visibility == VISIBLE) {
-							canvas.save()
-							var x = 0f
-							var y = 0f
-							val child = linearLayout.getChildAt(i) as GapView
-							var view: View? = child
+						for (i in 0 until linearLayout.childCount) {
+							if (linearLayout.getChildAt(i) is GapView && linearLayout.getChildAt(i).isVisible) {
+								withSave {
+									var x = 0f
+									var y = 0f
+									val child = linearLayout.getChildAt(i) as GapView
+									var view: View? = child
 
-							while (view !== this) {
-								x += (view?.x ?: 0f)
-								y += (view?.y ?: 0f)
+									while (view !== this) {
+										x += (view?.x ?: 0f)
+										y += (view?.y ?: 0f)
 
-								view = view?.parent as? View
+										view = view?.parent as? View
 
-								if (view == null) {
-									break
+										if (view == null) {
+											break
+										}
+									}
+
+									translate(x, y * scrollView!!.scaleY)
+									child.draw(this)
 								}
 							}
-
-							canvas.translate(x, y * scrollView!!.scaleY)
-							child.draw(canvas)
-							canvas.restore()
 						}
 					}
-					canvas.restore()
 				}
 
 				if (needRestore) {
@@ -868,6 +870,7 @@ open class ActionBarPopupWindow : PopupWindow {
 			}
 		}
 
+		@Deprecated("Deprecated in Java")
 		override fun setBackgroundDrawable(drawable: Drawable) {
 			backgroundColor = context.getColor(R.color.background)
 			backgroundDrawable = drawable

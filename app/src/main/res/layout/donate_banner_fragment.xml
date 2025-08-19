@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:backgroundTint="@color/background">
+
+	<ScrollView
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:overScrollMode="never"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="vertical"
+			android:paddingHorizontal="12dp">
+
+			<ImageView
+				android:id="@+id/iv_heart"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_gravity="center"
+				android:layout_marginTop="23dp"
+				android:src="@drawable/ic_heart_donate_banner" />
+
+			<LinearLayout
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="26dp"
+				android:orientation="vertical"
+				android:paddingHorizontal="16dp">
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:text="@string/we_believe_secure_communication"
+					android:textColor="@color/dark"
+					android:textSize="16sp" />
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginTop="14dp"
+					android:text="@string/contribute_text"
+					android:textColor="@color/dark"
+					android:textSize="16sp" />
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginTop="12dp"
+					android:text="@string/donate_as_a_thank_you"
+					android:textColor="@color/dark"
+					android:textSize="16sp" />
+
+			</LinearLayout>
+
+			<ImageView
+				android:id="@+id/already_subscribed"
+				android:layout_width="match_parent"
+				android:layout_height="120dp"
+				android:src="@drawable/img_already_subscribed"
+				app:layout_constraintTop_toTopOf="parent"
+				android:visibility="gone"
+				android:layout_marginTop="@dimen/common_size_10dp"
+				android:layout_marginBottom="@dimen/common_size_10dp"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"/>
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/membershipContainer"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="16dp"
+				android:layout_marginBottom="16dp"
+				android:background="@drawable/donate_rounded_border_active"
+				android:paddingVertical="24dp">
+
+				<com.google.android.material.checkbox.MaterialCheckBox
+					android:id="@+id/membershipCheckBox"
+					style="@style/Widget.App.CheckBoxCustom"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:checked="true"
+					android:clickable="false"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/textView4"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/ello_plus_subscription"
+					android:textColor="@color/dark"
+					android:textSize="20sp"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toTopOf="@+id/descriptionTextView"
+					app:layout_constraintStart_toEndOf="@+id/membershipCheckBox"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/descriptionTextView"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/will_include_special_features_soon"
+					android:textColor="@color/dark"
+					android:textSize="16sp"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toEndOf="@+id/membershipCheckBox"
+					app:layout_constraintTop_toBottomOf="@+id/textView4" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<androidx.constraintlayout.widget.ConstraintLayout
+				android:id="@+id/regularDonateContainer"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginBottom="16dp"
+				android:background="@drawable/donate_rounded_border_active"
+				android:paddingVertical="24dp">
+
+				<com.google.android.material.checkbox.MaterialCheckBox
+					android:id="@+id/regularDonateCheckBox"
+					style="@style/Widget.App.CheckBoxCustom"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:clickable="false"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/textView5"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/donate"
+					android:textColor="@color/dark"
+					android:textSize="20sp"
+					android:textStyle="bold"
+					app:layout_constraintBottom_toTopOf="@+id/descriptionTextView1"
+					app:layout_constraintStart_toEndOf="@+id/regularDonateCheckBox"
+					app:layout_constraintTop_toTopOf="parent" />
+
+				<TextView
+					android:id="@+id/descriptionTextView1"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:text="@string/every_contribution"
+					android:textColor="@color/dark"
+					android:textSize="16sp"
+					app:layout_constraintBottom_toBottomOf="@id/regular_donate"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toEndOf="@+id/regularDonateCheckBox"
+					app:layout_constraintTop_toBottomOf="@+id/textView5" />
+
+				<androidx.recyclerview.widget.RecyclerView
+					android:id="@+id/regular_donate"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="16dp"
+					android:layout_marginTop="16dp"
+					android:layout_marginEnd="16dp"
+					android:visibility="gone"
+					app:layout_constraintBottom_toBottomOf="parent"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@+id/descriptionTextView1"
+					tools:itemCount="1"
+					tools:listitem="@layout/donate_item" />
+
+			</androidx.constraintlayout.widget.ConstraintLayout>
+
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/support_our_mission"
+				style="@style/Widget.App.BrandedButtonSmallRadius"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="14dp"
+				android:layout_marginTop="18dp"
+				android:layout_marginEnd="14dp"
+				android:layout_marginBottom="18dp"
+				android:paddingVertical="18dp"
+				android:text="@string/support_our_mission"
+				android:textColor="@color/dark_fixed"
+				android:textStyle="bold"
+				app:backgroundTint="@color/orange_dark"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<com.google.android.material.button.MaterialButton
+				android:id="@+id/restore_purchases"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="14dp"
+				android:layout_marginEnd="14dp"
+				android:layout_marginBottom="14dp"
+				android:text="@string/restore_purchases"
+				android:textColor="@color/orange"
+				android:textStyle="bold"
+				app:backgroundTint="@color/background"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+		</LinearLayout>
+
+	</ScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

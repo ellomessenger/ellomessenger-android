@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.statistics
 
@@ -38,7 +38,7 @@ class ChartViewData(val title: String, val graphType: Int) {
 		if (!loading) {
 			loading = true
 
-			val request = TLRPC.TL_stats_loadAsyncGraph()
+			val request = TLRPC.TLStatsLoadAsyncGraph()
 			request.token = token
 
 			val reqId = ConnectionsManager.getInstance(accountId).sendRequest(request, { response, error ->
@@ -46,13 +46,13 @@ class ChartViewData(val title: String, val graphType: Int) {
 				var zoomToken: String? = null
 
 				if (error == null) {
-					if (response is TLRPC.TL_statsGraph) {
-						val json = response.json.data
+					if (response is TLRPC.TLStatsGraph) {
+						val json = response.json?.data
 
 						if (!json.isNullOrEmpty()) {
 							try {
 								chartData = StatisticActivity.createChartData(JSONObject(json), graphType, isLanguages)
-								zoomToken = response.zoom_token
+								zoomToken = response.zoomToken
 
 								if (graphType == 4 && chartData?.x != null && chartData.x.isNotEmpty()) {
 									val x = chartData.x[chartData.x.size - 1]
@@ -66,7 +66,7 @@ class ChartViewData(val title: String, val graphType: Int) {
 						}
 					}
 
-					if (response is TLRPC.TL_statsGraphError) {
+					if (response is TLRPC.TLStatsGraphError) {
 						isEmpty = false
 						isError = true
 						errorMessage = response.error

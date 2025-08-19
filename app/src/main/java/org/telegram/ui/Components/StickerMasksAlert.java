@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -12,6 +12,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -20,7 +21,6 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.RippleDrawable;
-import android.os.Build;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.TextUtils;
@@ -48,8 +48,8 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.EmptyCell;
@@ -63,23 +63,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearSmoothScroller;
 import androidx.recyclerview.widget.RecyclerView;
 
 @SuppressWarnings("unchecked")
+@SuppressLint("AppCompatCustomView")
 public class StickerMasksAlert extends BottomSheet implements NotificationCenter.NotificationCenterDelegate {
-
 	private final Drawable shadowDrawable;
-
 	private int scrollOffsetY;
-
 	private StickerMasksAlertDelegate delegate;
-
 	private FrameLayout bottomTabContainer;
 	private View shadowLine;
 	private AnimatorSet bottomTabContainerAnimation;
-
 	private final StickersGridAdapter stickersGridAdapter;
 	private final StickersSearchGridAdapter stickersSearchGridAdapter;
 	private RecyclerListView.OnItemClickListener stickersOnItemClickListener;
@@ -87,28 +84,16 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 	private final RecyclerListView gridView;
 	private final GridLayoutManager stickersLayoutManager;
 	private final SearchField stickersSearchField;
-
 	private String[] lastSearchKeyboardLanguage;
-
 	private final Drawable[] stickerIcons;
-
 	private final int searchFieldHeight;
-
 	private final int currentAccount = UserConfig.selectedAccount;
-
-	private final List<TLRPC.TL_messages_stickerSet>[] stickerSets = new ArrayList[]{new ArrayList<>(), new ArrayList<>()};
+	private final List<TLRPC.TLMessagesStickerSet>[] stickerSets = new ArrayList[]{new ArrayList<>(), new ArrayList<>()};
 	private final List<TLRPC.Document>[] recentStickers = new ArrayList[]{new ArrayList<>(), new ArrayList<>()};
-
 	private List<TLRPC.Document> favouriteStickers = new ArrayList<>();
-
 	private int stickersTabOffset;
 	private int recentTabBum = -2;
 	private int favTabBum = -2;
-
-	private int lastNotifyWidth;
-	private int lastNotifyHeight;
-	private int lastNotifyHeight2;
-
 	private ImageView stickersButton;
 	private ImageView masksButton;
 
@@ -178,7 +163,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 			@Override
 			protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 				int totalHeight = MeasureSpec.getSize(heightMeasureSpec);
-				if (Build.VERSION.SDK_INT >= 21 && !isFullscreen) {
+				if (!isFullscreen) {
 					ignoreLayout = true;
 					setPadding(backgroundPaddingLeft, AndroidUtilities.statusBarHeight, backgroundPaddingLeft, 0);
 					ignoreLayout = false;
@@ -230,7 +215,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 			}
 
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				int offset = AndroidUtilities.dp(13);
 				int top = scrollOffsetY - backgroundPaddingTop - offset;
 				if (currentSheetAnimationType == 1) {
@@ -254,10 +239,8 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 					rad = 1.0f - moveProgress;
 				}
 
-				if (Build.VERSION.SDK_INT >= 21) {
-					top += AndroidUtilities.statusBarHeight;
-					y += AndroidUtilities.statusBarHeight;
-				}
+				top += AndroidUtilities.statusBarHeight;
+				y += AndroidUtilities.statusBarHeight;
 
 				shadowDrawable.setBounds(0, top, getMeasuredWidth(), height);
 				shadowDrawable.draw(canvas);
@@ -325,11 +308,11 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 
 			@Override
 			protected boolean allowSelectChildAtPosition(float x, float y) {
-				return y >= scrollOffsetY + (Build.VERSION.SDK_INT >= 21 ? AndroidUtilities.statusBarHeight : 0);
+				return y >= scrollOffsetY + AndroidUtilities.statusBarHeight;
 			}
 
 			@Override
-			public boolean onInterceptTouchEvent(MotionEvent event) {
+			public boolean onInterceptTouchEvent(@NonNull MotionEvent event) {
 				boolean result = ContentPreviewViewer.getInstance().onInterceptTouchEvent(event, gridView, containerView.getMeasuredHeight(), contentPreviewViewerDelegate);
 				return super.onInterceptTouchEvent(event) || result;
 			}
@@ -390,11 +373,10 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 		gridView.setAdapter(stickersGridAdapter = new StickersGridAdapter(context));
 		gridView.setOnTouchListener((v, event) -> ContentPreviewViewer.getInstance().onTouch(event, gridView, containerView.getMeasuredHeight(), stickersOnItemClickListener, contentPreviewViewerDelegate));
 		stickersOnItemClickListener = (view, position) -> {
-			if (!(view instanceof StickerEmojiCell)) {
+			if (!(view instanceof StickerEmojiCell cell)) {
 				return;
 			}
 			ContentPreviewViewer.getInstance().reset();
-			StickerEmojiCell cell = (StickerEmojiCell)view;
 			delegate.onStickerSelected(cell.getParentObject(), cell.getSticker());
 			dismiss();
 		};
@@ -449,14 +431,14 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 
 		gridView.setOnScrollListener(new RecyclerView.OnScrollListener() {
 			@Override
-			public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+			public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
 				if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
 					stickersSearchField.hideKeyboard();
 				}
 			}
 
 			@Override
-			public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+			public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
 				updateLayout(true);
 			}
 		});
@@ -495,7 +477,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				public void setSelected(boolean selected) {
 					super.setSelected(selected);
 					Drawable background = getBackground();
-					if (Build.VERSION.SDK_INT >= 21 && background != null) {
+					if (background != null) {
 						int color = selected ? 0xff6ebaed : 0x1effffff;
 						Theme.setSelectorDrawableColor(background, Color.argb(30, Color.red(color), Color.green(color), Color.blue(color)), true);
 					}
@@ -503,11 +485,9 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 			};
 			stickersButton.setScaleType(ImageView.ScaleType.CENTER);
 			stickersButton.setImageDrawable(Theme.createEmojiIconSelectorDrawable(context, R.drawable.smiles_tab_stickers, 0xffffffff, 0xff6ebaed));
-			if (Build.VERSION.SDK_INT >= 21) {
-				RippleDrawable rippleDrawable = (RippleDrawable)Theme.createSelectorDrawable(0x1effffff);
-				Theme.setRippleDrawableForceSoftware(rippleDrawable);
-				stickersButton.setBackground(rippleDrawable);
-			}
+			RippleDrawable rippleDrawable = (RippleDrawable)Theme.createSelectorDrawable(0x1effffff);
+			Theme.setRippleDrawableForceSoftware(rippleDrawable);
+			stickersButton.setBackground(rippleDrawable);
 			itemsLayout.addView(stickersButton, LayoutHelper.createLinear(70, 48));
 			stickersButton.setOnClickListener(v -> {
 				if (currentType == MediaDataController.TYPE_IMAGE) {
@@ -522,7 +502,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				public void setSelected(boolean selected) {
 					super.setSelected(selected);
 					Drawable background = getBackground();
-					if (Build.VERSION.SDK_INT >= 21 && background != null) {
+					if (background != null) {
 						int color = selected ? 0xff6ebaed : 0x1effffff;
 						Theme.setSelectorDrawableColor(background, Color.argb(30, Color.red(color), Color.green(color), Color.blue(color)), true);
 					}
@@ -530,11 +510,9 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 			};
 			masksButton.setScaleType(ImageView.ScaleType.CENTER);
 			masksButton.setImageDrawable(Theme.createEmojiIconSelectorDrawable(context, R.drawable.ic_masks_msk1, 0xffffffff, 0xff6ebaed));
-			if (Build.VERSION.SDK_INT >= 21) {
-				RippleDrawable rippleDrawable = (RippleDrawable)Theme.createSelectorDrawable(0x1effffff);
-				Theme.setRippleDrawableForceSoftware(rippleDrawable);
-				masksButton.setBackground(rippleDrawable);
-			}
+			rippleDrawable = (RippleDrawable)Theme.createSelectorDrawable(0x1effffff);
+			Theme.setRippleDrawableForceSoftware(rippleDrawable);
+			masksButton.setBackground(rippleDrawable);
 			itemsLayout.addView(masksButton, LayoutHelper.createLinear(70, 48));
 			masksButton.setOnClickListener(v -> {
 				if (currentType == MediaDataController.TYPE_MASK) {
@@ -689,16 +667,16 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 		}
 
 		stickerSets[currentType].clear();
-		List<TLRPC.TL_messages_stickerSet> packs = MediaDataController.getInstance(currentAccount).getStickerSets(currentType);
+		List<TLRPC.TLMessagesStickerSet> packs = MediaDataController.getInstance(currentAccount).getStickerSets(currentType);
 		for (int a = 0; a < packs.size(); a++) {
-			TLRPC.TL_messages_stickerSet pack = packs.get(a);
+			TLRPC.TLMessagesStickerSet pack = packs.get(a);
 			if (pack.set.archived || pack.documents == null || pack.documents.isEmpty()) {
 				continue;
 			}
 			stickerSets[currentType].add(pack);
 		}
 		for (int a = 0; a < stickerSets[currentType].size(); a++) {
-			TLRPC.TL_messages_stickerSet stickerSet = stickerSets[currentType].get(a);
+			TLRPC.TLMessagesStickerSet stickerSet = stickerSets[currentType].get(a);
 			TLRPC.Document document = stickerSet.documents.get(0);
 			TLObject thumb = FileLoader.getClosestPhotoSizeWithSize(stickerSet.set.thumbs, 90);
 			if (thumb == null) {
@@ -792,9 +770,12 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				TLRPC.Document favSticker = favouriteStickers.get(a);
 				for (int b = 0; b < recentStickers[currentType].size(); b++) {
 					TLRPC.Document recSticker = recentStickers[currentType].get(b);
-					if (recSticker.dc_id == favSticker.dc_id && recSticker.id == favSticker.id) {
-						recentStickers[currentType].remove(b);
-						break;
+
+					if (recSticker instanceof TLRPC.TLDocument tlDocument && favSticker instanceof TLRPC.TLDocument tlFavSticker) {
+						if (tlDocument.dcId == tlFavSticker.dcId && recSticker.id == favSticker.id) {
+							recentStickers[currentType].remove(b);
+							break;
+						}
 					}
 				}
 			}
@@ -995,7 +976,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 		}
 
 		@Override
-		public boolean isEnabled(RecyclerView.ViewHolder holder) {
+		public boolean isEnabled(@NonNull RecyclerView.ViewHolder holder) {
 			return false;
 		}
 
@@ -1058,14 +1039,15 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				}
 			}
 			else {
-				TLRPC.TL_messages_stickerSet set = (TLRPC.TL_messages_stickerSet)pack;
+				TLRPC.TLMessagesStickerSet set = (TLRPC.TLMessagesStickerSet)pack;
 				int idx = stickerSets[currentType].indexOf(set);
 				return idx + stickersTabOffset;
 			}
 		}
 
+		@NonNull
 		@Override
-		public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 			View view = null;
 			switch (viewType) {
 				case 0:
@@ -1112,8 +1094,8 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 						else {
 							List<TLRPC.Document> documents;
 							Object pack = rowStartPack.get(row);
-							if (pack instanceof TLRPC.TL_messages_stickerSet) {
-								documents = ((TLRPC.TL_messages_stickerSet)pack).documents;
+							if (pack instanceof TLRPC.TLMessagesStickerSet) {
+								documents = ((TLRPC.TLMessagesStickerSet)pack).documents;
 							}
 							else if (pack instanceof String) {
 								if ("recent".equals(pack)) {
@@ -1148,8 +1130,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				case 2: {
 					StickerSetNameCell cell = (StickerSetNameCell)holder.itemView;
 					Object object = cache.get(position);
-					if (object instanceof TLRPC.TL_messages_stickerSet) {
-						TLRPC.TL_messages_stickerSet set = (TLRPC.TL_messages_stickerSet)object;
+					if (object instanceof TLRPC.TLMessagesStickerSet set) {
 						if (set.set != null) {
 							cell.setText(set.set.title, 0);
 						}
@@ -1178,11 +1159,11 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 			positionToRow.clear();
 			cache.clear();
 			totalItems = 0;
-			List<TLRPC.TL_messages_stickerSet> packs = stickerSets[currentType];
+			List<TLRPC.TLMessagesStickerSet> packs = stickerSets[currentType];
 			int startRow = 0;
 			for (int a = -3; a < packs.size(); a++) {
 				List<TLRPC.Document> documents;
-				TLRPC.TL_messages_stickerSet pack = null;
+				TLRPC.TLMessagesStickerSet pack = null;
 				String key;
 				if (a == -3) {
 					cache.put(totalItems++, "search");
@@ -1256,9 +1237,9 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 		private final SparseIntArray positionToRow = new SparseIntArray();
 		private final SparseArray<String> positionToEmoji = new SparseArray<>();
 		private int totalItems;
-		private final ArrayList<TLRPC.TL_messages_stickerSet> localPacks = new ArrayList<>();
-		private final HashMap<TLRPC.TL_messages_stickerSet, Boolean> localPacksByShortName = new HashMap<>();
-		private final HashMap<TLRPC.TL_messages_stickerSet, Integer> localPacksByName = new HashMap<>();
+		private final ArrayList<TLRPC.TLMessagesStickerSet> localPacks = new ArrayList<>();
+		private final HashMap<TLRPC.TLMessagesStickerSet, Boolean> localPacksByShortName = new HashMap<>();
+		private final HashMap<TLRPC.TLMessagesStickerSet, Integer> localPacksByName = new HashMap<>();
 		private final HashMap<List<TLRPC.Document>, String> emojiStickers = new HashMap<>();
 		private final ArrayList<List<TLRPC.Document>> emojiArrays = new ArrayList<>();
 		private int reqId2;
@@ -1348,10 +1329,10 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 						}
 					}, false);
 				}
-				List<TLRPC.TL_messages_stickerSet> local = MediaDataController.getInstance(currentAccount).getStickerSets(currentType);
+				List<TLRPC.TLMessagesStickerSet> local = MediaDataController.getInstance(currentAccount).getStickerSets(currentType);
 				int index;
 				for (int a = 0, size = local.size(); a < size; a++) {
-					TLRPC.TL_messages_stickerSet set = local.get(a);
+					TLRPC.TLMessagesStickerSet set = local.get(a);
 					if ((index = AndroidUtilities.indexOfIgnoreCase(set.set.title, searchQuery)) >= 0) {
 						if (index == 0 || set.set.title.charAt(index - 1) == ' ') {
 							clear();
@@ -1359,8 +1340,8 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 							localPacksByName.put(set, index);
 						}
 					}
-					else if (set.set.short_name != null && (index = AndroidUtilities.indexOfIgnoreCase(set.set.short_name, searchQuery)) >= 0) {
-						if (index == 0 || set.set.short_name.charAt(index - 1) == ' ') {
+					else if (set.set.shortName != null && (index = AndroidUtilities.indexOfIgnoreCase(set.set.shortName, searchQuery)) >= 0) {
+						if (index == 0 || set.set.shortName.charAt(index - 1) == ' ') {
 							clear();
 							localPacks.add(set);
 							localPacksByShortName.put(set, true);
@@ -1369,7 +1350,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				}
 				local = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_FEATURED);
 				for (int a = 0, size = local.size(); a < size; a++) {
-					TLRPC.TL_messages_stickerSet set = local.get(a);
+					TLRPC.TLMessagesStickerSet set = local.get(a);
 					if ((index = AndroidUtilities.indexOfIgnoreCase(set.set.title, searchQuery)) >= 0) {
 						if (index == 0 || set.set.title.charAt(index - 1) == ' ') {
 							clear();
@@ -1377,8 +1358,8 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 							localPacksByName.put(set, index);
 						}
 					}
-					else if (set.set.short_name != null && (index = AndroidUtilities.indexOfIgnoreCase(set.set.short_name, searchQuery)) >= 0) {
-						if (index == 0 || set.set.short_name.charAt(index - 1) == ' ') {
+					else if (set.set.shortName != null && (index = AndroidUtilities.indexOfIgnoreCase(set.set.shortName, searchQuery)) >= 0) {
+						if (index == 0 || set.set.shortName.charAt(index - 1) == ' ') {
 							clear();
 							localPacks.add(set);
 							localPacksByShortName.put(set, true);
@@ -1388,17 +1369,16 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				boolean validEmoji;
 				if (validEmoji = Emoji.isValidEmoji(searchQuery)) {
 					stickersSearchField.progressDrawable.startAnimation();
-					final TLRPC.TL_messages_getStickers req2 = new TLRPC.TL_messages_getStickers();
+					final TLRPC.TLMessagesGetStickers req2 = new TLRPC.TLMessagesGetStickers();
 					req2.emoticon = searchQuery;
 					req2.hash = 0;
 					reqId2 = ConnectionsManager.getInstance(currentAccount).sendRequest(req2, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 						if (req2.emoticon.equals(searchQuery)) {
 							stickersSearchField.progressDrawable.stopAnimation();
 							reqId2 = 0;
-							if (!(response instanceof TLRPC.TL_messages_stickers)) {
+							if (!(response instanceof TLRPC.TLMessagesStickers res)) {
 								return;
 							}
-							TLRPC.TL_messages_stickers res = (TLRPC.TL_messages_stickers)response;
 							int oldCount = emojiStickersArray.size();
 							for (int a = 0, size = res.stickers.size(); a < size; a++) {
 								TLRPC.Document document = res.stickers.get(a);
@@ -1433,7 +1413,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 		}
 
 		@Override
-		public boolean isEnabled(RecyclerView.ViewHolder holder) {
+		public boolean isEnabled(@NonNull RecyclerView.ViewHolder holder) {
 			return false;
 		}
 
@@ -1492,8 +1472,9 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 			return 1;
 		}
 
+		@NonNull
 		@Override
-		public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 			View view = null;
 			switch (viewType) {
 				case 0:
@@ -1562,8 +1543,8 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 						else {
 							Object pack = rowStartPack.get(row);
 							Integer count;
-							if (pack instanceof TLRPC.TL_messages_stickerSet) {
-								count = ((TLRPC.TL_messages_stickerSet)pack).documents.size();
+							if (pack instanceof TLRPC.TLMessagesStickerSet) {
+								count = ((TLRPC.TLMessagesStickerSet)pack).documents.size();
 							}
 							else if (pack instanceof Integer) {
 								count = (Integer)pack;
@@ -1593,13 +1574,12 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				case 2: {
 					StickerSetNameCell cell = (StickerSetNameCell)holder.itemView;
 					Object object = cache.get(position);
-					if (object instanceof TLRPC.TL_messages_stickerSet) {
-						TLRPC.TL_messages_stickerSet set = (TLRPC.TL_messages_stickerSet)object;
+					if (object instanceof TLRPC.TLMessagesStickerSet set) {
 						if (!TextUtils.isEmpty(searchQuery) && localPacksByShortName.containsKey(set)) {
 							if (set.set != null) {
 								cell.setText(set.set.title, 0);
 							}
-							cell.setUrl(set.set.short_name, searchQuery.length());
+							cell.setUrl(set.set.shortName, searchQuery.length());
 						}
 						else {
 							Integer start = localPacksByName.get(set);
@@ -1633,7 +1613,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 				}
 				else {
 					if (a < localCount) {
-						TLRPC.TL_messages_stickerSet set = localPacks.get(a);
+						TLRPC.TLMessagesStickerSet set = localPacks.get(a);
 						documents = set.documents;
 						pack = set;
 					}

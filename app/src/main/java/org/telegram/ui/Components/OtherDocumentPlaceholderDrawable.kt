@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -19,6 +19,7 @@ import android.text.TextUtils
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withTranslation
 import com.beint.elloapp.FileHelper
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -29,6 +30,7 @@ import org.telegram.messenger.ImageLoader
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.messageobject.MessageObject
+import org.telegram.tgnet.media
 import org.telegram.ui.ActionBar.Theme
 import java.io.File
 import java.util.Locale
@@ -103,7 +105,7 @@ class OtherDocumentPlaceholderDrawable @JvmOverloads constructor(context: Contex
 			ext = TextUtils.ellipsize(ext, docPaint, AndroidUtilities.dp(40f).toFloat(), TextUtils.TruncateAt.END).toString()
 		}
 
-		val mime = messageObject?.document?.mime_type ?: path?.let { FileHelper.getMimeType(it) }
+		val mime = messageObject?.document?.mimeType ?: path?.let { FileHelper.getMimeType(it) }
 
 		thumbDrawable = ResourcesCompat.getDrawable(context.resources, AndroidUtilities.getThumbForNameOrMime(fileName, mime, true), null)?.mutate()
 
@@ -143,84 +145,81 @@ class OtherDocumentPlaceholderDrawable @JvmOverloads constructor(context: Contex
 		val width = bounds.width()
 		val height = bounds.height()
 
-		canvas.save()
-		canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
-		canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+		canvas.withTranslation(bounds.left.toFloat(), bounds.top.toFloat()) {
+			drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
 
-		var y = (height - AndroidUtilities.dp(240f)) / 2
-		var x = (width - AndroidUtilities.dp(48f)) / 2
-		var w: Int
+			var y = (height - AndroidUtilities.dp(240f)) / 2
+			var x = (width - AndroidUtilities.dp(48f)) / 2
+			var w: Int
 
-		thumbDrawable?.let {
-			it.setBounds(x, y, x + AndroidUtilities.dp(48f), y + AndroidUtilities.dp(48f))
-			it.draw(canvas)
-		}
+			thumbDrawable?.let {
+				it.setBounds(x, y, x + AndroidUtilities.dp(48f), y + AndroidUtilities.dp(48f))
+				it.draw(this)
+			}
 
-		ext?.let {
-			w = ceil(docPaint.measureText(it).toDouble()).toInt()
-			canvas.drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(31f)).toFloat(), docPaint)
-		}
+			ext?.let {
+				w = ceil(docPaint.measureText(it).toDouble()).toInt()
+				drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(31f)).toFloat(), docPaint)
+			}
 
+			fileName?.let {
+				w = ceil(namePaint.measureText(it).toDouble()).toInt()
+				drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(96f)).toFloat(), namePaint)
+			}
 
-		fileName?.let {
-			w = ceil(namePaint.measureText(it).toDouble()).toInt()
-			canvas.drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(96f)).toFloat(), namePaint)
-		}
+			fileSize?.let {
+				w = ceil(sizePaint.measureText(it).toDouble()).toInt()
+				drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(125f)).toFloat(), sizePaint)
+			}
 
-		fileSize?.let {
-			w = ceil(sizePaint.measureText(it).toDouble()).toInt()
-			canvas.drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(125f)).toFloat(), sizePaint)
-		}
+			val button: String
+			val paint: TextPaint
+			val offsetY: Int
 
-		val button: String
-		val paint: TextPaint
-		val offsetY: Int
-
-		if (loaded) {
-			button = ApplicationLoader.applicationContext.getString(R.string.OpenFile)
-			paint = openPaint
-			offsetY = 0
-		}
-		else {
-			button = if (loading) {
-				ApplicationLoader.applicationContext.getString(R.string.Cancel).uppercase()
+			if (loaded) {
+				button = ApplicationLoader.applicationContext.getString(R.string.OpenFile)
+				paint = openPaint
+				offsetY = 0
 			}
 			else {
-				ApplicationLoader.applicationContext.getString(R.string.TapToDownload)
+				button = if (loading) {
+					ApplicationLoader.applicationContext.getString(R.string.Cancel).uppercase()
+				}
+				else {
+					ApplicationLoader.applicationContext.getString(R.string.TapToDownload)
+				}
+
+				offsetY = AndroidUtilities.dp(28f)
+				paint = buttonPaint
 			}
 
-			offsetY = AndroidUtilities.dp(28f)
-			paint = buttonPaint
-		}
+			w = ceil(paint.measureText(button).toDouble()).toInt()
+			drawText(button, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(235f) + offsetY).toFloat(), paint)
 
-		w = ceil(paint.measureText(button).toDouble()).toInt()
-		canvas.drawText(button, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(235f) + offsetY).toFloat(), paint)
+			if (progressVisible) {
+				progress?.let {
+					w = ceil(percentPaint.measureText(it).toDouble()).toInt()
+					drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(210f)).toFloat(), percentPaint)
+				}
 
-		if (progressVisible) {
-			progress?.let {
-				w = ceil(percentPaint.measureText(it).toDouble()).toInt()
-				canvas.drawText(it, ((width - w) / 2).toFloat(), (y + AndroidUtilities.dp(210f)).toFloat(), percentPaint)
+				x = (width - AndroidUtilities.dp(240f)) / 2
+				y += AndroidUtilities.dp(232f)
+
+				progressPaint.color = -0x9d948b
+				progressPaint.alpha = (255 * animatedAlphaValue).toInt()
+
+				val start = (AndroidUtilities.dp(240f) * animatedProgressValue).toInt()
+
+				drawRect((x + start).toFloat(), y.toFloat(), (x + AndroidUtilities.dp(240f)).toFloat(), (y + AndroidUtilities.dp(2f)).toFloat(), progressPaint)
+
+				progressPaint.color = -0x1
+				progressPaint.alpha = (255 * animatedAlphaValue).toInt()
+
+				drawRect(x.toFloat(), y.toFloat(), x + AndroidUtilities.dp(240f) * animatedProgressValue, (y + AndroidUtilities.dp(2f)).toFloat(), progressPaint)
+
+				updateAnimation()
 			}
-
-			x = (width - AndroidUtilities.dp(240f)) / 2
-			y += AndroidUtilities.dp(232f)
-
-			progressPaint.color = -0x9d948b
-			progressPaint.alpha = (255 * animatedAlphaValue).toInt()
-
-			val start = (AndroidUtilities.dp(240f) * animatedProgressValue).toInt()
-
-			canvas.drawRect((x + start).toFloat(), y.toFloat(), (x + AndroidUtilities.dp(240f)).toFloat(), (y + AndroidUtilities.dp(2f)).toFloat(), progressPaint)
-
-			progressPaint.color = -0x1
-			progressPaint.alpha = (255 * animatedAlphaValue).toInt()
-
-			canvas.drawRect(x.toFloat(), y.toFloat(), x + AndroidUtilities.dp(240f) * animatedProgressValue, (y + AndroidUtilities.dp(2f)).toFloat(), progressPaint)
-
-			updateAnimation()
 		}
-
-		canvas.restore()
 	}
 
 	override fun getIntrinsicWidth(): Int {

@@ -4,21 +4,20 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components.voip
 
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.widget.ImageView
-import android.widget.ImageView.ScaleType
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.createBitmap
 import androidx.palette.graphics.Palette
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ImageReceiver.BitmapHolder
@@ -35,17 +34,21 @@ class VoIPOverlayBackground(context: Context) : ImageView(context) {
 	}
 
 	override fun onDraw(canvas: Canvas) {
-		if (blackoutProgress == 1f) {
-			canvas.drawColor(ColorUtils.setAlphaComponent(Color.BLACK, (255 * 0.4f).toInt()))
-		}
-		else if (blackoutProgress == 0f) {
-			imageAlpha = 255
-			super.onDraw(canvas)
-		}
-		else {
-			canvas.drawColor(ColorUtils.setAlphaComponent(Color.BLACK, (255 * 0.4f * blackoutProgress).toInt()))
-			imageAlpha = (255 * (1f - blackoutProgress)).toInt()
-			super.onDraw(canvas)
+		when (blackoutProgress) {
+			1f -> {
+				canvas.drawColor(ColorUtils.setAlphaComponent(Color.BLACK, (255 * 0.4f).toInt()))
+			}
+
+			0f -> {
+				imageAlpha = 255
+				super.onDraw(canvas)
+			}
+
+			else -> {
+				canvas.drawColor(ColorUtils.setAlphaComponent(Color.BLACK, (255 * 0.4f * blackoutProgress).toInt()))
+				imageAlpha = (255 * (1f - blackoutProgress)).toInt()
+				super.onDraw(canvas)
+			}
 		}
 	}
 
@@ -54,7 +57,7 @@ class VoIPOverlayBackground(context: Context) : ImageView(context) {
 
 		Thread {
 			runCatching {
-				val blur1 = Bitmap.createBitmap(150, 150, Bitmap.Config.ARGB_8888)
+				val blur1 = createBitmap(150, 150)
 
 				val canvas = Canvas(blur1)
 				canvas.drawBitmap(bitmap, null, Rect(0, 0, 150, 150), Paint(Paint.FILTER_BITMAP_FLAG))

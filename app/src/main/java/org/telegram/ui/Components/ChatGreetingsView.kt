@@ -5,7 +5,7 @@
  *
  * Copyright Nikolai Kudashov, 2013-2018.
  * Copyright Mykhailo Mykytyn, Ello 2023.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  * Copyright Shamil Afandiyev, Ello 2024.
  */
 package org.telegram.ui.Components
@@ -26,8 +26,10 @@ import org.telegram.messenger.MediaDataController
 import org.telegram.messenger.R
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_documentAttributeImageSize
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeImageSize
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.LayoutHelper.createLinear
 import java.util.Locale
@@ -111,8 +113,8 @@ class ChatGreetingsView(context: Context, user: User, distance: Int, currentAcco
 		if (user.bot) {
 			when (user.id) {
 				BuildConfig.AI_BOT_ID -> animationImageView.setAnimation(R.raw.ai_panda_hi, 112, 112)
-
 				BuildConfig.SUPPORT_BOT_ID -> animationImageView.setAnimation(R.raw.panda_support_hi, 112, 112)
+				else -> animationImageView.setAnimation(R.raw.ai_panda_hi, 112, 112)
 			}
 		}
 		else {
@@ -149,11 +151,6 @@ class ChatGreetingsView(context: Context, user: User, distance: Int, currentAcco
 						titleView.text = context.getString(R.string.support_bot_welcome)
 						descriptionView.text = context.getString(R.string.support_bot_welcome_message)
 					}
-
-					BuildConfig.PHOENIX_BOT_ID -> {
-						titleView.text = context.getString(R.string.ai_bot_welcome)
-						descriptionView.text = context.getString(R.string.bot_phoenix_description)
-					}
 				}
 			}
 			else {
@@ -162,7 +159,7 @@ class ChatGreetingsView(context: Context, user: User, distance: Int, currentAcco
 			}
 		}
 		else {
-			titleView.text = context.getString(R.string.NearbyPeopleGreetingsMessage, user.first_name, LocaleController.formatDistance(distance.toFloat(), 1))
+			titleView.text = context.getString(R.string.NearbyPeopleGreetingsMessage, user.firstName, LocaleController.formatDistance(distance.toFloat(), 1))
 			descriptionView.text = context.getString(R.string.NearbyPeopleGreetingsDescription)
 		}
 
@@ -173,6 +170,11 @@ class ChatGreetingsView(context: Context, user: User, distance: Int, currentAcco
 		if (preloadedGreetingsSticker == null) {
 			preloadedGreetingsSticker = MediaDataController.getInstance(currentAccount).getGreetingsSticker()
 		}
+	}
+
+	fun setBotTitleDescription(description: String?) {
+		titleView.text = context.getString(R.string.BotInfoTitle)
+		descriptionView.text = description
 	}
 
 	override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -246,7 +248,7 @@ class ChatGreetingsView(context: Context, user: User, distance: Int, currentAcco
 				maxHeight = maxWidth
 			}
 
-			document.attributes?.firstOrNull { it is TL_documentAttributeImageSize }?.let {
+			(document as? TLRPC.TLDocument)?.attributes?.firstOrNull { it is TLDocumentAttributeImageSize }?.let {
 				photoWidth = it.w
 				photoHeight = it.h
 			}

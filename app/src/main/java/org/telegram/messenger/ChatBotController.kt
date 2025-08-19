@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Mykhailo Mykytyn, Ello 2023.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -37,7 +37,7 @@ class ChatBotController(account: Int) : BaseController(account) {
 	 * @param itemType 0 - text, 1 - image
 	 */
 	fun buyAiItem(isSubscription: Boolean, @IntRange(from = 0, to = 2) itemType: Int) {
-		val requestParams = mapOf((true to 0) to 1, (true to 1) to 2, (false to 0) to 3, (false to 1) to 4, (false to 2) to 5)
+		val requestParams = mapOf((true to 0) to 1, (true to 1) to 2, (false to 0) to 3, (false to 1) to 4, (false to 2) to 5, (true to 2) to 7)
 
 		val request = ElloRpc.subscribeChatBotRequest(requestParams[(isSubscription to itemType)]!!)
 
@@ -49,7 +49,7 @@ class ChatBotController(account: Int) : BaseController(account) {
 					notificationCenter.postNotificationName(NotificationCenter.aiSubscriptionError, err)
 				}
 				else {
-					if (resp is TLRPC.TL_biz_dataRaw) {
+					if (resp is TLRPC.TLBizDataRaw) {
 						val data = resp.readData<ElloRpc.SubscriptionInfoAiBot>()?.storeLastResponse(storeLast)
 						userSettingsUpdated = true
 						notificationCenter.postNotificationName(NotificationCenter.aiSubscriptionSuccess, data)
@@ -72,14 +72,14 @@ class ChatBotController(account: Int) : BaseController(account) {
 
 	fun startChatBot(botId: Long) = getSubscriptionInfo(START_ID, botId)
 
-	fun updateSubscriptionsInfo(botId: Long) = getSubscriptionInfo(INFO_ID, botId)
+	fun updateSubscriptionInfo(botId: Long) = getSubscriptionInfo(INFO_ID, botId)
 
 	// fun stopChatBot() = getSubscriptionInfo(STOP_ID)
 
-	private fun getSubscriptionInfo(methodId: Int, botId: Long? = null) {
+	private fun getSubscriptionInfo(methodId: Int, botId: Long) {
 		val (req, id) = when (methodId) {
-			START_ID -> Pair(ElloRpc.startChatBot(botId ?: 0L), NotificationCenter.aiBotStarted)
-			INFO_ID -> Pair(ElloRpc.getSubscriptionsChatBotRequest(botId ?: 0L), NotificationCenter.aiSubscriptionStatusReceived)
+			START_ID -> Pair(ElloRpc.startChatBot(botId), NotificationCenter.aiBotStarted)
+			INFO_ID -> Pair(ElloRpc.getSubscriptionsChatBotRequest(botId), NotificationCenter.aiSubscriptionStatusReceived)
 			STOP_ID -> Pair(ElloRpc.stopChatBot(), NotificationCenter.aiBotStopped)
 			else -> throw IllegalArgumentException()
 		}
@@ -92,13 +92,13 @@ class ChatBotController(account: Int) : BaseController(account) {
 					notificationCenter.postNotificationName(NotificationCenter.aiBotRequestFailed, error)
 				}
 				else {
-					if (resp is TLRPC.TL_biz_dataRaw) {
+					if (resp is TLRPC.TLBizDataRaw) {
 						var hasUpdates = false
 						val data = resp.readData<ElloRpc.SubscriptionInfoAiBot>()?.also { hasUpdates = it != lastSubscriptionInfo }?.storeLastResponse(storeLast)
 
 						if (data != null) {
 							if (hasUpdates) {
-								val isNewBotPeer = !(data.isImgSubscriptionActive || data.isTextSubscriptionActive || data.imgExpireAt > 0 || data.textExpireAt > 0)
+								val isNewBotPeer = !(data.imgExpireAt > 0 || data.textExpireAt > 0)
 								userSettingsUpdated = !isNewBotPeer
 							}
 

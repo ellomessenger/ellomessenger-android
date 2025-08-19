@@ -20,7 +20,6 @@ import org.telegram.messenger.audioinfo.mp3.ID3v1Genre.Companion.getGenre
 import java.io.EOFException
 import java.io.IOException
 import java.io.InputStream
-import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 
 class ID3v1Info(input: InputStream) : AudioInfo() {

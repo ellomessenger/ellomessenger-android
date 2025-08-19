@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -35,11 +35,12 @@ import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.TL_messages_importChatInvite
+import org.telegram.tgnet.TLRPC.ChatInvite
 import org.telegram.tgnet.TLRPC.Updates
-import org.telegram.tgnet.tlrpc.ChatInvite
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.sizes
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.ActionBar.Theme
@@ -118,7 +119,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 			if (chatInvite.chat != null) {
 				avatarDrawable = AvatarDrawable(chatInvite.chat)
 				title = chatInvite.chat?.title
-				participantsCount = chatInvite.chat?.participants_count ?: 0
+				participantsCount = chatInvite.chat?.participantsCount ?: 0
 				avatarImageView.setForUserOrChat(chatInvite.chat, avatarDrawable, chatInvite)
 			}
 			else {
@@ -144,7 +145,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 
 			about = chatFull?.about
 
-			participantsCount = max(currentChat.participants_count, chatFull?.participants_count ?: 0)
+			participantsCount = max(currentChat.participantsCount, chatFull?.participantsCount ?: 0)
 
 			avatarImageView.setForUserOrChat(currentChat, avatarDrawable, currentChat)
 		}
@@ -231,7 +232,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 					}
 				}
 				else {
-					val request = TL_messages_importChatInvite()
+					val request = TLRPC.TLMessagesImportChatInvite()
 					request.hash = hash
 
 					ConnectionsManager.getInstance(currentAccount).sendRequest(request, { _, error ->
@@ -308,7 +309,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 			pickerBottomLayout.doneButton.setOnClickListener {
 				dismiss()
 
-				val req = TL_messages_importChatInvite()
+				val req = TLRPC.TLMessagesImportChatInvite()
 				req.hash = hash
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error ->
@@ -327,7 +328,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 							if (updates.chats.isNotEmpty()) {
 								val chat = updates.chats[0]
 								chat.left = false
-								chat.kicked = false
+								// chat.kicked = false
 
 								MessagesController.getInstance(currentAccount).putUsers(updates.users, false)
 								MessagesController.getInstance(currentAccount).putChats(updates.chats, false)
@@ -353,7 +354,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 	private inner class UsersAdapter(private val context: Context) : SelectionAdapter() {
 		override fun getItemCount(): Int {
 			var count = chatInvite?.participants?.size ?: 0
-			val participantsCount = chatInvite?.chat?.participants_count ?: chatInvite?.participantsCount ?: 0
+			val participantsCount = chatInvite?.chat?.participantsCount ?: chatInvite?.participantsCount ?: 0
 
 			if (count != participantsCount) {
 				count++
@@ -384,7 +385,7 @@ class JoinGroupAlert(context: Context, obj: TLObject?, private val hash: String,
 				cell.setUser(chatInvite.participants[position])
 			}
 			else {
-				val participantsCount = chatInvite.chat?.participants_count ?: chatInvite.participantsCount
+				val participantsCount = chatInvite.chat?.participantsCount ?: chatInvite.participantsCount
 				cell.setCount(participantsCount - chatInvite.participants.size)
 			}
 		}

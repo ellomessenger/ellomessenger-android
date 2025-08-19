@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
@@ -28,6 +36,8 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
 
 import com.google.android.gms.vision.Frame;
 import com.google.android.gms.vision.face.Face;
@@ -69,7 +79,6 @@ import java.util.ArrayList;
 
 @SuppressLint("NewApi")
 public class PhotoPaintView extends FrameLayout implements EntityView.EntityViewDelegate {
-	private final static int gallery_menu_done = 1;
 	int currentBrush;
 	private final Bitmap bitmapToEdit;
 	private final Bitmap facesBitmap;
@@ -495,16 +504,14 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 			for (int i = 0; i < count; i++) {
 				boolean skipDrawToBitmap = false;
 				View v = entitiesView.getChildAt(i);
-				if (!(v instanceof EntityView)) {
+				if (!(v instanceof EntityView entity)) {
 					continue;
 				}
-				EntityView entity = (EntityView)v;
 				Point position = entity.getPosition();
 				if (entities != null) {
 					VideoEditedInfo.MediaEntity mediaEntity = new VideoEditedInfo.MediaEntity();
-					if (entity instanceof TextPaintView) {
+					if (entity instanceof TextPaintView textPaintView) {
 						mediaEntity.type = 1;
-						TextPaintView textPaintView = (TextPaintView)entity;
 						mediaEntity.text = textPaintView.getText();
 						int type = textPaintView.getType();
 						if (type == 0) {
@@ -516,9 +523,8 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 						mediaEntity.color = textPaintView.getSwatch().color;
 						mediaEntity.fontSize = textPaintView.getTextSize();
 					}
-					else if (entity instanceof StickerView) {
+					else if (entity instanceof StickerView stickerView) {
 						mediaEntity.type = 0;
-						StickerView stickerView = (StickerView)entity;
 						Size size = stickerView.getBaseSize();
 						mediaEntity.width = size.width;
 						mediaEntity.height = size.height;
@@ -757,7 +763,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 		int width = right - left;
 		int height = bottom - top;
 
-		int status = (Build.VERSION.SDK_INT >= 21 && !inBubbleMode ? AndroidUtilities.statusBarHeight : 0);
+		int status = !inBubbleMode ? AndroidUtilities.statusBarHeight : 0;
 		int actionBarHeight = ActionBar.getCurrentActionBarHeight();
 		int actionBarHeight2 = actionBarHeight + status;
 
@@ -818,12 +824,12 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 	}
 
 	@Override
-	protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+	protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 		boolean restore = false;
 		if ((child == renderView || child == entitiesView || child == selectionContainerView) && currentCropState != null) {
 			canvas.save();
 
-			int status = (Build.VERSION.SDK_INT >= 21 && !inBubbleMode ? AndroidUtilities.statusBarHeight : 0);
+			int status = !inBubbleMode ? AndroidUtilities.statusBarHeight : 0;
 			int actionBarHeight = ActionBar.getCurrentActionBarHeight();
 			int actionBarHeight2 = actionBarHeight + status;
 
@@ -914,17 +920,23 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 			View child = entitiesView.getChildAt(a);
 			if (child instanceof StickerView) {
 				TLRPC.Document document = ((StickerView)child).getSticker();
-				if (result == null) {
-					result = new ArrayList<>();
+
+				if (document instanceof TLRPC.TLDocument tlDocument) {
+					if (result == null) {
+						result = new ArrayList<>();
+					}
+
+					var inputDocument = new TLRPC.TLInputDocument();
+					inputDocument.id = document.id;
+					inputDocument.accessHash = tlDocument.accessHash;
+					inputDocument.fileReference = tlDocument.fileReference;
+
+					if (inputDocument.fileReference == null) {
+						inputDocument.fileReference = new byte[0];
+					}
+
+					result.add(inputDocument);
 				}
-				TLRPC.TL_inputDocument inputDocument = new TLRPC.TL_inputDocument();
-				inputDocument.id = document.id;
-				inputDocument.access_hash = document.access_hash;
-				inputDocument.file_reference = document.file_reference;
-				if (inputDocument.file_reference == null) {
-					inputDocument.file_reference = new byte[0];
-				}
-				result.add(inputDocument);
 			}
 		}
 		return result;
@@ -1015,8 +1027,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 
 		EntityView oldEntity = currentEntityView;
 		currentEntityView = entityView;
-		if (oldEntity instanceof TextPaintView) {
-			TextPaintView textPaintView = (TextPaintView)oldEntity;
+		if (oldEntity instanceof TextPaintView textPaintView) {
 			if (TextUtils.isEmpty(textPaintView.getText())) {
 				removeEntity(oldEntity);
 			}
@@ -1165,13 +1176,12 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 	}
 
 	private void editSelectedTextEntity() {
-		if (!(currentEntityView instanceof TextPaintView) || editingText) {
+		if (!(currentEntityView instanceof TextPaintView textPaintView) || editingText) {
 			return;
 		}
 
 		curtainView.setVisibility(View.VISIBLE);
 
-		final TextPaintView textPaintView = (TextPaintView)currentEntityView;
 		initialText = textPaintView.getText();
 		editingText = true;
 
@@ -1199,11 +1209,9 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 	}
 
 	public void closeTextEnter(boolean apply) {
-		if (!editingText || !(currentEntityView instanceof TextPaintView)) {
+		if (!editingText || !(currentEntityView instanceof TextPaintView textPaintView)) {
 			return;
 		}
-
-		TextPaintView textPaintView = (TextPaintView)currentEntityView;
 
 		toolsView.setVisibility(VISIBLE);
 
@@ -1587,13 +1595,15 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 	}
 
 	private StickerPosition calculateStickerPosition(TLRPC.Document document) {
-		TLRPC.TL_maskCoords maskCoords = null;
+		TLRPC.TLMaskCoords maskCoords = null;
 
-		for (int a = 0; a < document.attributes.size(); a++) {
-			TLRPC.DocumentAttribute attribute = document.attributes.get(a);
-			if (attribute instanceof TLRPC.TL_documentAttributeSticker) {
-				maskCoords = attribute.mask_coords;
-				break;
+		if (document instanceof TLRPC.TLDocument tlDocument) {
+			for (int a = 0; a < tlDocument.attributes.size(); a++) {
+				TLRPC.DocumentAttribute attribute = tlDocument.attributes.get(a);
+				if (attribute instanceof TLRPC.TLDocumentAttributeSticker) {
+					maskCoords = ((TLRPC.TLDocumentAttributeSticker)attribute).maskCoords;
+					break;
+				}
 			}
 		}
 
@@ -1640,7 +1650,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 		}
 	}
 
-	private PhotoFace getRandomFaceWithVacantAnchor(int anchor, long documentId, TLRPC.TL_maskCoords maskCoords) {
+	private PhotoFace getRandomFaceWithVacantAnchor(int anchor, long documentId, TLRPC.TLMaskCoords maskCoords) {
 		if (anchor < 0 || anchor > 3 || faces.isEmpty()) {
 			return null;
 		}
@@ -1660,7 +1670,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 		return selectedFace;
 	}
 
-	private boolean isFaceAnchorOccupied(PhotoFace face, int anchor, long documentId, TLRPC.TL_maskCoords maskCoords) {
+	private boolean isFaceAnchorOccupied(PhotoFace face, int anchor, long documentId, TLRPC.TLMaskCoords maskCoords) {
 		Point anchorPoint = face.getPointForAnchor(anchor);
 		if (anchorPoint == null) {
 			return true;
@@ -1670,11 +1680,10 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 
 		for (int index = 0; index < entitiesView.getChildCount(); index++) {
 			View view = entitiesView.getChildAt(index);
-			if (!(view instanceof StickerView)) {
+			if (!(view instanceof StickerView stickerView)) {
 				continue;
 			}
 
-			StickerView stickerView = (StickerView)view;
 			if (stickerView.getAnchor() != anchor) {
 				continue;
 			}
@@ -1693,15 +1702,6 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 		return Theme.getColor(key);
 	}
 
-	private static class StickerPosition {
-		private final Point position;
-		private final float scale;
-		private final float angle;
-
-		StickerPosition(Point position, float scale, float angle) {
-			this.position = position;
-			this.scale = scale;
-			this.angle = angle;
-		}
+	private record StickerPosition(Point position, float scale, float angle) {
 	}
 }

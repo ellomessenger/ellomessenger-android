@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -32,11 +32,13 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.CheckBoxBase;
 import org.telegram.ui.Components.FlickerLoadingView;
 import org.telegram.ui.PhotoViewer;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
 
@@ -94,7 +96,7 @@ public class SharedPhotoVideoCell2 extends View {
 				imageReceiver.onAttachedToWindow();
 			}
 		}
-		String restrictionReason = MessagesController.getRestrictionReason(messageObject.messageOwner.restriction_reason);
+		String restrictionReason = MessagesController.getRestrictionReason(TLRPCExtensions.getRestrictionReason(messageObject.messageOwner));
 		String imageFilter;
 		int stride;
 		int width = (int)(AndroidUtilities.displaySize.x / parentColumnsCount / AndroidUtilities.density);
@@ -133,8 +135,8 @@ public class SharedPhotoVideoCell2 extends View {
 			}
 			else {
 				TLRPC.Document document = messageObject.getDocument();
-				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 50);
-				TLRPC.PhotoSize qualityThumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, stride);
+				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 50);
+				TLRPC.PhotoSize qualityThumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), stride);
 				if (thumb == qualityThumb) {
 					qualityThumb = null;
 				}
@@ -151,7 +153,7 @@ public class SharedPhotoVideoCell2 extends View {
 				}
 			}
 		}
-		else if (MessageObject.getMedia(messageObject.messageOwner) instanceof TLRPC.TL_messageMediaPhoto && MessageObject.getMedia(messageObject.messageOwner).photo != null && !messageObject.photoThumbs.isEmpty()) {
+		else if (MessageObject.getMedia(messageObject.messageOwner) instanceof TLRPC.TLMessageMediaPhoto media && media.photo != null && !messageObject.photoThumbs.isEmpty()) {
 			if (messageObject.mediaExists || canAutoDownload(messageObject)) {
 				if (messageObject.mediaThumb != null) {
 					if (messageObject.strippedThumb != null) {
@@ -204,7 +206,7 @@ public class SharedPhotoVideoCell2 extends View {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		super.onDraw(canvas);
 
 		float padding;

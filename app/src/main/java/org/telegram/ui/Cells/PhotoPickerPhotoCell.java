@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -33,6 +33,7 @@ import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CheckBox2;
 import org.telegram.ui.Components.LayoutHelper;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
 public class PhotoPickerPhotoCell extends FrameLayout {
@@ -62,7 +63,7 @@ public class PhotoPickerPhotoCell extends FrameLayout {
 			private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				rect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
 				radii[0] = radii[1] = radii[2] = radii[3] = 0;
 				radii[4] = radii[5] = radii[6] = radii[7] = AndroidUtilities.dp(4);
@@ -164,12 +165,12 @@ public class PhotoPickerPhotoCell extends FrameLayout {
 		else if (searchImage.thumbPath != null) {
 			imageView.setImage(searchImage.thumbPath, null, thumb);
 		}
-		else if (searchImage.thumbUrl != null && searchImage.thumbUrl.length() > 0) {
+		else if (searchImage.thumbUrl != null && !searchImage.thumbUrl.isEmpty()) {
 			imageView.setImage(searchImage.thumbUrl, null, thumb);
 		}
-		else if (MessageObject.isDocumentHasThumb(searchImage.document)) {
-			TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(searchImage.document.thumbs, 320);
-			imageView.setImage(ImageLocation.getForDocument(photoSize, searchImage.document), null, thumb, searchImage);
+		else if (MessageObject.isDocumentHasThumb(searchImage.document) && searchImage.document instanceof TLRPC.TLDocument document) {
+			TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 320);
+			imageView.setImage(ImageLocation.getForDocument(photoSize, document), null, thumb, searchImage);
 		}
 		else {
 			imageView.setImageDrawable(thumb);

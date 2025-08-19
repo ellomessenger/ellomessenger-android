@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -48,7 +48,7 @@ import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.ringtone.RingtoneDataStore;
 import org.telegram.messenger.ringtone.RingtoneUploader;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -128,8 +128,8 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 				title = title.substring(0, idx);
 			}
 		}
-		if (TextUtils.isEmpty(title) && document != null) {
-			title = LocaleController.formatString("SoundNameEmpty", R.string.SoundNameEmpty, LocaleController.formatDateChat(document.date, true));
+		if (TextUtils.isEmpty(title) && document instanceof TLRPC.TLDocument tlDocument) {
+			title = LocaleController.formatString("SoundNameEmpty", R.string.SoundNameEmpty, LocaleController.formatDateChat(tlDocument.date, true));
 		}
 		return title;
 	}
@@ -170,7 +170,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 
 		startSelectedTone = new Tone();
 		if (documentId != 0) {
-			startSelectedTone.document = new TLRPC.TL_document();
+			startSelectedTone.document = new TLRPC.TLDocument();
 			startSelectedTone.document.id = documentId;
 		}
 		else {
@@ -276,18 +276,25 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 
 				for (int i = 0; i < documentsToRemove.size(); i++) {
 					TLRPC.Document document = documentsToRemove.get(i);
-					TLRPC.TL_account_saveRingtone req = new TLRPC.TL_account_saveRingtone();
-					req.id = new TLRPC.TL_inputDocument();
-					req.id.id = document.id;
-					req.id.access_hash = document.access_hash;
-					req.id.file_reference = document.file_reference;
-					if (req.id.file_reference == null) {
-						req.id.file_reference = new byte[0];
-					}
-					req.unsave = true;
-					getConnectionsManager().sendRequest(req, (response, error) -> {
 
-					});
+					var id = new TLRPC.TLInputDocument();
+					id = new TLRPC.TLInputDocument();
+					id.id = document.id;
+
+					if (document instanceof TLRPC.TLDocument tlDocument) {
+						id.accessHash = tlDocument.accessHash;
+						id.fileReference = tlDocument.fileReference;
+					}
+
+					if (id.fileReference == null) {
+						id.fileReference = new byte[0];
+					}
+
+					var req = new TLRPC.TLAccountSaveRingtone();
+					req.id = id;
+					req.unsave = true;
+
+					getConnectionsManager().sendRequest(req);
 				}
 				hideActionMode();
 				updateRows();
@@ -319,7 +326,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 				User user = getMessagesController().getUser(dialogId);
 				if (user != null) {
 					avatarContainer.setUserAvatar(user);
-					avatarContainer.setTitle(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+					avatarContainer.setTitle(ContactsController.formatName(user.firstName, user.lastName));
 				}
 			}
 			avatarContainer.setSubtitle(LocaleController.getString("NotificationsSound", R.string.NotificationsSound));
@@ -356,8 +363,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 				chatAttachAlert.init();
 				chatAttachAlert.show();
 			}
-			if (view instanceof ToneCell) {
-				ToneCell cell = (ToneCell)view;
+			if (view instanceof ToneCell cell) {
 				if (actionBar.isActionModeShowed() || cell.tone == null) {
 					checkSelection(cell.tone);
 					return;
@@ -411,8 +417,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 		});
 
 		listView.setOnItemLongClickListener((view, position) -> {
-			if (view instanceof ToneCell) {
-				ToneCell cell = (ToneCell)view;
+			if (view instanceof ToneCell cell) {
 				checkSelection(cell.tone);
 				cell.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
 			}
@@ -467,7 +472,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 			tone.stableId = stableIds++;
 			tone.fromServer = true;
 			tone.localId = cachedTone.localId;
-			tone.title = cachedTone.document.file_name_fixed;
+			tone.title = cachedTone.document.fileNameFixed;
 			tone.document = cachedTone.document;
 			trimTitle(tone);
 
@@ -612,7 +617,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 				tone.fromServer = true;
 				tone.localId = cachedTone.localId;
 				if (cachedTone.document != null) {
-					tone.title = cachedTone.document.file_name_fixed;
+					tone.title = cachedTone.document.fileNameFixed;
 				}
 				else {
 					tone.title = new File(cachedTone.localUri).getName();
@@ -769,11 +774,10 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 	}
 
 	private static class ToneCell extends FrameLayout {
-		public TextView valueTextView;
 		Tone tone;
-		private TextView textView;
-		private RadioButton radioButton;
-		private CheckBox2 checkBox;
+		private final TextView textView;
+		private final RadioButton radioButton;
+		private final CheckBox2 checkBox;
 		private boolean needDivider;
 
 		public ToneCell(Context context, Theme.ResourcesProvider resourcesProvider) {
@@ -809,7 +813,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			if (needDivider) {
 				canvas.drawLine(AndroidUtilities.dp(LocaleController.isRTL ? 0 : 60), getHeight() - 1, getMeasuredWidth() - AndroidUtilities.dp(LocaleController.isRTL ? 60 : 0), getHeight() - 1, Theme.dividerPaint);
 			}
@@ -839,7 +843,7 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
 				return Uri.fromFile(new File(uri));
 			}
 			if (document != null) {
-				String fileName = document.file_name_fixed;
+				String fileName = document.fileNameFixed;
 				String ext = FileLoader.getDocumentExtension(document);
 				if (ext != null) {
 					ext = ext.toLowerCase();

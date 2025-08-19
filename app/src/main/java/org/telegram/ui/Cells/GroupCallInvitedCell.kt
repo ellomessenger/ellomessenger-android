@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -22,7 +22,7 @@ import org.telegram.messenger.LocaleController
 import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserObject.getUserName
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarDrawable
@@ -36,11 +36,12 @@ open class GroupCallInvitedCell(context: Context) : FrameLayout(context) {
 	private val statusTextView: SimpleTextView
 	private val muteButton: ImageView
 	private val avatarDrawable: AvatarDrawable
-	var user: User? = null
-		private set
 	private val dividerPaint: Paint = Paint()
 	private var grayIconColor = ResourcesCompat.getColor(getContext().resources, R.color.dark_gray, null)
 	private var needDivider = false
+
+	var user: User? = null
+		private set
 
 	init {
 		dividerPaint.color = Theme.getColor(Theme.key_voipgroup_actionBar)

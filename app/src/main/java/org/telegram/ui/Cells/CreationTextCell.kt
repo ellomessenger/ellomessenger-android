@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -15,6 +15,7 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.isVisible
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
@@ -22,7 +23,7 @@ import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 
 class CreationTextCell(context: Context) : FrameLayout(context) {
-	private val textView: SimpleTextView
+	private val textView = SimpleTextView(context)
 	private val imageView: ImageView
 	var divider = false
 
@@ -30,7 +31,6 @@ class CreationTextCell(context: Context) : FrameLayout(context) {
 	var startPadding = 70
 
 	init {
-		textView = SimpleTextView(context)
 		textView.setTextSize(16)
 		textView.setGravity(if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT)
 		textView.textColor = ResourcesCompat.getColor(context.resources, R.color.brand, null)
@@ -55,10 +55,10 @@ class CreationTextCell(context: Context) : FrameLayout(context) {
 		val viewTop = (height - textView.textHeight) / 2
 
 		var viewLeft = if (LocaleController.isRTL) {
-			measuredWidth - textView.measuredWidth - AndroidUtilities.dp((if (imageView.visibility == VISIBLE) startPadding else 25).toFloat())
+			measuredWidth - textView.measuredWidth - AndroidUtilities.dp((if (imageView.isVisible) startPadding else 25).toFloat())
 		}
 		else {
-			AndroidUtilities.dp((if (imageView.visibility == VISIBLE) startPadding else 25).toFloat())
+			AndroidUtilities.dp((if (imageView.isVisible) startPadding else 25).toFloat())
 		}
 
 		textView.layout(viewLeft, viewTop, viewLeft + textView.measuredWidth, viewTop + textView.measuredHeight)

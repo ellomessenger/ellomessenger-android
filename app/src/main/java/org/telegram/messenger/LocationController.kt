@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -26,11 +26,15 @@ import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.NativeByteBuffer
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TL_messages_editMessage
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.TLMessagesEditMessage
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.action
+import org.telegram.tgnet.media
+import org.telegram.tgnet.period
 import kotlin.math.abs
+import androidx.core.util.isNotEmpty
+import androidx.core.util.size
 
 @SuppressLint("MissingPermission")
 class LocationController(instance: Int) : BaseController(instance), NotificationCenterDelegate, ILocationServiceProvider.IAPIConnectionCallbacks, ILocationServiceProvider.IAPIOnConnectionFailedListener {
@@ -58,17 +62,15 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 	private var wasConnectedToPlayServices = false
 	private val apiClient = ApplicationLoader.locationServiceProvider.onCreateLocationServicesAPI(ApplicationLoader.applicationContext, this, this)
 	private val locationRequest: ILocationServiceProvider.ILocationRequest = ApplicationLoader.locationServiceProvider.onCreateLocationRequest()
-
-	@JvmField
-	val locationsCache = LongSparseArray<ArrayList<Message>>()
+	val locationsCache = LongSparseArray<MutableList<Message>>()
 
 	@JvmField
 	val sharingLocationsUI = ArrayList<SharingLocationInfo>()
 
-	var cachedNearbyUsers = ArrayList<TLRPC.TL_peerLocated>()
+	var cachedNearbyUsers = ArrayList<TLRPC.TLPeerLocated>()
 		private set
 
-	var cachedNearbyChats = ArrayList<TLRPC.TL_peerLocated>()
+	var cachedNearbyChats = ArrayList<TLRPC.TLPeerLocated>()
 		private set
 
 	class SharingLocationInfo {
@@ -173,7 +175,7 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 							messages.add(messageObject.messageOwner!!)
 						}
 					}
-					else if (messageObject.messageOwner?.action is TLRPC.TL_messageActionGeoProximityReached) {
+					else if (messageObject.messageOwner?.action is TLRPC.TLMessageActionGeoProximityReached) {
 						val dialogId = messageObject.dialogId
 
 						if (DialogObject.isUserDialog(dialogId)) {
@@ -347,9 +349,9 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 	private fun broadcastLastKnownLocation(cancelCurrent: Boolean) {
 		val lastKnownLocation = lastKnownLocation ?: return
 
-		if (requests.size() != 0) {
+		if (requests.isNotEmpty()) {
 			if (cancelCurrent) {
-				for (a in 0 until requests.size()) {
+				for (a in 0 until requests.size) {
 					connectionsManager.cancelRequest(requests.keyAt(a), false)
 				}
 			}
@@ -365,12 +367,12 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 				val info = sharingLocations[a]
 
 				if (info.messageObject?.messageOwner?.media?.geo != null && info.lastSentProximityMeters == info.proximityMeters) {
-					val messageDate = (if (info.messageObject?.messageOwner?.edit_date != 0) info.messageObject?.messageOwner?.edit_date else info.messageObject?.messageOwner?.date) ?: 0
-					val point = info.messageObject!!.messageOwner?.media?.geo
+					val messageDate = (info.messageObject?.messageOwner as? TLRPC.TLMessage)?.editDate?.takeIf { it != 0 } ?: info.messageObject?.messageOwner?.date ?: 0
+					val point = info.messageObject?.messageOwner?.media?.geo as? TLRPC.TLGeoPoint
 
 					if (point != null) {
 						if (abs(date - messageDate) < 10) {
-							Location.distanceBetween(point.lat, point._long, lastKnownLocation.latitude, lastKnownLocation.longitude, result)
+							Location.distanceBetween(point.lat, point.lon, lastKnownLocation.latitude, lastKnownLocation.longitude, result)
 
 							if (result[0] < 1.0f) {
 								continue
@@ -379,27 +381,31 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 					}
 				}
 
-				val req = TL_messages_editMessage()
+				val req = TLMessagesEditMessage()
 				req.peer = messagesController.getInputPeer(info.did)
 				req.id = info.mid
 				req.flags = req.flags or 16384
-				req.media = TLRPC.TL_inputMediaGeoLive()
-				req.media?.stopped = false
-				req.media?.geo_point = TLRPC.TL_inputGeoPoint()
-				req.media?.geo_point?.lat = AndroidUtilities.fixLocationCoordinate(lastKnownLocation.latitude)
-				req.media?.geo_point?._long = AndroidUtilities.fixLocationCoordinate(lastKnownLocation.longitude)
-				req.media?.geo_point?.accuracy_radius = lastKnownLocation.accuracy.toInt()
 
-				if (req.media?.geo_point?.accuracy_radius != 0) {
-					req.media?.geo_point?.flags = req.media!!.geo_point.flags or 1
+				req.media = TLRPC.TLInputMediaGeoLive().also {
+					it.stopped = false
+				}
+
+				req.media?.geoPoint = TLRPC.TLInputGeoPoint().also {
+					it.lat = AndroidUtilities.fixLocationCoordinate(lastKnownLocation.latitude)
+					it.lon = AndroidUtilities.fixLocationCoordinate(lastKnownLocation.longitude)
+					it.accuracyRadius = lastKnownLocation.accuracy.toInt()
+
+					if (it.accuracyRadius != 0) {
+						it.flags = it.flags or 1
+					}
 				}
 
 				if (info.lastSentProximityMeters != info.proximityMeters) {
-					req.media?.proximity_notification_radius = info.proximityMeters
+					(req.media as? TLRPC.TLInputMediaGeoLive)?.proximityNotificationRadius = info.proximityMeters
 					req.media?.flags = req.media!!.flags or 8
 				}
 
-				req.media?.heading = getHeading(lastKnownLocation)
+				(req.media as? TLRPC.TLInputMediaGeoLive)?.heading = getHeading(lastKnownLocation)
 				req.media?.flags = req.media!!.flags or 4
 
 				val reqId = IntArray(1)
@@ -429,7 +435,7 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 					}
 
 					if (req.flags and 8 != 0) {
-						info.lastSentProximityMeters = req.media?.proximity_notification_radius ?: 0
+						info.lastSentProximityMeters = (req.media as? TLRPC.TLInputMediaGeoLive)?.proximityNotificationRadius ?: 0
 					}
 
 					val updates = response as TLRPC.Updates
@@ -438,11 +444,11 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 					for (a1 in updates.updates.indices) {
 						val update = updates.updates[a1]
 
-						if (update is TLRPC.TL_updateEditMessage) {
+						if (update is TLRPC.TLUpdateEditMessage) {
 							updated = true
 							info.messageObject?.messageOwner = update.message
 						}
-						else if (update is TLRPC.TL_updateEditChannelMessage) {
+						else if (update is TLRPC.TLUpdateEditChannelMessage) {
 							updated = true
 							info.messageObject?.messageOwner = update.message
 						}
@@ -464,13 +470,16 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 			userConfig.lastMyLocationShareTime = (System.currentTimeMillis() / 1000).toInt()
 			userConfig.saveConfig(false)
 
-			val req = TLRPC.TL_contacts_getLocated()
-			req.geo_point = TLRPC.TL_inputGeoPoint()
-			req.geo_point.lat = lastKnownLocation.latitude
-			req.geo_point._long = lastKnownLocation.longitude
+			val req = TLRPC.TLContactsGetLocated()
+
+			req.geoPoint = TLRPC.TLInputGeoPoint().also {
+				it.lat = lastKnownLocation.latitude
+				it.lon = lastKnownLocation.longitude
+			}
+
 			req.background = true
 
-			connectionsManager.sendRequest(req) { _, _ -> }
+			connectionsManager.sendRequest(req)
 		}
 
 		connectionsManager.resumeNetworkMaybe()
@@ -601,17 +610,17 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 		}
 	}
 
-	fun setCachedNearbyUsersAndChats(u: ArrayList<TLRPC.TL_peerLocated>?, c: ArrayList<TLRPC.TL_peerLocated>?) {
+	fun setCachedNearbyUsersAndChats(u: ArrayList<TLRPC.TLPeerLocated>?, c: ArrayList<TLRPC.TLPeerLocated>?) {
 		cachedNearbyUsers = ArrayList(u ?: emptyList())
 		cachedNearbyChats = ArrayList(c ?: emptyList())
 	}
 
 	fun addSharingLocation(message: Message) {
 		val info = SharingLocationInfo()
-		info.did = message.dialog_id
+		info.did = message.dialogId
 		info.mid = message.id
 		info.period = message.media?.period ?: 0
-		info.proximityMeters = message.media?.proximity_notification_radius ?: 0
+		info.proximityMeters = (message.media as? TLRPC.TLMessageMediaGeoLive)?.proximityNotificationRadius ?: 0
 		info.lastSentProximityMeters = info.proximityMeters
 		info.account = currentAccount
 		info.messageObject = MessageObject(currentAccount, message, generateLayout = false, checkMediaExists = false)
@@ -704,7 +713,7 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 					val data = cursor.byteBufferValue(4)
 
 					if (data != null) {
-						val msg = Message.TLdeserialize(data, data.readInt32(false), false)
+						val msg = Message.deserialize(data, data.readInt32(false), false)
 
 						if (msg != null) {
 							info.messageObject = MessageObject(currentAccount, msg, generateLayout = false, checkMediaExists = false)
@@ -832,13 +841,15 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 			sharingLocationsMap.remove(did)
 
 			if (info != null) {
-				val req = TL_messages_editMessage()
+				val req = TLMessagesEditMessage()
 				req.peer = messagesController.getInputPeer(info.did)
 				req.id = info.mid
 				req.flags = req.flags or 16384
-				req.media = TLRPC.TL_inputMediaGeoLive()
-				req.media?.stopped = true
-				req.media?.geo_point = TLRPC.TL_inputGeoPointEmpty()
+
+				req.media = TLRPC.TLInputMediaGeoLive().also {
+					it.stopped = true
+					it.geoPoint = TLRPC.TLInputGeoPointEmpty()
+				}
 
 				connectionsManager.sendRequest(req) { response, error ->
 					if (error != null) {
@@ -870,11 +881,15 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 		}
 	}
 
+	private val serviceIntent by lazy {
+		Intent(ApplicationLoader.applicationContext, LocationSharingService::class.java)
+	}
+
 	private fun startService() {
 		try {            /*if (Build.VERSION.SDK_INT >= 26) {
 				ApplicationLoader.applicationContext.startForegroundService(new Intent(ApplicationLoader.applicationContext, LocationSharingService.class));
 			} else {*/
-			ApplicationLoader.applicationContext.startService(Intent(ApplicationLoader.applicationContext, LocationSharingService::class.java))
+			ApplicationLoader.applicationContext.startService(serviceIntent)
 			//}
 		}
 		catch (e: Throwable) {
@@ -883,7 +898,7 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 	}
 
 	private fun stopService() {
-		ApplicationLoader.applicationContext.stopService(Intent(ApplicationLoader.applicationContext, LocationSharingService::class.java))
+		ApplicationLoader.applicationContext.stopService(serviceIntent)
 	}
 
 	fun removeAllLocationShares() {
@@ -891,13 +906,15 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 			for (a in sharingLocations.indices) {
 				val info = sharingLocations[a]
 
-				val req = TL_messages_editMessage()
+				val req = TLMessagesEditMessage()
 				req.peer = messagesController.getInputPeer(info.did)
 				req.id = info.mid
 				req.flags = req.flags or 16384
-				req.media = TLRPC.TL_inputMediaGeoLive()
-				req.media?.stopped = true
-				req.media?.geo_point = TLRPC.TL_inputGeoPointEmpty()
+
+				req.media = TLRPC.TLInputMediaGeoLive().also {
+					it.stopped = true
+					it.geoPoint = TLRPC.TLInputGeoPointEmpty()
+				}
 
 				connectionsManager.sendRequest(req) { response, error ->
 					if (error != null) {
@@ -1051,37 +1068,35 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 
 		cacheRequests.put(did, true)
 
-		val req = TLRPC.TL_messages_getRecentLocations()
+		val req = TLRPC.TLMessagesGetRecentLocations()
 		req.peer = messagesController.getInputPeer(did)
 		req.limit = 100
 
 		connectionsManager.sendRequest(req) { response, error ->
-			if (error != null) {
+			if (error != null || response !is TLRPC.MessagesMessages) {
 				return@sendRequest
 			}
 
 			AndroidUtilities.runOnUIThread {
 				cacheRequests.remove(did)
 
-				val res = response as messages_Messages
-
 				var a = 0
 
-				while (a < res.messages.size) {
-					if (res.messages[a].media !is TLRPC.TL_messageMediaGeoLive) {
-						res.messages.removeAt(a)
+				while (a < response.messages.size) {
+					if (response.messages[a].media !is TLRPC.TLMessageMediaGeoLive) {
+						response.messages.removeAt(a)
 						a--
 					}
 
 					a++
 				}
 
-				messagesStorage.putUsersAndChats(res.users, res.chats, true, true)
+				messagesStorage.putUsersAndChats(response.users, response.chats, true, true)
 
-				messagesController.putUsers(res.users, false)
-				messagesController.putChats(res.chats, false)
+				messagesController.putUsers(response.users, false)
+				messagesController.putChats(response.chats, false)
 
-				locationsCache.put(did, res.messages)
+				locationsCache.put(did, response.messages)
 
 				NotificationCenter.globalInstance.postNotificationName(NotificationCenter.liveLocationsCacheChanged, did, currentAccount)
 			}
@@ -1109,20 +1124,20 @@ class LocationController(instance: Int) : BaseController(instance), Notification
 		lastReadLocationTime.put(dialogId, currentDate)
 
 		val request = if (DialogObject.isChatDialog(dialogId) && ChatObject.isChannel(-dialogId, currentAccount)) {
-			val req = TLRPC.TL_channels_readMessageContents()
+			val req = TLRPC.TLChannelsReadMessageContents()
 			req.id.addAll(messages.map { it.id })
 			req.channel = messagesController.getInputChannel(-dialogId)
 			req
 		}
 		else {
-			val req = TLRPC.TL_messages_readMessageContents()
+			val req = TLRPC.TLMessagesReadMessageContents()
 			req.id.addAll(messages.map { it.id })
 			req
 		}
 
 		connectionsManager.sendRequest(request) { response, _ ->
-			if (response is TLRPC.TL_messages_affectedMessages) {
-				messagesController.processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+			if (response is TLRPC.TLMessagesAffectedMessages) {
+				messagesController.processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 			}
 		}
 	}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -21,6 +21,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.LocaleController
@@ -29,7 +30,7 @@ import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
 import org.telegram.messenger.UserObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.BaseFragment
@@ -104,14 +105,13 @@ class ContactAddActivity(args: Bundle?) : BaseFragment(args), NotificationCenter
 
 						if (!firstName.isNullOrEmpty()) {
 							val user = messagesController.getUser(userId) ?: return
-							user.first_name = firstName
-							user.last_name = lastNameField!!.getText().toString()
+							user.firstName = firstName
+							user.lastName = lastNameField!!.getText().toString()
 
 							// getContactsController().addContact(user, checkBoxCell != null && checkBoxCell.isChecked());
 							contactsController.addContact(user, false)
 
-							val preferences = MessagesController.getNotificationsSettings(currentAccount)
-							preferences.edit().putInt("dialog_bar_vis3$userId", 3).commit()
+							MessagesController.getNotificationsSettings(currentAccount).edit { putInt("dialog_bar_vis3$userId", 3) }
 
 							notificationCenter.postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_NAME)
 							notificationCenter.postNotificationName(NotificationCenter.peerSettingsDidLoad, userId)
@@ -246,10 +246,10 @@ class ContactAddActivity(args: Bundle?) : BaseFragment(args), NotificationCenter
 //				}
 //			}
 
-			firstNameField?.setText(user.first_name)
+			firstNameField?.setText(user.firstName)
 			firstNameField?.setSelection(firstNameField?.length() ?: 0)
 
-			lastNameField?.setText(user.last_name)
+			lastNameField?.setText(user.lastName)
 		}
 
 //		infoTextView = new TextView(context);

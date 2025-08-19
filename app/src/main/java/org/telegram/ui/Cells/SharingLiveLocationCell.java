@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -32,7 +32,8 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
@@ -41,6 +42,7 @@ import org.telegram.ui.Components.CombinedDrawable;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.LocationActivity;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
 public class SharingLiveLocationCell extends FrameLayout {
@@ -112,7 +114,7 @@ public class SharingLiveLocationCell extends FrameLayout {
 		}
 	};
 
-	public void setDialog(long dialogId, TLRPC.TL_channelLocation chatLocation) {
+	public void setDialog(long dialogId, TLRPC.TLChannelLocation chatLocation) {
 		currentAccount = UserConfig.selectedAccount;
 		String address = chatLocation.address;
 		String name = "";
@@ -135,24 +137,39 @@ public class SharingLiveLocationCell extends FrameLayout {
 		}
 		nameTextView.setText(name);
 
-		location.setLatitude(chatLocation.geo_point.lat);
-		location.setLongitude(chatLocation.geo_point._long);
+		if (chatLocation.geoPoint instanceof TLRPC.TLGeoPoint geoPoint) {
+			location.setLatitude(geoPoint.lat);
+			location.setLongitude(geoPoint.lon);
+		}
+		else {
+			location.setLatitude(0.0);
+			location.setLongitude(0.0);
+		}
+
 		distanceTextView.setText(address);
 	}
 
 	public void setDialog(MessageObject messageObject, Location userLocation, boolean userLocationDenied) {
 		long fromId = messageObject.getFromChatId();
 		if (messageObject.isForwarded()) {
-			fromId = MessageObject.getPeerId(messageObject.messageOwner.fwd_from.from_id);
+			var fwdFrom = TLRPCExtensions.getFwdFrom(messageObject.messageOwner);
+
+			if (fwdFrom != null) {
+				fromId = MessageObject.getPeerId(fwdFrom.fromId);
+			}
 		}
 		currentAccount = messageObject.currentAccount;
 		String address = null;
 		String name;
-		if (!TextUtils.isEmpty(messageObject.messageOwner.media.address)) {
-			address = messageObject.messageOwner.media.address;
+
+		var media = TLRPCExtensions.getMedia(messageObject.messageOwner);
+
+		if (media instanceof TLRPC.TLMessageMediaVenue venueMedia && !TextUtils.isEmpty(venueMedia.address)) {
+			address = venueMedia.address;
 		}
-		if (!TextUtils.isEmpty(messageObject.messageOwner.media.title)) {
-			name = messageObject.messageOwner.media.title;
+
+		if (!TextUtils.isEmpty(media.title)) {
+			name = media.title;
 
 			Drawable drawable = ResourcesCompat.getDrawable(getResources(), R.drawable.pin, null);
 			drawable.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_location_sendLocationIcon), PorterDuff.Mode.MULTIPLY));
@@ -185,8 +202,15 @@ public class SharingLiveLocationCell extends FrameLayout {
 		}
 		nameTextView.setText(name);
 
-		location.setLatitude(messageObject.messageOwner.media.geo.lat);
-		location.setLongitude(messageObject.messageOwner.media.geo._long);
+		if (media.geo instanceof TLRPC.TLGeoPoint geoPoint) {
+			location.setLatitude(geoPoint.lat);
+			location.setLongitude(geoPoint.lon);
+		}
+		else {
+			location.setLatitude(0.0);
+			location.setLongitude(0.0);
+		}
+
 		if (userLocation != null) {
 			float distance = location.distanceTo(userLocation);
 			if (address != null) {
@@ -215,7 +239,7 @@ public class SharingLiveLocationCell extends FrameLayout {
 			User user = MessagesController.getInstance(currentAccount).getUser(info.id);
 			if (user != null) {
 				avatarDrawable.setInfo(user);
-				nameTextView.setText(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+				nameTextView.setText(ContactsController.formatName(user.firstName, user.lastName));
 				avatarImageView.setForUserOrChat(user, avatarDrawable);
 			}
 		}
@@ -232,7 +256,14 @@ public class SharingLiveLocationCell extends FrameLayout {
 		location.setLatitude(position.latitude);
 		location.setLongitude(position.longitude);
 
-		String time = LocaleController.formatLocationUpdateDate(info.object.edit_date != 0 ? info.object.edit_date : info.object.date);
+		int editDate = 0;
+
+		if (info.object instanceof TLRPC.TLMessage tlMessage) {
+			editDate = tlMessage.editDate;
+		}
+
+		String time = LocaleController.formatLocationUpdateDate(editDate != 0 ? editDate : info.object.date);
+
 		if (userLocation != null) {
 			distanceTextView.setText(String.format("%s - %s", time, LocaleController.formatDistance(location.distanceTo(userLocation), 0)));
 		}
@@ -249,7 +280,7 @@ public class SharingLiveLocationCell extends FrameLayout {
 			User user = MessagesController.getInstance(currentAccount).getUser(info.did);
 			if (user != null) {
 				avatarDrawable.setInfo(user);
-				nameTextView.setText(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+				nameTextView.setText(ContactsController.formatName(user.firstName, user.lastName));
 				avatarImageView.setForUserOrChat(user, avatarDrawable);
 			}
 		}
@@ -264,7 +295,7 @@ public class SharingLiveLocationCell extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (currentInfo == null && liveLocation == null) {
 			return;
 		}
@@ -275,8 +306,14 @@ public class SharingLiveLocationCell extends FrameLayout {
 			period = currentInfo.period;
 		}
 		else {
-			stopTime = liveLocation.object.date + liveLocation.object.media.period;
-			period = liveLocation.object.media.period;
+			int liveLocationPeriod = 0;
+
+			if (TLRPCExtensions.getMedia(liveLocation.object) instanceof TLRPC.TLMessageMediaGeoLive live) {
+				liveLocationPeriod = live.period;
+			}
+
+			stopTime = liveLocation.object.date + liveLocationPeriod;
+			period = liveLocationPeriod;
 		}
 		int currentTime = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
 		if (stopTime < currentTime) {

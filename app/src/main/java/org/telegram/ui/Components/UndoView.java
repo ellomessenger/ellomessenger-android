@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components;
 
@@ -54,19 +54,17 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
-import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.Message;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
-import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.PaymentFormActivity;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
 
 public class UndoView extends FrameLayout {
 	public final static int ACTION_CLEAR = 0;
@@ -149,7 +147,6 @@ public class UndoView extends FrameLayout {
 	private final RLottieImageView leftImageView;
 	private final BackupImageView avatarImageView;
 	private final LinearLayout undoButton;
-	private final BaseFragment parentFragment;
 	private final int currentAccount = UserConfig.selectedAccount;
 	private final TextPaint textPaint;
 	private final Paint progressPaint;
@@ -165,7 +162,6 @@ public class UndoView extends FrameLayout {
 	private Object currentInfoObject;
 	private long timeLeft;
 	private int prevSeconds;
-	private String timeLeftString;
 	private int textWidth;
 	private int currentAction = -1;
 	private ArrayList<Long> currentDialogIds;
@@ -179,12 +175,11 @@ public class UndoView extends FrameLayout {
 	private int enterOffsetMargin = AndroidUtilities.dp(8);
 
 	public UndoView(Context context) {
-		this(context, null, false);
+		this(context, false);
 	}
 
-	public UndoView(Context context, BaseFragment parent, boolean top) {
+	public UndoView(Context context, boolean top) {
 		super(context);
-		parentFragment = parent;
 		fromTop = top;
 
 		infoTextView = new TextView(context);
@@ -478,8 +473,7 @@ public class UndoView extends FrameLayout {
 			}
 			else if (action == ACTION_VOIP_USER_JOINED) {
 				TLRPC.Chat currentChat = (TLRPC.Chat)infoObject2;
-				if (infoObject instanceof User) {
-					User user = (User)infoObject;
+				if (infoObject instanceof User user) {
 					if (ChatObject.isChannelOrGiga(currentChat)) {
 						infoText = AndroidUtilities.replaceTags(LocaleController.formatString("VoipChannelUserJoined", R.string.VoipChannelUserJoined, UserObject.getFirstName(user)));
 					}
@@ -509,11 +503,10 @@ public class UndoView extends FrameLayout {
 				AvatarDrawable avatarDrawable = new AvatarDrawable();
 				avatarDrawable.setTextSize(AndroidUtilities.dp(12));
 				String name;
-				if (infoObject instanceof User) {
-					User user = (User)infoObject;
+				if (infoObject instanceof User user) {
 					avatarDrawable.setInfo(user);
 					avatarImageView.setForUserOrChat(user, avatarDrawable);
-					name = ContactsController.formatName(user.getFirst_name(), user.getLast_name());
+					name = ContactsController.formatName(user.firstName, user.lastName);
 				}
 				else {
 					TLRPC.Chat chat = (TLRPC.Chat)infoObject;
@@ -539,32 +532,31 @@ public class UndoView extends FrameLayout {
 				icon = R.raw.voip_invite;
 				timeLeft = 3000;
 			}
-			else if (action == ACTION_PAYMENT_SUCCESS) {
-				infoText = (CharSequence)infoObject;
-				subInfoText = null;
-				icon = R.raw.payment_success;
-				timeLeft = 5000;
-				if (parentFragment != null && infoObject2 instanceof Message) {
-					Message message = (Message)infoObject2;
-					setOnTouchListener(null);
-					infoTextView.setMovementMethod(null);
-					setOnClickListener(v -> {
-						hide(true, 1);
-						TLRPC.TL_payments_getPaymentReceipt req = new TLRPC.TL_payments_getPaymentReceipt();
-						req.msg_id = message.id;
-						req.peer = parentFragment.getMessagesController().getInputPeer(message.peer_id);
-						parentFragment.getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-							if (response instanceof TLRPC.TL_payments_paymentReceipt) {
-								parentFragment.presentFragment(new PaymentFormActivity((TLRPC.TL_payments_paymentReceipt)response));
-							}
-						}), ConnectionsManager.RequestFlagFailOnServerErrors);
-					});
-				}
-			}
+//			else if (action == ACTION_PAYMENT_SUCCESS) {
+//				infoText = (CharSequence)infoObject;
+//				subInfoText = null;
+//				icon = R.raw.payment_success;
+//				timeLeft = 5000;
+//				if (parentFragment != null && infoObject2 instanceof Message) {
+//					Message message = (Message)infoObject2;
+//					setOnTouchListener(null);
+//					infoTextView.setMovementMethod(null);
+//					setOnClickListener(v -> {
+//						hide(true, 1);
+//						TLRPC.TLPaymentsGetPaymentReceipt req = new TLRPC.TL_payments_getPaymentReceipt();
+//						req.msg_id = message.id;
+//						req.peer = parentFragment.getMessagesController().getInputPeer(message.peer_id);
+//						parentFragment.getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+//							if (response instanceof TLRPC.TL_payments_paymentReceipt) {
+//								parentFragment.presentFragment(new PaymentFormActivity((TLRPC.TL_payments_paymentReceipt)response));
+//							}
+//						}), ConnectionsManager.RequestFlagFailOnServerErrors);
+//					});
+//				}
+//			}
 			else if (action == ACTION_VOIP_MUTED) {
 				String name;
-				if (infoObject instanceof User) {
-					User user = (User)infoObject;
+				if (infoObject instanceof User user) {
 					name = UserObject.getFirstName(user);
 				}
 				else {
@@ -578,12 +570,10 @@ public class UndoView extends FrameLayout {
 			}
 			else if (action == ACTION_VOIP_MUTED_FOR_YOU) {
 				String name;
-				if (infoObject instanceof User) {
-					User user = (User)infoObject;
+				if (infoObject instanceof User user) {
 					name = UserObject.getFirstName(user);
 				}
-				else if (infoObject instanceof TLRPC.Chat) {
-					TLRPC.Chat chat = (TLRPC.Chat)infoObject;
+				else if (infoObject instanceof TLRPC.Chat chat) {
 					name = chat.title;
 				}
 				else {
@@ -596,8 +586,7 @@ public class UndoView extends FrameLayout {
 			}
 			else if (action == ACTION_VOIP_UNMUTED) {
 				String name;
-				if (infoObject instanceof User) {
-					User user = (User)infoObject;
+				if (infoObject instanceof User user) {
 					name = UserObject.getFirstName(user);
 				}
 				else {
@@ -610,8 +599,7 @@ public class UndoView extends FrameLayout {
 				timeLeft = 3000;
 			}
 			else if (action == ACTION_VOIP_CAN_NOW_SPEAK) {
-				if (infoObject instanceof TLRPC.Chat) {
-					TLRPC.Chat chat = (TLRPC.Chat)infoObject;
+				if (infoObject instanceof TLRPC.Chat chat) {
 					infoText = AndroidUtilities.replaceTags(LocaleController.formatString("VoipGroupYouCanNowSpeakIn", R.string.VoipGroupYouCanNowSpeakIn, chat.title));
 				}
 				else {
@@ -674,8 +662,7 @@ public class UndoView extends FrameLayout {
 			}
 			else if (action == ACTION_VOIP_UNMUTED_FOR_YOU) {
 				String name;
-				if (infoObject instanceof User) {
-					User user = (User)infoObject;
+				if (infoObject instanceof User user) {
 					name = UserObject.getFirstName(user);
 				}
 				else {
@@ -689,8 +676,7 @@ public class UndoView extends FrameLayout {
 			}
 			else if (action == ACTION_VOIP_REMOVED) {
 				String name;
-				if (infoObject instanceof User) {
-					User user = (User)infoObject;
+				if (infoObject instanceof User user) {
 					name = UserObject.getFirstName(user);
 				}
 				else {
@@ -789,7 +775,10 @@ public class UndoView extends FrameLayout {
 					long dialogId = did;
 					if (DialogObject.isEncryptedDialog(did)) {
 						TLRPC.EncryptedChat encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(dialogId));
-						dialogId = encryptedChat.user_id;
+
+						if (encryptedChat != null) {
+							dialogId = encryptedChat.userId;
+						}
 					}
 					if (DialogObject.isUserDialog(dialogId)) {
 						User user = MessagesController.getInstance(currentAccount).getUser(dialogId);
@@ -927,7 +916,6 @@ public class UndoView extends FrameLayout {
 				infoTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
 			}
 			else if (action == ACTION_AUTO_DELETE_ON) {
-				User user = (User)infoObject;
 				int ttl = (Integer)infoObject2;
 				subinfoTextView.setSingleLine(false);
 				String time = LocaleController.formatTTLString(ttl);
@@ -1094,7 +1082,6 @@ public class UndoView extends FrameLayout {
 				timeLeft = 3000;
 			}
 			else if (currentAction == ACTION_SHARE_BACKGROUND) {
-				Integer count = (Integer)infoObject;
 				if (infoObject2 == null) {
 					if (did == UserConfig.getInstance(currentAccount).clientUserId) {
 						infoTextView.setText(AndroidUtilities.replaceTags(LocaleController.getString("BackgroundToSavedMessages", R.string.BackgroundToSavedMessages)));
@@ -1189,14 +1176,14 @@ public class UndoView extends FrameLayout {
 			leftImageView.playAnimation();
 		}
 		else if (currentAction == ACTION_QR_SESSION_ACCEPTED) {
-			TLRPC.TL_authorization authorization = (TLRPC.TL_authorization)infoObject;
+			var authorization = (TLRPC.TLAuthorization)infoObject;
 
 			infoTextView.setText(LocaleController.getString("AuthAnotherClientOk", R.string.AuthAnotherClientOk));
 			leftImageView.setAnimation(R.raw.contact_check, 36, 36);
 
 			layoutParams.leftMargin = AndroidUtilities.dp(58);
 			layoutParams.topMargin = AndroidUtilities.dp(6);
-			subinfoTextView.setText(authorization.app_name);
+			subinfoTextView.setText(authorization.appName);
 			subinfoTextView.setVisibility(VISIBLE);
 			infoTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
 			infoTextView.setTypeface(Theme.TYPEFACE_BOLD);
@@ -1458,8 +1445,7 @@ public class UndoView extends FrameLayout {
 		else if (hasSubInfo()) {
 			undoViewHeight = AndroidUtilities.dp(52);
 		}
-		else if (getParent() instanceof ViewGroup) {
-			ViewGroup parent = (ViewGroup)getParent();
+		else if (getParent() instanceof ViewGroup parent) {
 			int width = parent.getMeasuredWidth() - parent.getPaddingLeft() - parent.getPaddingRight();
 			if (width <= 0) {
 				width = AndroidUtilities.displaySize.x;
@@ -1504,7 +1490,7 @@ public class UndoView extends FrameLayout {
 	}
 
 	@Override
-	protected void dispatchDraw(Canvas canvas) {
+	protected void dispatchDraw(@NonNull Canvas canvas) {
 		if (additionalTranslationY != 0) {
 			canvas.save();
 
@@ -1521,7 +1507,7 @@ public class UndoView extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (additionalTranslationY != 0) {
 			canvas.save();
 
@@ -1541,7 +1527,7 @@ public class UndoView extends FrameLayout {
 			int newSeconds = timeLeft > 0 ? (int)Math.ceil(timeLeft / 1000.0f) : 0;
 			if (prevSeconds != newSeconds) {
 				prevSeconds = newSeconds;
-				timeLeftString = String.format("%d", Math.max(1, newSeconds));
+				String timeLeftString = String.format(Locale.getDefault(), "%d", Math.max(1, newSeconds));
 				if (timeLayout != null) {
 					timeLayoutOut = timeLayout;
 					timeReplaceProgress = 0;

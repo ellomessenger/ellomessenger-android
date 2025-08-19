@@ -20,7 +20,7 @@ import java.io.IOException
 import java.io.InputStream
 import kotlin.math.min
 
-class ID3v2FrameBody internal constructor(delegate: InputStream?, position: Long, dataLength: Int, tagHeader: ID3v2TagHeader, frameHeader: ID3v2FrameHeader) {
+class ID3v2FrameBody internal constructor(delegate: InputStream?, position: Long, dataLength: Int, val tagHeader: ID3v2TagHeader, val frameHeader: ID3v2FrameHeader) {
 	class Buffer(initialLength: Int) {
 		var bytes: ByteArray
 
@@ -43,17 +43,8 @@ class ID3v2FrameBody internal constructor(delegate: InputStream?, position: Long
 		}
 	}
 
-	private val input: RangeInputStream
-	val tagHeader: ID3v2TagHeader
-	val frameHeader: ID3v2FrameHeader
-	val data: ID3v2DataInput
-
-	init {
-		input = RangeInputStream(delegate, position, dataLength.toLong())
-		data = ID3v2DataInput(input)
-		this.tagHeader = tagHeader
-		this.frameHeader = frameHeader
-	}
+	private val input = RangeInputStream(delegate, position, dataLength.toLong())
+	val data = ID3v2DataInput(input)
 
 	val position: Long
 		get() = input.position
@@ -99,7 +90,7 @@ class ID3v2FrameBody internal constructor(delegate: InputStream?, position: Long
 	fun readZeroTerminatedString(maxLength: Int, encoding: ID3v2Encoding): String {
 		var zeros = 0
 		val length = min(maxLength, remainingLength.toInt())
-		val bytes = textBuffer.get().bytes(length)
+		val bytes = textBuffer.get()?.bytes(length) ?: throw ID3v2Exception("Could not allocate buffer")
 
 		for (i in 0 until length) {
 			// UTF-16LE may have a zero byte as second byte of a 2-byte character -> skip first zero at odd index
@@ -112,7 +103,8 @@ class ID3v2FrameBody internal constructor(delegate: InputStream?, position: Long
 				zeros = 0
 			}
 		}
-		throw ID3v2Exception("Could not read zero-termiated string")
+
+		throw ID3v2Exception("Could not read zero-terminated string")
 	}
 
 	@Throws(IOException::class, ID3v2Exception::class)
@@ -121,7 +113,7 @@ class ID3v2FrameBody internal constructor(delegate: InputStream?, position: Long
 			throw ID3v2Exception("Could not read fixed-length string of length: $length")
 		}
 
-		val bytes = textBuffer.get().bytes(length)
+		val bytes = textBuffer.get()?.bytes(length) ?: throw ID3v2Exception("Could not allocate buffer")
 
 		data.readFully(bytes, 0, length)
 

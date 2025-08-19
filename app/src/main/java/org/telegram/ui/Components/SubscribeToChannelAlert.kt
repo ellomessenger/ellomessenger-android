@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
@@ -13,7 +13,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.View.OnClickListener
 import org.telegram.messenger.AndroidUtilities
-import org.telegram.messenger.ChatObject.isOnlineCourse
+import org.telegram.messenger.ChatObject.isMasterclass
 import org.telegram.messenger.ChatObject.isPaidChannel
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
@@ -57,7 +57,7 @@ class SubscribeToChannelAlert(context: Context, currentChat: TLRPC.Chat, current
 		binding.channelProfile.avatarContainer.addView(avatarImageView, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 		binding.channelProfile.title.text = currentChat.title // or currentChat.channel_name?
 		binding.channelProfile.title.isSelected = true
-		binding.channelProfile.subTitle.text = LocaleController.formatPluralString("Subscribers", currentChat.participants_count)
+		binding.channelProfile.subTitle.text = LocaleController.formatPluralString("Subscribers", currentChat.participantsCount)
 
 		if (!currentChatInfo?.about.isNullOrEmpty()) {
 			binding.channelProfile.about.text = currentChatInfo?.about?.processForLinks(context, true, linkClickListener)
@@ -83,8 +83,8 @@ class SubscribeToChannelAlert(context: Context, currentChat: TLRPC.Chat, current
 			binding.priceContainer.visible()
 			binding.description.visible()
 
-			if (isOnlineCourse(currentChat)) {
-				binding.subsChannel.text = context.getString(R.string.online_course)
+			if (isMasterclass(currentChat)) {
+				binding.subsChannel.text = context.getString(R.string.masterclass)
 				binding.subscribeButton.text = context.getString(R.string.VoipChatJoin)
 				binding.channelProfile.paid.setImageResource(R.drawable.online_course)
 				binding.description.setText(R.string.course_description)
@@ -102,18 +102,18 @@ class SubscribeToChannelAlert(context: Context, currentChat: TLRPC.Chat, current
 
 			binding.adultLayout.visibility = if (isAdult) View.VISIBLE else View.GONE
 			binding.channelProfile.adult.visibility = if (isAdult) View.VISIBLE else View.GONE
-			binding.price.text = LocaleController.formatString(if (isOnlineCourse(currentChat)) R.string.PricePerCourse else R.string.PricePerMonthMe, currentChat.cost)
+			binding.price.text = LocaleController.formatString(if (isMasterclass(currentChat)) R.string.PricePerCourse else R.string.PricePerMonthMe, currentChat.cost)
 
-			if (currentChat.start_date != 0L) {
-				val startDate = Date(currentChat.start_date)
+			if (currentChat.startDate != 0L) {
+				val startDate = Date(currentChat.startDate)
 				binding.startDateLabel.text = startDate.toDateOnlyString()
 			}
 			else {
 				binding.startDateContainer.gone()
 			}
 
-			if (currentChat.end_date != 0L) {
-				val endDate = Date(currentChat.end_date)
+			if (currentChat.endDate != 0L) {
+				val endDate = Date(currentChat.endDate)
 				binding.endDateLabel.text = endDate.toDateOnlyString()
 			}
 			else {

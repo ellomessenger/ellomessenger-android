@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -26,9 +26,14 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.FileLocation
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoSmall
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarDrawable
@@ -186,20 +191,20 @@ class ManageChatUserCell(context: Context, avatarPadding: Int, private val nameP
 
 		when (currentObject) {
 			is User -> {
-				val photo = currentObject.photo?.photo_small
+				val photo = currentObject.photo?.photoSmall
 				var newName: String? = null
 
 				if (mask != 0) {
 					var continueUpdate = false
 
 					if (mask and MessagesController.UPDATE_MASK_AVATAR != 0) {
-						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar!!.volume_id != photo!!.volume_id || lastAvatar!!.local_id != photo.local_id)) {
+						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar!!.volumeId != photo!!.volumeId || lastAvatar!!.localId != photo.localId)) {
 							continueUpdate = true
 						}
 					}
 
 					if (!continueUpdate && mask and MessagesController.UPDATE_MASK_STATUS != 0) {
-						val newStatus = currentObject.status?.expires ?: 0
+						val newStatus = (currentObject as? TLRPC.TLUser)?.status?.expires ?: 0
 
 						if (newStatus != lastStatus) {
 							continueUpdate = true
@@ -221,7 +226,7 @@ class ManageChatUserCell(context: Context, avatarPadding: Int, private val nameP
 
 				avatarDrawable.setInfo(currentObject)
 
-				lastStatus = currentObject.status?.expires ?: 0
+				lastStatus = (currentObject as? TLRPC.TLUser)?.status?.expires ?: 0
 
 				if (currentName != null) {
 					lastName = null
@@ -240,7 +245,7 @@ class ManageChatUserCell(context: Context, avatarPadding: Int, private val nameP
 					if (currentObject.bot) {
 						statusTextView.textColor = statusColor
 
-						if (currentObject.bot_chat_history || isAdmin) {
+						if ((currentObject as? TLRPC.TLUser)?.botChatHistory == true || isAdmin) {
 							statusTextView.setText(context.getString(R.string.BotStatusRead))
 						}
 						else {
@@ -248,7 +253,7 @@ class ManageChatUserCell(context: Context, avatarPadding: Int, private val nameP
 						}
 					}
 					else {
-						if (currentObject.id == UserConfig.getInstance(currentAccount).getClientUserId() || currentObject.status != null && currentObject.status!!.expires > ConnectionsManager.getInstance(currentAccount).currentTime || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(currentObject.id)) {
+						if (currentObject.id == UserConfig.getInstance(currentAccount).getClientUserId() || (currentObject as? TLRPC.TLUser)?.status != null && currentObject.status!!.expires > ConnectionsManager.getInstance(currentAccount).currentTime || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(currentObject.id)) {
 							statusTextView.textColor = statusOnlineColor
 							statusTextView.setText(context.getString(R.string.Online))
 						}
@@ -265,18 +270,14 @@ class ManageChatUserCell(context: Context, avatarPadding: Int, private val nameP
 			}
 
 			is Chat -> {
-				var photo: FileLocation? = null
+				val photo = currentObject.photo?.photoSmall
 				var newName: String? = null
-
-				if (currentObject.photo != null) {
-					photo = currentObject.photo.photo_small
-				}
 
 				if (mask != 0) {
 					var continueUpdate = false
 
 					if (mask and MessagesController.UPDATE_MASK_AVATAR != 0) {
-						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar?.volume_id != photo?.volume_id || lastAvatar?.local_id != photo?.local_id)) {
+						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar?.volumeId != photo?.volumeId || lastAvatar?.localId != photo?.localId)) {
 							continueUpdate = true
 						}
 					}
@@ -312,15 +313,15 @@ class ManageChatUserCell(context: Context, avatarPadding: Int, private val nameP
 				else {
 					statusTextView.textColor = statusColor
 
-					if (currentObject.participants_count != 0) {
+					if (currentObject.participantsCount != 0) {
 						if (ChatObject.isChannel(currentObject) && !currentObject.megagroup) {
-							statusTextView.setText(LocaleController.formatPluralString("Subscribers", currentObject.participants_count))
+							statusTextView.setText(LocaleController.formatPluralString("Subscribers", currentObject.participantsCount))
 						}
 						else {
-							statusTextView.setText(LocaleController.formatPluralString("Members", currentObject.participants_count))
+							statusTextView.setText(LocaleController.formatPluralString("Members", currentObject.participantsCount))
 						}
 					}
-					else if (currentObject.has_geo) {
+					else if (currentObject.hasGeo) {
 						statusTextView.setText(context.getString(R.string.MegaLocation))
 					}
 					else if (currentObject.username.isNullOrEmpty()) {

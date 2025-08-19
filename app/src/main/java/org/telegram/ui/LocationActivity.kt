@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui
 
@@ -36,7 +36,6 @@ import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.location.Location
 import android.location.LocationManager
-import android.net.Uri
 import android.opengl.GLES20
 import android.os.Build
 import android.provider.Settings
@@ -54,7 +53,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.collection.LongSparseArray
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withSave
+import androidx.core.net.toUri
+import androidx.core.view.isNotEmpty
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -80,21 +84,18 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
+import org.telegram.tgnet.TLRPC.Message
 import org.telegram.tgnet.TLRPC.MessageMedia
-import org.telegram.tgnet.TLRPC.TL_channelLocation
-import org.telegram.tgnet.TLRPC.TL_channels_editLocation
-import org.telegram.tgnet.TLRPC.TL_geoPoint
-import org.telegram.tgnet.TLRPC.TL_inputGeoPoint
-import org.telegram.tgnet.TLRPC.TL_messageActionGeoProximityReached
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeo
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeoLive
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_messages_getRecentLocations
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.heading
+import org.telegram.tgnet.lat
+import org.telegram.tgnet.lon
+import org.telegram.tgnet.media
+import org.telegram.tgnet.period
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -108,6 +109,7 @@ import org.telegram.ui.Cells.LocationCell
 import org.telegram.ui.Components.AlertsCreator
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.BackupImageView
+import org.telegram.ui.Components.ChatAttachAlert
 import org.telegram.ui.Components.CubicBezierInterpolator
 import org.telegram.ui.Components.HintView
 import org.telegram.ui.Components.LayoutHelper
@@ -186,8 +188,8 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 	private var myLocation: Location? = null
 	private var userLocation: Location? = null
 	private var markerTop = 0
-	private var chatLocation: TL_channelLocation? = null
-	private var initialLocation: TL_channelLocation? = null
+	private var chatLocation: TLRPC.TLChannelLocation? = null
+	private var initialLocation: TLRPC.TLChannelLocation? = null
 	private var messageObject: MessageObject? = null
 	private var userLocationMoved = false
 	private var searchedForCustomLocations = false
@@ -199,7 +201,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 	class VenueLocation {
 		var num: Int = 0
 		var marker: IMarker? = null
-		var venue: TL_messageMediaVenue? = null
+		var venue: TLRPC.TLMessageMediaVenue? = null
 	}
 
 	class LiveLocation {
@@ -325,7 +327,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			frameLayout.addView(iconLayout, LayoutHelper.createFrame(36, 36f, Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM, 0f, 0f, 0f, 4f))
 
 			val imageView = BackupImageView(context)
-			imageView.setImage("https://ss3.4sqi.net/img/categories_v2/" + location.venue?.venue_type + "_64.png", null, null)
+			imageView.setImage("https://ss3.4sqi.net/img/categories_v2/" + location.venue?.venueType + "_64.png", null, null)
 
 			iconLayout.addView(imageView, LayoutHelper.createFrame(30, 30, Gravity.CENTER))
 
@@ -488,13 +490,13 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 
 		if (chatLocation != null) {
 			userLocation = Location("network")
-			userLocation?.latitude = chatLocation?.geo_point?.lat ?: 0.0
-			userLocation?.longitude = chatLocation?.geo_point?._long ?: 0.0
+			userLocation?.latitude = chatLocation?.geoPoint?.lat ?: 0.0
+			userLocation?.longitude = chatLocation?.geoPoint?.lon ?: 0.0
 		}
 		else if (messageObject != null) {
 			userLocation = Location("network")
 			userLocation?.latitude = messageObject?.messageOwner?.media?.geo?.lat ?: 0.0
-			userLocation?.longitude = messageObject?.messageOwner?.media?.geo?._long ?: 0.0
+			userLocation?.longitude = messageObject?.messageOwner?.media?.geo?.lon ?: 0.0
 		}
 
 		locationDenied = parentActivity?.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
@@ -522,9 +524,9 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 					open_in -> {
 						try {
 							val lat = messageObject?.messageOwner?.media?.geo?.lat ?: 0.0
-							val lon = messageObject?.messageOwner?.media?.geo?._long ?: 0.0
+							val lon = messageObject?.messageOwner?.media?.geo?.lon ?: 0.0
 
-							parentActivity?.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lon?q=$lat,$lon")))
+							parentActivity?.startActivity(Intent(Intent.ACTION_VIEW, "geo:$lat,$lon?q=$lat,$lon".toUri()))
 						}
 						catch (e: Exception) {
 							FileLog.e(e)
@@ -874,8 +876,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 
 			hintView?.hide()
 
-			val preferences = MessagesController.getGlobalMainSettings()
-			preferences.edit().putInt("proximityhint", 3).apply()
+			MessagesController.getGlobalMainSettings().edit { putInt("proximityhint", 3) }
 
 			val info = locationController.getSharingLocationInfo(dialogId)
 
@@ -989,10 +990,10 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 				if (myLocation != null) {
 					try {
 						val intent = if (messageObject != null) {
-							Intent(Intent.ACTION_VIEW, Uri.parse(String.format(Locale.US, "http://maps.google.com/maps?saddr=%f,%f&daddr=%f,%f", myLocation!!.latitude, myLocation!!.longitude, messageObject!!.messageOwner!!.media!!.geo.lat, messageObject!!.messageOwner!!.media!!.geo._long)))
+							Intent(Intent.ACTION_VIEW, String.format(Locale.US, "http://maps.google.com/maps?saddr=%f,%f&daddr=%f,%f", myLocation!!.latitude, myLocation!!.longitude, messageObject!!.messageOwner!!.media!!.geo?.lat, messageObject!!.messageOwner!!.media!!.geo?.lon).toUri())
 						}
 						else {
-							Intent(Intent.ACTION_VIEW, Uri.parse(String.format(Locale.US, "http://maps.google.com/maps?saddr=%f,%f&daddr=%f,%f", myLocation!!.latitude, myLocation!!.longitude, chatLocation!!.geo_point.lat, chatLocation!!.geo_point._long)))
+							Intent(Intent.ACTION_VIEW, String.format(Locale.US, "http://maps.google.com/maps?saddr=%f,%f&daddr=%f,%f", myLocation!!.latitude, myLocation!!.longitude, chatLocation?.geoPoint?.lat ?: 0.0, chatLocation?.geoPoint?.lon ?: 0.0).toUri())
 						}
 
 						parentActivity?.startActivity(intent)
@@ -1035,7 +1036,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		listView?.setOnItemClickListener { _, position ->
 			if (locationType == LOCATION_TYPE_GROUP) {
 				if (position == 1) {
-					val venue = adapter?.getItem(position) as? TL_messageMediaVenue ?: return@setOnItemClickListener
+					val venue = adapter?.getItem(position) as? TLRPC.TLMessageMediaVenue ?: return@setOnItemClickListener
 
 					if (dialogId == 0L) {
 						delegate?.didSelectLocation(venue, LOCATION_TYPE_GROUP, true, 0)
@@ -1044,12 +1045,14 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 					else {
 						var progressDialog: AlertDialog? = AlertDialog(parentActivity!!, 3)
 
-						val req = TL_channels_editLocation()
+						val req = TLRPC.TLChannelsEditLocation()
 						req.address = venue.address
 						req.channel = messagesController.getInputChannel(-dialogId)
-						req.geo_point = TL_inputGeoPoint()
-						req.geo_point.lat = venue.geo.lat
-						req.geo_point._long = venue.geo._long
+
+						req.geoPoint = TLRPC.TLInputGeoPoint().also {
+							it.lat = venue.geo?.lat ?: 0.0
+							it.lon = venue.geo?.lon ?: 0.0
+						}
 
 						val requestId = connectionsManager.sendRequest(req) { _, _ ->
 							AndroidUtilities.runOnUIThread {
@@ -1074,10 +1077,10 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 				}
 			}
 			else if (locationType == LOCATION_TYPE_GROUP_VIEW) {
-				map?.animateCamera(ApplicationLoader.mapsProvider.newCameraUpdateLatLngZoom(IMapsProvider.LatLng(chatLocation!!.geo_point.lat, chatLocation!!.geo_point._long), map!!.maxZoomLevel - 4))
+				map?.animateCamera(ApplicationLoader.mapsProvider.newCameraUpdateLatLngZoom(IMapsProvider.LatLng(chatLocation?.geoPoint?.lat ?: 0.0, chatLocation?.geoPoint?.lon ?: 0.0), map!!.maxZoomLevel - 4))
 			}
 			else if (position == 1 && messageObject != null && (!messageObject!!.isLiveLocation || locationType == LOCATION_TYPE_LIVE_VIEW)) {
-				map?.animateCamera(ApplicationLoader.mapsProvider.newCameraUpdateLatLngZoom(IMapsProvider.LatLng(messageObject!!.messageOwner!!.media!!.geo.lat, messageObject!!.messageOwner!!.media!!.geo._long), map!!.maxZoomLevel - 4))
+				map?.animateCamera(ApplicationLoader.mapsProvider.newCameraUpdateLatLngZoom(IMapsProvider.LatLng(messageObject?.messageOwner?.media?.geo?.lat ?: 0.0, messageObject?.messageOwner?.media?.geo?.lon ?: 0.0), map!!.maxZoomLevel - 4))
 			}
 			else if (position == 1 && locationType != 2) {
 				if (delegate != null && userLocation != null) {
@@ -1085,10 +1088,11 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 						lastPressedMarkerView?.callOnClick()
 					}
 					else {
-						val location = TL_messageMediaGeo()
-						location.geo = TL_geoPoint()
-						location.geo.lat = AndroidUtilities.fixLocationCoordinate(userLocation!!.latitude)
-						location.geo._long = AndroidUtilities.fixLocationCoordinate(userLocation!!.longitude)
+						val location = TLRPC.TLMessageMediaGeo()
+						location.geo = TLRPC.TLGeoPoint().also {
+							it.lat = AndroidUtilities.fixLocationCoordinate(userLocation!!.latitude)
+							it.lon = AndroidUtilities.fixLocationCoordinate(userLocation!!.longitude)
+						}
 
 						if (parentFragment?.isInScheduleMode == true) {
 							AlertsCreator.createScheduleDatePickerDialog(parentActivity, parentFragment!!.dialogId) { notify, scheduleDate ->
@@ -1115,7 +1119,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			else {
 				val `object` = adapter?.getItem(position)
 
-				if (`object` is TL_messageMediaVenue) {
+				if (`object` is TLRPC.TLMessageMediaVenue) {
 					if (parentFragment?.isInScheduleMode == true) {
 						AlertsCreator.createScheduleDatePickerDialog(parentActivity, parentFragment!!.dialogId) { notify, scheduleDate ->
 							delegate?.didSelectLocation(`object`, locationType, notify, scheduleDate)
@@ -1438,9 +1442,9 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		var result: Bitmap? = null
 
 		try {
-			val photo = liveLocation.user?.photo?.photo_small ?: liveLocation.chat?.photo?.photo_small
+			val photo = (liveLocation.user as? TLRPC.TLUser)?.photo?.photoSmall ?: liveLocation.chat?.photo?.photoSmall
 
-			result = Bitmap.createBitmap(AndroidUtilities.dp(62f), AndroidUtilities.dp(85f), Bitmap.Config.ARGB_8888)
+			result = createBitmap(AndroidUtilities.dp(62f), AndroidUtilities.dp(85f))
 			result.eraseColor(Color.TRANSPARENT)
 
 			val canvas = Canvas(result)
@@ -1452,46 +1456,45 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			val roundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 			val bitmapRect = RectF()
 
-			canvas.save()
+			canvas.withSave {
+				if (photo != null) {
+					val path = fileLoader.getPathToAttach(photo, true)
+					val bitmap = BitmapFactory.decodeFile(path.toString())
 
-			if (photo != null) {
-				val path = fileLoader.getPathToAttach(photo, true)
-				val bitmap = BitmapFactory.decodeFile(path.toString())
+					if (bitmap != null) {
+						val shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+						val matrix = Matrix()
+						val scale = AndroidUtilities.dp(50f) / bitmap.width.toFloat()
 
-				if (bitmap != null) {
-					val shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-					val matrix = Matrix()
-					val scale = AndroidUtilities.dp(50f) / bitmap.width.toFloat()
+						matrix.postTranslate(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat())
+						matrix.postScale(scale, scale)
 
-					matrix.postTranslate(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat())
-					matrix.postScale(scale, scale)
+						roundPaint.setShader(shader)
 
-					roundPaint.setShader(shader)
+						shader.setLocalMatrix(matrix)
 
-					shader.setLocalMatrix(matrix)
+						bitmapRect.set(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp((50 + 6).toFloat()).toFloat(), AndroidUtilities.dp((50 + 6).toFloat()).toFloat())
 
-					bitmapRect.set(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp((50 + 6).toFloat()).toFloat(), AndroidUtilities.dp((50 + 6).toFloat()).toFloat())
-
-					canvas.drawRoundRect(bitmapRect, AndroidUtilities.dp(25f).toFloat(), AndroidUtilities.dp(25f).toFloat(), roundPaint)
+						drawRoundRect(bitmapRect, AndroidUtilities.dp(25f).toFloat(), AndroidUtilities.dp(25f).toFloat(), roundPaint)
+					}
 				}
+				else {
+					val avatarDrawable = AvatarDrawable()
+
+					if (liveLocation.user != null) {
+						avatarDrawable.setInfo(liveLocation.user)
+					}
+					else if (liveLocation.chat != null) {
+						avatarDrawable.setInfo(liveLocation.chat)
+					}
+
+					translate(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat())
+
+					avatarDrawable.setBounds(0, 0, AndroidUtilities.dp(50f), AndroidUtilities.dp(50f))
+					avatarDrawable.draw(this)
+				}
+
 			}
-			else {
-				val avatarDrawable = AvatarDrawable()
-
-				if (liveLocation.user != null) {
-					avatarDrawable.setInfo(liveLocation.user)
-				}
-				else if (liveLocation.chat != null) {
-					avatarDrawable.setInfo(liveLocation.chat)
-				}
-
-				canvas.translate(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat())
-
-				avatarDrawable.setBounds(0, 0, AndroidUtilities.dp(50f), AndroidUtilities.dp(50f))
-				avatarDrawable.draw(canvas)
-			}
-
-			canvas.restore()
 
 			try {
 				canvas.setBitmap(null)
@@ -1508,7 +1511,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 	}
 
 	private fun getMessageId(message: Message?): Long {
-		return if (message?.from_id != null) {
+		return if (message?.fromId != null) {
 			MessageObject.getFromChatId(message)
 		}
 		else {
@@ -1549,11 +1552,11 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 					continue
 				}
 
-				val point = location.`object`!!.media!!.geo
+				val point = location.`object`?.media?.geo
 
 				val loc = Location("network")
-				loc.latitude = point.lat
-				loc.longitude = point._long
+				loc.latitude = point?.lat ?: 0.0
+				loc.longitude = point?.lon ?: 0.0
 
 				if (myLocation!!.distanceTo(loc) > radius) {
 					return@onRadiusPickerChange true
@@ -1615,7 +1618,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			return
 		}
 
-		if (checkBackgroundPermission && Build.VERSION.SDK_INT >= 29) {
+		if (checkBackgroundPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 			askWithRadius = proximityRadius
 			checkBackgroundPermission = false
 
@@ -1623,8 +1626,12 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			val lastTime = preferences.getInt("backgroundloc", 0)
 
 			if (abs((System.currentTimeMillis() / 1000 - lastTime).toDouble()) > 24 * 60 * 60 && parentActivity.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-				preferences.edit().putInt("backgroundloc", (System.currentTimeMillis() / 1000).toInt()).apply()
-				AlertsCreator.createBackgroundLocationPermissionDialog(parentActivity, messagesController.getUser(userConfig.getClientUserId())) { openShareLiveLocation(askWithRadius) }?.show()
+				preferences.edit { putInt("backgroundloc", (System.currentTimeMillis() / 1000).toInt()) }
+
+				AlertsCreator.createBackgroundLocationPermissionDialog(parentActivity, messagesController.getUser(userConfig.getClientUserId())) {
+					openShareLiveLocation(askWithRadius)
+				}?.show()
+
 				return
 			}
 		}
@@ -1642,14 +1649,17 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 	private fun shareLiveLocation(user: User?, period: Int, radius: Int) {
 		val myLocation = myLocation ?: return
 
-		val location = TL_messageMediaGeoLive()
-		location.geo = TL_geoPoint()
-		location.geo.lat = AndroidUtilities.fixLocationCoordinate(myLocation.latitude)
-		location.geo._long = AndroidUtilities.fixLocationCoordinate(myLocation.longitude)
+		val location = TLRPC.TLMessageMediaGeoLive()
+
+		location.geo = TLRPC.TLGeoPoint().also {
+			it.lat = AndroidUtilities.fixLocationCoordinate(myLocation.latitude)
+			it.lon = AndroidUtilities.fixLocationCoordinate(myLocation.longitude)
+		}
+
 		location.heading = LocationController.getHeading(myLocation)
 		location.flags = location.flags or 1
 		location.period = period
-		location.proximity_notification_radius = radius
+		location.proximityNotificationRadius = radius
 		location.flags = location.flags or 8
 
 		delegate?.didSelectLocation(location, locationType, true, 0)
@@ -1675,7 +1685,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 			paint.color = -0x1
 
-			val bitmap = Bitmap.createBitmap(AndroidUtilities.dp(12f), AndroidUtilities.dp(12f), Bitmap.Config.ARGB_8888)
+			val bitmap = createBitmap(AndroidUtilities.dp(12f), AndroidUtilities.dp(12f))
 
 			val canvas = Canvas(bitmap)
 			canvas.drawCircle(AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
@@ -1694,7 +1704,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		return null
 	}
 
-	private fun updatePlacesMarkers(places: List<TL_messageMediaVenue>?) {
+	private fun updatePlacesMarkers(places: List<TLRPC.TLMessageMediaVenue>?) {
 		if (places == null) {
 			return
 		}
@@ -1704,7 +1714,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 
 		places.forEachIndexed { index, venue ->
 			try {
-				val options = ApplicationLoader.mapsProvider.onCreateMarkerOptions().position(IMapsProvider.LatLng(venue.geo.lat, venue.geo._long))
+				val options = ApplicationLoader.mapsProvider.onCreateMarkerOptions().position(IMapsProvider.LatLng(venue.geo?.lat ?: 0.0, venue.geo?.lon ?: 0.0))
 				options.icon(createPlaceBitmap(index))
 				options.anchor(0.5f, 0.5f)
 				options.title(venue.title)
@@ -1726,15 +1736,15 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 
 	private fun addUserMarker(message: Message): LiveLocation {
 		var liveLocation = markersMap[MessageObject.getFromChatId(message)]
-		val latLng = IMapsProvider.LatLng(message.media!!.geo.lat, message.media!!.geo._long)
+		val latLng = IMapsProvider.LatLng(message.media?.geo?.lat, message.media?.geo?.lon)
 
 		if (liveLocation == null) {
 			liveLocation = LiveLocation()
 			liveLocation.`object` = message
 
-			if (liveLocation.`object`?.from_id is TL_peerUser) {
-				liveLocation.user = messagesController.getUser(liveLocation.`object`?.from_id?.user_id)
-				liveLocation.id = liveLocation.`object`?.from_id?.user_id ?: 0
+			if (liveLocation.`object`?.fromId is TLRPC.TLPeerUser) {
+				liveLocation.user = messagesController.getUser(liveLocation.`object`?.fromId?.userId)
+				liveLocation.id = liveLocation.`object`?.fromId?.userId ?: 0
 			}
 			else {
 				val did = MessageObject.getDialogId(message)
@@ -1802,8 +1812,8 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		return liveLocation
 	}
 
-	private fun addUserMarker(location: TL_channelLocation): LiveLocation {
-		val latLng = IMapsProvider.LatLng(location.geo_point.lat, location.geo_point._long)
+	private fun addUserMarker(location: TLRPC.TLChannelLocation): LiveLocation {
+		val latLng = IMapsProvider.LatLng(location.geoPoint?.lat, location.geoPoint?.lon)
 		val liveLocation = LiveLocation()
 
 		if (DialogObject.isUserDialog(dialogId)) {
@@ -1882,12 +1892,12 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			userLocation = Location("network")
 
 			if (initialLocation != null) {
-				val latLng = IMapsProvider.LatLng(initialLocation!!.geo_point.lat, initialLocation!!.geo_point._long)
+				val latLng = IMapsProvider.LatLng(initialLocation?.geoPoint?.lat, initialLocation?.geoPoint?.lon)
 
 				map.moveCamera(ApplicationLoader.mapsProvider.newCameraUpdateLatLngZoom(latLng, map.maxZoomLevel - 4))
 
-				userLocation?.latitude = initialLocation!!.geo_point.lat
-				userLocation?.longitude = initialLocation!!.geo_point._long
+				userLocation?.latitude = initialLocation?.geoPoint?.lat ?: 0.0
+				userLocation?.longitude = initialLocation?.geoPoint?.lon ?: 0.0
 
 				adapter?.setCustomLocation(userLocation)
 			}
@@ -1913,7 +1923,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 				showSearchPlacesButton(true)
 				removeInfoView()
 
-				if (!scrolling && (locationType == LOCATION_TYPE_SEND || locationType == LOCATION_TYPE_SEND_WITH_LIVE) && listView!!.childCount > 0) {
+				if (!scrolling && (locationType == LOCATION_TYPE_SEND || locationType == LOCATION_TYPE_SEND_WITH_LIVE) && !listView!!.isNotEmpty()) {
 					val view = listView?.getChildAt(0)
 
 					if (view != null) {
@@ -2065,7 +2075,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		builder.setNegativeButton(parentActivity.getString(R.string.PermissionOpenSettings)) { _, _ ->
 			try {
 				val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-				intent.setData(Uri.parse("package:" + ApplicationLoader.applicationContext.packageName))
+				intent.setData(("package:" + ApplicationLoader.applicationContext.packageName).toUri())
 				parentActivity.startActivity(intent)
 			}
 			catch (e: Exception) {
@@ -2114,7 +2124,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		var `val` = preferences.getInt("proximityhint", 0)
 
 		if (`val` < 3) {
-			preferences.edit().putInt("proximityhint", ++`val`).apply()
+			preferences.edit { putInt("proximityhint", ++`val`) }
 
 			if (DialogObject.isUserDialog(dialogId)) {
 				val user = messagesController.getUser(dialogId)
@@ -2371,7 +2381,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		dialogId = messageObject?.dialogId ?: 0
 	}
 
-	fun setChatLocation(chatId: Long, location: TL_channelLocation?) {
+	fun setChatLocation(chatId: Long, location: TLRPC.TLChannelLocation?) {
 		dialogId = -chatId
 		chatLocation = location
 	}
@@ -2380,7 +2390,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		dialogId = did
 	}
 
-	fun setInitialLocation(location: TL_channelLocation?) {
+	fun setInitialLocation(location: TLRPC.TLChannelLocation?) {
 		initialLocation = location
 	}
 
@@ -2400,9 +2410,9 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		for (a in messages.indices) {
 			val message = messages[a]
 
-			if (message.date + message.media!!.period > date) {
+			if (message.date + (message.media?.period ?: 0) > date) {
 				if (builder != null) {
-					val latLng = IMapsProvider.LatLng(message.media!!.geo.lat, message.media!!.geo._long)
+					val latLng = IMapsProvider.LatLng(message.media?.geo?.lat, message.media?.geo?.lon)
 					builder.include(latLng)
 				}
 
@@ -2503,7 +2513,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 				val message = marker.`object` ?: continue
 
 				if (message.date + message.media!!.period > date) {
-					val latLng = IMapsProvider.LatLng(message.media!!.geo.lat, message.media!!.geo._long)
+					val latLng = IMapsProvider.LatLng(message.media?.geo?.lat, message.media?.geo?.lon)
 					builder.include(latLng)
 				}
 			}
@@ -2550,13 +2560,13 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 			}
 		}
 
-		val req = TL_messages_getRecentLocations()
+		val req = TLRPC.TLMessagesGetRecentLocations()
 		val id = messageObject!!.dialogId
 		req.peer = messagesController.getInputPeer(id)
 		req.limit = 100
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is messages_Messages) {
+			if (response is TLRPC.MessagesMessages) {
 				AndroidUtilities.runOnUIThread(Runnable {
 					if (map == null) {
 						return@Runnable
@@ -2565,7 +2575,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 					var a = 0
 
 					while (a < response.messages.size) {
-						if (response.messages[a].media !is TL_messageMediaGeoLive) {
+						if (response.messages[a].media !is TLRPC.TLMessageMediaGeoLive) {
 							response.messages.removeAt(a)
 							a--
 						}
@@ -2675,7 +2685,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 						addUserMarker(messageObject.messageOwner!!)
 						added = true
 					}
-					else if (messageObject.messageOwner?.action is TL_messageActionGeoProximityReached) {
+					else if ((messageObject.messageOwner as? TLRPC.TLMessageService)?.action is TLRPC.TLMessageActionGeoProximityReached) {
 						if (DialogObject.isUserDialog(messageObject.dialogId)) {
 							proximityButton?.setImageResource(R.drawable.msg_location_alert)
 
@@ -2714,7 +2724,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 						if (myInfo == null || myInfo.mid != messageObject.id) {
 							liveLocation.`object` = messageObject.messageOwner
 
-							val latLng = IMapsProvider.LatLng(messageObject.messageOwner!!.media!!.geo.lat, messageObject.messageOwner!!.media!!.geo._long)
+							val latLng = IMapsProvider.LatLng(messageObject.messageOwner?.media?.geo?.lat, messageObject.messageOwner?.media?.geo?.lon)
 
 							liveLocation.marker!!.position = latLng
 
@@ -2802,7 +2812,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 
 				GLES20.glReadPixels(0, 0, glSurfaceView.width, glSurfaceView.height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer)
 
-				val bitmap = Bitmap.createBitmap(glSurfaceView.width, glSurfaceView.height, Bitmap.Config.ARGB_8888)
+				val bitmap = createBitmap(glSurfaceView.width, glSurfaceView.height)
 				bitmap.copyPixelsFromBuffer(buffer)
 
 				val flipVertically = Matrix()
@@ -2899,7 +2909,7 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 	}
 
 	override fun onRequestPermissionsResultFragment(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-		if (requestCode == 30) {
+		if (requestCode == ChatAttachAlert.REQUEST_CODE_LIVE_LOCATION && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
 			openShareLiveLocation(askWithRadius)
 		}
 	}
@@ -2935,13 +2945,13 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 		private const val map_list_menu_satellite = 3
 		private const val map_list_menu_hybrid = 4
 
-		const val LOCATION_TYPE_SEND: Int = 0
-		const val LOCATION_TYPE_SEND_WITH_LIVE: Int = 1
-		const val LOCATION_TYPE_GROUP: Int = 4
-		const val LOCATION_TYPE_GROUP_VIEW: Int = 5
-		const val LOCATION_TYPE_LIVE_VIEW: Int = 6
+		const val LOCATION_TYPE_SEND = 0
+		const val LOCATION_TYPE_SEND_WITH_LIVE = 1
+		const val LOCATION_TYPE_GROUP = 4
+		const val LOCATION_TYPE_GROUP_VIEW = 5
+		const val LOCATION_TYPE_LIVE_VIEW = 6
 
-		private const val EARTHRADIUS = 6366198.0
+		private const val EARTH_RADIUS = 6366198.0
 
 		private fun move(startLL: IMapsProvider.LatLng, toNorth: Double, toEast: Double): IMapsProvider.LatLng {
 			val lonDiff = meterToLongitude(toEast, startLL.latitude)
@@ -2951,13 +2961,13 @@ class LocationActivity(private val locationType: Int) : BaseFragment(), Notifica
 
 		private fun meterToLongitude(meterToEast: Double, latitude: Double): Double {
 			val latArc = Math.toRadians(latitude)
-			val radius = cos(latArc) * EARTHRADIUS
+			val radius = cos(latArc) * EARTH_RADIUS
 			val rad = meterToEast / radius
 			return Math.toDegrees(rad)
 		}
 
 		private fun meterToLatitude(meterToNorth: Double): Double {
-			val rad = meterToNorth / EARTHRADIUS
+			val rad = meterToNorth / EARTH_RADIUS
 			return Math.toDegrees(rad)
 		}
 	}

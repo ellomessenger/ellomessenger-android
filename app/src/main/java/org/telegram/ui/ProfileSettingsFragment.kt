@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -13,13 +13,14 @@ import android.content.pm.ActivityInfo
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Toast
+import androidx.core.view.isGone
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.ProfileSettingsFragmentBinding
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.Components.AlertsCreator
-import org.telegram.ui.profile.ChangeEmailPasswordFragment
+import org.telegram.ui.profile.ChangeEmailFragment
 import org.telegram.ui.profile.DeleteAccountInfoFragment
 
 class ProfileSettingsFragment : BaseFragment() {
@@ -45,8 +46,10 @@ class ProfileSettingsFragment : BaseFragment() {
 		}
 
 		binding?.emailContainer?.setOnClickListener {
-			presentFragment(ChangeEmailPasswordFragment())
+			presentFragment(ChangeEmailFragment())
 		}
+
+//		binding?.emailContainer?.isGone = true
 
 		binding?.languageContainer?.setOnClickListener {
 			// TODO: open language settings

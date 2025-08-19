@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.feed
 
@@ -14,7 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.databinding.ExploreViewHolderBinding
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.removeDuplicates
-import org.telegram.tgnet.tlrpc.Message
+import org.telegram.tgnet.TLRPC.Message
 
 class ExploreAdapter : RecyclerView.Adapter<ExploreViewHolder>() {
 	private val items = mutableListOf<MessageObject>()

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger;
 
@@ -69,12 +69,13 @@ import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.video.MediaCodecVideoConvertor;
 import org.telegram.messenger.voip.VoIPService;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.MessageEntity;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.TL_messages_messages;
-import org.telegram.tgnet.tlrpc.User;
-import org.telegram.tgnet.tlrpc.messages_Messages;
+import org.telegram.tgnet.TLRPC.MessageEntity;
+import org.telegram.tgnet.TLRPC.MessagesMessages;
+import org.telegram.tgnet.TLRPC.TLMessagesMessages;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Adapters.FiltersView;
@@ -178,7 +179,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 	private final ArrayList<VideoConvertMessage> videoConvertQueue = new ArrayList<>();
 	private final HashMap<String, MessageObject> generatingWaveform = new HashMap<>();
 	private boolean voiceMessagesPlaylistUnread;
-	private ArrayList<MessageObject> voiceMessagesPlaylist;
+	private List<MessageObject> voiceMessagesPlaylist;
 	private SparseArray<MessageObject> voiceMessagesPlaylistMap;
 	private boolean isPaused = false;
 	private VideoPlayer audioPlayer = null;
@@ -235,7 +236,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 		}
 	};
 	private AudioRecord audioRecorder;
-	private TLRPC.TL_document recordingAudio;
+	private TLRPC.TLDocument recordingAudio;
 	private int recordingGuid = -1;
 	private int recordingCurrentAccount;
 	private File recordingAudioFile;
@@ -1733,7 +1734,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 	}
 
 	private void checkScreenshots(ArrayList<Long> dates) {
-		if (dates == null || dates.isEmpty() || lastChatEnterTime == 0 || (lastUser == null && !(lastSecretChat instanceof TLRPC.TL_encryptedChat))) {
+		if (dates == null || dates.isEmpty() || lastChatEnterTime == 0 || (lastUser == null && !(lastSecretChat instanceof TLRPC.TLEncryptedChat))) {
 			return;
 		}
 		long dt = 2000;
@@ -1753,7 +1754,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 		}
 		if (send) {
 			if (lastSecretChat != null) {
-				SecretChatHelper.getInstance(lastChatAccount).sendScreenshotMessage(lastSecretChat, lastChatVisibleMessages, null);
+				// MARK: uncomment to enable secret chats
+				// SecretChatHelper.getInstance(lastChatAccount).sendScreenshotMessage(lastSecretChat, lastChatVisibleMessages, null);
 			}
 			else {
 				SendMessagesHelper.getInstance(lastChatAccount).sendScreenshotMessage(lastUser, lastMessageId, null);
@@ -1803,7 +1805,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 			long channelId = (Long)args[1];
 			ArrayList<Integer> markAsDeletedMessages = (ArrayList<Integer>)args[0];
 			if (playingMessageObject != null) {
-				if (channelId == playingMessageObject.messageOwner.peer_id.channel_id) {
+				if (channelId == TLRPCExtensions.getChannelId(playingMessageObject.messageOwner.peerId)) {
 					if (markAsDeletedMessages.contains(playingMessageObject.getId())) {
 						cleanupPlayer(true, true);
 					}
@@ -1811,7 +1813,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 			}
 			if (voiceMessagesPlaylist != null && !voiceMessagesPlaylist.isEmpty()) {
 				MessageObject messageObject = voiceMessagesPlaylist.get(0);
-				if (channelId == messageObject.messageOwner.peer_id.channel_id) {
+				if (channelId == TLRPCExtensions.getChannelId(messageObject.messageOwner.peerId)) {
 					for (int a = 0; a < markAsDeletedMessages.size(); a++) {
 						Integer key = markAsDeletedMessages.get(a);
 						messageObject = voiceMessagesPlaylistMap.get(key);
@@ -2488,7 +2490,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 		return playingMessageObject != null && playingMessageObject.getDialogId() == messageObject.getDialogId() && playingMessageObject.getId() == messageObject.getId() && ((playingMessageObject.eventId == 0) == (messageObject.eventId == 0));
 	}
 
-	public boolean seekToProgress(MessageObject messageObject, float progress) {
+	public boolean seekToProgress(@Nullable MessageObject messageObject, float progress) {
 		if (audioPlayer == null && videoPlayer == null || messageObject == null || playingMessageObject == null || !isSamePlayingMessage(messageObject)) {
 			return false;
 		}
@@ -2563,48 +2565,58 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 				int currentAccount = playlist.get(0).currentAccount;
 				TLObject request;
 				if (playlistGlobalSearchParams.dialogId != 0) {
-					final TLRPC.TL_messages_search req = new TLRPC.TL_messages_search();
+					var req = new TLRPC.TLMessagesSearch();
 					req.q = playlistGlobalSearchParams.query;
 					req.limit = 20;
-					req.filter = playlistGlobalSearchParams.filter == null ? new TLRPC.TL_inputMessagesFilterEmpty() : playlistGlobalSearchParams.filter.filter;
+					req.filter = playlistGlobalSearchParams.filter == null ? new TLRPC.TLInputMessagesFilterEmpty() : playlistGlobalSearchParams.filter.filter;
 					req.peer = AccountInstance.getInstance(currentAccount).getMessagesController().getInputPeer(playlistGlobalSearchParams.dialogId);
+
 					MessageObject lastMessage = playlist.get(playlist.size() - 1);
-					req.offset_id = lastMessage.getId();
+
+					req.offsetId = lastMessage.getId();
+
 					if (playlistGlobalSearchParams.minDate > 0) {
-						req.min_date = (int)(playlistGlobalSearchParams.minDate / 1000);
+						req.minDate = (int)(playlistGlobalSearchParams.minDate / 1000);
 					}
+
 					if (playlistGlobalSearchParams.maxDate > 0) {
-						req.min_date = (int)(playlistGlobalSearchParams.maxDate / 1000);
+						req.minDate = (int)(playlistGlobalSearchParams.maxDate / 1000);
 					}
+
 					request = req;
 				}
 				else {
-					final TLRPC.TL_messages_searchGlobal req = new TLRPC.TL_messages_searchGlobal();
+					final var req = new TLRPC.TLMessagesSearchGlobal();
 					req.limit = 20;
 					req.q = playlistGlobalSearchParams.query;
 					req.filter = playlistGlobalSearchParams.filter.filter;
 					MessageObject lastMessage = playlist.get(playlist.size() - 1);
-					req.offset_id = lastMessage.getId();
-					req.offset_rate = playlistGlobalSearchParams.nextSearchRate;
+					req.offsetId = lastMessage.getId();
+					req.offsetRate = playlistGlobalSearchParams.nextSearchRate;
 					req.flags |= 1;
-					req.folder_id = playlistGlobalSearchParams.folderId;
+					req.folderId = playlistGlobalSearchParams.folderId;
 					long id;
-					if (lastMessage.messageOwner.peer_id.channel_id != 0) {
-						id = -lastMessage.messageOwner.peer_id.channel_id;
+
+					if (TLRPCExtensions.getChannelId(lastMessage.messageOwner.peerId) != 0) {
+						id = -TLRPCExtensions.getChannelId(lastMessage.messageOwner.peerId);
 					}
-					else if (lastMessage.messageOwner.peer_id.chat_id != 0) {
-						id = -lastMessage.messageOwner.peer_id.chat_id;
+					else if (TLRPCExtensions.getChatId(lastMessage.messageOwner.peerId) != 0) {
+						id = -TLRPCExtensions.getChatId(lastMessage.messageOwner.peerId);
 					}
 					else {
-						id = lastMessage.messageOwner.peer_id.user_id;
+						id = TLRPCExtensions.getUserId(lastMessage.messageOwner.peerId);
 					}
-					req.offset_peer = MessagesController.getInstance(currentAccount).getInputPeer(id);
+
+					req.offsetPeer = MessagesController.getInstance(currentAccount).getInputPeer(id);
+
 					if (playlistGlobalSearchParams.minDate > 0) {
-						req.min_date = (int)(playlistGlobalSearchParams.minDate / 1000);
+						req.minDate = (int)(playlistGlobalSearchParams.minDate / 1000);
 					}
+
 					if (playlistGlobalSearchParams.maxDate > 0) {
-						req.min_date = (int)(playlistGlobalSearchParams.maxDate / 1000);
+						req.minDate = (int)(playlistGlobalSearchParams.maxDate / 1000);
 					}
+
 					request = req;
 				}
 				loadingPlaylist = true;
@@ -2617,8 +2629,12 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 					}
 					loadingPlaylist = false;
 
-					messages_Messages res = (messages_Messages)response;
-					playlistGlobalSearchParams.nextSearchRate = res.next_rate;
+					var res = (MessagesMessages)response;
+
+					if (res instanceof TLRPC.TLMessagesMessagesSlice slice) {
+						playlistGlobalSearchParams.nextSearchRate = slice.nextRate;
+					}
+
 					MessagesStorage.getInstance(currentAccount).putUsersAndChats(res.users, res.chats, true, true);
 					MessagesController.getInstance(currentAccount).putUsers(res.users, false);
 					MessagesController.getInstance(currentAccount).putChats(res.chats, false);
@@ -2720,9 +2736,16 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 		Collections.sort(playlist, (o1, o2) -> {
 			int mid1 = o1.getId();
 			int mid2 = o2.getId();
+			long group1 = 0;
+			long group2 = 0;
 
-			long group1 = o1.messageOwner.getGroupId();
-			long group2 = o2.messageOwner.getGroupId();
+			if (o1.messageOwner instanceof TLRPC.TLMessage msg) {
+				group1 = msg.groupedId;
+			}
+
+			if (o2.messageOwner instanceof TLRPC.TLMessage msg) {
+				group2 = msg.groupedId;
+			}
 
 			if (mid1 < 0 && mid2 < 0) {
 				if (group1 != 0 && group1 == group2) {
@@ -2940,7 +2963,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 		}
 	}
 
-	public void setVoiceMessagesPlaylist(ArrayList<MessageObject> playlist, boolean unread) {
+	public void setVoiceMessagesPlaylist(List<MessageObject> playlist, boolean unread) {
 		voiceMessagesPlaylist = playlist;
 		if (voiceMessagesPlaylist != null) {
 			voiceMessagesPlaylistUnread = unread;
@@ -3311,13 +3334,15 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 			return;
 		}
 		Utilities.stageQueue.postRunnable(() -> {
-			TLRPC.Document document = new TLRPC.TL_document();
-			document.access_hash = sound.accessHash;
+			var document = new TLRPC.TLDocument();
+			document.accessHash = sound.accessHash;
 			document.id = sound.id;
-			document.mime_type = "sound/ogg";
-			document.file_reference = sound.fileReference;
-			document.dc_id = accountInstance.getConnectionsManager().getCurrentDatacenterId();
+			document.mimeType = "sound/ogg";
+			document.fileReference = sound.fileReference;
+			document.dcId = accountInstance.getConnectionsManager().getCurrentDatacenterId();
+
 			File file = FileLoader.getInstance(accountInstance.currentAccount).getPathToAttach(document, true);
+
 			if (file.exists()) {
 				if (loadOnly) {
 					return;
@@ -3417,7 +3442,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 		if (am.isBluetoothScoAvailableOffCall() && SharedConfig.recordViaSco || !scoOn) {
 			BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
 			try {
-				if (btAdapter != null && btAdapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED || !scoOn) {
+				if (btAdapter != null && btAdapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothAdapter.STATE_CONNECTED || !scoOn) {
 					if (scoOn && !am.isBluetoothScoOn()) {
 						am.startBluetoothSco();
 					}
@@ -3519,7 +3544,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 		if (messageObject.isRoundVideo() || isVideo) {
 			FileLoader.getInstance(messageObject.currentAccount).setLoadingVideoForPlayer(messageObject.getDocument(), true);
 			playerWasReady = false;
-			boolean destroyAtEnd = !isVideo || messageObject.messageOwner.peer_id.channel_id == 0 && messageObject.audioProgress <= 0.1f;
+			boolean destroyAtEnd = !isVideo || TLRPCExtensions.getChannelId(messageObject.messageOwner.peerId) == 0 && messageObject.audioProgress <= 0.1f;
 			int[] playCount = isVideo && messageObject.getDuration() <= 30 ? new int[]{1} : null;
 			clearPlaylist();
 			videoPlayer = new VideoPlayer();
@@ -3647,8 +3672,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 			else {
 				try {
 					int reference = FileLoader.getInstance(messageObject.currentAccount).getFileReference(messageObject);
-					TLRPC.Document document = messageObject.getDocument();
-					String params = "?account=" + messageObject.currentAccount + "&id=" + document.id + "&hash=" + document.access_hash + "&dc=" + document.dc_id + "&size=" + document.size + "&mime=" + URLEncoder.encode(document.mime_type, "UTF-8") + "&rid=" + reference + "&name=" + URLEncoder.encode(FileLoader.getDocumentFileName(document), "UTF-8") + "&reference=" + Utilities.bytesToHex(document.file_reference != null ? document.file_reference : new byte[0]);
+					var document = (TLRPC.TLDocument)messageObject.getDocument();
+					String params = "?account=" + messageObject.currentAccount + "&id=" + document.id + "&hash=" + document.accessHash + "&dc=" + document.dcId + "&size=" + document.size + "&mime=" + URLEncoder.encode(document.mimeType, "UTF-8") + "&rid=" + reference + "&name=" + URLEncoder.encode(FileLoader.getDocumentFileName(document), "UTF-8") + "&reference=" + Utilities.bytesToHex(document.fileReference != null ? document.fileReference : new byte[0]);
 					Uri uri = Uri.parse("elloapp://" + messageObject.getFileName() + params);
 					videoPlayer.preparePlayer(uri, "other");
 				}
@@ -3748,8 +3773,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 				}
 				else {
 					int reference = FileLoader.getInstance(messageObject.currentAccount).getFileReference(messageObject);
-					TLRPC.Document document = messageObject.getDocument();
-					String params = "?account=" + messageObject.currentAccount + "&id=" + document.id + "&hash=" + document.access_hash + "&dc=" + document.dc_id + "&size=" + document.size + "&mime=" + URLEncoder.encode(document.mime_type, "UTF-8") + "&rid=" + reference + "&name=" + URLEncoder.encode(FileLoader.getDocumentFileName(document), "UTF-8") + "&reference=" + Utilities.bytesToHex(document.file_reference != null ? document.file_reference : new byte[0]);
+					var document = (TLRPC.TLDocument)messageObject.getDocument();
+					String params = "?account=" + messageObject.currentAccount + "&id=" + document.id + "&hash=" + document.accessHash + "&dc=" + document.dcId + "&size=" + document.size + "&mime=" + URLEncoder.encode(document.mimeType, "UTF-8") + "&rid=" + reference + "&name=" + URLEncoder.encode(FileLoader.getDocumentFileName(document), "UTF-8") + "&reference=" + Utilities.bytesToHex(document.fileReference != null ? document.fileReference : new byte[0]);
 					Uri uri = Uri.parse("elloapp://" + messageObject.getFileName() + params);
 					audioPlayer.preparePlayer(uri, "other");
 					isStreamingCurrentAudio = true;
@@ -4097,14 +4122,16 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 			setBluetoothScoOn(true);
 
 			sendAfterDone = 0;
-			recordingAudio = new TLRPC.TL_document();
+			recordingAudio = new TLRPC.TLDocument();
+
 			recordingGuid = guid;
-			recordingAudio.file_reference = new byte[0];
-			recordingAudio.dc_id = Integer.MIN_VALUE;
+
+			recordingAudio.fileReference = new byte[0];
+			recordingAudio.dcId = Integer.MIN_VALUE;
 			recordingAudio.id = SharedConfig.getLastLocalId();
-			recordingAudio.user_id = UserConfig.getInstance(currentAccount).getClientUserId();
-			recordingAudio.mime_type = "audio/ogg";
-			recordingAudio.file_reference = new byte[0];
+			recordingAudio.mimeType = "audio/ogg";
+			recordingAudio.fileReference = new byte[0];
+
 			SharedConfig.saveConfig();
 
 			recordingAudioFile = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), FileLoader.getAttachFileName(recordingAudio));
@@ -4170,19 +4197,24 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 			final byte[] waveform = getWaveform(path);
 			AndroidUtilities.runOnUIThread(() -> {
 				MessageObject messageObject1 = generatingWaveform.remove(id);
+
 				if (messageObject1 == null) {
 					return;
 				}
+
 				if (waveform != null && messageObject1.getDocument() != null) {
-					for (int a = 0; a < messageObject1.getDocument().attributes.size(); a++) {
-						TLRPC.DocumentAttribute attribute = messageObject1.getDocument().attributes.get(a);
-						if (attribute instanceof TLRPC.TL_documentAttributeAudio) {
-							attribute.waveform = waveform;
-							attribute.flags |= 4;
-							break;
+					if (messageObject1.getDocument() instanceof TLRPC.TLDocument tlDocument) {
+
+						for (TLRPC.DocumentAttribute attribute : tlDocument.attributes) {
+							if (attribute instanceof TLRPC.TLDocumentAttributeAudio attr) {
+								attr.waveform = waveform;
+								attr.flags |= 4;
+								break;
+							}
 						}
 					}
-					TL_messages_messages messagesRes = new TL_messages_messages();
+
+					var messagesRes = new TLMessagesMessages();
 					messagesRes.messages.add(messageObject1.messageOwner);
 					MessagesStorage.getInstance(messageObject1.currentAccount).putMessages(messagesRes, messageObject1.getDialogId(), -1, 0, false, messageObject.scheduled);
 					ArrayList<MessageObject> arrayList = new ArrayList<>();
@@ -4195,14 +4227,14 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
 	private void stopRecordingInternal(final int send, boolean notify, int scheduleDate) {
 		if (send != 0) {
-			final TLRPC.TL_document audioToSend = recordingAudio;
+			final var audioToSend = recordingAudio;
 			final File recordingAudioFileToSend = recordingAudioFile;
 			fileEncodingQueue.postRunnable(() -> {
 				stopRecord();
 				AndroidUtilities.runOnUIThread(() -> {
 					audioToSend.date = ConnectionsManager.getInstance(recordingCurrentAccount).getCurrentTime();
 					audioToSend.size = (int)recordingAudioFileToSend.length();
-					TLRPC.TL_documentAttributeAudio attributeAudio = new TLRPC.TL_documentAttributeAudio();
+					var attributeAudio = new TLRPC.TLDocumentAttributeAudio();
 					attributeAudio.voice = true;
 					attributeAudio.waveform = getWaveform2(recordSamples, recordSamples.length);
 					if (attributeAudio.waveform != null) {
@@ -4213,7 +4245,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 					audioToSend.attributes.add(attributeAudio);
 					if (duration > 700) {
 						if (send == 1) {
-							SendMessagesHelper.getInstance(recordingCurrentAccount).sendMessage(audioToSend, null, recordingAudioFileToSend.getAbsolutePath(), recordDialogId, recordReplyingMsg, recordReplyingTopMsg, null, null, null, null, notify, scheduleDate, 0, null, null, false, false, null);
+							SendMessagesHelper.getInstance(recordingCurrentAccount).sendMessage(audioToSend, null, recordingAudioFileToSend.getAbsolutePath(), recordDialogId, recordReplyingMsg, recordReplyingTopMsg, null, null, null, null, notify, scheduleDate, 0, null, null, false);
 						}
 						NotificationCenter.getInstance(recordingCurrentAccount).postNotificationName(NotificationCenter.audioDidSent, recordingGuid, send == 2 ? audioToSend : null, send == 2 ? recordingAudioFileToSend.getAbsolutePath() : null);
 					}
@@ -4340,15 +4372,20 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 			Intent intent = new Intent(ApplicationLoader.applicationContext, VideoEncodingService.class);
 			intent.putExtra("path", messageObject.messageOwner.attachPath);
 			intent.putExtra("currentAccount", messageObject.currentAccount);
-			if (messageObject.messageOwner.media.document != null) {
-				for (int a = 0; a < messageObject.messageOwner.media.document.attributes.size(); a++) {
-					TLRPC.DocumentAttribute documentAttribute = messageObject.messageOwner.media.document.attributes.get(a);
-					if (documentAttribute instanceof TLRPC.TL_documentAttributeAnimated) {
-						intent.putExtra("gif", true);
-						break;
+
+			var media = TLRPCExtensions.getMedia(messageObject.messageOwner);
+
+			if (media != null && TLRPCExtensions.getDocument(media) != null) {
+				if (TLRPCExtensions.getDocument(media) instanceof TLRPC.TLDocument tlDocument) {
+					for (TLRPC.DocumentAttribute attribute : tlDocument.attributes) {
+						if (attribute instanceof TLRPC.TLDocumentAttributeAnimated) {
+							intent.putExtra("gif", true);
+							break;
+						}
 					}
 				}
 			}
+
 			if (messageObject.getId() != 0) {
 				try {
 					ApplicationLoader.applicationContext.startService(intent);

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Reactions
 
@@ -31,7 +31,7 @@ import org.telegram.messenger.MediaDataController
 import org.telegram.messenger.R
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
-import org.telegram.tgnet.tlrpc.ReactionCount
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedEmojiDrawable
 import org.telegram.ui.Components.BackupImageView
@@ -107,7 +107,7 @@ class ReactionTabHolderView(context: Context) : FrameLayout(context) {
 		reactView.gone()
 	}
 
-	fun setCounter(currentAccount: Int, counter: ReactionCount) {
+	fun setCounter(currentAccount: Int, counter: TLRPC.TLReactionCount) {
 		count = counter.count
 		counterView.text = String.format("%s", LocaleController.formatShortNumber(counter.count, null))
 
@@ -116,8 +116,8 @@ class ReactionTabHolderView(context: Context) : FrameLayout(context) {
 		if (reaction?.emojicon != null) {
 			for (r in MediaDataController.getInstance(currentAccount).getReactionsList()) {
 				if (r.reaction == reaction?.emojicon) {
-					val svgThumb = getSvgThumb(r.static_icon, ResourcesCompat.getColor(context.resources, R.color.light_background, null), 1.0f)
-					reactView.setImage(ImageLocation.getForDocument(r.center_icon), "40_40_lastframe", "webp", svgThumb, r)
+					val svgThumb = getSvgThumb(r.staticIcon, ResourcesCompat.getColor(context.resources, R.color.light_background, null), 1.0f)
+					reactView.setImage(ImageLocation.getForDocument(r.centerIcon), "40_40_lastframe", "webp", svgThumb, r)
 					reactView.visible()
 					iconView.gone()
 					break

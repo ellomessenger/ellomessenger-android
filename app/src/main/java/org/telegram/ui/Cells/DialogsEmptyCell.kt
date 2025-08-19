@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -280,7 +280,7 @@ class DialogsEmptyCell @JvmOverloads constructor(context: Context, private val o
 
 				val arrayList = MessagesController.getInstance(currentAccount).hintDialogs
 
-				if (!arrayList.isNullOrEmpty()) {
+				if (arrayList.isNotEmpty()) {
 					totalHeight -= AndroidUtilities.dp(72f) * arrayList.size + arrayList.size - 1 + AndroidUtilities.dp((12 + 38).toFloat())
 				}
 

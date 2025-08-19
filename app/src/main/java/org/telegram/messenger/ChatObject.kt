@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -17,50 +17,16 @@ import androidx.collection.LongSparseArray
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.voip.Instance
 import org.telegram.messenger.voip.VoIPService.Companion.sharedInstance
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.ChatPhoto
 import org.telegram.tgnet.TLRPC.GroupCall
 import org.telegram.tgnet.TLRPC.InputPeer
 import org.telegram.tgnet.TLRPC.Peer
-import org.telegram.tgnet.TLRPC.TL_channel
-import org.telegram.tgnet.TLRPC.TL_channelForbidden
-import org.telegram.tgnet.TLRPC.TL_channel_layer48
-import org.telegram.tgnet.TLRPC.TL_channel_layer67
-import org.telegram.tgnet.TLRPC.TL_channel_layer72
-import org.telegram.tgnet.TLRPC.TL_channel_layer77
-import org.telegram.tgnet.TLRPC.TL_channel_layer92
-import org.telegram.tgnet.TLRPC.TL_channel_old
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.TLRPC.TL_chatEmpty
-import org.telegram.tgnet.TLRPC.TL_chatForbidden
-import org.telegram.tgnet.TLRPC.TL_chatPhotoEmpty
-import org.telegram.tgnet.TLRPC.TL_chatReactionsAll
-import org.telegram.tgnet.TLRPC.TL_chatReactionsSome
-import org.telegram.tgnet.TLRPC.TL_chat_layer92
-import org.telegram.tgnet.TLRPC.TL_chat_old
-import org.telegram.tgnet.TLRPC.TL_chat_old2
-import org.telegram.tgnet.TLRPC.TL_groupCallParticipant
-import org.telegram.tgnet.TLRPC.TL_groupCallParticipantVideo
-import org.telegram.tgnet.TLRPC.TL_groupCallParticipantVideoSourceGroup
-import org.telegram.tgnet.TLRPC.TL_groupCallStreamChannel
-import org.telegram.tgnet.TLRPC.TL_inputGroupCall
-import org.telegram.tgnet.TLRPC.TL_inputPeerChannel
-import org.telegram.tgnet.TLRPC.TL_inputPeerChat
-import org.telegram.tgnet.TLRPC.TL_inputPeerUser
-import org.telegram.tgnet.TLRPC.TL_peerChannel
-import org.telegram.tgnet.TLRPC.TL_peerChat
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.TLRPC.TL_phone_editGroupCallTitle
-import org.telegram.tgnet.TLRPC.TL_phone_getGroupCall
-import org.telegram.tgnet.TLRPC.TL_phone_getGroupParticipants
-import org.telegram.tgnet.TLRPC.TL_phone_groupCall
-import org.telegram.tgnet.TLRPC.TL_phone_groupParticipants
-import org.telegram.tgnet.TLRPC.TL_phone_toggleGroupCallRecord
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
-import org.telegram.tgnet.TLRPC.TL_updateGroupCall
-import org.telegram.tgnet.TLRPC.TL_updateGroupCallParticipants
 import org.telegram.tgnet.TLRPC.Updates
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.userId
 import org.telegram.ui.group.GroupCallActivity
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
@@ -97,15 +63,15 @@ object ChatObject {
 
 	@JvmStatic
 	fun reactionIsAvailable(chatInfo: ChatFull?, reaction: String?): Boolean {
-		if (chatInfo?.available_reactions is TL_chatReactionsAll) {
+		if (chatInfo?.availableReactions is TLRPC.TLChatReactionsAll) {
 			return true
 		}
 
-		if (chatInfo?.available_reactions is TL_chatReactionsSome) {
-			val someReactions = chatInfo.available_reactions as TL_chatReactionsSome
+		if (chatInfo?.availableReactions is TLRPC.TLChatReactionsSome) {
+			val someReactions = chatInfo.availableReactions as TLRPC.TLChatReactionsSome
 
 			for (i in someReactions.reactions.indices) {
-				if (someReactions.reactions[i] is TL_reactionEmoji && TextUtils.equals((someReactions.reactions[i] as TL_reactionEmoji).emoticon, reaction)) {
+				if (someReactions.reactions[i] is TLRPC.TLReactionEmoji && TextUtils.equals((someReactions.reactions[i] as TLRPC.TLReactionEmoji).emoticon, reaction)) {
 					return true
 				}
 			}
@@ -115,7 +81,11 @@ object ChatObject {
 	}
 
 	@JvmStatic
-	fun getParticipantVolume(participant: TL_groupCallParticipant): Int {
+	fun getParticipantVolume(participant: TLRPC.TLGroupCallParticipant?): Int {
+		if (participant == null) {
+			return 1000
+		}
+
 		return if (participant.flags and 128 != 0) participant.volume else 10000
 	}
 
@@ -134,38 +104,38 @@ object ChatObject {
 		return false
 	}
 
-	private fun getBannedRight(rights: TL_chatBannedRights?, action: Int): Boolean {
+	private fun getBannedRight(rights: TLRPC.TLChatBannedRights?, action: Int): Boolean {
 		if (rights == null) {
 			return false
 		}
 
 		return when (action) {
-			ACTION_PIN -> rights.pin_messages
-			ACTION_CHANGE_INFO -> rights.change_info
-			ACTION_INVITE -> rights.invite_users
-			ACTION_SEND -> rights.send_messages
-			ACTION_SEND_MEDIA -> rights.send_media
-			ACTION_SEND_STICKERS -> rights.send_stickers
-			ACTION_EMBED_LINKS -> rights.embed_links
-			ACTION_SEND_POLLS -> rights.send_polls
-			ACTION_VIEW -> rights.view_messages
+			ACTION_PIN -> rights.pinMessages
+			ACTION_CHANGE_INFO -> rights.changeInfo
+			ACTION_INVITE -> rights.inviteUsers
+			ACTION_SEND -> rights.sendMessages
+			ACTION_SEND_MEDIA -> rights.sendMedia
+			ACTION_SEND_STICKERS -> rights.sendStickers
+			ACTION_EMBED_LINKS -> rights.embedLinks
+			ACTION_SEND_POLLS -> rights.sendPolls
+			ACTION_VIEW -> rights.viewMessages
 			else -> false
 		}
 	}
 
 	@JvmStatic
 	fun isActionBannedByDefault(chat: Chat?, action: Int): Boolean {
-		return if (getBannedRight(chat?.banned_rights, action)) {
+		return if (getBannedRight(chat?.bannedRights, action)) {
 			false
 		}
 		else {
-			getBannedRight(chat?.default_banned_rights, action)
+			getBannedRight(chat?.defaultBannedRights, action)
 		}
 	}
 
 	@JvmStatic
 	fun isActionBanned(chat: Chat?, action: Int): Boolean {
-		return chat != null && (getBannedRight(chat.banned_rights, action) || getBannedRight(chat.default_banned_rights, action))
+		return chat != null && (getBannedRight(chat.bannedRights, action) || getBannedRight(chat.defaultBannedRights, action))
 	}
 
 	@JvmStatic
@@ -182,17 +152,19 @@ object ChatObject {
 			return true
 		}
 
-		if (chat.admin_rights != null) {
+		val adminRights = chat.adminRights
+
+		if (adminRights != null) {
 			return when (action) {
-				ACTION_PIN -> chat.admin_rights.pin_messages
-				ACTION_CHANGE_INFO -> chat.admin_rights.change_info
-				ACTION_INVITE -> chat.admin_rights.invite_users
-				ACTION_ADD_ADMINS -> chat.admin_rights.add_admins
-				ACTION_POST -> chat.admin_rights.post_messages
-				ACTION_EDIT_MESSAGES -> chat.admin_rights.edit_messages
-				ACTION_DELETE_MESSAGES -> chat.admin_rights.delete_messages
-				ACTION_BLOCK_USERS -> chat.admin_rights.ban_users
-				ACTION_MANAGE_CALLS -> chat.admin_rights.manage_call
+				ACTION_PIN -> adminRights.pinMessages
+				ACTION_CHANGE_INFO -> adminRights.changeInfo
+				ACTION_INVITE -> adminRights.inviteUsers
+				ACTION_ADD_ADMINS -> adminRights.addAdmins
+				ACTION_POST -> adminRights.postMessages
+				ACTION_EDIT_MESSAGES -> adminRights.editMessages
+				ACTION_DELETE_MESSAGES -> adminRights.deleteMessages
+				ACTION_BLOCK_USERS -> adminRights.banUsers
+				ACTION_MANAGE_CALLS -> adminRights.manageCall
 				else -> false
 			}
 		}
@@ -209,25 +181,22 @@ object ChatObject {
 			return true
 		}
 
-		if (getBannedRight(chat.banned_rights, action)) {
+		if (getBannedRight(chat.bannedRights, action)) {
 			return false
 		}
 
 		if (isBannableAction(action)) {
-			if (chat.admin_rights != null && !isAdminAction(action)) {
-				return true
-			}
-			if (chat.default_banned_rights == null && (chat is TL_chat_layer92 || chat is TL_chat_old || chat is TL_chat_old2 || chat is TL_channel_layer92 || chat is TL_channel_layer77 || chat is TL_channel_layer72 || chat is TL_channel_layer67 || chat is TL_channel_layer48 || chat is TL_channel_old)) {
+			if (chat.adminRights != null && !isAdminAction(action)) {
 				return true
 			}
 
-			val isBannedRight = getBannedRight(chat.default_banned_rights, action)
+			val isBannedRight = getBannedRight(chat.defaultBannedRights, action)
 
 			// MARK: This is new variant
 			return !isBannedRight
 
 			// MARK: This was old variant
-//			if (chat.default_banned_rights == null || getBannedRight(chat.default_banned_rights, action)) {
+//			if (chat.defaultBannedRights == null || getBannedRight(chat.defaultBannedRights, action)) {
 //				return false;
 //			}
 		}
@@ -237,55 +206,55 @@ object ChatObject {
 
 	@JvmStatic
 	fun isLeftFromChat(chat: Chat?): Boolean {
-		return chat == null || chat is TL_chatEmpty || chat is TL_chatForbidden || chat is TL_channelForbidden || chat.left || chat.deactivated
+		return chat == null || chat is TLRPC.TLChatEmpty || chat is TLRPC.TLChatForbidden || chat is TLRPC.TLChannelForbidden || chat.left || (chat as? TLRPC.TLChat)?.deactivated == true
 	}
 
 	fun isKickedFromChat(chat: Chat?): Boolean {
-		return chat == null || chat is TL_chatEmpty || chat is TL_chatForbidden || chat is TL_channelForbidden || chat.kicked || chat.deactivated || chat.banned_rights != null && chat.banned_rights.view_messages
+		return chat == null || chat is TLRPC.TLChatEmpty || chat is TLRPC.TLChatForbidden || chat is TLRPC.TLChannelForbidden || (chat as? TLRPC.TLChat)?.deactivated == true || chat.bannedRights?.viewMessages == true
 	}
 
 	@JvmStatic
 	fun isNotInChat(chat: Chat?): Boolean {
-		return chat == null || chat is TL_chatEmpty || chat is TL_chatForbidden || chat is TL_channelForbidden || chat.left || chat.kicked || chat.deactivated
+		return chat == null || chat is TLRPC.TLChatEmpty || chat is TLRPC.TLChatForbidden || chat is TLRPC.TLChannelForbidden || chat.left || (chat as? TLRPC.TLChat)?.deactivated == true
 	}
 
 	@JvmStatic
 	fun canSendAsPeers(chat: Chat?): Boolean {
-		return isChannel(chat) && chat.megagroup && (!chat.username.isNullOrEmpty() || chat.has_geo || chat.has_link)
+		return isChannel(chat) && chat.megagroup && (!chat.username.isNullOrEmpty() || chat.hasGeo || chat.hasLink)
 	}
 
 	@JvmStatic
 	fun isChannel(chat: Chat?): Boolean {
 		contract {
-			returns(true) implies (chat != null && (chat is TL_channel || chat is TL_channelForbidden))
+			returns(true) implies (chat != null && (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden))
 		}
 
-		return chat is TL_channel || chat is TL_channelForbidden
+		return chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden
 	}
 
 	@JvmStatic
 	fun isChannelOrGiga(chat: Chat?): Boolean {
-		return (chat is TL_channel || chat is TL_channelForbidden) && (!chat.megagroup || chat.gigagroup)
+		return (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden) && (!chat.megagroup || chat.gigagroup)
 	}
 
 	@JvmStatic
 	fun isSubscriptionChannel(chat: Chat?): Boolean {
-		return (chat is TL_channel || chat is TL_channelForbidden) && (chat.pay_type == Chat.PAY_TYPE_SUBSCRIBE)
+		return (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden) && (chat.payType == TLRPC.PAY_TYPE_SUBSCRIBE)
 	}
 
 	@JvmStatic
-	fun isOnlineCourse(chat: Chat?): Boolean {
-		return (chat is TL_channel || chat is TL_channelForbidden) && (chat.pay_type == Chat.PAY_TYPE_BASE)
+	fun isMasterclass(chat: Chat?): Boolean {
+		return (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden) && (chat.payType == TLRPC.PAY_TYPE_BASE)
 	}
 
 	@JvmStatic
 	fun isPaidChannel(chat: Chat?): Boolean {
-		return (chat is TL_channel || chat is TL_channelForbidden) && (chat.pay_type > Chat.PAY_TYPE_NONE)
+		return (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden) && (chat.payType > TLRPC.PAY_TYPE_NONE)
 	}
 
 	@JvmStatic
 	fun isMegagroup(chat: Chat?): Boolean {
-		return (chat is TL_channel || chat is TL_channelForbidden) && chat.megagroup
+		return (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden) && chat.megagroup
 	}
 
 	@JvmStatic
@@ -305,7 +274,7 @@ object ChatObject {
 
 	@JvmStatic
 	fun hasAdminRights(chat: Chat?): Boolean {
-		return chat != null && (chat.creator || chat.admin_rights != null && chat.admin_rights.flags != 0)
+		return chat != null && (chat.creator || chat.adminRights != null && chat.adminRights!!.flags != 0)
 	}
 
 	fun canChangeChatInfo(chat: Chat?): Boolean {
@@ -367,7 +336,7 @@ object ChatObject {
 	}
 
 	fun shouldSendAnonymously(chat: Chat?): Boolean {
-		return chat?.admin_rights?.anonymous == true
+		return chat?.adminRights?.anonymous == true
 	}
 
 	@JvmStatic
@@ -377,12 +346,12 @@ object ChatObject {
 
 	@JvmStatic
 	fun getSendAsPeerId(chat: Chat?, chatFull: ChatFull?, invertChannel: Boolean): Long {
-		if (chat != null && chatFull != null && chatFull.default_send_as != null) {
-			val p = chatFull.default_send_as
-			return if (p.user_id != 0L) p.user_id else if (invertChannel) -p.channel_id else p.channel_id
+		if (chat != null && chatFull != null && chatFull.defaultSendAs != null) {
+			val p = chatFull.defaultSendAs ?: return 0L
+			return if (p.userId != 0L) p.userId else if (invertChannel) -p.channelId else p.channelId
 		}
 
-		return if (chat?.admin_rights?.anonymous == true) {
+		return if (chat?.adminRights?.anonymous == true) {
 			if (invertChannel) -chat.id else chat.id
 		}
 		else {
@@ -396,12 +365,12 @@ object ChatObject {
 		}
 
 		if (isChannel(chat)) {
-			if (chat.megagroup && (chat.admin_rights != null && (chat.admin_rights.post_messages || chat.admin_rights.add_admins) || chat.creator)) {
+			if (chat.megagroup && (chat.adminRights != null && (chat.adminRights?.postMessages == true || chat.adminRights?.addAdmins == true) || chat.creator)) {
 				return true
 			}
 		}
 		else {
-			if (chat.migrated_to == null) {
+			if ((chat as? TLRPC.TLChat)?.migratedTo == null) {
 				return true
 			}
 		}
@@ -417,13 +386,13 @@ object ChatObject {
 //			return false
 //		}
 //
-//		return canUserDoAction(chat, ACTION_PIN) || isChannel(chat) && !chat.megagroup && chat.admin_rights != null && chat.admin_rights.edit_messages
+//		return canUserDoAction(chat, ACTION_PIN) || isChannel(chat) && !chat.megagroup && chat.adminRights != null && chat.adminRights.edit_messages
 	}
 
 	@JvmStatic
 	fun isChannel(chatId: Long, currentAccount: Int): Boolean {
 		val chat = MessagesController.getInstance(currentAccount).getChat(chatId)
-		return chat is TL_channel || chat is TL_channelForbidden
+		return chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden
 	}
 
 	@JvmStatic
@@ -444,34 +413,33 @@ object ChatObject {
 			return false
 		}
 
-		return !isChannel(chat) || chat.creator || chat.admin_rights != null && chat.admin_rights.post_messages || !chat.broadcast && !chat.gigagroup || chat.gigagroup && hasAdminRights(chat)
+		return !isChannel(chat) || chat.creator || chat.adminRights != null && chat.adminRights?.postMessages == true || !chat.broadcast && !chat.gigagroup || chat.gigagroup && hasAdminRights(chat)
 	}
 
-	@JvmStatic
-	fun getBannedRightsString(bannedRights: TL_chatBannedRights?): String {
+	fun getBannedRightsString(bannedRights: TLRPC.TLChatBannedRights?): String {
 		var currentBannedRights = ""
 
 		if (bannedRights != null) {
-			currentBannedRights += if (bannedRights.view_messages) 1 else 0
-			currentBannedRights += if (bannedRights.send_messages) 1 else 0
-			currentBannedRights += if (bannedRights.send_media) 1 else 0
-			currentBannedRights += if (bannedRights.send_stickers) 1 else 0
-			currentBannedRights += if (bannedRights.send_gifs) 1 else 0
-			currentBannedRights += if (bannedRights.send_games) 1 else 0
-			currentBannedRights += if (bannedRights.send_inline) 1 else 0
-			currentBannedRights += if (bannedRights.embed_links) 1 else 0
-			currentBannedRights += if (bannedRights.send_polls) 1 else 0
-			currentBannedRights += if (bannedRights.invite_users) 1 else 0
-			currentBannedRights += if (bannedRights.change_info) 1 else 0
-			currentBannedRights += if (bannedRights.pin_messages) 1 else 0
-			currentBannedRights += bannedRights.until_date
+			currentBannedRights += if (bannedRights.viewMessages) 1 else 0
+			currentBannedRights += if (bannedRights.sendMessages) 1 else 0
+			currentBannedRights += if (bannedRights.sendMedia) 1 else 0
+			currentBannedRights += if (bannedRights.sendStickers) 1 else 0
+			currentBannedRights += if (bannedRights.sendGifs) 1 else 0
+			currentBannedRights += if (bannedRights.sendGames) 1 else 0
+			currentBannedRights += if (bannedRights.sendInline) 1 else 0
+			currentBannedRights += if (bannedRights.embedLinks) 1 else 0
+			currentBannedRights += if (bannedRights.sendPolls) 1 else 0
+			currentBannedRights += if (bannedRights.inviteUsers) 1 else 0
+			currentBannedRights += if (bannedRights.changeInfo) 1 else 0
+			currentBannedRights += if (bannedRights.pinMessages) 1 else 0
+			currentBannedRights += bannedRights.untilDate
 		}
 
 		return currentBannedRights
 	}
 
 	private fun hasPhoto(chat: Chat?): Boolean {
-		return chat?.photo != null && chat.photo !is TL_chatPhotoEmpty
+		return chat?.photo != null && chat.photo !is TLRPC.TLChatPhotoEmpty
 	}
 
 	fun getPhoto(chat: Chat?): ChatPhoto? {
@@ -483,8 +451,8 @@ object ChatObject {
 		@IntDef(RECORD_TYPE_AUDIO, RECORD_TYPE_VIDEO_PORTRAIT, RECORD_TYPE_VIDEO_LANDSCAPE)
 		annotation class RecordType
 
-		var participantsByVideoSources = SparseArray<TL_groupCallParticipant>()
-		var participantsByPresentationSources = SparseArray<TL_groupCallParticipant>()
+		var participantsByVideoSources = SparseArray<TLRPC.TLGroupCallParticipant>()
+		var participantsByPresentationSources = SparseArray<TLRPC.TLGroupCallParticipant>()
 		private var nextLoadOffset: String? = null
 		private var activeVideos = 0
 		var rtmpStreamParticipant: VideoParticipant? = null
@@ -493,7 +461,7 @@ object ChatObject {
 		private var typingUpdateRunnableScheduled = false
 		private var lastLoadGuid = 0
 		private val loadingGuids = HashSet<Int>()
-		private val updatesQueue = mutableListOf<TL_updateGroupCallParticipants>()
+		private val updatesQueue = mutableListOf<TLRPC.TLUpdateGroupCallParticipants>()
 		private var updatesStartWaitTime: Long = 0
 		private val loadingUids = HashSet<Long>()
 		private val loadingSsrcs = HashSet<Long>()
@@ -508,16 +476,16 @@ object ChatObject {
 		var chatId: Long = 0
 
 		@JvmField
-		var participants = LongSparseArray<TL_groupCallParticipant>()
+		var participants = LongSparseArray<TLRPC.TLGroupCallParticipant>()
 
 		@JvmField
-		val sortedParticipants = ArrayList<TL_groupCallParticipant>()
+		val sortedParticipants = ArrayList<TLRPC.TLGroupCallParticipant>()
 
 		@JvmField
 		val visibleVideoParticipants = ArrayList<VideoParticipant>()
 
 		@JvmField
-		val visibleParticipants = ArrayList<TL_groupCallParticipant>()
+		val visibleParticipants = ArrayList<TLRPC.TLGroupCallParticipant>()
 
 		@JvmField
 		val thumbs = HashMap<String, Bitmap>()
@@ -531,7 +499,7 @@ object ChatObject {
 		var invitedUsersMap = HashSet<Long>()
 
 		@JvmField
-		var participantsBySources = SparseArray<TL_groupCallParticipant>()
+		var participantsBySources = SparseArray<TLRPC.TLGroupCallParticipant>()
 
 		@JvmField
 		var membersLoadEndReached = false
@@ -556,14 +524,14 @@ object ChatObject {
 		private val typingUpdateRunnable = Runnable {
 			typingUpdateRunnableScheduled = false
 			checkOnlineParticipants()
-			currentAccount!!.notificationCenter.postNotificationName(NotificationCenter.groupCallTypingsUpdated)
+			currentAccount?.notificationCenter?.postNotificationName(NotificationCenter.groupCallTypingsUpdated)
 		}
 
 		@JvmField
 		var selfPeer: Peer? = null
 
 		@JvmField
-		val currentSpeakingPeers = LongSparseArray<TL_groupCallParticipant?>()
+		val currentSpeakingPeers = LongSparseArray<TLRPC.TLGroupCallParticipant?>()
 
 		private val updateCurrentSpeakingRunnable = object : Runnable {
 			override fun run() {
@@ -582,7 +550,7 @@ object ChatObject {
 
 						if (key > 0) {
 							val user = MessagesController.getInstance(currentAccount!!.currentAccount).getUser(key)
-							FileLog.d("GroupCall: remove from speaking " + key + " " + user?.first_name)
+							FileLog.d("GroupCall: remove from speaking " + key + " " + user?.firstName)
 						}
 						else {
 							val user = MessagesController.getInstance(currentAccount!!.currentAccount).getChat(-key)
@@ -605,12 +573,12 @@ object ChatObject {
 			}
 		}
 
-		fun setCall(account: AccountInstance?, chatId: Long, groupCall: TL_phone_groupCall?) {
+		fun setCall(account: AccountInstance?, chatId: Long, groupCall: TLRPC.TLPhoneGroupCall?) {
 			this.chatId = chatId
 
 			currentAccount = account
 			call = groupCall?.call
-			recording = (call != null && call?.record_start_date != 0)
+			recording = (call is TLRPC.TLGroupCall) && (call as? TLRPC.TLGroupCall)?.recordStartDate != 0
 
 			var date = Int.MAX_VALUE
 
@@ -623,13 +591,13 @@ object ChatObject {
 
 			sortParticipants()
 
-			nextLoadOffset = groupCall?.participants_next_offset
+			nextLoadOffset = groupCall?.participantsNextOffset
 
 			loadMembers(true)
 
 			createNoVideoParticipant()
 
-			if (call?.rtmp_stream == true) {
+			if ((call as? TLRPC.TLGroupCall)?.rtmpStream == true) {
 				createRtmpStreamParticipant(emptyList())
 			}
 		}
@@ -641,33 +609,32 @@ object ChatObject {
 		//            TLRPC.TL_phone_getGroupCallStreamChannels getGroupCallStreamChannels = new TLRPC.TL_phone_getGroupCallStreamChannels();
 		//            getGroupCallStreamChannels.call = getInputGroupCall();
 		//            currentAccount.getConnectionsManager().sendRequest(getGroupCallStreamChannels, (response, error, timestamp) -> {
-		//                if (response instanceof TLRPC.TL_phone_groupCallStreamChannels) {
-		//                    TLRPC.TL_phone_groupCallStreamChannels streamChannels = (TLRPC.TL_phone_groupCallStreamChannels) response;
+		//                if (response instanceof TLRPC.TLRPC.TLPhoneGroupCallStreamChannels) {
+		//                    TLRPC.TLRPC.TLPhoneGroupCallStreamChannels streamChannels = (TLRPC.TLRPC.TLPhoneGroupCallStreamChannels) response;
 		//                    createRtmpStreamParticipant(streamChannels.channels);
 		//                    loadedRtmpStreamParticipant = true;
 		//                }
 		//            }, ConnectionsManager.RequestFlagFailOnServerErrors, ConnectionsManager.ConnectionTypeDownload, call.stream_dc_id);
 		//        }
 
-		fun createRtmpStreamParticipant(channels: List<TL_groupCallStreamChannel>?) {
+		fun createRtmpStreamParticipant(channels: List<TLRPC.TLGroupCallStreamChannel>?) {
 			if (loadedRtmpStreamParticipant && rtmpStreamParticipant != null) {
 				return
 			}
 
-			val participant = if (rtmpStreamParticipant != null) rtmpStreamParticipant!!.participant else TL_groupCallParticipant()
-			participant.peer = TL_peerChat()
-			participant.peer.channel_id = chatId
-			participant.video = TL_groupCallParticipantVideo()
+			val participant = rtmpStreamParticipant?.participant ?: TLRPC.TLGroupCallParticipant()
+			participant.peer = TLRPC.TLPeerChat().also { it.chatId = chatId } // MARK: was participant.peer.channelId = chatId
+			participant.video = TLRPC.TLGroupCallParticipantVideo()
 
-			val sourceGroup = TL_groupCallParticipantVideoSourceGroup()
+			val sourceGroup = TLRPC.TLGroupCallParticipantVideoSourceGroup()
 			sourceGroup.semantics = "SIM"
 
 			channels?.forEach {
 				sourceGroup.sources.add(it.channel)
 			}
 
-			participant.video.source_groups.add(sourceGroup)
-			participant.video.endpoint = "unified"
+			participant.video?.sourceGroups?.add(sourceGroup)
+			participant.video?.endpoint = "unified"
 			participant.videoEndpoint = "unified"
 
 			rtmpStreamParticipant = VideoParticipant(participant, presentation = false, hasSame = false)
@@ -684,13 +651,14 @@ object ChatObject {
 				return
 			}
 
-			val noVideoParticipant = TL_groupCallParticipant()
-			noVideoParticipant.peer = TL_peerChannel()
-			noVideoParticipant.peer.channel_id = chatId
+			val noVideoParticipant = TLRPC.TLGroupCallParticipant()
+			noVideoParticipant.peer = TLRPC.TLPeerChannel().also { it.channelId = chatId }
 			noVideoParticipant.muted = true
-			noVideoParticipant.video = TL_groupCallParticipantVideo()
-			noVideoParticipant.video.paused = true
-			noVideoParticipant.video.endpoint = ""
+
+			noVideoParticipant.video = TLRPC.TLGroupCallParticipantVideo().also {
+				it.paused = true
+				it.endpoint = ""
+			}
 
 			videoNotAvailableParticipant = VideoParticipant(noVideoParticipant, presentation = false, hasSame = false)
 		}
@@ -702,19 +670,19 @@ object ChatObject {
 				return
 			}
 
-			val selfDummyParticipant = TL_groupCallParticipant()
+			val selfDummyParticipant = TLRPC.TLGroupCallParticipant()
 			selfDummyParticipant.peer = selfPeer
 			selfDummyParticipant.muted = true
-			selfDummyParticipant.self = true
-			selfDummyParticipant.video_joined = call!!.can_start_video
+			selfDummyParticipant.isSelf = true
+			selfDummyParticipant.videoJoined = (call as? TLRPC.TLGroupCall)?.canStartVideo == true
 
-			val chat = currentAccount!!.messagesController.getChat(chatId)
+			val chat = currentAccount?.messagesController?.getChat(chatId)
 
-			selfDummyParticipant.can_self_unmute = !call!!.join_muted || canManageCalls(chat)
+			selfDummyParticipant.canSelfUnmute = (call as? TLRPC.TLGroupCall)?.joinMuted != true || canManageCalls(chat)
 			selfDummyParticipant.date = currentAccount!!.connectionsManager.currentTime
 
-			if (canManageCalls(chat) || !isChannel(chat) || chat.megagroup || selfDummyParticipant.can_self_unmute) {
-				selfDummyParticipant.active_date = currentAccount!!.connectionsManager.currentTime
+			if (canManageCalls(chat) || !isChannel(chat) || chat.megagroup || selfDummyParticipant.canSelfUnmute) {
+				selfDummyParticipant.activeDate = currentAccount?.connectionsManager?.currentTime ?: 0
 			}
 
 			if (selfId > 0) {
@@ -753,11 +721,12 @@ object ChatObject {
 		}
 
 		fun shouldShowPanel(): Boolean {
-			return call!!.participants_count > 0 || call!!.rtmp_stream || isScheduled
+			val call = (call as? TLRPC.TLGroupCall) ?: return false
+			return call.participantsCount > 0 || call.rtmpStream || isScheduled
 		}
 
 		val isScheduled: Boolean
-			get() = call!!.flags and 128 != 0
+			get() = ((call as? TLRPC.TLGroupCall)?.flags ?: 0) and 128 != 0
 
 		private val selfId: Long
 			get() = if (selfPeer != null) {
@@ -767,8 +736,8 @@ object ChatObject {
 				currentAccount?.userConfig?.getClientUserId() ?: 0L
 			}
 
-		private fun onParticipantsLoad(loadedParticipants: ArrayList<TL_groupCallParticipant>, fromBegin: Boolean, reqOffset: String?, nextOffset: String?, version: Int, participantCount: Int) {
-			var old: LongSparseArray<TL_groupCallParticipant>? = null
+		private fun onParticipantsLoad(loadedParticipants: List<TLRPC.TLGroupCallParticipant>, fromBegin: Boolean, reqOffset: String?, nextOffset: String?, version: Int, participantCount: Int) {
+			var old: LongSparseArray<TLRPC.TLGroupCallParticipant>? = null
 			val selfId = selfId
 			val oldSelf = participants[selfId]
 
@@ -795,11 +764,13 @@ object ChatObject {
 			}
 
 			if (reqOffset.isNullOrEmpty()) {
-				call?.version = version
-				call?.participants_count = participantCount
+				(call as? TLRPC.TLGroupCall)?.let {
+					it.version = version
+					it.participantsCount = participantCount
 
-				if (BuildConfig.DEBUG) {
-					FileLog.d("new participants count ${call?.participants_count ?: 0}")
+					if (BuildConfig.DEBUG) {
+						FileLog.d("new participants count ${it.participantsCount}")
+					}
 				}
 			}
 
@@ -812,7 +783,7 @@ object ChatObject {
 			val n = loadedParticipants.size
 
 			while (a <= n) {
-				var participant: TL_groupCallParticipant
+				var participant: TLRPC.TLGroupCallParticipant
 
 				if (a == n) {
 					if (fromBegin && oldSelf != null && !hasSelf) {
@@ -826,7 +797,7 @@ object ChatObject {
 				else {
 					participant = loadedParticipants[a]
 
-					if (participant.self) {
+					if (participant.isSelf) {
 						hasSelf = true
 					}
 				}
@@ -838,33 +809,33 @@ object ChatObject {
 
 					processAllSources(oldParticipant, false)
 
-					if (oldParticipant.self) {
-						participant.lastTypingDate = oldParticipant.active_date
+					if (oldParticipant.isSelf) {
+						participant.lastTypingDate = oldParticipant.activeDate
 					}
 					else {
-						participant.lastTypingDate = max(participant.active_date, oldParticipant.active_date)
+						participant.lastTypingDate = max(participant.activeDate, oldParticipant.activeDate)
 					}
 
 					if (time != participant.lastVisibleDate) {
-						participant.active_date = participant.lastTypingDate
+						participant.activeDate = participant.lastTypingDate
 					}
 				}
 				else if (old != null) {
 					oldParticipant = old[MessageObject.getPeerId(participant.peer)]
 
 					if (oldParticipant != null) {
-						if (oldParticipant.self) {
-							participant.lastTypingDate = oldParticipant.active_date
+						if (oldParticipant.isSelf) {
+							participant.lastTypingDate = oldParticipant.activeDate
 						}
 						else {
-							participant.lastTypingDate = max(participant.active_date, oldParticipant.active_date)
+							participant.lastTypingDate = max(participant.activeDate, oldParticipant.activeDate)
 						}
 
 						if (time != participant.lastVisibleDate) {
-							participant.active_date = participant.lastTypingDate
+							participant.activeDate = participant.lastTypingDate
 						}
 						else {
-							participant.active_date = oldParticipant.active_date
+							participant.activeDate = oldParticipant.activeDate
 						}
 					}
 				}
@@ -876,8 +847,8 @@ object ChatObject {
 				a++
 			}
 
-			if (call!!.participants_count < participants.size()) {
-				call!!.participants_count = participants.size()
+			if (((call as? TLRPC.TLGroupCall)?.participantsCount ?: 0) < participants.size()) {
+				(call as? TLRPC.TLGroupCall)?.participantsCount = participants.size()
 			}
 
 			sortParticipants()
@@ -907,7 +878,7 @@ object ChatObject {
 
 			loadingMembers = true
 
-			val req = TL_phone_getGroupParticipants()
+			val req = TLRPC.TLPhoneGetGroupParticipants()
 			req.call = inputGroupCall
 			req.offset = nextLoadOffset ?: ""
 			req.limit = 20
@@ -921,12 +892,12 @@ object ChatObject {
 					}
 
 					if (response != null) {
-						val groupParticipants = response as TL_phone_groupParticipants
+						val groupParticipants = response as TLRPC.TLPhoneGroupParticipants
 
 						currentAccount?.messagesController?.putUsers(groupParticipants.users, false)
 						currentAccount?.messagesController?.putChats(groupParticipants.chats, false)
 
-						onParticipantsLoad(groupParticipants.participants, fromBegin, req.offset, groupParticipants.next_offset, groupParticipants.version, groupParticipants.count)
+						onParticipantsLoad(groupParticipants.participants, fromBegin, req.offset, groupParticipants.nextOffset, groupParticipants.version, groupParticipants.count)
 					}
 				}
 			}
@@ -941,7 +912,7 @@ object ChatObject {
 		}
 
 		fun setTitle(title: String?) {
-			val req = TL_phone_editGroupCallTitle()
+			val req = TLRPC.TLPhoneEditGroupCallTitle()
 			req.call = inputGroupCall
 			req.title = title
 
@@ -975,7 +946,7 @@ object ChatObject {
 				if (participant != null) {
 					if (date - participant.lastTypingDate > 10) {
 						if (participant.lastVisibleDate != date.toLong()) {
-							participant.active_date = date
+							participant.activeDate = date
 						}
 
 						participant.lastTypingDate = date
@@ -1028,27 +999,30 @@ object ChatObject {
 
 			set.addAll(participantsToLoad)
 
-			val req = TL_phone_getGroupParticipants()
+			val req = TLRPC.TLPhoneGetGroupParticipants()
 			req.call = inputGroupCall
 
 			for (uid in participantsToLoad) {
 				if (isIds) {
 					if (uid > 0) {
-						val peerUser = TL_inputPeerUser()
-						peerUser.user_id = uid
+						val peerUser = TLRPC.TLInputPeerUser()
+						peerUser.userId = uid
+
 						req.ids.add(peerUser)
 					}
 					else {
-						val chat = currentAccount!!.messagesController.getChat(-uid)
+						val chat = currentAccount?.messagesController?.getChat(-uid)
 						var inputPeer: InputPeer
+
 						if (chat == null || isChannel(chat)) {
-							inputPeer = TL_inputPeerChannel()
-							inputPeer.channel_id = -uid
+							inputPeer = TLRPC.TLInputPeerChannel()
+							inputPeer.channelId = -uid
 						}
 						else {
-							inputPeer = TL_inputPeerChat()
-							inputPeer.chat_id = -uid
+							inputPeer = TLRPC.TLInputPeerChat()
+							inputPeer.chatId = -uid
 						}
+
 						req.ids.add(inputPeer)
 					}
 				}
@@ -1067,7 +1041,7 @@ object ChatObject {
 					}
 
 					if (response != null) {
-						val groupParticipants = response as TL_phone_groupParticipants
+						val groupParticipants = response as TLRPC.TLPhoneGroupParticipants
 
 						currentAccount?.messagesController?.putUsers(groupParticipants.users, false)
 						currentAccount?.messagesController?.putChats(groupParticipants.chats, false)
@@ -1093,8 +1067,10 @@ object ChatObject {
 							}
 						}
 
-						if (call!!.participants_count < participants.size()) {
-							call!!.participants_count = participants.size()
+						(call as? TLRPC.TLGroupCall)?.let {
+							if (it.participantsCount < participants.size()) {
+								it.participantsCount = participants.size()
+							}
 						}
 
 						sortParticipants()
@@ -1114,7 +1090,7 @@ object ChatObject {
 			}
 		}
 
-		private fun processAllSources(participant: TL_groupCallParticipant, add: Boolean) {
+		private fun processAllSources(participant: TLRPC.TLGroupCallParticipant, add: Boolean) {
 			if (participant.source != 0) {
 				if (add) {
 					participantsBySources.put(participant.source, participant)
@@ -1128,21 +1104,21 @@ object ChatObject {
 				val data = if (c == 0) participant.video else participant.presentation
 
 				if (data != null) {
-					if (data.flags and 2 != 0 && data.audio_source != 0) {
+					if (data.flags and 2 != 0 && data.audioSource != 0) {
 						if (add) {
-							participantsBySources.put(data.audio_source, participant)
+							participantsBySources.put(data.audioSource, participant)
 						}
 						else {
-							participantsBySources.remove(data.audio_source)
+							participantsBySources.remove(data.audioSource)
 						}
 					}
 
 					val sourcesArray = if (c == 0) participantsByVideoSources else participantsByPresentationSources
 					var a = 0
-					val n = data.source_groups.size
+					val n = data.sourceGroups.size
 
 					while (a < n) {
-						val sourceGroup = data.source_groups[a]
+						val sourceGroup = data.sourceGroups[a]
 						var b = 0
 						val n2 = sourceGroup.sources.size
 
@@ -1212,7 +1188,7 @@ object ChatObject {
 					if (levels[a] > 0.1f) {
 						if (voice[a] && participant.lastTypingDate + 1 < currentTime) {
 							if (time != participant.lastVisibleDate) {
-								participant.active_date = currentTime
+								participant.activeDate = currentTime
 							}
 
 							participant.lastTypingDate = currentTime
@@ -1223,10 +1199,10 @@ object ChatObject {
 						participant.lastSpeakTime = uptime
 						participant.amplitude = levels[a]
 
-						if (currentSpeakingPeers[peerId, null] == null) {
+						if (currentSpeakingPeers.get(peerId, null) == null) {
 							if (peerId > 0) {
 								val user = MessagesController.getInstance(currentAccount!!.currentAccount).getUser(peerId)
-								FileLog.d("GroupCall: add to current speaking " + peerId + " " + user?.first_name)
+								FileLog.d("GroupCall: add to current speaking " + peerId + " " + user?.firstName)
 							}
 							else {
 								val user = MessagesController.getInstance(currentAccount!!.currentAccount).getChat(-peerId)
@@ -1240,12 +1216,12 @@ object ChatObject {
 					}
 					else {
 						if (uptime - participant.lastSpeakTime >= 500) {
-							if (currentSpeakingPeers[peerId, null] != null) {
+							if (currentSpeakingPeers.get(peerId, null) != null) {
 								currentSpeakingPeers.remove(peerId)
 
 								if (peerId > 0) {
 									val user = MessagesController.getInstance(currentAccount!!.currentAccount).getUser(peerId)
-									FileLog.d("GroupCall: remove from speaking " + peerId + " " + user?.first_name)
+									FileLog.d("GroupCall: remove from speaking " + peerId + " " + user?.firstName)
 								}
 								else {
 									val user = MessagesController.getInstance(currentAccount!!.currentAccount).getChat(-peerId)
@@ -1328,11 +1304,13 @@ object ChatObject {
 			}
 		}
 
-		private fun isValidUpdate(update: TL_updateGroupCallParticipants): Int {
-			return if (call!!.version + 1 == update.version || call!!.version == update.version) {
+		private fun isValidUpdate(update: TLRPC.TLUpdateGroupCallParticipants): Int {
+			val call = call as? TLRPC.TLGroupCall ?: return 2
+
+			return if (call.version + 1 == update.version || call.version == update.version) {
 				0
 			}
-			else if (call!!.version < update.version) {
+			else if (call.version < update.version) {
 				1
 			}
 			else {
@@ -1346,19 +1324,16 @@ object ChatObject {
 			}
 			else {
 				when (peer) {
-					is TL_inputPeerUser -> {
-						selfPeer = TL_peerUser()
-						selfPeer?.user_id = peer.user_id
+					is TLRPC.TLInputPeerUser -> {
+						selfPeer = TLRPC.TLPeerUser().also { it.userId = peer.userId }
 					}
 
-					is TL_inputPeerChat -> {
-						selfPeer = TL_peerChat()
-						selfPeer?.chat_id = peer.chat_id
+					is TLRPC.TLInputPeerChat -> {
+						selfPeer = TLRPC.TLPeerChat().also { it.chatId = peer.chatId }
 					}
 
 					else -> {
-						selfPeer = TL_peerChannel()
-						selfPeer?.channel_id = peer.channel_id
+						selfPeer = TLRPC.TLPeerChannel().also { it.channelId = peer.channelId }
 					}
 				}
 			}
@@ -1444,19 +1419,19 @@ object ChatObject {
 		}
 
 		fun reloadGroupCall() {
-			val req = TL_phone_getGroupCall()
+			val req = TLRPC.TLPhoneGetGroupCall()
 			req.call = inputGroupCall
 			req.limit = 100
 
 			currentAccount?.connectionsManager?.sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
-					if (response is TL_phone_groupCall) {
-						call = response.call
+					if (response is TLRPC.TLPhoneGroupCall) {
+						val call = response.call.also { this.call = it } as? TLRPC.TLGroupCall
 
 						currentAccount?.messagesController?.putUsers(response.users, false)
 						currentAccount?.messagesController?.putChats(response.chats, false)
 
-						onParticipantsLoad(response.participants, true, "", response.participants_next_offset, response.call.version, response.call.participants_count)
+						onParticipantsLoad(response.participants, true, "", response.participantsNextOffset, call?.version ?: 0, call?.participantsCount ?: 0)
 					}
 				}
 			}
@@ -1469,7 +1444,7 @@ object ChatObject {
 
 			loadingGroupCall = true
 
-			val req = TL_phone_getGroupParticipants()
+			val req = TLRPC.TLPhoneGetGroupParticipants()
 			req.call = inputGroupCall
 			req.offset = ""
 			req.limit = 1
@@ -1480,16 +1455,18 @@ object ChatObject {
 					loadingGroupCall = false
 
 					if (response != null) {
-						val res = response as TL_phone_groupParticipants
+						val res = response as TLRPC.TLPhoneGroupParticipants
 
 						currentAccount?.messagesController?.putUsers(res.users, false)
 						currentAccount?.messagesController?.putChats(res.chats, false)
 
-						if (call?.participants_count != res.count) {
-							call?.participants_count = res.count
+						val call = call as? TLRPC.TLGroupCall
+
+						if (call?.participantsCount != res.count) {
+							call?.participantsCount = res.count
 
 							if (BuildConfig.DEBUG) {
-								FileLog.d("new participants reload count ${call?.participants_count}")
+								FileLog.d("new participants reload count ${call?.participantsCount}")
 							}
 
 							currentAccount?.notificationCenter?.postNotificationName(NotificationCenter.groupCallUpdated, chatId, call!!.id, false)
@@ -1499,7 +1476,7 @@ object ChatObject {
 			}
 		}
 
-		fun processParticipantsUpdate(update: TL_updateGroupCallParticipants, fromQueue: Boolean) {
+		fun processParticipantsUpdate(update: TLRPC.TLUpdateGroupCallParticipants, fromQueue: Boolean) {
 			if (!fromQueue) {
 				var versioned = false
 				var a = 0
@@ -1516,7 +1493,7 @@ object ChatObject {
 					a++
 				}
 
-				if (versioned && call!!.version + 1 < update.version) {
+				if (versioned && ((call as? TLRPC.TLGroupCall)?.version ?: 0) + 1 < update.version) {
 					if (reloadingMembers || updatesStartWaitTime == 0L || abs(System.currentTimeMillis() - updatesStartWaitTime) <= 1500) {
 						if (updatesStartWaitTime == 0L) {
 							updatesStartWaitTime = System.currentTimeMillis()
@@ -1540,7 +1517,7 @@ object ChatObject {
 					return
 				}
 
-				if (versioned && update.version < call!!.version) {
+				if (versioned && update.version < ((call as? TLRPC.TLGroupCall)?.version ?: 0)) {
 					if (BuildConfig.DEBUG) {
 						FileLog.d("ignore processParticipantsUpdate because of version")
 					}
@@ -1581,7 +1558,7 @@ object ChatObject {
 				val oldParticipant = participants[pid]
 
 				if (participant.left) {
-					if (oldParticipant == null && update.version == call!!.version) {
+					if (oldParticipant == null && update.version == ((call as? TLRPC.TLGroupCall)?.version ?: 0)) {
 						if (BuildConfig.DEBUG) {
 							FileLog.d("Unknown participant left, reload call")
 						}
@@ -1597,10 +1574,10 @@ object ChatObject {
 						sortedParticipants.remove(oldParticipant)
 						visibleParticipants.remove(oldParticipant)
 
-						if (currentSpeakingPeers[pid, null] != null) {
+						if (currentSpeakingPeers.get(pid, null) != null) {
 							if (pid > 0) {
 								val user = MessagesController.getInstance(currentAccount!!.currentAccount).getUser(pid)
-								FileLog.d("GroupCall: left, remove from speaking " + pid + " " + user?.first_name)
+								FileLog.d("GroupCall: left, remove from speaking " + pid + " " + user?.firstName)
 							}
 							else {
 								val user = MessagesController.getInstance(currentAccount!!.currentAccount).getChat(-pid)
@@ -1626,10 +1603,12 @@ object ChatObject {
 						}
 					}
 
-					call!!.participants_count--
+					(call as? TLRPC.TLGroupCall)?.let {
+						it.participantsCount--
 
-					if (call!!.participants_count < 0) {
-						call!!.participants_count = 0
+						if (it.participantsCount < 0) {
+							it.participantsCount = 0
+						}
 					}
 
 					updated = true
@@ -1647,12 +1626,12 @@ object ChatObject {
 
 						oldParticipant.muted = participant.muted
 
-						if (participant.muted && currentSpeakingPeers[pid, null] != null) {
+						if (participant.muted && currentSpeakingPeers.get(pid, null) != null) {
 							currentSpeakingPeers.remove(pid)
 
 							if (pid > 0) {
 								val user = MessagesController.getInstance(currentAccount!!.currentAccount).getUser(pid)
-								FileLog.d("GroupCall: muted remove from speaking " + pid + " " + user?.first_name)
+								FileLog.d("GroupCall: muted remove from speaking " + pid + " " + user?.firstName)
 							}
 							else {
 								val user = MessagesController.getInstance(currentAccount!!.currentAccount).getChat(-pid)
@@ -1664,32 +1643,32 @@ object ChatObject {
 
 						if (!participant.min) {
 							oldParticipant.volume = participant.volume
-							oldParticipant.muted_by_you = participant.muted_by_you
+							oldParticipant.mutedByYou = participant.mutedByYou
 						}
 						else {
 							if (participant.flags and 128 != 0 && oldParticipant.flags and 128 == 0) {
 								participant.flags = participant.flags and 128.inv()
 							}
 
-							if (participant.volume_by_admin && oldParticipant.volume_by_admin) {
+							if (participant.volumeByAdmin && oldParticipant.volumeByAdmin) {
 								oldParticipant.volume = participant.volume
 							}
 						}
 
 						oldParticipant.flags = participant.flags
-						oldParticipant.can_self_unmute = participant.can_self_unmute
-						oldParticipant.video_joined = participant.video_joined
+						oldParticipant.canSelfUnmute = participant.canSelfUnmute
+						oldParticipant.videoJoined = participant.videoJoined
 
-						if (oldParticipant.raise_hand_rating == 0L && participant.raise_hand_rating != 0L) {
+						if (oldParticipant.raiseHandRating == 0L && participant.raiseHandRating != 0L) {
 							oldParticipant.lastRaiseHandDate = SystemClock.elapsedRealtime()
 						}
 
-						oldParticipant.raise_hand_rating = participant.raise_hand_rating
+						oldParticipant.raiseHandRating = participant.raiseHandRating
 						oldParticipant.date = participant.date
-						oldParticipant.lastTypingDate = max(oldParticipant.active_date, participant.active_date)
+						oldParticipant.lastTypingDate = max(oldParticipant.activeDate, participant.activeDate)
 
 						if (time != oldParticipant.lastVisibleDate) {
-							oldParticipant.active_date = oldParticipant.lastTypingDate
+							oldParticipant.activeDate = oldParticipant.lastTypingDate
 						}
 
 						if (oldParticipant.source != participant.source || !isSameVideo(oldParticipant.video, participant.video) || !isSameVideo(oldParticipant.presentation, participant.presentation)) {
@@ -1706,36 +1685,38 @@ object ChatObject {
 							participant.videoIndex = oldParticipant.videoIndex
 						}
 						else if (oldParticipant.video != null && participant.video != null) {
-							oldParticipant.video.paused = participant.video.paused
+							oldParticipant.video?.paused = participant.video?.paused == true
 						}
 					}
 					else {
-						if (participant.just_joined) {
+						if (participant.justJoined) {
 							if (pid != selfId) {
 								justJoinedId = pid
 							}
 
-							call!!.participants_count++
+							(call as? TLRPC.TLGroupCall)?.let { call ->
+								call.participantsCount++
 
-							if (update.version == call!!.version) {
-								reloadCall = true
+								if (update.version == call.version) {
+									reloadCall = true
 
-								if (BuildConfig.DEBUG) {
-									FileLog.d("new participant, just joined, reload call")
+									if (BuildConfig.DEBUG) {
+										FileLog.d("new participant, just joined, reload call")
+									}
 								}
-							}
-							else {
-								if (BuildConfig.DEBUG) {
-									FileLog.d("new participant, just joined")
+								else {
+									if (BuildConfig.DEBUG) {
+										FileLog.d("new participant, just joined")
+									}
 								}
 							}
 						}
 
-						if (participant.raise_hand_rating != 0L) {
+						if (participant.raiseHandRating != 0L) {
 							participant.lastRaiseHandDate = SystemClock.elapsedRealtime()
 						}
 
-						if (pid == selfId || sortedParticipants.size < 20 || participant.date <= lastParticipantDate || participant.active_date != 0 || participant.can_self_unmute || !participant.muted || !participant.min || membersLoadEndReached) {
+						if (pid == selfId || sortedParticipants.size < 20 || participant.date <= lastParticipantDate || participant.activeDate != 0 || participant.canSelfUnmute || !participant.muted || !participant.min || membersLoadEndReached) {
 							sortedParticipants.add(participant)
 						}
 
@@ -1744,8 +1725,8 @@ object ChatObject {
 						processAllSources(participant, true)
 					}
 
-					if (pid == selfId && participant.active_date == 0 && (participant.can_self_unmute || !participant.muted)) {
-						participant.active_date = currentAccount!!.connectionsManager.currentTime
+					if (pid == selfId && participant.activeDate == 0 && (participant.canSelfUnmute || !participant.muted)) {
+						participant.activeDate = currentAccount!!.connectionsManager.currentTime
 					}
 
 					changedOrAdded = true
@@ -1759,20 +1740,21 @@ object ChatObject {
 				a++
 			}
 
-			if (update.version > call!!.version) {
-				call!!.version = update.version
+
+			if (update.version > ((call as? TLRPC.TLGroupCall)?.version ?: 0)) {
+				(call as? TLRPC.TLGroupCall)?.version = update.version
 
 				if (!fromQueue) {
 					processUpdatesQueue()
 				}
 			}
 
-			if (call!!.participants_count < participants.size()) {
-				call!!.participants_count = participants.size()
+			if (((call as? TLRPC.TLGroupCall)?.participantsCount ?: 0) < participants.size()) {
+				(call as? TLRPC.TLGroupCall)?.participantsCount = participants.size()
 			}
 
 			if (BuildConfig.DEBUG) {
-				FileLog.d("new participants count after update " + call!!.participants_count)
+				FileLog.d("new participants count after update " + (call as? TLRPC.TLGroupCall)?.participantsCount)
 			}
 
 			if (reloadCall) {
@@ -1792,7 +1774,7 @@ object ChatObject {
 			}
 		}
 
-		private fun isSameVideo(oldVideo: TL_groupCallParticipantVideo?, newVideo: TL_groupCallParticipantVideo?): Boolean {
+		private fun isSameVideo(oldVideo: TLRPC.TLGroupCallParticipantVideo?, newVideo: TLRPC.TLGroupCallParticipantVideo?): Boolean {
 			if (oldVideo == null && newVideo != null || oldVideo != null && newVideo == null) {
 				return false
 			}
@@ -1805,16 +1787,16 @@ object ChatObject {
 				return false
 			}
 
-			if (oldVideo.source_groups.size != newVideo.source_groups.size) {
+			if (oldVideo.sourceGroups.size != newVideo.sourceGroups.size) {
 				return false
 			}
 
 			var a = 0
-			val n = oldVideo.source_groups.size
+			val n = oldVideo.sourceGroups.size
 
 			while (a < n) {
-				val oldGroup = oldVideo.source_groups[a]
-				val newGroup = newVideo.source_groups[a]
+				val oldGroup = oldVideo.sourceGroups[a]
+				val newGroup = newVideo.sourceGroups[a]
 
 				if (!TextUtils.equals(oldGroup.semantics, newGroup.semantics)) {
 					return false
@@ -1841,23 +1823,23 @@ object ChatObject {
 			return true
 		}
 
-		fun processGroupCallUpdate(update: TL_updateGroupCall) {
-			if (call!!.version < update.call.version) {
+		fun processGroupCallUpdate(update: TLRPC.TLUpdateGroupCall) {
+			if (((call as? TLRPC.TLGroupCall)?.version ?: 0) < ((update.call as? TLRPC.TLGroupCall)?.version ?: 0)) {
 				nextLoadOffset = null
 				loadMembers(true)
 			}
 
 			call = update.call
-			recording = call!!.record_start_date != 0
+			recording = (call as? TLRPC.TLGroupCall)?.recordStartDate != 0
 
 			currentAccount?.notificationCenter?.postNotificationName(NotificationCenter.groupCallUpdated, chatId, call!!.id, false)
 		}
 
-		val inputGroupCall: TL_inputGroupCall
+		val inputGroupCall: TLRPC.TLInputGroupCall
 			get() {
-				val inputGroupCall = TL_inputGroupCall()
-				inputGroupCall.id = call!!.id
-				inputGroupCall.access_hash = call!!.access_hash
+				val inputGroupCall = TLRPC.TLInputGroupCall()
+				inputGroupCall.id = call?.id ?: 0L
+				inputGroupCall.accessHash = call?.accessHash ?: 0L
 				return inputGroupCall
 			}
 
@@ -1890,7 +1872,7 @@ object ChatObject {
 				val cameraActive = videoIsActive(participant, false, this)
 				val screenActive = videoIsActive(participant, true, this)
 
-				if (!participant.self && (cameraActive || screenActive)) {
+				if (!participant.isSelf && (cameraActive || screenActive)) {
 					activeVideos++
 				}
 
@@ -1899,7 +1881,7 @@ object ChatObject {
 
 					if (canStreamVideo) {
 						if (participant.videoIndex == 0) {
-							if (participant.self) {
+							if (participant.isSelf) {
 								participant.videoIndex = Int.MAX_VALUE
 							}
 							else {
@@ -1911,14 +1893,14 @@ object ChatObject {
 						participant.videoIndex = 0
 					}
 				}
-				else if ((participant.self || !canStreamVideo || participant.video == null) && participant.presentation == null) {
+				else if ((participant.isSelf || !canStreamVideo || participant.video == null) && participant.presentation == null) {
 					participant.videoIndex = 0
 				}
 
 				i++
 			}
 
-			val comparator = Comparator { o1: TL_groupCallParticipant, o2: TL_groupCallParticipant ->
+			val comparator = Comparator { o1: TLRPC.TLGroupCallParticipant, o2: TLRPC.TLGroupCallParticipant ->
 				val videoActive1 = o1.videoIndex > 0
 				val videoActive2 = o2.videoIndex > 0
 
@@ -1932,13 +1914,13 @@ object ChatObject {
 					return@Comparator 1
 				}
 
-				if (o1.active_date != 0 && o2.active_date != 0) {
-					return@Comparator o2.active_date.compareTo(o1.active_date)
+				if (o1.activeDate != 0 && o2.activeDate != 0) {
+					return@Comparator o2.activeDate.compareTo(o1.activeDate)
 				}
-				else if (o1.active_date != 0) {
+				else if (o1.activeDate != 0) {
 					return@Comparator -1
 				}
-				else if (o2.active_date != 0) {
+				else if (o2.activeDate != 0) {
 					return@Comparator 1
 				}
 
@@ -1950,18 +1932,18 @@ object ChatObject {
 				}
 
 				if (isAdmin) {
-					if (o1.raise_hand_rating != 0L && o2.raise_hand_rating != 0L) {
-						return@Comparator o2.raise_hand_rating.compareTo(o1.raise_hand_rating)
+					if (o1.raiseHandRating != 0L && o2.raiseHandRating != 0L) {
+						return@Comparator o2.raiseHandRating.compareTo(o1.raiseHandRating)
 					}
-					else if (o1.raise_hand_rating != 0L) {
+					else if (o1.raiseHandRating != 0L) {
 						return@Comparator -1
 					}
-					else if (o2.raise_hand_rating != 0L) {
+					else if (o2.raiseHandRating != 0L) {
 						return@Comparator 1
 					}
 				}
 
-				if (call!!.join_date_asc) {
+				if ((call as? TLRPC.TLGroupCall)?.joinDateAsc == true) {
 					return@Comparator o1.date.compareTo(o2.date)
 				}
 				else {
@@ -1974,8 +1956,8 @@ object ChatObject {
 			val lastParticipant = if (sortedParticipants.isEmpty()) null else sortedParticipants[sortedParticipants.size - 1]
 
 			if (videoIsActive(lastParticipant, false, this) || videoIsActive(lastParticipant, true, this)) {
-				if (call!!.unmuted_video_count > activeVideos) {
-					activeVideos = call!!.unmuted_video_count
+				if (((call as? TLRPC.TLGroupCall)?.unmutedVideoCount ?: 0) > activeVideos) {
+					activeVideos = (call as? TLRPC.TLGroupCall)?.unmutedVideoCount ?: 0
 
 					val voIPService = sharedInstance
 
@@ -1987,14 +1969,14 @@ object ChatObject {
 				}
 			}
 
-			if (sortedParticipants.size > MAX_PARTICIPANTS_COUNT && (!canManageCalls(chat) || lastParticipant!!.raise_hand_rating == 0L)) {
+			if (sortedParticipants.size > MAX_PARTICIPANTS_COUNT && (!canManageCalls(chat) || lastParticipant!!.raiseHandRating == 0L)) {
 				var a = MAX_PARTICIPANTS_COUNT
 				@Suppress("NAME_SHADOWING") val n = sortedParticipants.size
 
 				while (a < n) {
 					val p = sortedParticipants[MAX_PARTICIPANTS_COUNT]
 
-					if (p.raise_hand_rating != 0L) {
+					if (p.raiseHandRating != 0L) {
 						a++
 						continue
 					}
@@ -2017,12 +1999,12 @@ object ChatObject {
 
 			sortedParticipants.forEach { participant ->
 				if (canStreamVideo && participant.videoIndex != 0) {
-					if (!participant.self && videoIsActive(participant, true, this) && videoIsActive(participant, false, this)) {
+					if (!participant.isSelf && videoIsActive(participant, true, this) && videoIsActive(participant, false, this)) {
 						var videoParticipant = videoParticipantsCache[participant.videoEndpoint]
 
 						if (videoParticipant == null) {
 							videoParticipant = VideoParticipant(participant, presentation = false, hasSame = true)
-							videoParticipantsCache[participant.videoEndpoint] = videoParticipant
+							videoParticipantsCache[participant.videoEndpoint ?: ""] = videoParticipant
 						}
 						else {
 							videoParticipant.participant = participant
@@ -2054,7 +2036,7 @@ object ChatObject {
 						}
 					}
 					else {
-						if (participant.self) {
+						if (participant.isSelf) {
 							if (videoIsActive(participant, true, this)) {
 								visibleVideoParticipants.add(VideoParticipant(participant, presentation = true, hasSame = false))
 							}
@@ -2068,7 +2050,7 @@ object ChatObject {
 
 							if (videoParticipant == null) {
 								videoParticipant = VideoParticipant(participant, presentation, false)
-								videoParticipantsCache[if (presentation) participant.presentationEndpoint else participant.videoEndpoint] = videoParticipant
+								videoParticipantsCache[(if (presentation) participant.presentationEndpoint else participant.videoEndpoint) ?: ""] = videoParticipant
 							}
 							else {
 								videoParticipant.participant = participant
@@ -2106,13 +2088,13 @@ object ChatObject {
 				true
 			}
 			else {
-				activeVideos < call!!.unmuted_video_limit
+				activeVideos < ((call as? TLRPC.TLGroupCall)?.unmutedVideoLimit ?: 0)
 			}
 		}
 
 		fun saveActiveDates() {
 			for (p in sortedParticipants) {
-				p.lastActiveDate = p.active_date.toLong()
+				p.lastActiveDate = p.activeDate.toLong()
 			}
 		}
 
@@ -2131,14 +2113,14 @@ object ChatObject {
 
 			while (a < n) {
 				val participant = sortedParticipants[a]
-				val diff = currentTime - participant.active_date
+				val diff = currentTime - participant.activeDate
 
 				if (diff < 5) {
 					speakingMembersCount++
 					minDiff = min(diff, minDiff)
 				}
 
-				if (max(participant.date, participant.active_date) <= currentTime - 5) {
+				if (max(participant.date, participant.activeDate) <= currentTime - 5) {
 					break
 				}
 
@@ -2154,7 +2136,7 @@ object ChatObject {
 		fun toggleRecord(title: String?, @RecordType type: Int) {
 			recording = !recording
 
-			val req = TL_phone_toggleGroupCallRecord()
+			val req = TLRPC.TLPhoneToggleGroupCallRecord()
 			req.call = inputGroupCall
 			req.start = recording
 
@@ -2166,7 +2148,7 @@ object ChatObject {
 			if (type == RECORD_TYPE_VIDEO_PORTRAIT || type == RECORD_TYPE_VIDEO_LANDSCAPE) {
 				req.flags = req.flags or 4
 				req.video = true
-				req.video_portrait = type == RECORD_TYPE_VIDEO_PORTRAIT
+				req.videoPortrait = type == RECORD_TYPE_VIDEO_PORTRAIT
 			}
 
 			currentAccount?.connectionsManager?.sendRequest(req) { response, _ ->
@@ -2186,14 +2168,14 @@ object ChatObject {
 			private var videoPointer = 0
 
 			@JvmStatic
-			fun videoIsActive(participant: TL_groupCallParticipant?, presentation: Boolean, call: Call): Boolean {
+			fun videoIsActive(participant: TLRPC.TLGroupCallParticipant?, presentation: Boolean, call: Call): Boolean {
 				if (participant == null) {
 					return false
 				}
 
 				val service = sharedInstance ?: return false
 
-				return if (participant.self) {
+				return if (participant.isSelf) {
 					service.getVideoState(presentation) == Instance.VIDEO_STATE_ACTIVE
 				}
 				else {
@@ -2213,7 +2195,7 @@ object ChatObject {
 		}
 	}
 
-	class VideoParticipant(@JvmField var participant: TL_groupCallParticipant, @JvmField var presentation: Boolean, var hasSame: Boolean) {
+	class VideoParticipant(@JvmField var participant: TLRPC.TLGroupCallParticipant, @JvmField var presentation: Boolean, var hasSame: Boolean) {
 		@JvmField
 		var aspectRatio = 0f // w / h
 		private var aspectRatioFromWidth = 0

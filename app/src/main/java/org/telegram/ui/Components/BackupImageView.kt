@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -14,14 +14,14 @@ import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.view.View
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
 import org.telegram.messenger.ImageLocation
 import org.telegram.messenger.ImageReceiver
 import org.telegram.messenger.SecureDocument
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLObject
 
 open class BackupImageView(context: Context) : View(context) {
 	@JvmField
@@ -81,7 +81,7 @@ open class BackupImageView(context: Context) : View(context) {
 		var thumb: Drawable? = null
 
 		if (thumbBitmap != null) {
-			thumb = BitmapDrawable(null, thumbBitmap)
+			thumb = thumbBitmap.toDrawable(resources)
 		}
 
 		imageReceiver.setImage(imageLocation, imageFilter, null, null, thumb, size.toLong(), null, parentObject, cacheType)
@@ -99,7 +99,7 @@ open class BackupImageView(context: Context) : View(context) {
 		var thumb: Drawable? = null
 
 		if (thumbBitmap != null) {
-			thumb = BitmapDrawable(null, thumbBitmap)
+			thumb = thumbBitmap.toDrawable(resources)
 		}
 
 		imageReceiver.setImage(mediaLocation, mediaFilter, imageLocation, imageFilter, null, null, thumb, size.toLong(), null, parentObject, cacheType)
@@ -121,7 +121,7 @@ open class BackupImageView(context: Context) : View(context) {
 		@Suppress("NAME_SHADOWING") var thumb = thumb
 
 		if (thumbBitmap != null) {
-			thumb = BitmapDrawable(null, thumbBitmap)
+			thumb = thumbBitmap.toDrawable(resources)
 		}
 
 		imageReceiver.setImage(imageLocation, imageFilter, thumbLocation, thumbFilter, thumb, size.toLong(), ext, parentObject, 0)

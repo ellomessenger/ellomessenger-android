@@ -4,11 +4,10 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
-import android.Manifest
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
@@ -17,10 +16,7 @@ import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
-import android.location.LocationManager
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.text.InputType
 import android.text.TextUtils
 import android.util.TypedValue
@@ -52,7 +48,6 @@ import org.telegram.messenger.MessagesStorage
 import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
-import org.telegram.messenger.SecretChatHelper
 import org.telegram.messenger.SharedConfig
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserConfig.Companion.getInstance
@@ -63,8 +58,10 @@ import org.telegram.messenger.utils.invisible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.UserFull
+import org.telegram.tgnet.TLRPC.TLUserFull
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.botNochats
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem.ActionBarMenuItemSearchListener
 import org.telegram.ui.ActionBar.AlertDialog
@@ -132,7 +129,7 @@ class ContactsActivity(args: Bundle?) : BaseFragment(args), NotificationCenterDe
 
 	var userId: Long = 0
 
-	var userInfo: UserFull? = null
+	var userInfo: TLUserFull? = null
 
 	override fun onFragmentCreate(): Boolean {
 		super.onFragmentCreate()
@@ -317,7 +314,7 @@ class ContactsActivity(args: Bundle?) : BaseFragment(args), NotificationCenterDe
 		item?.setSearchFieldHint(context.getString(R.string.Search))
 		item?.contentDescription = context.getString(R.string.Search)
 
-		searchListViewAdapter = object : SearchAdapter(context, ignoreUsers, allowUsernameSearch, false, false, allowBots, allowSelf, true, 0) {
+		searchListViewAdapter = object : SearchAdapter(context, ignoreUsers, allowUsernameSearch, false, false, allowBots, allowSelf, 0) {
 			override fun onSearchProgressChanged() {
 				if (!searchInProgress() && itemCount == 0) {
 					searchEmptyView?.showProgress(show = false, animated = true)
@@ -432,7 +429,7 @@ class ContactsActivity(args: Bundle?) : BaseFragment(args), NotificationCenterDe
 			listView?.setEmptyView(searchEmptyView)
 		}
 
-		undoView = UndoView(context, this, false)
+		undoView = UndoView(context, false)
 		undoView.setAdditionalTranslationY(51.dp.toFloat())
 
 		frameLayout.addView(undoView, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.BOTTOM or Gravity.LEFT, 8f, 0f, 8f, 8f))
@@ -568,13 +565,14 @@ class ContactsActivity(args: Bundle?) : BaseFragment(args), NotificationCenterDe
 					}
 					else {
 						if (createSecretChat) {
-							if (`object`.id == getInstance(currentAccount).getClientUserId()) {
-								return@OnItemClickListener
-							}
+							// MARK: uncomment this whole block to enable secret chats
+//							if (`object`.id == getInstance(currentAccount).getClientUserId()) {
+//								return@OnItemClickListener
+//							}
+//
+//							creatingChat = true
 
-							creatingChat = true
-
-							SecretChatHelper.getInstance(currentAccount).startSecretChat(parentActivity, `object`)
+							// SecretChatHelper.getInstance(currentAccount).startSecretChat(parentActivity, `object`)
 						}
 						else {
 							val args = Bundle()
@@ -608,37 +606,37 @@ class ContactsActivity(args: Bundle?) : BaseFragment(args), NotificationCenterDe
 							presentFragment(InviteContactsActivity())
 						}
 						else if (row == 1 && hasGps) {
-							val activity = parentActivity
-
-							if (activity != null) {
-								if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-									presentFragment(ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_NEARBY_LOCATION_ACCESS))
-									return@OnItemClickListener
-								}
-							}
-
-							var enabled = true
-
-							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-								val lm = ApplicationLoader.applicationContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-								enabled = lm.isLocationEnabled
-							}
-							else {
-								try {
-									@Suppress("DEPRECATION") val mode = Settings.Secure.getInt(ApplicationLoader.applicationContext.contentResolver, Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF)
-									enabled = mode != Settings.Secure.LOCATION_MODE_OFF
-								}
-								catch (e: Throwable) {
-									FileLog.e(e)
-								}
-							}
-
-							if (!enabled) {
-								presentFragment(ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_NEARBY_LOCATION_ENABLED))
-								return@OnItemClickListener
-							}
-
-							presentFragment(PeopleNearbyActivity())
+//							val activity = parentActivity
+//
+//							if (activity != null) {
+//								if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//									presentFragment(ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_NEARBY_LOCATION_ACCESS))
+//									return@OnItemClickListener
+//								}
+//							}
+//
+//							var enabled = true
+//
+//							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+//								val lm = ApplicationLoader.applicationContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+//								enabled = lm.isLocationEnabled
+//							}
+//							else {
+//								try {
+//									@Suppress("DEPRECATION") val mode = Settings.Secure.getInt(ApplicationLoader.applicationContext.contentResolver, Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF)
+//									enabled = mode != Settings.Secure.LOCATION_MODE_OFF
+//								}
+//								catch (e: Throwable) {
+//									FileLog.e(e)
+//								}
+//							}
+//
+//							if (!enabled) {
+//								presentFragment(ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_NEARBY_LOCATION_ENABLED))
+//								return@OnItemClickListener
+//							}
+//
+//							presentFragment(PeopleNearbyActivity())
 						}
 					}
 					else if (inviteViaLink != 0) {
@@ -712,8 +710,9 @@ class ContactsActivity(args: Bundle?) : BaseFragment(args), NotificationCenterDe
 						}
 						else {
 							if (createSecretChat) {
-								creatingChat = true
-								SecretChatHelper.getInstance(currentAccount).startSecretChat(parentActivity, item1)
+								// MARK: uncomment to enable secret chats
+//								creatingChat = true
+//								SecretChatHelper.getInstance(currentAccount).startSecretChat(parentActivity, item1)
 							}
 							else {
 								val args = Bundle()
@@ -783,7 +782,7 @@ class ContactsActivity(args: Bundle?) : BaseFragment(args), NotificationCenterDe
 			val parentActivity = parentActivity ?: return
 
 			if (user.bot) {
-				if (user.bot_nochats) {
+				if (user.botNochats) {
 					try {
 						BulletinFactory.of(this).createErrorBulletin(parentActivity.getString(R.string.BotCantJoinGroups)).show()
 					}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -18,7 +18,6 @@ import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
-import android.os.Build;
 import android.text.SpannableString;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -40,8 +39,9 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.messageobject.MessageObject;
-import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CheckBox2;
@@ -51,17 +51,15 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.Premium.PremiumButtonView;
 import org.telegram.ui.Components.RadialProgressView;
 
-import java.util.ArrayList;
 import java.util.Locale;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
 public class StickerSetCell extends FrameLayout {
 	private final static String LINK_PREFIX = String.format(Locale.US, "%s/addstickers/", ApplicationLoader.applicationContext.getString(R.string.domain));
 	private final static String LINK_PREFIX_EMOJI = String.format(Locale.US, "%s/addemoji/", ApplicationLoader.applicationContext.getString(R.string.domain));
-
 	private final int option;
-
 	private final TextView textView;
 	private final TextView valueTextView;
 	private final BackupImageView imageView;
@@ -70,9 +68,8 @@ public class StickerSetCell extends FrameLayout {
 	private boolean needDivider;
 	private ImageView optionsButton;
 	private ImageView reorderButton;
-	private TLRPC.TL_messages_stickerSet stickersSet;
+	private TLRPC.TLMessagesStickerSet stickersSet;
 	private final Rect rect = new Rect();
-
 	private boolean emojis;
 	private final FrameLayout sideButtons;
 	private final TextView addButtonView;
@@ -256,33 +253,33 @@ public class StickerSetCell extends FrameLayout {
 		this.needDivider = needDivider;
 	}
 
-	public void setStickersSet(TLRPC.TL_messages_stickerSet set, boolean divider) {
+	public void setStickersSet(TLRPC.TLMessagesStickerSet set, boolean divider) {
 		setStickersSet(set, divider, false);
 	}
 
-	public void setSearchQuery(TLRPC.TL_messages_stickerSet tlSet, String query, Theme.ResourcesProvider resourcesProvider) {
-		TLRPC.StickerSet set = tlSet.set;
+	public void setSearchQuery(TLRPC.TLMessagesStickerSet tlSet, String query) {
+		var set = tlSet.set;
 		int titleIndex = set.title.toLowerCase(Locale.ROOT).indexOf(query);
 		if (titleIndex != -1) {
 			SpannableString spannableString = new SpannableString(set.title);
 			spannableString.setSpan(new ForegroundColorSpanThemable(getContext().getColor(R.color.brand)), titleIndex, titleIndex + query.length(), 0);
 			textView.setText(spannableString);
 		}
-		int linkIndex = set.short_name.toLowerCase(Locale.ROOT).indexOf(query);
+		int linkIndex = set.shortName.toLowerCase(Locale.ROOT).indexOf(query);
 		if (linkIndex != -1) {
 			String linkPrefix = LINK_PREFIX;
 			if (set.emojis) {
 				linkPrefix = LINK_PREFIX_EMOJI;
 			}
 			linkIndex += linkPrefix.length();
-			SpannableString spannableString = new SpannableString(linkPrefix + set.short_name);
+			SpannableString spannableString = new SpannableString(linkPrefix + set.shortName);
 			spannableString.setSpan(new ForegroundColorSpanThemable(getContext().getColor(R.color.brand)), linkIndex, linkIndex + query.length(), 0);
 			valueTextView.setText(spannableString);
 		}
 	}
 
 	@SuppressLint("SetTextI18n")
-	public void setStickersSet(TLRPC.TL_messages_stickerSet set, boolean divider, boolean groupSearch) {
+	public void setStickersSet(TLRPC.TLMessagesStickerSet set, boolean divider, boolean groupSearch) {
 		needDivider = divider;
 		stickersSet = set;
 
@@ -308,14 +305,15 @@ public class StickerSetCell extends FrameLayout {
 		sideButtons.setVisibility(emojis ? View.VISIBLE : View.GONE);
 		optionsButton.setVisibility(emojis ? View.GONE : View.VISIBLE);
 
-		ArrayList<TLRPC.Document> documents = set.documents;
-		if (documents != null && !documents.isEmpty()) {
+		var documents = set.documents;
+
+		if (!documents.isEmpty()) {
 			valueTextView.setText(LocaleController.formatPluralString(emojis ? "EmojiCount" : "Stickers", documents.size()));
 
 			TLRPC.Document sticker = null;
 			for (int i = 0; i < documents.size(); ++i) {
 				TLRPC.Document d = documents.get(i);
-				if (d != null && d.id == set.set.thumb_document_id) {
+				if (d != null && d.id == set.set.thumbDocumentId) {
 					sticker = d;
 					break;
 				}
@@ -324,19 +322,21 @@ public class StickerSetCell extends FrameLayout {
 				sticker = documents.get(0);
 			}
 			TLObject object = FileLoader.getClosestPhotoSizeWithSize(set.set.thumbs, 90);
+
 			if (object == null) {
 				object = sticker;
 			}
+
 			SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(set.set.thumbs, ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), 1.0f);
 			ImageLocation imageLocation;
 
 			if (object instanceof TLRPC.Document) {
-				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(sticker.thumbs, 90);
+				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(sticker), 90);
 				imageLocation = ImageLocation.getForDocument(thumb, sticker);
 			}
 			else {
 				TLRPC.PhotoSize thumb = (TLRPC.PhotoSize)object;
-				imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumb_version);
+				imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumbVersion);
 			}
 
 			if (object instanceof TLRPC.Document && MessageObject.isAnimatedStickerDocument(sticker, true) || MessageObject.isVideoSticker(sticker)) {
@@ -359,7 +359,7 @@ public class StickerSetCell extends FrameLayout {
 			imageView.setImageDrawable(null);
 		}
 		if (groupSearch) {
-			valueTextView.setText((set.set.emojis ? LINK_PREFIX_EMOJI : LINK_PREFIX) + set.set.short_name);
+			valueTextView.setText((set.set.emojis ? LINK_PREFIX_EMOJI : LINK_PREFIX) + set.set.shortName);
 		}
 	}
 
@@ -509,19 +509,19 @@ public class StickerSetCell extends FrameLayout {
 		optionsButton.setOnClickListener(listener);
 	}
 
-	public TLRPC.TL_messages_stickerSet getStickersSet() {
+	public TLRPC.TLMessagesStickerSet getStickersSet() {
 		return stickersSet;
 	}
 
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
-		if (Build.VERSION.SDK_INT >= 21 && getBackground() != null && optionsButton != null) {
+		if (getBackground() != null && optionsButton != null) {
 			optionsButton.getHitRect(rect);
 			if (rect.contains((int)event.getX(), (int)event.getY())) {
 				return true;
 			}
 		}
-		if (Build.VERSION.SDK_INT >= 21 && getBackground() != null && emojis && sideButtons != null) {
+		if (getBackground() != null && emojis && sideButtons != null) {
 			sideButtons.getHitRect(rect);
 			if (rect.contains((int)event.getX(), (int)event.getY())) {
 				return true;
@@ -531,7 +531,7 @@ public class StickerSetCell extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (needDivider) {
 			canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(71), getHeight() - 1, getWidth() - getPaddingRight() - (LocaleController.isRTL ? AndroidUtilities.dp(71) : 0), getHeight() - 1, Theme.dividerPaint);
 		}

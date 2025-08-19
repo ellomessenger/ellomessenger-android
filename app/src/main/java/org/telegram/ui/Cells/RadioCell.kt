@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -12,7 +12,6 @@ import android.animation.Animator
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -27,12 +26,11 @@ import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.RadioButton
 
 class RadioCell @JvmOverloads constructor(context: Context, padding: Int = 21) : FrameLayout(context) {
-	private val textView: TextView
+	private val textView = TextView(context)
 	private val radioButton: RadioButton
 	private var needDivider = false
 
 	init {
-		textView = TextView(context)
 		textView.setTextColor(context.getColor(R.color.text))
 		textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f)
 		textView.setLines(1)

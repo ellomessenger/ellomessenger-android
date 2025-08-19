@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -18,14 +18,14 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.widget.NestedScrollView
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
-import org.telegram.messenger.ChatObject
 import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_chatInviteExported
-import org.telegram.tgnet.TLRPC.TL_messages_exportChatInvite
+import org.telegram.tgnet.TLRPC.TLChatInviteExported
+import org.telegram.tgnet.TLRPC.TLMessagesExportChatInvite
+import org.telegram.tgnet.link
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.BottomSheet
@@ -41,7 +41,7 @@ class PermanentLinkBottomSheet(context: Context, needFocus: Boolean, fragment: B
 	private val linkActionView: LinkActionView
 	private val fragment: BaseFragment? = null
 	private var linkGenerating = false
-	private var invite: TL_chatInviteExported? = null
+	private var invite: TLChatInviteExported? = null
 
 	init {
 		setAllowNestedScroll(true)
@@ -111,7 +111,7 @@ class PermanentLinkBottomSheet(context: Context, needFocus: Boolean, fragment: B
 		manage.setOnClickListener {
 			if (info != null) {
 				val manageFragment = ManageLinksActivity(info.id, 0, 0)
-				manageFragment.setInfo(info, info.exported_invite)
+				manageFragment.setInfo(info, info.exportedInvite)
 
 				fragment.presentFragment(manageFragment)
 			}
@@ -138,8 +138,8 @@ class PermanentLinkBottomSheet(context: Context, needFocus: Boolean, fragment: B
 			linkActionView.setLink(String.format(Locale.getDefault(), "https://%s/%s", ApplicationLoader.applicationContext.getString(R.string.domain), chat?.username))
 			manage.visibility = View.GONE
 		}
-		else if (info?.exported_invite != null) {
-			linkActionView.setLink(info.exported_invite?.link)
+		else if (info?.exportedInvite != null) {
+			linkActionView.setLink(info.exportedInvite?.link)
 		}
 		else {
 			generateLink(false)
@@ -164,22 +164,19 @@ class PermanentLinkBottomSheet(context: Context, needFocus: Boolean, fragment: B
 
 		linkGenerating = true
 
-		val req = TL_messages_exportChatInvite()
-		req.legacy_revoke_permanent = true
+		val req = TLMessagesExportChatInvite()
+		req.legacyRevokePermanent = true
 		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(-chatId)
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 			AndroidUtilities.runOnUIThread {
 				if (error == null) {
-					invite = response as TL_chatInviteExported?
+					invite = response as? TLChatInviteExported
 
 					val chatInfo = MessagesController.getInstance(currentAccount).getChatFull(chatId)
+					chatInfo?.exportedInvite = invite
 
-					if (chatInfo != null) {
-						chatInfo.exported_invite = invite
-					}
-
-					linkActionView.setLink(invite!!.link)
+					linkActionView.setLink(invite?.link)
 
 					if (showDialog && fragment != null) {
 						val builder = AlertDialog.Builder(context)

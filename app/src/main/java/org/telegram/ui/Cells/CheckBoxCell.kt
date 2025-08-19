@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -32,12 +32,11 @@ class CheckBoxCell @JvmOverloads constructor(context: Context, private val curre
 	private var checkBoxSquare: CheckBoxSquare? = null
 	private var isMultiline = false
 	private var needDivider = false
-	val textView: TextView
+	val textView = TextView(context)
 	val valueTextView: TextView
 	var checkBoxView: View? = null
 
 	init {
-		textView = TextView(context)
 		textView.setTextColor(context.getColor(R.color.text))
 		textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f)
 		textView.setLines(1)
@@ -224,10 +223,6 @@ class CheckBoxCell @JvmOverloads constructor(context: Context, private val curre
 		info.className = "android.widget.CheckBox"
 		info.isCheckable = true
 		info.isChecked = isChecked
-	}
-
-	private fun getThemedColor(key: String): Int {
-		return Theme.getColor(key)
 	}
 
 	companion object {

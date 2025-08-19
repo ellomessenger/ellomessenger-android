@@ -41,11 +41,14 @@ import org.telegram.messenger.UserObject.getUserName
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.ChatInvite
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.ChatInvite
+import org.telegram.tgnet.TLRPC.TLMessagesMessagesSlice
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Adapters.FiltersView.DateData
 import org.telegram.ui.Adapters.SearchAdapterHelper.HashtagObject
@@ -176,26 +179,33 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 			var chat: TLRPC.Chat? = null
 			var user: User? = null
 			var did: Long = 0
-			if (peer.peer.user_id != 0L) {
-				did = peer.peer.user_id
-				user = MessagesController.getInstance(currentAccount).getUser(peer.peer.user_id)
+
+			peer.peer?.let {
+				if (it.userId != 0L) {
+					did = it.userId
+					user = MessagesController.getInstance(currentAccount).getUser(it.userId)
+				}
+				else if (it.channelId != 0L) {
+					did = -it.channelId
+					chat = MessagesController.getInstance(currentAccount).getChat(it.channelId)
+				}
+				else if (it.chatId != 0L) {
+					did = -it.chatId
+					chat = MessagesController.getInstance(currentAccount).getChat(it.chatId)
+				}
 			}
-			else if (peer.peer.channel_id != 0L) {
-				did = -peer.peer.channel_id
-				chat = MessagesController.getInstance(currentAccount).getChat(peer.peer.channel_id)
-			}
-			else if (peer.peer.chat_id != 0L) {
-				did = -peer.peer.chat_id
-				chat = MessagesController.getInstance(currentAccount).getChat(peer.peer.chat_id)
-			}
+
 			cell.tag = did
+
 			var name: String? = ""
+
 			if (user != null) {
 				name = getFirstName(user)
 			}
 			else if (chat != null) {
-				name = chat.title
+				name = chat?.title
 			}
+
 			cell.setDialog(did, true, name)
 		}
 
@@ -239,26 +249,26 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 			searchAdapterHelper.mergeResults(searchResult, filteredRecentSearchObjects)
 		}
 
-		val req = TLRPC.TL_messages_searchGlobal()
+		val req = TLRPC.TLMessagesSearchGlobal()
 		req.limit = 20
 		req.q = query
-		req.filter = TLRPC.TL_inputMessagesFilterEmpty()
+		req.filter = TLRPC.TLInputMessagesFilterEmpty()
 		req.flags = req.flags or 1
-		req.folder_id = folderId
+		req.folderId = folderId
 
 		if (query == lastSearchString && searchResultMessages.isNotEmpty()) {
 			val lastMessage = searchResultMessages[searchResultMessages.size - 1]
-			req.offset_id = lastMessage.id
-			req.offset_rate = nextSearchRate
+			req.offsetId = lastMessage.id
+			req.offsetRate = nextSearchRate
 
-			val id = MessageObject.getPeerId(lastMessage.messageOwner?.peer_id)
+			val id = MessageObject.getPeerId(lastMessage.messageOwner?.peerId)
 
-			req.offset_peer = MessagesController.getInstance(currentAccount).getInputPeer(id)
+			req.offsetPeer = MessagesController.getInstance(currentAccount).getInputPeer(id)
 		}
 		else {
-			req.offset_rate = 0
-			req.offset_id = 0
-			req.offset_peer = TLRPC.TL_inputPeerEmpty()
+			req.offsetRate = 0
+			req.offsetId = 0
+			req.offsetPeer = TLRPC.TLInputPeerEmpty()
 		}
 
 		lastSearchString = query
@@ -269,7 +279,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 			val messageObjects = mutableListOf<MessageObject>()
 
 			if (error == null) {
-				val res = response as messages_Messages
+				val res = response as TLRPC.MessagesMessages
 				val chatsMap = LongSparseArray<TLRPC.Chat>()
 				val usersMap = LongSparseArray<User>()
 
@@ -293,17 +303,19 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 					waitingResponseCount--
 
 					if (error == null) {
-						val res = response as messages_Messages
+						val res = response as TLRPC.MessagesMessages
 
 						MessagesStorage.getInstance(currentAccount).putUsersAndChats(res.users, res.chats, true, true)
 						MessagesController.getInstance(currentAccount).putUsers(res.users, false)
 						MessagesController.getInstance(currentAccount).putChats(res.chats, false)
 
-						if (req.offset_id == 0) {
+						if (req.offsetId == 0) {
 							searchResultMessages.clear()
 						}
 
-						nextSearchRate = res.next_rate
+						if (res is TLMessagesMessagesSlice) {
+							nextSearchRate = res.nextRate
+						}
 
 						for (a in res.messages.indices) {
 							val message = res.messages[a]
@@ -474,7 +486,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 
 		recentSearchObjects.forEach {
 			when (val recentSearchObject = it.`object`) {
-				is User -> {
+				is TLRPC.TLUser -> {
 					MessagesController.getInstance(currentAccount).putUser(recentSearchObject, true)
 				}
 
@@ -551,7 +563,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 				var dialogId: Long = 0
 
 				when (obj) {
-					is User -> {
+					is TLRPC.TLUser -> {
 						MessagesController.getInstance(currentAccount).putUser(obj, true)
 						dialogId = obj.id
 					}
@@ -574,11 +586,11 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 
 						MessagesStorage.getInstance(currentAccount).getDialogFolderId(dialogId) { param ->
 							if (param != -1) {
-								val newDialog: TLRPC.Dialog = TLRPC.TL_dialog()
+								val newDialog = TLRPC.TLDialog()
 								newDialog.id = finalDialogId
 
 								if (param != 0) {
-									newDialog.folder_id = param
+									newDialog.folderId = param
 								}
 
 								if (obj is TLRPC.Chat) {
@@ -1085,7 +1097,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 
 					is TLRPC.EncryptedChat -> {
 						encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(obj.id)
-						user = MessagesController.getInstance(currentAccount).getUser(encryptedChat?.user_id)
+						user = MessagesController.getInstance(currentAccount).getUser(encryptedChat?.userId)
 					}
 				}
 
@@ -1136,7 +1148,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 						var index = 0
 
 						if (user != null) {
-							nameSearch = ContactsController.formatName(user.first_name, user.last_name)
+							nameSearch = ContactsController.formatName(user.firstName, user.lastName)
 						}
 						else if (chat != null) {
 							nameSearch = chat.title
@@ -1192,12 +1204,12 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 					savedMessages = true
 				}
 
-				if (chat != null && chat.participants_count != 0) {
+				if (chat != null && chat.participantsCount != 0) {
 					val membersString = if (ChatObject.isChannel(chat) && !chat.megagroup) {
-						LocaleController.formatPluralString("Subscribers", chat.participants_count)
+						LocaleController.formatPluralString("Subscribers", chat.participantsCount)
 					}
 					else {
-						LocaleController.formatPluralString("Members", chat.participants_count)
+						LocaleController.formatPluralString("Members", chat.participantsCount)
 					}
 
 					if (username is SpannableStringBuilder) {
@@ -1702,7 +1714,7 @@ open class DialogsSearchAdapter(private val context: Context, messagesSearch: In
 							val chat = chats[a]
 							val did = -chat.id
 
-							if (chat.migrated_to != null) {
+							if ((chat as? TLRPC.TLChat)?.migratedTo != null) {
 								val recentSearchObject = hashMap[did]
 
 								hashMap.remove(did)

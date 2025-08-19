@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -40,7 +40,8 @@ import org.telegram.messenger.messageobject.GroupedMessagePosition;
 import org.telegram.messenger.messageobject.GroupedMessages;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
 import org.telegram.ui.ActionBar.Theme;
@@ -139,8 +140,7 @@ public class ForwardingPreviewView extends FrameLayout {
 		chatListView = new RecyclerListView(context) {
 			@Override
 			public boolean drawChild(Canvas canvas, View child, long drawingTime) {
-				if (child instanceof ChatMessageCell) {
-					ChatMessageCell cell = (ChatMessageCell)child;
+				if (child instanceof ChatMessageCell cell) {
 					boolean r = super.drawChild(canvas, child, drawingTime);
 					cell.drawCheckBox(canvas);
 					canvas.save();
@@ -167,8 +167,7 @@ public class ForwardingPreviewView extends FrameLayout {
 			protected void dispatchDraw(@NonNull Canvas canvas) {
 				for (int i = 0; i < getChildCount(); i++) {
 					View child = getChildAt(i);
-					if (child instanceof ChatMessageCell) {
-						ChatMessageCell cell = (ChatMessageCell)child;
+					if (child instanceof ChatMessageCell cell) {
 						cell.setParentViewSize(chatPreviewContainer.getMeasuredWidth(), chatPreviewContainer.getBackgroundSizeY());
 					}
 				}
@@ -188,8 +187,7 @@ public class ForwardingPreviewView extends FrameLayout {
 
 				for (int a = 0; a < count; a++) {
 					View child = getChildAt(a);
-					if (child instanceof ChatMessageCell) {
-						ChatMessageCell cell = (ChatMessageCell)child;
+					if (child instanceof ChatMessageCell cell) {
 						GroupedMessages group = cell.getCurrentMessagesGroup();
 						if (group != null && group == lastDrawnGroup) {
 							continue;
@@ -205,8 +203,7 @@ public class ForwardingPreviewView extends FrameLayout {
 					}
 					for (int i = 0; i < count; i++) {
 						View child = chatListView.getChildAt(i);
-						if (child instanceof ChatMessageCell) {
-							ChatMessageCell cell = (ChatMessageCell)child;
+						if (child instanceof ChatMessageCell cell) {
 							if (child.getY() > chatListView.getHeight() || child.getY() + child.getHeight() < 0) {
 								continue;
 							}
@@ -305,8 +302,7 @@ public class ForwardingPreviewView extends FrameLayout {
 							canvas.restore();
 							for (int ii = 0; ii < count; ii++) {
 								View child = chatListView.getChildAt(ii);
-								if (child instanceof ChatMessageCell && ((ChatMessageCell)child).getCurrentMessagesGroup() == group) {
-									ChatMessageCell cell = ((ChatMessageCell)child);
+								if (child instanceof ChatMessageCell cell && ((ChatMessageCell)child).getCurrentMessagesGroup() == group) {
 									int left = cell.getLeft();
 									int top = cell.getTop();
 									child.setPivotX(l - left + (r - l) / 2);
@@ -483,8 +479,7 @@ public class ForwardingPreviewView extends FrameLayout {
 			public void getItemOffsets(@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
 				outRect.bottom = 0;
 
-				if (view instanceof ChatMessageCell) {
-					ChatMessageCell cell = (ChatMessageCell)view;
+				if (view instanceof ChatMessageCell cell) {
 					GroupedMessages group = cell.getCurrentMessagesGroup();
 
 					if (group != null) {
@@ -708,7 +703,7 @@ public class ForwardingPreviewView extends FrameLayout {
 		if (!forwardingMessagesParams.hasSenders) {
 			if (forwardingMessagesParams.willSeeSenders) {
 				if (currentUser != null) {
-					actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameVisible", R.string.ForwardPreviewSendersNameVisible, ContactsController.formatName(currentUser.getFirst_name(), currentUser.getLast_name())));
+					actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameVisible", R.string.ForwardPreviewSendersNameVisible, ContactsController.formatName(currentUser.firstName, currentUser.lastName)));
 				}
 				else {
 					if (ChatObject.isChannel(currentChat) && !currentChat.megagroup) {
@@ -721,7 +716,7 @@ public class ForwardingPreviewView extends FrameLayout {
 			}
 			else {
 				if (currentUser != null) {
-					actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameVisible", R.string.ForwardPreviewSendersNameVisible, ContactsController.formatName(currentUser.getFirst_name(), currentUser.getLast_name())));
+					actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameVisible", R.string.ForwardPreviewSendersNameVisible, ContactsController.formatName(currentUser.firstName, currentUser.lastName)));
 				}
 				else {
 					if (ChatObject.isChannel(currentChat) && !currentChat.megagroup) {
@@ -735,7 +730,7 @@ public class ForwardingPreviewView extends FrameLayout {
 		}
 		else if (!forwardingMessagesParams.hideForwardSendersName) {
 			if (currentUser != null) {
-				actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameVisible", R.string.ForwardPreviewSendersNameVisible, ContactsController.formatName(currentUser.getFirst_name(), currentUser.getLast_name())));
+				actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameVisible", R.string.ForwardPreviewSendersNameVisible, ContactsController.formatName(currentUser.firstName, currentUser.lastName)));
 			}
 			else {
 				if (ChatObject.isChannel(currentChat) && !currentChat.megagroup) {
@@ -748,7 +743,7 @@ public class ForwardingPreviewView extends FrameLayout {
 		}
 		else {
 			if (currentUser != null) {
-				actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameHidden", R.string.ForwardPreviewSendersNameHidden, ContactsController.formatName(currentUser.getFirst_name(), currentUser.getLast_name())));
+				actionBar.setSubtitle(LocaleController.formatString("ForwardPreviewSendersNameHidden", R.string.ForwardPreviewSendersNameHidden, ContactsController.formatName(currentUser.firstName, currentUser.lastName)));
 			}
 			else {
 				if (ChatObject.isChannel(currentChat) && !currentChat.megagroup) {
@@ -810,8 +805,8 @@ public class ForwardingPreviewView extends FrameLayout {
 			}
 
 			if (messageObject.isPoll()) {
-				ForwardingMessagesParams.PreviewMediaPoll mediaPoll = (ForwardingMessagesParams.PreviewMediaPoll)messageObject.messageOwner.media;
-				mediaPoll.results.total_voters = forwardingMessagesParams.hideCaption ? 0 : mediaPoll.totalVotersCached;
+				ForwardingMessagesParams.PreviewMediaPoll mediaPoll = (ForwardingMessagesParams.PreviewMediaPoll)TLRPCExtensions.getMedia(messageObject.messageOwner);
+				mediaPoll.results.totalVoters = forwardingMessagesParams.hideCaption ? 0 : mediaPoll.totalVotersCached;
 			}
 		}
 		for (int i = 0; i < forwardingMessagesParams.pollChoosenAnswers.size(); i++) {

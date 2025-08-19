@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.statistics
 
@@ -45,18 +45,18 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.StatsGraph
-import org.telegram.tgnet.TLRPC.TL_channels_getMessages
-import org.telegram.tgnet.TLRPC.TL_statsGraph
-import org.telegram.tgnet.TLRPC.TL_statsGraphAsync
-import org.telegram.tgnet.TLRPC.TL_statsGraphError
-import org.telegram.tgnet.TLRPC.TL_stats_broadcastStats
-import org.telegram.tgnet.TLRPC.TL_stats_getBroadcastStats
-import org.telegram.tgnet.TLRPC.TL_stats_getMegagroupStats
-import org.telegram.tgnet.TLRPC.TL_stats_loadAsyncGraph
-import org.telegram.tgnet.TLRPC.TL_stats_megagroupStats
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.TLChannelsGetMessages
+import org.telegram.tgnet.TLRPC.TLStatsBroadcastStats
+import org.telegram.tgnet.TLRPC.TLStatsGetBroadcastStats
+import org.telegram.tgnet.TLRPC.TLStatsGetMegagroupStats
+import org.telegram.tgnet.TLRPC.TLStatsGraph
+import org.telegram.tgnet.TLRPC.TLStatsGraphAsync
+import org.telegram.tgnet.TLRPC.TLStatsGraphError
+import org.telegram.tgnet.TLRPC.TLStatsLoadAsyncGraph
+import org.telegram.tgnet.TLRPC.TLStatsMegagroupStats
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -155,53 +155,53 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		notificationCenter.addObserver(this, NotificationCenter.messagesDidLoad)
 
 		val req = if (isMegaGroup) {
-			val getMegagroupStats = TL_stats_getMegagroupStats()
+			val getMegagroupStats = TLStatsGetMegagroupStats()
 			getMegagroupStats.channel = MessagesController.getInstance(currentAccount).getInputChannel(chat.id)
 			getMegagroupStats
 		}
 		else {
-			val getBroadcastStats = TL_stats_getBroadcastStats()
+			val getBroadcastStats = TLStatsGetBroadcastStats()
 			getBroadcastStats.channel = MessagesController.getInstance(currentAccount).getInputChannel(chat.id)
 			getBroadcastStats
 		}
 
 		val reqId = connectionsManager.sendRequest(req, { response, _ ->
 			when (response) {
-				is TL_stats_broadcastStats -> {
+				is TLStatsBroadcastStats -> {
 					val chartsViewData = arrayOfNulls<ChartViewData>(9)
 
-					chartsViewData[0] = createViewData(response.iv_interactions_graph, R.string.IVInteractionsChartTitle, 1)
-					chartsViewData[1] = createViewData(response.followers_graph, R.string.FollowersChartTitle, 0)
+					chartsViewData[0] = createViewData(response.ivInteractionsGraph, R.string.IVInteractionsChartTitle, 1)
+					chartsViewData[1] = createViewData(response.followersGraph, R.string.FollowersChartTitle, 0)
 
-					chartsViewData[2] = createViewData(response.top_hours_graph, R.string.TopHoursChartTitle, 0)?.apply {
+					chartsViewData[2] = createViewData(response.topHoursGraph, R.string.TopHoursChartTitle, 0)?.apply {
 						useHourFormat = true
 					}
 
-					chartsViewData[3] = createViewData(response.interactions_graph, R.string.InteractionsChartTitle, 1)
-					chartsViewData[4] = createViewData(response.growth_graph, R.string.GrowthChartTitle, 0)
-					chartsViewData[5] = createViewData(response.views_by_source_graph, R.string.ViewsBySourceChartTitle, 2)
-					chartsViewData[6] = createViewData(response.new_followers_by_source_graph, R.string.NewFollowersBySourceChartTitle, 2)
-					chartsViewData[7] = createViewData(response.languages_graph, R.string.LanguagesChartTitle, 4, true)
-					chartsViewData[8] = createViewData(response.mute_graph, R.string.NotificationsChartTitle, 0)
+					chartsViewData[3] = createViewData(response.interactionsGraph, R.string.InteractionsChartTitle, 1)
+					chartsViewData[4] = createViewData(response.growthGraph, R.string.GrowthChartTitle, 0)
+					chartsViewData[5] = createViewData(response.viewsBySourceGraph, R.string.ViewsBySourceChartTitle, 2)
+					chartsViewData[6] = createViewData(response.newFollowersBySourceGraph, R.string.NewFollowersBySourceChartTitle, 2)
+					chartsViewData[7] = createViewData(response.languagesGraph, R.string.LanguagesChartTitle, 4, true)
+					chartsViewData[8] = createViewData(response.muteGraph, R.string.NotificationsChartTitle, 0)
 
 					overviewChannelData = OverviewChannelData(response)
 
-					maxDateOverview = response.period.max_date * 1000L
-					minDateOverview = response.period.min_date * 1000L
+					maxDateOverview = (response.period?.maxDate ?: 0) * 1000L
+					minDateOverview = (response.period?.minDate ?: 0) * 1000L
 
 					recentPostsAll.clear()
 
-					for (i in response.recent_message_interactions.indices) {
+					for (i in response.recentMessageInteractions.indices) {
 						val recentPostInfo = RecentPostInfo()
-						recentPostInfo.counters = response.recent_message_interactions[i]
+						recentPostInfo.counters = response.recentMessageInteractions[i]
 
 						recentPostsAll.add(recentPostInfo)
 
-						recentPostIdToIndexMap.put(recentPostInfo.counters!!.msg_id, i)
+						recentPostIdToIndexMap.put(recentPostInfo.counters!!.msgId, i)
 					}
 
 					if (recentPostsAll.size > 0) {
-						val lastPostId = recentPostsAll[0].counters!!.msg_id
+						val lastPostId = recentPostsAll[0].counters!!.msgId
 						val count = recentPostsAll.size
 
 						messagesStorage.getMessages(-chat.id, 0, false, count, lastPostId, 0, 0, classGuid, 0, false, 0, 0, true)
@@ -222,31 +222,31 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					}
 				}
 
-				is TL_stats_megagroupStats -> {
+				is TLStatsMegagroupStats -> {
 					val chartsViewData = arrayOfNulls<ChartViewData>(8)
-					chartsViewData[0] = createViewData(response.growth_graph, R.string.GrowthChartTitle, 0)
-					chartsViewData[1] = createViewData(response.members_graph, R.string.GroupMembersChartTitle, 0)
-					chartsViewData[2] = createViewData(response.new_members_by_source_graph, R.string.NewMembersBySourceChartTitle, 2)
-					chartsViewData[3] = createViewData(response.languages_graph, R.string.MembersLanguageChartTitle, 4, true)
-					chartsViewData[4] = createViewData(response.messages_graph, R.string.MessagesChartTitle, 2)
-					chartsViewData[5] = createViewData(response.actions_graph, R.string.ActionsChartTitle, 1)
+					chartsViewData[0] = createViewData(response.growthGraph, R.string.GrowthChartTitle, 0)
+					chartsViewData[1] = createViewData(response.membersGraph, R.string.GroupMembersChartTitle, 0)
+					chartsViewData[2] = createViewData(response.newMembersBySourceGraph, R.string.NewMembersBySourceChartTitle, 2)
+					chartsViewData[3] = createViewData(response.languagesGraph, R.string.MembersLanguageChartTitle, 4, true)
+					chartsViewData[4] = createViewData(response.messagesGraph, R.string.MessagesChartTitle, 2)
+					chartsViewData[5] = createViewData(response.actionsGraph, R.string.ActionsChartTitle, 1)
 
-					chartsViewData[6] = createViewData(response.top_hours_graph, R.string.TopHoursChartTitle, 0)?.apply {
+					chartsViewData[6] = createViewData(response.topHoursGraph, R.string.TopHoursChartTitle, 0)?.apply {
 						useHourFormat = true
 					}
 
-					chartsViewData[7] = createViewData(response.weekdays_graph, R.string.TopDaysOfWeekChartTitle, 4)?.apply {
+					chartsViewData[7] = createViewData(response.weekdaysGraph, R.string.TopDaysOfWeekChartTitle, 4)?.apply {
 						useWeekFormat = true
 					}
 
 					overviewChatData = OverviewChatData(response)
 
-					maxDateOverview = response.period.max_date * 1000L
-					minDateOverview = response.period.min_date * 1000L
+					maxDateOverview = (response.period?.maxDate ?: 0) * 1000L
+					minDateOverview = (response.period?.minDate ?: 0) * 1000L
 
-					if (response.top_posters != null && response.top_posters.isNotEmpty()) {
-						for (i in response.top_posters.indices) {
-							val data = MemberData.from(response.top_posters[i], response.users)
+					if (response.topPosters.isNotEmpty()) {
+						for (i in response.topPosters.indices) {
+							val data = MemberData.from(response.topPosters[i], response.users)
 
 							if (topMembersVisible.size < 10) {
 								topMembersVisible.add(data)
@@ -261,15 +261,15 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						}
 					}
 
-					if (response.top_admins != null && response.top_admins.isNotEmpty()) {
-						for (i in response.top_admins.indices) {
-							topAdmins.add(MemberData.from(response.top_admins[i], response.users))
+					if (response.topAdmins.isNotEmpty()) {
+						for (i in response.topAdmins.indices) {
+							topAdmins.add(MemberData.from(response.topAdmins[i], response.users))
 						}
 					}
 
-					if (response.top_inviters != null && response.top_inviters.isNotEmpty()) {
-						for (i in response.top_inviters.indices) {
-							topInviters.add(MemberData.from(response.top_inviters[i], response.users))
+					if (response.topInviters.isNotEmpty()) {
+						for (i in response.topInviters.indices) {
+							topInviters.add(MemberData.from(response.topInviters[i], response.users))
 						}
 					}
 
@@ -339,7 +339,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				val guid = args[10] as Int
 
 				if (guid == classGuid) {
-					val messArr = args[2] as ArrayList<MessageObject>
+					val messArr = args[2] as List<MessageObject>
 					val deletedMessages = mutableListOf<RecentPostInfo>()
 					var n = messArr.size
 
@@ -347,7 +347,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						val messageObjectFormCache = messArr[i]
 						val index = recentPostIdToIndexMap[messageObjectFormCache.id, -1]
 
-						if (index >= 0 && recentPostsAll[index].counters?.msg_id == messageObjectFormCache.id) {
+						if (index >= 0 && recentPostsAll[index].counters?.msgId == messageObjectFormCache.id) {
 							if (messageObjectFormCache.deleted) {
 								deletedMessages.add(recentPostsAll[index])
 							}
@@ -367,7 +367,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						val postInfo = recentPostsAll[i]
 
 						if (postInfo.message == null) {
-							loadFromId = postInfo.counters?.msg_id ?: -1
+							loadFromId = postInfo.counters?.msgId ?: -1
 							break
 						}
 						else {
@@ -684,7 +684,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 		override fun getItemId(position: Int): Long {
 			if (position in recentPostsStartRow until recentPostsEndRow) {
-				return recentPostsLoaded[position - recentPostsStartRow].counters?.msg_id?.toLong() ?: 0L
+				return recentPostsLoaded[position - recentPostsStartRow].counters?.msgId?.toLong() ?: 0L
 			}
 
 			return when (position) {
@@ -1178,7 +1178,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				return
 			}
 
-			val request = TL_stats_loadAsyncGraph()
+			val request = TLStatsLoadAsyncGraph()
 			request.token = data.zoomToken
 
 			if (x != 0L) {
@@ -1197,7 +1197,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			val reqId = connectionsManager.sendRequest(request, { response, _ ->
 				var childData: ChartData? = null
 
-				if (response is TL_statsGraph) {
+				if (response is TLStatsGraph) {
 					val json = response.json?.data
 
 					if (!json.isNullOrEmpty()) {
@@ -1209,7 +1209,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						}
 					}
 				}
-				else if (response is TL_statsGraphError) {
+				else if (response is TLStatsGraphError) {
 					Toast.makeText(context, response.error, Toast.LENGTH_LONG).show()
 				}
 
@@ -1257,8 +1257,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			return
 		}
 
-		val req = TL_channels_getMessages()
-		req.id = ArrayList()
+		val req = TLChannelsGetMessages()
 
 		val index = recentPostIdToIndexMap[loadFromId]
 		val n = recentPostsAll.size
@@ -1266,7 +1265,9 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 		for (i in index until n) {
 			if (recentPostsAll[i].message == null) {
-				req.id.add(recentPostsAll[i].counters!!.msg_id)
+				req.id.add(recentPostsAll[i].counters!!.msgId.let { msgId ->
+					TLRPC.TLInputMessageID().also { it.id = msgId }
+				})
 
 				count++
 
@@ -1285,13 +1286,13 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				hasLoadedPosts.set(true)
 			}
 
-			val messageObjects = ArrayList<MessageObject>()
+			val messageObjects = mutableListOf<MessageObject>()
 
-			if (response is messages_Messages) {
+			if (response is TLRPC.MessagesMessages) {
 				val messages = response.messages
 
 				for (i in messages.indices) {
-					messageObjects.add(MessageObject(currentAccount, messages[i], false, true))
+					messageObjects.add(MessageObject(currentAccount, messages[i], generateLayout = false, checkMediaExists = true))
 				}
 
 				messagesStorage.putMessages(messages, false, true, true, 0, false)
@@ -1307,7 +1308,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						val messageObjectFormCache = messageObjects[i]
 						val localIndex = recentPostIdToIndexMap[messageObjectFormCache.id, -1]
 
-						if (localIndex >= 0 && recentPostsAll[localIndex].counters!!.msg_id == messageObjectFormCache.id) {
+						if (localIndex >= 0 && recentPostsAll[localIndex].counters!!.msgId == messageObjectFormCache.id) {
 							recentPostsAll[localIndex].message = messageObjectFormCache
 						}
 					}
@@ -1320,7 +1321,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						val postInfo = recentPostsAll[i]
 
 						if (postInfo.message == null) {
-							loadFromId = postInfo.counters!!.msg_id
+							loadFromId = postInfo.counters!!.msgId
 							break
 						}
 						else {
@@ -1365,7 +1366,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 	companion object {
 		fun createViewData(graph: StatsGraph?, @StringRes titleResId: Int, graphType: Int, isLanguages: Boolean): ChartViewData? {
-			if (graph == null || graph is TL_statsGraphError) {
+			if (graph == null || graph is TLStatsGraphError) {
 				return null
 			}
 
@@ -1373,8 +1374,8 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 			var viewData: ChartViewData? = null
 
-			if (graph is TL_statsGraph) {
-				val json = graph.json.data
+			if (graph is TLStatsGraph) {
+				val json = graph.json?.data
 
 				if (json.isNullOrEmpty()) {
 					return null
@@ -1384,7 +1385,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					viewData = ChartViewData(title, graphType)
 					viewData.isLanguages = isLanguages
 					viewData.chartData = createChartData(JSONObject(json), graphType, isLanguages)
-					viewData.zoomToken = graph.zoom_token
+					viewData.zoomToken = graph.zoomToken
 
 					if ((viewData.chartData?.x?.size ?: 0) < 2) {
 						viewData.isEmpty = true
@@ -1401,7 +1402,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					return null
 				}
 			}
-			else if (graph is TL_statsGraphAsync) {
+			else if (graph is TLStatsGraphAsync) {
 				viewData = ChartViewData(title, graphType)
 				viewData.isLanguages = isLanguages
 				viewData.token = graph.token
@@ -1410,7 +1411,7 @@ class StatisticActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			return viewData
 		}
 
-		private fun createViewData(graph: StatsGraph, @StringRes titleResId: Int, graphType: Int): ChartViewData? {
+		private fun createViewData(graph: StatsGraph?, @StringRes titleResId: Int, graphType: Int): ChartViewData? {
 			return createViewData(graph, titleResId, graphType, false)
 		}
 

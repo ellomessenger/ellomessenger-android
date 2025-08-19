@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -12,7 +12,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.style.MetricAffectingSpan
-import org.telegram.tgnet.tlrpc.MessageEntity
+import org.telegram.tgnet.TLRPC.MessageEntity
 import org.telegram.ui.ActionBar.Theme
 
 class TextStyleSpan @JvmOverloads constructor(val style: TextStyleRun, private val textSize: Int = 0, private var color: Int = 0) : MetricAffectingSpan() {

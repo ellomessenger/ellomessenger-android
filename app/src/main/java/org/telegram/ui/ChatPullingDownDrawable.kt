@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -24,6 +24,11 @@ import android.text.TextPaint
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withTranslation
+import androidx.core.util.size
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -37,6 +42,7 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
+import org.telegram.tgnet.unreadCount
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.CounterView.CounterDrawable
@@ -103,7 +109,7 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 
 			MessagesController.getInstance(currentAccount).ensureMessagesLoaded(dialog.id, 0, null)
 
-			counterDrawable.setCount(dialog.unread_count, false)
+			counterDrawable.setCount(dialog.unreadCount, false)
 		}
 		else {
 			nextChat = null
@@ -241,32 +247,27 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 
 			val arrowCy = -offset + AndroidUtilities.dp(24f) + AndroidUtilities.dp(8f) * (1f - progress) - AndroidUtilities.dp(36f) * swipeToReleaseProgress
 
-			canvas.save()
+			canvas.withSave {
+				AndroidUtilities.rectTmp.inset(AndroidUtilities.dp(1f).toFloat(), AndroidUtilities.dp(1f).toFloat())
 
-			AndroidUtilities.rectTmp.inset(AndroidUtilities.dp(1f).toFloat(), AndroidUtilities.dp(1f).toFloat())
+				clipRect(AndroidUtilities.rectTmp)
 
-			canvas.clipRect(AndroidUtilities.rectTmp)
+				if (swipeToReleaseProgress > 0f) {
+					arrowPaint.alpha = ((1f - swipeToReleaseProgress) * 255).toInt()
+				}
 
-			if (swipeToReleaseProgress > 0f) {
-				arrowPaint.alpha = ((1f - swipeToReleaseProgress) * 255).toInt()
+				drawArrow(this, cx, arrowCy, AndroidUtilities.dp(24f) * progress)
+
+				if (emptyStub) {
+					val top = (-AndroidUtilities.dp(8f) - AndroidUtilities.dp2(8f) * progress - size) * (1f - swipeToReleaseProgress) + (-offset - AndroidUtilities.dp(2f)) * swipeToReleaseProgress + bounceOffset
+
+					arrowPaint.alpha = oldAlpha3
+
+					withScale(progress, progress, cx, top + AndroidUtilities.dp(28f)) {
+						drawCheck(this, cx, top + AndroidUtilities.dp(28f))
+					}
+				}
 			}
-
-			drawArrow(canvas, cx, arrowCy, AndroidUtilities.dp(24f) * progress)
-
-			if (emptyStub) {
-				val top = (-AndroidUtilities.dp(8f) - AndroidUtilities.dp2(8f) * progress - size) * (1f - swipeToReleaseProgress) + (-offset - AndroidUtilities.dp(2f)) * swipeToReleaseProgress + bounceOffset
-
-				arrowPaint.alpha = oldAlpha3
-
-				canvas.save()
-				canvas.scale(progress, progress, cx, top + AndroidUtilities.dp(28f))
-
-				drawCheck(canvas, cx, top + AndroidUtilities.dp(28f))
-
-				canvas.restore()
-			}
-
-			canvas.restore()
 		}
 
 		if (chatNameLayout != null && swipeToReleaseProgress > 0) {
@@ -285,12 +286,9 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 				canvas.drawRoundRect(AndroidUtilities.rectTmp, AndroidUtilities.dp(15f).toFloat(), AndroidUtilities.dp(15f).toFloat(), Theme.chat_actionBackgroundGradientDarkenPaint)
 			}
 
-			canvas.save()
-			canvas.translate((lastWidth - chatNameWidth) / 2f, y)
-
-			chatNameLayout?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation((lastWidth - chatNameWidth) / 2f, y) {
+				chatNameLayout?.draw(this)
+			}
 		}
 
 		if (!emptyStub && size > 0) {
@@ -312,13 +310,11 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 
 				canvas.drawRoundRect(counterDrawable.rectF, counterDrawable.rectF.height() / 2f, counterDrawable.rectF.height() / 2f, xRefPaint)
 				canvas.restore()
-				canvas.save()
-				canvas.scale(swipeToReleaseProgress, swipeToReleaseProgress, cx + AndroidUtilities.dp(12f) + counterDrawable.centerX, top - AndroidUtilities.dp(6f) + AndroidUtilities.dp(14f))
-				canvas.translate(cx + AndroidUtilities.dp(12f), top - AndroidUtilities.dp(6f))
 
-				counterDrawable.draw(canvas)
-
-				canvas.restore()
+				canvas.withScale(swipeToReleaseProgress, swipeToReleaseProgress, cx + AndroidUtilities.dp(12f) + counterDrawable.centerX, top - AndroidUtilities.dp(6f) + AndroidUtilities.dp(14f)) {
+					translate(cx + AndroidUtilities.dp(12f), top - AndroidUtilities.dp(6f))
+					counterDrawable.draw(this)
+				}
 			}
 			else {
 				imageReceiver.draw(canvas)
@@ -350,24 +346,22 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 		val p1 = if (checkProgress > 0.5f) 1f else checkProgress / 0.5f
 		val p2: Float = if (checkProgress < 0.5f) 0f else (checkProgress - 0.5f) / 0.5f
 
-		canvas.save()
-		canvas.clipRect(AndroidUtilities.rectTmp)
-		canvas.translate(cx - AndroidUtilities.dp(24f), cy - AndroidUtilities.dp(24f))
+		canvas.withClip(AndroidUtilities.rectTmp) {
+			translate(cx - AndroidUtilities.dp(24f), cy - AndroidUtilities.dp(24f))
 
-		val x1 = AndroidUtilities.dp(16f).toFloat()
-		val y1 = AndroidUtilities.dp(26f).toFloat()
-		val x2 = AndroidUtilities.dp(22f).toFloat()
-		val y2 = AndroidUtilities.dp(32f).toFloat()
-		val x3 = AndroidUtilities.dp(32f).toFloat()
-		val y3 = AndroidUtilities.dp(20f).toFloat()
+			val x1 = AndroidUtilities.dp(16f).toFloat()
+			val y1 = AndroidUtilities.dp(26f).toFloat()
+			val x2 = AndroidUtilities.dp(22f).toFloat()
+			val y2 = AndroidUtilities.dp(32f).toFloat()
+			val x3 = AndroidUtilities.dp(32f).toFloat()
+			val y3 = AndroidUtilities.dp(20f).toFloat()
 
-		canvas.drawLine(x1, y1, x1 * (1f - p1) + x2 * p1, y1 * (1f - p1) + y2 * p1, arrowPaint)
+			drawLine(x1, y1, x1 * (1f - p1) + x2 * p1, y1 * (1f - p1) + y2 * p1, arrowPaint)
 
-		if (p2 > 0) {
-			canvas.drawLine(x2, y2, x2 * (1f - p2) + x3 * p2, y2 * (1f - p2) + y3 * p2, arrowPaint)
+			if (p2 > 0) {
+				drawLine(x2, y2, x2 * (1f - p2) + x3 * p2, y2 * (1f - p2) + y3 * p2, arrowPaint)
+			}
 		}
-
-		canvas.restore()
 	}
 
 	private fun drawBackground(canvas: Canvas, rectTmp: RectF) {
@@ -499,16 +493,15 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 	}
 
 	private fun drawArrow(canvas: Canvas, cx: Float, cy: Float, size: Float) {
-		canvas.save()
+		canvas.withSave {
+			val s = size / AndroidUtilities.dpf2(24f)
 
-		val s = size / AndroidUtilities.dpf2(24f)
-
-		canvas.scale(s, s, cx, cy - AndroidUtilities.dp(20f))
-		canvas.translate(cx - AndroidUtilities.dp2(12f), cy - AndroidUtilities.dp(12f))
-		canvas.drawLine(AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(4f), AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(22f), arrowPaint)
-		canvas.drawLine(AndroidUtilities.dpf2(3.5f), AndroidUtilities.dpf2(12f), AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(3.5f), arrowPaint)
-		canvas.drawLine(AndroidUtilities.dpf2(25 - 3.5f), AndroidUtilities.dpf2(12f), AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(3.5f), arrowPaint)
-		canvas.restore()
+			scale(s, s, cx, cy - AndroidUtilities.dp(20f))
+			translate(cx - AndroidUtilities.dp2(12f), cy - AndroidUtilities.dp(12f))
+			drawLine(AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(4f), AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(22f), arrowPaint)
+			drawLine(AndroidUtilities.dpf2(3.5f), AndroidUtilities.dpf2(12f), AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(3.5f), arrowPaint)
+			drawLine(AndroidUtilities.dpf2(25 - 3.5f), AndroidUtilities.dpf2(12f), AndroidUtilities.dpf2(12.5f), AndroidUtilities.dpf2(3.5f), arrowPaint)
+		}
 	}
 
 	fun onAttach() {
@@ -528,7 +521,7 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 			val dialog = MessagesController.getInstance(currentAccount).dialogs_dict[nextDialogId]
 
 			if (dialog != null) {
-				counterDrawable.setCount(dialog.unread_count, true)
+				counterDrawable.setCount(dialog.unreadCount, true)
 				parentView?.invalidate()
 			}
 		}
@@ -570,20 +563,22 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 
 		if (layout1 != null && swipeToReleaseProgress < 1f) {
 			textPaint2.alpha = (oldAlphaText * (1f - swipeToReleaseProgress) * progressToBottomPanel).toInt()
+
 			val y = top + (bottom - top - layout1!!.height) / 2f - AndroidUtilities.dp(10f) * swipeToReleaseProgress
-			canvas.save()
-			canvas.translate((lastWidth - layout1Width) / 2f, y)
-			layout1?.draw(canvas)
-			canvas.restore()
+
+			canvas.withTranslation((lastWidth - layout1Width) / 2f, y) {
+				layout1?.draw(this)
+			}
 		}
 
 		if (layout2 != null && swipeToReleaseProgress > 0) {
 			textPaint2.alpha = (oldAlphaText * swipeToReleaseProgress * progressToBottomPanel).toInt()
+
 			val y = top + (bottom - top - layout2!!.height) / 2f + AndroidUtilities.dp(10f) * (1f - swipeToReleaseProgress)
-			canvas.save()
-			canvas.translate((lastWidth - layout2Width) / 2f, y)
-			layout2?.draw(canvas)
-			canvas.restore()
+
+			canvas.withTranslation((lastWidth - layout2Width) / 2f, y) {
+				layout2?.draw(this)
+			}
 		}
 
 		textPaint2.alpha = oldAlphaText
@@ -712,8 +707,8 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 				val dialog = dialogs[i]
 				val chat = messagesController.getChat(-dialog.id)
 
-				if (chat != null && dialog.id != currentDialogId && dialog.unread_count > 0 && DialogObject.isChannel(dialog) && !chat.megagroup && !messagesController.isPromoDialog(dialog.id, false)) {
-					MessagesController.getRestrictionReason(chat.restriction_reason) ?: return dialog
+				if (chat != null && dialog.id != currentDialogId && dialog.unreadCount > 0 && DialogObject.isChannel(dialog) && !chat.megagroup && !messagesController.isPromoDialog(dialog.id, false)) {
+					MessagesController.getRestrictionReason(chat.restrictionReason) ?: return dialog
 				}
 			}
 
@@ -736,7 +731,7 @@ class ChatPullingDownDrawable(private val currentAccount: Int, private val fragm
 					}
 				}
 
-				for (i in 0 until messagesController.dialogsByFolder.size()) {
+				for (i in 0 until messagesController.dialogsByFolder.size) {
 					val newFolderId = messagesController.dialogsByFolder.keyAt(i)
 
 					if (folderId != newFolderId) {

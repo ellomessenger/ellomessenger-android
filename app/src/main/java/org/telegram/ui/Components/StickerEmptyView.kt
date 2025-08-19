@@ -4,9 +4,9 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Mykhailo Mykytyn, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -19,12 +19,20 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import org.telegram.messenger.*
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
+import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.DocumentObject
+import org.telegram.messenger.ImageLocation
+import org.telegram.messenger.MediaDataController
+import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
+import org.telegram.messenger.R
+import org.telegram.messenger.UserConfig
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.LayoutHelper.createFrame
 import org.telegram.ui.Components.LayoutHelper.createLinear
@@ -42,7 +50,7 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 	}
 
 	@JvmField
-	val stickerView: BackupImageView
+	val stickerView = BackupImageView(context)
 
 	@JvmField
 	val title: TextView
@@ -83,14 +91,14 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 		if ((animateLayoutChange || preventMoving) && lastH > 0 && lastH != measuredHeight) {
 			val y = (lastH - measuredHeight) / 2f
 
-			linearLayout.translationY = linearLayout.translationY + y
+			linearLayout.translationY += y
 
 			if (!preventMoving) {
 				linearLayout.animate().translationY(0f).setInterpolator(CubicBezierInterpolator.DEFAULT).duration = 250
 			}
 
 			progressBar?.let { progressBar ->
-				progressBar.translationY = progressBar.translationY + y
+				progressBar.translationY += y
 
 				if (!preventMoving) {
 					progressBar.animate().translationY(0f).setInterpolator(CubicBezierInterpolator.DEFAULT).duration = 250
@@ -102,7 +110,6 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 	}
 
 	init {
-		stickerView = BackupImageView(context)
 		stickerView.gone()
 
 		stickerView.setOnClickListener {
@@ -111,7 +118,7 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 
 		linearLayout = object : LinearLayout(context) {
 			override fun setVisibility(visibility: Int) {
-				if (getVisibility() == GONE && visibility == VISIBLE) {
+				if (isGone && visibility == VISIBLE) {
 					setSticker()
 					stickerView.imageReceiver.startAnimation()
 					animationImageView.playAnimation()
@@ -198,7 +205,7 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 
 		super.setVisibility(visibility)
 
-		if (getVisibility() == VISIBLE) {
+		if (isVisible) {
 			setSticker()
 		}
 		else {
@@ -229,7 +236,7 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 	override fun onAttachedToWindow() {
 		super.onAttachedToWindow()
 
-		if (visibility == VISIBLE) {
+		if (isVisible) {
 			setSticker()
 			animationImageView.playAnimation()
 		}
@@ -245,7 +252,7 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 	private fun setSticker() {
 		var imageFilter: String? = null
 		var document: TLRPC.Document? = null
-		var set: TL_messages_stickerSet? = null
+		var set: TLRPC.TLMessagesStickerSet? = null
 
 		if (stickerType == STICKER_TYPE_DONE) {
 			document = MediaDataController.getInstance(currentAccount).getEmojiAnimatedSticker("\uD83D\uDC4D")
@@ -292,7 +299,7 @@ open class StickerEmptyView @JvmOverloads constructor(context: Context, var prog
 		if (id == NotificationCenter.diceStickersDidLoad) {
 			val name = args[0] as String
 
-			if (AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME == name && visibility == VISIBLE) {
+			if (AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME == name && isVisible) {
 				setSticker()
 			}
 		}

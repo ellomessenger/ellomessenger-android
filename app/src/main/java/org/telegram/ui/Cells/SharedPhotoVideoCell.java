@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -38,27 +38,27 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CheckBox2;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.PhotoViewer;
 
+import androidx.annotation.NonNull;
+
 public class SharedPhotoVideoCell extends FrameLayout {
 	private final PhotoVideoView[] photoVideoViews;
 	private final MessageObject[] messageObjects;
-	private final int[] indeces;
+	private final int[] indexes;
 	private SharedPhotoVideoCellDelegate delegate;
 	private int itemsCount;
 	private boolean isFirst;
 	private boolean ignoreLayout;
 	private final Paint backgroundPaint = new Paint();
-
 	public final static int VIEW_TYPE_DEFAULT = 0;
 	public final static int VIEW_TYPE_GLOBAL_SEARCH = 1;
-
 	private final int type;
-
 	private final int currentAccount = UserConfig.selectedAccount;
 
 	public SharedPhotoVideoCellDelegate getDelegate() {
@@ -97,11 +97,10 @@ public class SharedPhotoVideoCell extends FrameLayout {
 			container.addView(imageView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
 			videoInfoContainer = new FrameLayout(context) {
-
 				private final RectF rect = new RectF();
 
 				@Override
-				protected void onDraw(Canvas canvas) {
+				protected void onDraw(@NonNull Canvas canvas) {
 					rect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
 					canvas.drawRoundRect(rect, AndroidUtilities.dp(4), AndroidUtilities.dp(4), Theme.chat_timeBackgroundPaint);
 				}
@@ -179,7 +178,9 @@ public class SharedPhotoVideoCell extends FrameLayout {
 		public void setMessageObject(MessageObject messageObject) {
 			currentMessageObject = messageObject;
 			imageView.imageReceiver.setVisible(!PhotoViewer.isShowingImage(messageObject), false);
-			String restrictionReason = MessagesController.getRestrictionReason(messageObject.messageOwner.restriction_reason);
+
+			String restrictionReason = MessagesController.getRestrictionReason(TLRPCExtensions.getRestrictionReason(messageObject.messageOwner));
+
 			if (!TextUtils.isEmpty(restrictionReason)) {
 				videoInfoContainer.setVisibility(INVISIBLE);
 				imageView.setImageResource(R.drawable.photo_placeholder_in);
@@ -188,8 +189,9 @@ public class SharedPhotoVideoCell extends FrameLayout {
 				videoInfoContainer.setVisibility(VISIBLE);
 				videoTextView.setText(AndroidUtilities.formatShortDuration(messageObject.getDuration()));
 				TLRPC.Document document = messageObject.getDocument();
-				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 50);
-				TLRPC.PhotoSize qualityThumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 320);
+				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 50);
+				TLRPC.PhotoSize qualityThumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 320);
+
 				if (thumb == qualityThumb) {
 					qualityThumb = null;
 				}
@@ -205,7 +207,7 @@ public class SharedPhotoVideoCell extends FrameLayout {
 					imageView.setImageResource(R.drawable.photo_placeholder_in);
 				}
 			}
-			else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaPhoto && messageObject.messageOwner.media.photo != null && !messageObject.photoThumbs.isEmpty()) {
+			else if (TLRPCExtensions.getMedia(messageObject.messageOwner) instanceof TLRPC.TLMessageMediaPhoto mediaPhoto && mediaPhoto.photo != null && !messageObject.photoThumbs.isEmpty()) {
 				videoInfoContainer.setVisibility(INVISIBLE);
 				TLRPC.PhotoSize currentPhotoObjectThumb = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 50);
 				TLRPC.PhotoSize currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 320, false, currentPhotoObjectThumb, false);
@@ -245,7 +247,7 @@ public class SharedPhotoVideoCell extends FrameLayout {
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			if (checkBox.isChecked() || !imageView.imageReceiver.hasBitmapImage() || imageView.imageReceiver.getCurrentAlpha() != 1.0f || PhotoViewer.isShowingImage(currentMessageObject)) {
 				canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), backgroundPaint);
 			}
@@ -278,7 +280,7 @@ public class SharedPhotoVideoCell extends FrameLayout {
 		backgroundPaint.setColor(Theme.getColor(Theme.key_sharedMedia_photoPlaceholder));
 		messageObjects = new MessageObject[6];
 		photoVideoViews = new PhotoVideoView[6];
-		indeces = new int[6];
+		indexes = new int[6];
 		for (int a = 0; a < 6; a++) {
 			photoVideoViews[a] = new PhotoVideoView(context);
 			addView(photoVideoViews[a]);
@@ -287,13 +289,13 @@ public class SharedPhotoVideoCell extends FrameLayout {
 			photoVideoViews[a].setOnClickListener(v -> {
 				if (delegate != null) {
 					int a1 = (Integer)v.getTag();
-					delegate.didClickItem(SharedPhotoVideoCell.this, indeces[a1], messageObjects[a1], a1);
+					delegate.didClickItem(SharedPhotoVideoCell.this, indexes[a1], messageObjects[a1], a1);
 				}
 			});
 			photoVideoViews[a].setOnLongClickListener(v -> {
 				if (delegate != null) {
 					int a12 = (Integer)v.getTag();
-					return delegate.didLongClickItem(SharedPhotoVideoCell.this, indeces[a12], messageObjects[a12], a12);
+					return delegate.didLongClickItem(SharedPhotoVideoCell.this, indexes[a12], messageObjects[a12], a12);
 				}
 				return false;
 			});
@@ -361,7 +363,7 @@ public class SharedPhotoVideoCell extends FrameLayout {
 		if (a >= itemsCount) {
 			return -1;
 		}
-		return indeces[a];
+		return indexes[a];
 	}
 
 	public void setIsFirst(boolean first) {
@@ -374,7 +376,7 @@ public class SharedPhotoVideoCell extends FrameLayout {
 
 	public void setItem(int a, int index, MessageObject messageObject) {
 		messageObjects[a] = messageObject;
-		indeces[a] = index;
+		indexes[a] = index;
 
 		if (messageObject != null) {
 			photoVideoViews[a].setVisibility(VISIBLE);

@@ -3,7 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Mykhailo Mykytyn, Nikita Denin, Ello 2023.
+ * Copyright Mykhailo Mykytyn, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger.utils
 
@@ -70,7 +71,7 @@ class CheckUsername(private val resultObserver: Result) {
 		lastCheckName = name
 
 		checkRunnable = Runnable {
-			val req = TLRPC.TL_account_checkUsername()
+			val req = TLRPC.TLAccountCheckUsername()
 			req.username = name
 
 			checkReqId = ConnectionsManager.getInstance(UserConfig.selectedAccount).sendRequest(req, { response, error ->
@@ -78,7 +79,7 @@ class CheckUsername(private val resultObserver: Result) {
 					checkReqId = 0
 
 					if (lastCheckName != null && lastCheckName == name) {
-						lastNameAvailable = if (error == null && response is TLRPC.TL_boolTrue) {
+						lastNameAvailable = if (error == null && response is TLRPC.TLBoolTrue) {
 							resultObserver.done(null)
 							true
 						}

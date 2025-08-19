@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Premium;
 
@@ -43,7 +43,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
@@ -146,8 +146,7 @@ public class PremiumPreviewBottomSheet extends BottomSheetWithRecyclerListView i
 		}
 		recyclerListView.setPadding(AndroidUtilities.dp(6), 0, AndroidUtilities.dp(6), 0);
 		recyclerListView.setOnItemClickListener((view, position) -> {
-			if (view instanceof PremiumFeatureCell) {
-				PremiumFeatureCell cell = (PremiumFeatureCell)view;
+			if (view instanceof PremiumFeatureCell cell) {
 				PremiumPreviewFragment.sentShowFeaturePreview(currentAccount, cell.data.type);
 //                if (cell.data.type == PremiumPreviewFragment.PREMIUM_FEATURE_LIMITS) {
 //                    DoubledLimitsBottomSheet bottomSheet = new DoubledLimitsBottomSheet(fragment, currentAccount);
@@ -231,18 +230,18 @@ public class PremiumPreviewBottomSheet extends BottomSheetWithRecyclerListView i
 		}
 		if (statusStickerSet != null) {
 			final String stickerSetPlaceholder = "<STICKERSET>";
-			String string = LocaleController.formatString(R.string.TelegramPremiumUserStatusDialogTitle, ContactsController.formatName(user.getFirst_name(), user.getLast_name()), stickerSetPlaceholder);
+			String string = LocaleController.formatString(R.string.TelegramPremiumUserStatusDialogTitle, ContactsController.formatName(user.firstName, user.lastName), stickerSetPlaceholder);
 			CharSequence charSequence = AndroidUtilities.replaceSingleTag(string, Theme.key_windowBackgroundWhiteBlueButton, null);
 			SpannableStringBuilder title = charSequence instanceof SpannableStringBuilder ? ((SpannableStringBuilder)charSequence) : new SpannableStringBuilder(charSequence);
 			int index = charSequence.toString().indexOf(stickerSetPlaceholder);
 			if (index >= 0) {
-				TLRPC.TL_messages_stickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(statusStickerSet, false);
+				var stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(statusStickerSet, false);
 				TLRPC.Document sticker = null;
 				if (stickerSet != null && !stickerSet.documents.isEmpty()) {
 					sticker = stickerSet.documents.get(0);
 					if (stickerSet.set != null) {
 						for (int i = 0; i < stickerSet.documents.size(); ++i) {
-							if (stickerSet.documents.get(i).id == stickerSet.set.thumb_document_id) {
+							if (stickerSet.documents.get(i).id == stickerSet.set.thumbDocumentId) {
 								sticker = stickerSet.documents.get(i);
 								break;
 							}
@@ -324,21 +323,21 @@ public class PremiumPreviewBottomSheet extends BottomSheetWithRecyclerListView i
 			subtitleView.setText(AndroidUtilities.replaceTags(getContext().getString(R.string.TelegramPremiumUserStatusDialogSubtitle)));
 		}
 		else if (isEmojiStatus) {
-			titleView.setText(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.TelegramPremiumUserStatusDefaultDialogTitle, ContactsController.formatName(user.getFirst_name(), user.getLast_name()))));
-			subtitleView.setText(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.TelegramPremiumUserStatusDialogSubtitle, ContactsController.formatName(user.getFirst_name(), user.getLast_name()))));
+			titleView.setText(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.TelegramPremiumUserStatusDefaultDialogTitle, ContactsController.formatName(user.firstName, user.lastName))));
+			subtitleView.setText(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.TelegramPremiumUserStatusDialogSubtitle, ContactsController.formatName(user.firstName, user.lastName))));
 		}
 		else if (giftTier != null) {
 			if (isOutboundGift) {
-				titleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserGiftedPremiumOutboundDialogTitleWithPlural, user != null ? user.getFirst_name() : "", LocaleController.formatPluralString("GiftMonths", giftTier.getMonths())), Theme.key_windowBackgroundWhiteBlueButton, null));
-				subtitleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserGiftedPremiumOutboundDialogSubtitle, user != null ? user.getFirst_name() : ""), Theme.key_windowBackgroundWhiteBlueButton, null));
+				titleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserGiftedPremiumOutboundDialogTitleWithPlural, user != null ? user.firstName : "", LocaleController.formatPluralString("GiftMonths", giftTier.getMonths())), Theme.key_windowBackgroundWhiteBlueButton, null));
+				subtitleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserGiftedPremiumOutboundDialogSubtitle, user != null ? user.firstName : ""), Theme.key_windowBackgroundWhiteBlueButton, null));
 			}
 			else {
-				titleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserGiftedPremiumDialogTitleWithPlural, user != null ? user.getFirst_name() : "", LocaleController.formatPluralString("GiftMonths", giftTier.getMonths())), Theme.key_windowBackgroundWhiteBlueButton, null));
+				titleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserGiftedPremiumDialogTitleWithPlural, user != null ? user.firstName : "", LocaleController.formatPluralString("GiftMonths", giftTier.getMonths())), Theme.key_windowBackgroundWhiteBlueButton, null));
 				subtitleView.setText(AndroidUtilities.replaceTags(getContext().getString(R.string.TelegramPremiumUserGiftedPremiumDialogSubtitle)));
 			}
 		}
 		else {
-			titleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserDialogTitle, ContactsController.formatName(user.getFirst_name(), user.getLast_name())), Theme.key_windowBackgroundWhiteBlueButton, null));
+			titleView.setText(AndroidUtilities.replaceSingleTag(LocaleController.formatString(R.string.TelegramPremiumUserDialogTitle, ContactsController.formatName(user.firstName, user.lastName)), Theme.key_windowBackgroundWhiteBlueButton, null));
 			subtitleView.setText(AndroidUtilities.replaceTags(getContext().getString(R.string.TelegramPremiumUserDialogSubtitle)));
 		}
 	}
@@ -510,8 +509,10 @@ public class PremiumPreviewBottomSheet extends BottomSheetWithRecyclerListView i
 	@Override
 	public void didReceivedNotification(int id, int account, Object... args) {
 		if (id == NotificationCenter.groupStickersDidLoad) {
-			if (statusStickerSet != null && statusStickerSet.id == (long)args[0]) {
-				setTitle();
+			if (statusStickerSet instanceof TLRPC.TLInputStickerSetID tlInputStickerSetID) {
+				if (tlInputStickerSetID.id == (long)args[0]) {
+					setTitle();
+				}
 			}
 		}
 	}
@@ -527,7 +528,7 @@ public class PremiumPreviewBottomSheet extends BottomSheetWithRecyclerListView i
 				case 0:
 					LinearLayout linearLayout = new LinearLayout(context) {
 						@Override
-						protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+						protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 							if (child == iconTextureView && enterTransitionInProgress) {
 								return true;
 							}
@@ -580,7 +581,7 @@ public class PremiumPreviewBottomSheet extends BottomSheetWithRecyclerListView i
 							}
 
 							@Override
-							protected void dispatchDraw(Canvas canvas) {
+							protected void dispatchDraw(@NonNull Canvas canvas) {
 								super.dispatchDraw(canvas);
 								if (lastLayout != getLayout()) {
 									stack = AnimatedEmojiSpan.update(AnimatedEmojiDrawable.CACHE_TYPE_ALERT_PREVIEW, this, stack, lastLayout = getLayout());

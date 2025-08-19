@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui.Cells;
 
 import android.annotation.SuppressLint;
@@ -20,6 +20,8 @@ import android.view.SoundEffectConstants;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 
+import androidx.annotation.NonNull;
+
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DownloadController;
 import org.telegram.messenger.FileLoader;
@@ -27,11 +29,12 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
-import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.DotDividerSpan;
 import org.telegram.ui.Components.MediaActionDrawable;
@@ -134,8 +137,8 @@ public class AudioPlayerCell extends View implements DownloadController.FileDown
 	public void setMessageObject(MessageObject messageObject) {
 		currentMessageObject = messageObject;
 		TLRPC.Document document = messageObject.getDocument();
-		TLRPC.PhotoSize thumb = document != null ? FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90) : null;
-		if (thumb instanceof TLRPC.TL_photoSize || thumb instanceof TLRPC.TL_photoSizeProgressive) {
+		TLRPC.PhotoSize thumb = document != null ? FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 90) : null;
+		if (thumb instanceof TLRPC.TLPhotoSize || thumb instanceof TLRPC.TLPhotoSizeProgressive) {
 			radialProgress.setImageOverlay(thumb, document, messageObject);
 		}
 		else {
@@ -264,7 +267,7 @@ public class AudioPlayerCell extends View implements DownloadController.FileDown
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (titleLayout != null) {
 			canvas.save();
 			canvas.translate(AndroidUtilities.dp(LocaleController.isRTL ? 8 : AndroidUtilities.leftBaseline), titleY);

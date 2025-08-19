@@ -4,13 +4,12 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.annotation.TargetApi
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlarmManager
@@ -46,6 +45,7 @@ import android.provider.Settings
 import android.text.TextUtils
 import android.util.SparseArray
 import android.util.SparseBooleanArray
+import androidx.annotation.RequiresApi
 import androidx.collection.LongSparseArray
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -54,9 +54,12 @@ import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.FileProvider
 import androidx.core.content.LocusIdCompat
+import androidx.core.content.edit
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
+import androidx.core.net.toUri
+import androidx.core.util.isEmpty
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -65,61 +68,16 @@ import kotlinx.coroutines.runBlocking
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.support.LongSparseIntArray
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.EncryptedChat
 import org.telegram.tgnet.TLRPC.FileLocation
-import org.telegram.tgnet.TLRPC.TL_account_updateNotifySettings
-import org.telegram.tgnet.TLRPC.TL_inputNotifyBroadcasts
-import org.telegram.tgnet.TLRPC.TL_inputNotifyChats
-import org.telegram.tgnet.TLRPC.TL_inputNotifyPeer
-import org.telegram.tgnet.TLRPC.TL_inputNotifyUsers
-import org.telegram.tgnet.TLRPC.TL_inputPeerNotifySettings
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonCallback
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonRow
-import org.telegram.tgnet.TLRPC.TL_messageActionChannelCreate
-import org.telegram.tgnet.TLRPC.TL_messageActionChannelMigrateFrom
-import org.telegram.tgnet.TLRPC.TL_messageActionChatAddUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatCreate
-import org.telegram.tgnet.TLRPC.TL_messageActionChatDeletePhoto
-import org.telegram.tgnet.TLRPC.TL_messageActionChatDeleteUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatEditPhoto
-import org.telegram.tgnet.TLRPC.TL_messageActionChatEditTitle
-import org.telegram.tgnet.TLRPC.TL_messageActionChatJoinedByLink
-import org.telegram.tgnet.TLRPC.TL_messageActionChatJoinedByRequest
-import org.telegram.tgnet.TLRPC.TL_messageActionChatMigrateTo
-import org.telegram.tgnet.TLRPC.TL_messageActionContactSignUp
-import org.telegram.tgnet.TLRPC.TL_messageActionEmpty
-import org.telegram.tgnet.TLRPC.TL_messageActionGameScore
-import org.telegram.tgnet.TLRPC.TL_messageActionGeoProximityReached
-import org.telegram.tgnet.TLRPC.TL_messageActionGroupCall
-import org.telegram.tgnet.TLRPC.TL_messageActionGroupCallScheduled
-import org.telegram.tgnet.TLRPC.TL_messageActionInviteToGroupCall
-import org.telegram.tgnet.TLRPC.TL_messageActionLoginUnknownLocation
-import org.telegram.tgnet.TLRPC.TL_messageActionPaymentSent
-import org.telegram.tgnet.TLRPC.TL_messageActionPhoneCall
-import org.telegram.tgnet.TLRPC.TL_messageActionPinMessage
-import org.telegram.tgnet.TLRPC.TL_messageActionScreenshotTaken
-import org.telegram.tgnet.TLRPC.TL_messageActionSetChatTheme
-import org.telegram.tgnet.TLRPC.TL_messageActionSetMessagesTTL
-import org.telegram.tgnet.TLRPC.TL_messageActionUserJoined
-import org.telegram.tgnet.TLRPC.TL_messageActionUserUpdatedPhoto
-import org.telegram.tgnet.TLRPC.TL_messageMediaContact
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_messageMediaGame
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeo
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeoLive
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messageMediaPoll
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_messageService
-import org.telegram.tgnet.TLRPC.TL_notificationSoundDefault
-import org.telegram.tgnet.TLRPC.TL_notificationSoundLocal
-import org.telegram.tgnet.TLRPC.TL_notificationSoundNone
-import org.telegram.tgnet.TLRPC.TL_notificationSoundRingtone
-import org.telegram.tgnet.TLRPC.TL_peerNotifySettings
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.notifySettings
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.replyMarkup
+import org.telegram.tgnet.userId
 import org.telegram.ui.BubbleActivity
 import org.telegram.ui.LaunchActivity
 import org.telegram.ui.PopupNotificationActivity
@@ -214,15 +172,15 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 			messagesStorage.setDialogFlags(did, flags)
 
-			editor.commit()
+			editor.apply()
 
-			val dialog = messagesController.dialogs_dict[did]
+			val dialog = messagesController.dialogs_dict[did] as? TLRPC.TLDialog
 
 			if (dialog != null) {
-				dialog.notify_settings = TL_peerNotifySettings()
+				dialog.notifySettings = TLRPC.TLPeerNotifySettings()
 
 				if (selectedTimeInSeconds != Int.MAX_VALUE || defaultEnabled) {
-					dialog.notify_settings.mute_until = selectedTimeInSeconds
+					dialog.notifySettings?.muteUntil = selectedTimeInSeconds
 				}
 			}
 
@@ -265,9 +223,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 			val preferences = accountInstance.notificationsSettings
 
-			val editor = preferences.edit()
-			editor.clear()
-			editor.commit()
+			preferences.edit(commit = true) {
+				clear()
+			}
 
 			if (Build.VERSION.SDK_INT >= 26) {
 				try {
@@ -338,7 +296,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		for (messageObject in pushMessages) {
 			val dialogId = messageObject.dialogId
 
-			if (messageObject.messageOwner?.mentioned == true && messageObject.messageOwner?.action is TL_messageActionPinMessage || DialogObject.isEncryptedDialog(dialogId) || messageObject.messageOwner?.peer_id?.channel_id != 0L && !messageObject.isSupergroup) {
+			if (messageObject.messageOwner?.mentioned == true && (messageObject.messageOwner as? TLRPC.TLMessageService)?.action is TLRPC.TLMessageActionPinMessage || DialogObject.isEncryptedDialog(dialogId) || messageObject.messageOwner?.peerId?.channelId != 0L && !messageObject.isSupergroup) {
 				continue
 			}
 
@@ -355,7 +313,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			for (messageObject in pushMessages) {
 				val dialogId = messageObject.dialogId
 
-				if (messageObject.messageOwner?.mentioned == true && messageObject.messageOwner?.action is TL_messageActionPinMessage || DialogObject.isEncryptedDialog(dialogId) || messageObject.messageOwner?.peer_id?.channel_id != 0L && !messageObject.isSupergroup) {
+				if (messageObject.messageOwner?.mentioned == true && (messageObject.messageOwner as? TLRPC.TLMessageService)?.action is TLRPC.TLMessageActionPinMessage || DialogObject.isEncryptedDialog(dialogId) || messageObject.messageOwner?.peerId?.channelId != 0L && !messageObject.isSupergroup) {
 					continue
 				}
 
@@ -372,10 +330,6 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					popupIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_NO_USER_ACTION or Intent.FLAG_FROM_BACKGROUND)
 
 					ApplicationLoader.applicationContext.startActivity(popupIntent)
-
-					val it = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
-
-					ApplicationLoader.applicationContext.sendBroadcast(it)
 				}
 			}
 		}
@@ -447,7 +401,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				if (sparseArray.size() == 0) {
+				if (sparseArray.isEmpty()) {
 					pushMessagesDict.remove(key)
 				}
 			}
@@ -520,7 +474,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						if (sparseArray != null) {
 							sparseArray.remove(messageObject.id)
 
-							if (sparseArray.size() == 0) {
+							if (sparseArray.isEmpty()) {
 								pushMessagesDict.remove(dialogId)
 							}
 						}
@@ -611,20 +565,20 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					while (a < pushMessages.size) {
 						val messageObject = pushMessages[a]
 
-						if (!messageObject.messageOwner!!.from_scheduled && messageObject.dialogId == key && messageObject.id <= messageId) {
+						if ((messageObject.messageOwner as? TLRPC.TLMessage)?.fromScheduled != true && messageObject.dialogId == key && messageObject.id <= messageId) {
 							if (isPersonalMessage(messageObject)) {
 								personalCount--
 							}
 
 							popupArrayRemove.add(messageObject)
 
-							val did = messageObject.messageOwner?.peer_id?.channel_id?.takeIf { it != 0L }?.let { -it } ?: 0
+							val did = messageObject.messageOwner?.peerId?.channelId?.takeIf { it != 0L }?.let { -it } ?: 0L
 							val sparseArray = pushMessagesDict[did]
 
 							if (sparseArray != null) {
 								sparseArray.remove(messageObject.id)
 
-								if (sparseArray.size() == 0) {
+								if (sparseArray.isEmpty()) {
 									pushMessagesDict.remove(did)
 								}
 							}
@@ -672,13 +626,13 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								personalCount--
 							}
 
-							val did = messageObject.messageOwner?.peer_id?.channel_id?.takeIf { it != 0L }?.let { -it } ?: 0L
+							val did = messageObject.messageOwner?.peerId?.channelId?.takeIf { it != 0L }?.let { -it } ?: 0L
 							val sparseArray = pushMessagesDict[did]
 
 							if (sparseArray != null) {
 								sparseArray.remove(messageObject.id)
 
-								if (sparseArray.size() == 0) {
+								if (sparseArray.isEmpty()) {
 									pushMessagesDict.remove(did)
 								}
 							}
@@ -733,7 +687,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			}
 		}
 
-		if (popup != 0 && messageObject.messageOwner?.peer_id?.channel_id != 0L && !messageObject.isSupergroup) {
+		if (popup != 0 && messageObject.messageOwner?.peerId?.channelId != 0L && !messageObject.isSupergroup) {
 			popup = 0
 		}
 
@@ -768,7 +722,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 				while (b < N2) {
 					val messageObject = messages[b]
-					val did = messageObject.messageOwner?.peer_id?.channel_id?.takeIf { it != 0L }?.let { -it } ?: 0L
+					val did = messageObject.messageOwner?.peerId?.channelId?.takeIf { it != 0L }?.let { -it } ?: 0L
 					val sparseArray = pushMessagesDict[did] ?: break
 					var oldMessage = sparseArray[messageObject.id]
 
@@ -828,18 +782,18 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			for (a in messageObjects.indices) {
 				val messageObject = messageObjects[a]
 
-				if (messageObject.wasUnread && messageObject.messageOwner is TL_messageService) {
+				if (messageObject.wasUnread && messageObject.messageOwner is TLRPC.TLMessageService) {
 					runBlocking(mainScope.coroutineContext) {
 						messagesController.markMessageContentAsRead(messageObject)
 					}
 				}
 
-				if (messageObject.messageOwner != null && (messageObject.isImportedForward || messageObject.messageOwner?.action is TL_messageActionSetMessagesTTL || messageObject.messageOwner?.silent == true && (messageObject.messageOwner?.action is TL_messageActionContactSignUp || messageObject.messageOwner?.action is TL_messageActionUserJoined))) {
+				if (messageObject.messageOwner != null && (messageObject.isImportedForward || (messageObject.messageOwner as? TLRPC.TLMessageService)?.action is TLRPC.TLMessageActionSetMessagesTTL || messageObject.messageOwner?.silent == true && ((messageObject.messageOwner as? TLRPC.TLMessageService)?.action is TLRPC.TLMessageActionContactSignUp))) {
 					continue
 				}
 
 				val mid = messageObject.id
-				val randomId = if (messageObject.isFcmMessage) messageObject.messageOwner!!.random_id else 0
+				val randomId = if (messageObject.isFcmMessage) messageObject.messageOwner!!.randomId else 0
 				var dialogId = messageObject.dialogId
 
 				val isChannel = if (messageObject.isFcmMessage) {
@@ -853,15 +807,15 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					false
 				}
 
-				val did = messageObject.messageOwner?.peer_id?.channel_id?.takeIf { it != 0L }?.let { -it } ?: 0L
+				val did = messageObject.messageOwner?.peerId?.channelId?.takeIf { it != 0L }?.let { -it } ?: 0L
 				var sparseArray = pushMessagesDict[did]
 				var oldMessageObject = sparseArray?.get(mid)
 
-				if (oldMessageObject == null && messageObject.messageOwner?.random_id != 0L) {
-					oldMessageObject = fcmRandomMessagesDict[messageObject.messageOwner!!.random_id]
+				if (oldMessageObject == null && messageObject.messageOwner?.randomId != 0L) {
+					oldMessageObject = fcmRandomMessagesDict[messageObject.messageOwner!!.randomId]
 
 					if (oldMessageObject != null) {
-						fcmRandomMessagesDict.remove(messageObject.messageOwner!!.random_id)
+						fcmRandomMessagesDict.remove(messageObject.messageOwner!!.randomId)
 					}
 				}
 
@@ -908,7 +862,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				}
 
 				if (messageObject.messageOwner?.mentioned == true) {
-					if (!allowPinned && messageObject.messageOwner?.action is TL_messageActionPinMessage) {
+					if (!allowPinned && (messageObject.messageOwner as? TLRPC.TLMessageService)?.action is TLRPC.TLMessageActionPinMessage) {
 						continue
 					}
 
@@ -946,7 +900,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					}
 
 					if (!hasScheduled) {
-						hasScheduled = messageObject.messageOwner!!.from_scheduled
+						hasScheduled = (messageObject.messageOwner as? TLRPC.TLMessage)?.fromScheduled == true
 					}
 
 					delayedPushMessages.add(messageObject)
@@ -1141,7 +1095,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					while (a < pushMessages.size) {
 						val messageObject = pushMessages[a]
 
-						if (messageObject.messageOwner?.from_scheduled == false && messageObject.dialogId == dialogId) {
+						if ((messageObject.messageOwner as? TLRPC.TLMessage)?.fromScheduled == false && messageObject.dialogId == dialogId) {
 							if (isPersonalMessage(messageObject)) {
 								personalCount--
 							}
@@ -1152,13 +1106,13 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 							delayedPushMessages.remove(messageObject)
 
-							val did = messageObject.messageOwner?.peer_id?.channel_id?.takeIf { it != 0L }?.let { -it } ?: 0L
+							val did = messageObject.messageOwner?.peerId?.channelId?.takeIf { it != 0L }?.let { -it } ?: 0L
 							val sparseArray = pushMessagesDict[did]
 
 							if (sparseArray != null) {
 								sparseArray.remove(messageObject.id)
 
-								if (sparseArray.size() == 0) {
+								if (sparseArray.isEmpty()) {
 									pushMessagesDict.remove(did)
 								}
 							}
@@ -1208,7 +1162,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	fun processLoadedUnreadMessages(dialogs: LongSparseArray<Int>, messages: ArrayList<Message?>?, push: ArrayList<MessageObject>?, users: ArrayList<User>?, chats: ArrayList<Chat>?, encryptedChats: ArrayList<EncryptedChat?>?) {
+	fun processLoadedUnreadMessages(dialogs: LongSparseArray<Int>, messages: ArrayList<TLRPC.Message?>?, push: ArrayList<MessageObject>?, users: ArrayList<TLRPC.User>?, chats: ArrayList<Chat>?, encryptedChats: ArrayList<EncryptedChat?>?) {
 		messagesController.putUsers(users, true)
 		messagesController.putChats(chats, true)
 		messagesController.putEncryptedChats(encryptedChats, true)
@@ -1228,11 +1182,17 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				for (a in messages.indices) {
 					val message = messages[a] ?: continue
 
-					if (message.fwd_from?.imported == true || message.action is TL_messageActionSetMessagesTTL || message.silent && (message.action is TL_messageActionContactSignUp || message.action is TL_messageActionUserJoined)) {
+					if ((message as? TLRPC.TLMessage)?.fwdFrom?.imported == true) {
 						continue
 					}
 
-					val did = message.peer_id?.channel_id?.takeIf { it != 0L }?.let { -it } ?: 0L
+					if (message is TLRPC.TLMessageService) {
+						if (message.action is TLRPC.TLMessageActionSetMessagesTTL || message.silent && (message.action is TLRPC.TLMessageActionContactSignUp)) {
+							continue
+						}
+					}
+
+					val did = message.peerId?.channelId?.takeIf { it != 0L }?.let { -it } ?: 0L
 					var sparseArray = pushMessagesDict[did]
 
 					if (sparseArray != null && sparseArray.indexOfKey(message.id) >= 0) {
@@ -1337,7 +1297,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 					var dialogId = messageObject.dialogId
 					val originalDialogId = dialogId
-					val randomId = messageObject.messageOwner!!.random_id
+					val randomId = messageObject.messageOwner!!.randomId
 
 					if (messageObject.messageOwner!!.mentioned) {
 						dialogId = messageObject.fromChatId
@@ -1367,7 +1327,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					}
 
 					if (mid != 0) {
-						val did = messageObject.messageOwner?.peer_id?.channel_id?.takeIf { it != 0L }?.let { -it } ?: 0L
+						val did = messageObject.messageOwner?.peerId?.channelId?.takeIf { it != 0L }?.let { -it } ?: 0L
 						var sparseArray = pushMessagesDict[did]
 
 						if (sparseArray == null) {
@@ -1444,7 +1404,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 
-							count += dialog.unread_count
+							count += ((dialog as? TLRPC.TLDialog)?.unreadCount ?: 0)
 						}
 					}
 					catch (e: Exception) {
@@ -1469,7 +1429,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 
-							count += dialog.unread_count
+							count += ((dialog as? TLRPC.TLDialog)?.unreadCount ?: 0)
 						}
 					}
 					catch (e: Exception) {
@@ -1531,9 +1491,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			return ApplicationLoader.applicationContext.getString(R.string.NotificationHiddenMessage)
 		}
 
-		var dialogId = messageObject.messageOwner?.dialog_id ?: 0L
-		val chatId = messageObject.messageOwner?.peer_id?.chat_id?.takeIf { it != 0L } ?: messageObject.messageOwner?.peer_id?.channel_id ?: 0L
-		var fromId = messageObject.messageOwner?.peer_id?.user_id ?: 0L
+		var dialogId = messageObject.messageOwner?.dialogId ?: 0L
+		val chatId = messageObject.messageOwner?.peerId?.chatId?.takeIf { it != 0L } ?: messageObject.messageOwner?.peerId?.channelId ?: 0L
+		var fromId = messageObject.messageOwner?.peerId?.userId ?: 0L
 
 		if (preview != null) {
 			preview[0] = true
@@ -1557,7 +1517,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				}
 			}
 			else if (chatId != 0L) {
-				if (messageObject.messageOwner?.peer_id?.channel_id == 0L || messageObject.isSupergroup) {
+				if (messageObject.messageOwner?.peerId?.channelId == 0L || messageObject.isSupergroup) {
 					userName[0] = messageObject.localUserName
 				}
 				else if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O_MR1) {
@@ -1569,7 +1529,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						preview[0] = false
 					}
 
-					return if (messageObject.messageOwner?.peer_id?.channel_id != 0L && !messageObject.isSupergroup) {
+					return if (messageObject.messageOwner?.peerId?.channelId != 0L && !messageObject.isSupergroup) {
 						LocaleController.formatString("ChannelMessageNoText", R.string.ChannelMessageNoText, messageObject.localName)
 					}
 					else {
@@ -1581,7 +1541,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			return replaceSpoilers(messageObject)
 		}
 
-		val selfUsedId = userConfig.getClientUserId()
+		val selfUserId = userConfig.getClientUserId()
 
 		if (fromId == 0L) {
 			fromId = messageObject.fromChatId
@@ -1590,7 +1550,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				fromId = -chatId
 			}
 		}
-		else if (fromId == selfUsedId) {
+		else if (fromId == selfUserId) {
 			fromId = messageObject.fromChatId
 		}
 
@@ -1605,8 +1565,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 		var name: String? = null
 
-		if (UserObject.isReplyUser(dialogId) && messageObject.messageOwner?.fwd_from?.from_id != null) {
-			fromId = MessageObject.getPeerId(messageObject.messageOwner?.fwd_from?.from_id)
+		if (UserObject.isReplyUser(dialogId) && (messageObject.messageOwner as? TLRPC.TLMessage)?.fwdFrom?.fromId != null) {
+			fromId = MessageObject.getPeerId((messageObject.messageOwner as? TLRPC.TLMessage)?.fwdFrom?.fromId)
 		}
 
 		if (fromId > 0) {
@@ -1637,8 +1597,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			}
 		}
 
-		if (name != null && fromId > 0 && UserObject.isReplyUser(dialogId) && messageObject.messageOwner?.fwd_from?.saved_from_peer != null) {
-			val id = MessageObject.getPeerId(messageObject.messageOwner?.fwd_from?.saved_from_peer)
+		if (name != null && fromId > 0 && UserObject.isReplyUser(dialogId) && (messageObject.messageOwner as? TLRPC.TLMessage)?.fwdFrom?.savedFromPeer != null) {
+			val id = MessageObject.getPeerId((messageObject.messageOwner as? TLRPC.TLMessage)?.fwdFrom?.savedFromPeer)
 
 			if (DialogObject.isChatDialog(id)) {
 				val chat = messagesController.getChat(-id)
@@ -1682,33 +1642,35 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			val isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 
 			if (dialogPreviewEnabled && (chatId == 0L && fromId != 0L && preferences.getBoolean("EnablePreviewAll", true) || chatId != 0L && (!isChannel && preferences.getBoolean("EnablePreviewGroup", true) || isChannel && preferences.getBoolean("EnablePreviewChannel", true)))) {
-				if (messageObject.messageOwner is TL_messageService) {
+				if (messageObject.messageOwner is TLRPC.TLMessageService) {
 					userName[0] = null
 
-					when (messageObject.messageOwner?.action) {
-						is TL_messageActionGeoProximityReached -> {
+					val serviceMessage = messageObject.messageOwner as TLRPC.TLMessageService
+
+					when (val action = serviceMessage.action) {
+						is TLRPC.TLMessageActionGeoProximityReached -> {
 							return messageObject.messageText.toString()
 						}
 
-						is TL_messageActionUserJoined, is TL_messageActionContactSignUp -> {
+						/*is TLRPC.TLMessageActionUserJoined,*/ is TLRPC.TLMessageActionContactSignUp -> {
 							return LocaleController.formatString("NotificationContactJoined", R.string.NotificationContactJoined, name)
 						}
 
-						is TL_messageActionUserUpdatedPhoto -> {
-							return LocaleController.formatString("NotificationContactNewPhoto", R.string.NotificationContactNewPhoto, name)
-						}
+//						is TLRPC.TLMessageActionUserUpdatedPhoto -> {
+//							return LocaleController.formatString("NotificationContactNewPhoto", R.string.NotificationContactNewPhoto, name)
+//						}
 
-						is TL_messageActionLoginUnknownLocation -> {
-							val date = LocaleController.formatString("formatDateAtTime", R.string.formatDateAtTime, LocaleController.getInstance().formatterYear.format(messageObject.messageOwner!!.date.toLong() * 1000), LocaleController.getInstance().formatterDay.format(messageObject.messageOwner!!.date.toLong() * 1000))
-							return LocaleController.formatString("NotificationUnrecognizedDevice", R.string.NotificationUnrecognizedDevice, userConfig.getCurrentUser()?.first_name, date, messageObject.messageOwner?.action?.title, messageObject.messageOwner?.action?.address)
-						}
+//						is TLRPC.TLMessageActionLoginUnknownLocation -> {
+//							val date = LocaleController.formatString("formatDateAtTime", R.string.formatDateAtTime, LocaleController.getInstance().formatterYear.format(messageObject.messageOwner!!.date.toLong() * 1000), LocaleController.getInstance().formatterDay.format(messageObject.messageOwner!!.date.toLong() * 1000))
+//							return LocaleController.formatString("NotificationUnrecognizedDevice", R.string.NotificationUnrecognizedDevice, userConfig.getCurrentUser()?.first_name, date, action?.title, action?.address)
+//						}
 
-						is TL_messageActionGameScore, is TL_messageActionPaymentSent -> {
+						is TLRPC.TLMessageActionGameScore, is TLRPC.TLMessageActionPaymentSent -> {
 							return messageObject.messageText.toString()
 						}
 
-						is TL_messageActionPhoneCall -> {
-							return if (messageObject.messageOwner?.action?.video == true) {
+						is TLRPC.TLMessageActionPhoneCall -> {
+							return if (action.video) {
 								ApplicationLoader.applicationContext.getString(R.string.CallMessageVideoIncomingMissed)
 							}
 							else {
@@ -1716,19 +1678,19 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 
-						is TL_messageActionChatAddUser -> {
-							var singleUserId = messageObject.messageOwner?.action?.user_id ?: 0L
+						is TLRPC.TLMessageActionChatAddUser -> {
+							var singleUserId = 0L
 
-							if (singleUserId == 0L && messageObject.messageOwner?.action?.users?.size == 1) {
-								singleUserId = messageObject.messageOwner?.action?.users?.firstOrNull() ?: 0L
+							if (action.users.size == 1) {
+								singleUserId = action.users.firstOrNull() ?: 0L
 							}
 
 							return if (singleUserId != 0L) {
-								if (messageObject.messageOwner?.peer_id?.channel_id != 0L && chat?.megagroup != true) {
+								if (messageObject.messageOwner?.peerId?.channelId != 0L && chat?.megagroup != true) {
 									LocaleController.formatString("ChannelAddedByNotification", R.string.ChannelAddedByNotification, name, chat?.title)
 								}
 								else {
-									if (singleUserId == selfUsedId) {
+									if (singleUserId == selfUserId) {
 										LocaleController.formatString("NotificationInvitedToGroup", R.string.NotificationInvitedToGroup, name, chat?.title)
 									}
 									else {
@@ -1750,7 +1712,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 							else {
 								val names = buildString {
-									messageObject.messageOwner?.action?.users?.forEach {
+									action.users.forEach {
 										val user = messagesController.getUser(it)
 
 										if (user != null) {
@@ -1769,22 +1731,23 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 
-						is TL_messageActionGroupCall -> {
+						is TLRPC.TLMessageActionGroupCall -> {
 							return LocaleController.formatString("NotificationGroupCreatedCall", R.string.NotificationGroupCreatedCall, name, chat?.title)
 						}
 
-						is TL_messageActionGroupCallScheduled -> {
+						is TLRPC.TLMessageActionGroupCallScheduled -> {
 							return messageObject.messageText?.toString()
 						}
 
-						is TL_messageActionInviteToGroupCall -> {
-							var singleUserId = messageObject.messageOwner?.action?.user_id ?: 0L
+						is TLRPC.TLMessageActionInviteToGroupCall -> {
+							var singleUserId = 0L
 
-							if (singleUserId == 0L && messageObject.messageOwner?.action?.users?.size == 1) {
-								singleUserId = messageObject.messageOwner?.action?.users?.firstOrNull() ?: 0L
+							if (action.users.size == 1) {
+								singleUserId = action.users.firstOrNull() ?: 0L
 							}
+
 							return if (singleUserId != 0L) {
-								if (singleUserId == selfUsedId) {
+								if (singleUserId == selfUserId) {
 									LocaleController.formatString("NotificationGroupInvitedYouToCall", R.string.NotificationGroupInvitedYouToCall, name, chat?.title)
 								}
 								else {
@@ -1794,7 +1757,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 							else {
 								val names = buildString {
-									messageObject.messageOwner?.action?.users?.forEach {
+									action.users.forEach {
 										val user = messagesController.getUser(it)
 
 										if (user != null) {
@@ -1813,16 +1776,16 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 
-						is TL_messageActionChatJoinedByLink -> {
+						is TLRPC.TLMessageActionChatJoinedByLink -> {
 							return LocaleController.formatString("NotificationInvitedToGroupByLink", R.string.NotificationInvitedToGroupByLink, name, chat?.title)
 						}
 
-						is TL_messageActionChatEditTitle -> {
-							return LocaleController.formatString("NotificationEditedGroupName", R.string.NotificationEditedGroupName, name, messageObject.messageOwner?.action?.title)
+						is TLRPC.TLMessageActionChatEditTitle -> {
+							return LocaleController.formatString("NotificationEditedGroupName", R.string.NotificationEditedGroupName, name, action.title)
 						}
 
-						is TL_messageActionChatEditPhoto, is TL_messageActionChatDeletePhoto -> {
-							return if (messageObject.messageOwner?.peer_id?.channel_id != 0L && chat?.megagroup != true) {
+						is TLRPC.TLMessageActionChatEditPhoto, is TLRPC.TLMessageActionChatDeletePhoto -> {
+							return if (messageObject.messageOwner?.peerId?.channelId != 0L && chat?.megagroup != true) {
 								if (messageObject.isVideoAvatar) {
 									LocaleController.formatString("ChannelVideoEditNotification", R.string.ChannelVideoEditNotification, chat?.title)
 								}
@@ -1840,9 +1803,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 
-						is TL_messageActionChatDeleteUser -> {
-							return when (messageObject.messageOwner?.action?.user_id) {
-								selfUsedId -> {
+						is TLRPC.TLMessageActionChatDeleteUser -> {
+							return when (action.userId) {
+								selfUserId -> {
 									LocaleController.formatString("NotificationGroupKickYou", R.string.NotificationGroupKickYou, name, chat?.title)
 								}
 
@@ -1851,46 +1814,48 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 
 								else -> {
-									val u2 = messagesController.getUser(messageObject.messageOwner?.action?.user_id) ?: return null
+									val u2 = messagesController.getUser(action.userId) ?: return null
 									LocaleController.formatString("NotificationGroupKickMember", R.string.NotificationGroupKickMember, name, chat?.title, UserObject.getUserName(u2))
 								}
 							}
 						}
 
-						is TL_messageActionChatCreate -> {
+						is TLRPC.TLMessageActionChatCreate -> {
 							return messageObject.messageText?.toString()
 						}
 
-						is TL_messageActionChannelCreate -> {
+						is TLRPC.TLMessageActionChannelCreate -> {
 							return messageObject.messageText?.toString()
 						}
 
-						is TL_messageActionChatMigrateTo -> {
+						is TLRPC.TLMessageActionChatMigrateTo -> {
 							return LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, chat?.title)
 						}
 
-						is TL_messageActionChannelMigrateFrom -> {
-							return LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, messageObject.messageOwner?.action?.title)
+						is TLRPC.TLMessageActionChannelMigrateFrom -> {
+							return LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, action.title)
 						}
 
-						is TL_messageActionScreenshotTaken -> {
+						is TLRPC.TLMessageActionScreenshotTaken -> {
 							return messageObject.messageText?.toString()
 						}
 
-						is TL_messageActionPinMessage -> {
+						is TLRPC.TLMessageActionPinMessage -> {
 							return if (chat != null && (!ChatObject.isChannel(chat) || chat.megagroup)) {
 								if (messageObject.replyMessageObject == null) {
 									LocaleController.formatString("NotificationActionPinnedNoText", R.string.NotificationActionPinnedNoText, name, chat.title)
 								}
 								else {
 									val `object` = messageObject.replyMessageObject
+									val messageOwnerMessage = (`object`?.messageOwner as? TLRPC.TLMessage)?.message
+									val messageOwnerMedia =  (`object`?.messageOwner as? TLRPC.TLMessage)?.media
 
 									if (`object`?.isMusic == true) {
 										LocaleController.formatString("NotificationActionPinnedMusic", R.string.NotificationActionPinnedMusic, name, chat.title)
 									}
 									else if (`object`?.isVideo == true) {
-										if (`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCF9 " + `object`.messageOwner?.message
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCF9 $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat.title)
 										}
 										else {
@@ -1898,8 +1863,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 										}
 									}
 									else if (`object`?.isGif == true) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83C\uDFAC " + `object`.messageOwner?.message
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83C\uDFAC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat.title)
 										}
 										else {
@@ -1922,45 +1887,42 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 											LocaleController.formatString("NotificationActionPinnedSticker", R.string.NotificationActionPinnedSticker, name, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaDocument) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCCE " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCCE $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat.title)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedFile", R.string.NotificationActionPinnedFile, name, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeo || `object`?.messageOwner?.media is TL_messageMediaVenue) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 										LocaleController.formatString("NotificationActionPinnedGeo", R.string.NotificationActionPinnedGeo, name, chat.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeoLive) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 										LocaleController.formatString("NotificationActionPinnedGeoLive", R.string.NotificationActionPinnedGeoLive, name, chat.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaContact) {
-										val mediaContact = `object`.messageOwner?.media as? TL_messageMediaContact
-										LocaleController.formatString("NotificationActionPinnedContact2", R.string.NotificationActionPinnedContact2, name, chat.title, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+										LocaleController.formatString("NotificationActionPinnedContact2", R.string.NotificationActionPinnedContact2, name, chat.title, ContactsController.formatName(messageOwnerMedia.firstName, messageOwnerMedia.lastName))
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPoll) {
-										val mediaPoll = `object`.messageOwner?.media as? TL_messageMediaPoll
-
-										if (mediaPoll?.poll?.quiz == true) {
-											LocaleController.formatString("NotificationActionPinnedQuiz2", R.string.NotificationActionPinnedQuiz2, name, chat.title, mediaPoll.poll?.question)
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+										if (messageOwnerMedia.poll?.quiz == true) {
+											LocaleController.formatString("NotificationActionPinnedQuiz2", R.string.NotificationActionPinnedQuiz2, name, chat.title, messageOwnerMedia.poll?.question)
 										}
 										else {
-											LocaleController.formatString("NotificationActionPinnedPoll2", R.string.NotificationActionPinnedPoll2, name, chat.title, mediaPoll?.poll?.question)
+											LocaleController.formatString("NotificationActionPinnedPoll2", R.string.NotificationActionPinnedPoll2, name, chat.title, messageOwnerMedia.poll?.question)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPhoto) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDDBC " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDDBC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat.title)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedPhoto", R.string.NotificationActionPinnedPhoto, name, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGame) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGame) {
 										LocaleController.formatString("NotificationActionPinnedGame", R.string.NotificationActionPinnedGame, name, chat.title)
 									}
 									else if (!`object`?.messageText.isNullOrEmpty()) {
@@ -1983,13 +1945,15 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 								else {
 									val `object` = messageObject.replyMessageObject
+									val messageOwnerMessage = (`object`?.messageOwner as? TLRPC.TLMessage)?.message
+									val messageOwnerMedia =  (`object`?.messageOwner as? TLRPC.TLMessage)?.media
 
 									if (`object`?.isMusic == true) {
 										LocaleController.formatString("NotificationActionPinnedMusicChannel", R.string.NotificationActionPinnedMusicChannel, chat.title)
 									}
 									else if (`object`?.isVideo == true) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCF9 " + `object`.messageOwner?.message
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCF9 $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
@@ -1997,8 +1961,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 										}
 									}
 									else if (`object`?.isGif == true) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83C\uDFAC " + `object`.messageOwner?.message
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83C\uDFAC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
@@ -2021,45 +1985,42 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 											LocaleController.formatString("NotificationActionPinnedStickerChannel", R.string.NotificationActionPinnedStickerChannel, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaDocument) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCCE " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCCE $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedFileChannel", R.string.NotificationActionPinnedFileChannel, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeo || `object`?.messageOwner?.media is TL_messageMediaVenue) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 										LocaleController.formatString("NotificationActionPinnedGeoChannel", R.string.NotificationActionPinnedGeoChannel, chat.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeoLive) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 										LocaleController.formatString("NotificationActionPinnedGeoLiveChannel", R.string.NotificationActionPinnedGeoLiveChannel, chat.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaContact) {
-										val mediaContact = `object`.messageOwner?.media as? TL_messageMediaContact
-										LocaleController.formatString("NotificationActionPinnedContactChannel2", R.string.NotificationActionPinnedContactChannel2, chat.title, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+										LocaleController.formatString("NotificationActionPinnedContactChannel2", R.string.NotificationActionPinnedContactChannel2, chat.title, ContactsController.formatName(messageOwnerMedia.firstName, messageOwnerMedia.lastName))
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPoll) {
-										val mediaPoll = `object`.messageOwner?.media as? TL_messageMediaPoll
-
-										if (mediaPoll?.poll?.quiz == true) {
-											LocaleController.formatString("NotificationActionPinnedQuizChannel2", R.string.NotificationActionPinnedQuizChannel2, chat.title, mediaPoll.poll?.question)
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+										if (messageOwnerMedia.poll?.quiz == true) {
+											LocaleController.formatString("NotificationActionPinnedQuizChannel2", R.string.NotificationActionPinnedQuizChannel2, chat.title, messageOwnerMedia.poll?.question)
 										}
 										else {
-											LocaleController.formatString("NotificationActionPinnedPollChannel2", R.string.NotificationActionPinnedPollChannel2, chat.title, mediaPoll?.poll?.question)
+											LocaleController.formatString("NotificationActionPinnedPollChannel2", R.string.NotificationActionPinnedPollChannel2, chat.title, messageOwnerMedia.poll?.question)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPhoto) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDDBC " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDDBC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedPhotoChannel", R.string.NotificationActionPinnedPhotoChannel, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGame) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGame) {
 										LocaleController.formatString("NotificationActionPinnedGameChannel", R.string.NotificationActionPinnedGameChannel, chat.title)
 									}
 									else if (!`object`?.messageText.isNullOrEmpty()) {
@@ -2082,13 +2043,15 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 								else {
 									val `object` = messageObject.replyMessageObject
+									val messageOwnerMessage = (`object`?.messageOwner as? TLRPC.TLMessage)?.message
+									val messageOwnerMedia =  (`object`?.messageOwner as? TLRPC.TLMessage)?.media
 
 									if (`object`?.isMusic == true) {
 										LocaleController.formatString("NotificationActionPinnedMusicUser", R.string.NotificationActionPinnedMusicUser, name)
 									}
 									else if (`object`?.isVideo == true) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCF9 " + `object`.messageOwner?.message
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCF9 $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextUser", R.string.NotificationActionPinnedTextUser, name, message)
 										}
 										else {
@@ -2096,8 +2059,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 										}
 									}
 									else if (`object`?.isGif == true) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83C\uDFAC " + `object`.messageOwner?.message
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83C\uDFAC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextUser", R.string.NotificationActionPinnedTextUser, name, message)
 										}
 										else {
@@ -2120,45 +2083,42 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 											LocaleController.formatString("NotificationActionPinnedStickerUser", R.string.NotificationActionPinnedStickerUser, name)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaDocument) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCCE " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCCE $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextUser", R.string.NotificationActionPinnedTextUser, name, message)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedFileUser", R.string.NotificationActionPinnedFileUser, name)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeo || `object`?.messageOwner?.media is TL_messageMediaVenue) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 										LocaleController.formatString("NotificationActionPinnedGeoUser", R.string.NotificationActionPinnedGeoUser, name)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeoLive) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 										LocaleController.formatString("NotificationActionPinnedGeoLiveUser", R.string.NotificationActionPinnedGeoLiveUser, name)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaContact) {
-										val mediaContact = `object`.messageOwner?.media as? TL_messageMediaContact
-										LocaleController.formatString("NotificationActionPinnedContactUser", R.string.NotificationActionPinnedContactUser, name, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+										LocaleController.formatString("NotificationActionPinnedContactUser", R.string.NotificationActionPinnedContactUser, name, ContactsController.formatName(messageOwnerMedia.firstName, messageOwnerMedia.lastName))
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPoll) {
-										val mediaPoll = `object`.messageOwner?.media as? TL_messageMediaPoll
-
-										if (mediaPoll?.poll?.quiz == true) {
-											LocaleController.formatString("NotificationActionPinnedQuizUser", R.string.NotificationActionPinnedQuizUser, name, mediaPoll.poll?.question)
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+										if (messageOwnerMedia.poll?.quiz == true) {
+											LocaleController.formatString("NotificationActionPinnedQuizUser", R.string.NotificationActionPinnedQuizUser, name, messageOwnerMedia.poll?.question)
 										}
 										else {
-											LocaleController.formatString("NotificationActionPinnedPollUser", R.string.NotificationActionPinnedPollUser, name, mediaPoll?.poll?.question)
+											LocaleController.formatString("NotificationActionPinnedPollUser", R.string.NotificationActionPinnedPollUser, name, messageOwnerMedia.poll?.question)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPhoto) {
-										if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDDBC " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+										if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDDBC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextUser", R.string.NotificationActionPinnedTextUser, name, message)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedPhotoUser", R.string.NotificationActionPinnedPhotoUser, name)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGame) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGame) {
 										LocaleController.formatString("NotificationActionPinnedGameUser", R.string.NotificationActionPinnedGameUser, name)
 									}
 									else if (!`object`?.messageText.isNullOrEmpty()) {
@@ -2177,40 +2137,43 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 
-						is TL_messageActionSetChatTheme -> {
-							val emoticon = (messageObject.messageOwner?.action as? TL_messageActionSetChatTheme)?.emoticon
+						is TLRPC.TLMessageActionSetChatTheme -> {
+							val emoticon = action.emoticon
 
 							msg = if (emoticon.isNullOrEmpty()) {
-								if (dialogId == selfUsedId) LocaleController.formatString("ChatThemeDisabledYou", R.string.ChatThemeDisabledYou)
+								if (dialogId == selfUserId) LocaleController.formatString("ChatThemeDisabledYou", R.string.ChatThemeDisabledYou)
 								else LocaleController.formatString("ChatThemeDisabled", R.string.ChatThemeDisabled, name, emoticon)
 							}
 							else {
-								if (dialogId == selfUsedId) LocaleController.formatString("ChangedChatThemeYou", R.string.ChatThemeChangedYou, emoticon)
+								if (dialogId == selfUserId) LocaleController.formatString("ChangedChatThemeYou", R.string.ChatThemeChangedYou, emoticon)
 								else LocaleController.formatString("ChangedChatThemeTo", R.string.ChatThemeChangedTo, name, emoticon)
 							}
 
 							return msg
 						}
 
-						is TL_messageActionChatJoinedByRequest -> {
+						is TLRPC.TLMessageActionChatJoinedByRequest -> {
 							return messageObject.messageText?.toString()
 						}
 					}
 				}
 				else {
+					val messageOwnerMessage = (messageObject.messageOwner as? TLRPC.TLMessage)?.message
+					val messageOwnerMedia =  (messageObject.messageOwner as? TLRPC.TLMessage)?.media
+					
 					return if (messageObject.isMediaEmpty) {
-						if (!messageObject.messageOwner?.message.isNullOrEmpty()) {
+						if (!messageOwnerMessage.isNullOrEmpty()) {
 							replaceSpoilers(messageObject)
 						}
 						else {
 							ApplicationLoader.applicationContext.getString(R.string.Message)
 						}
 					}
-					else if (messageObject.messageOwner?.media is TL_messageMediaPhoto) {
-						if (!messageObject.messageOwner?.message.isNullOrEmpty()) {
+					else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+						if (!messageOwnerMessage.isNullOrEmpty()) {
 							"\uD83D\uDDBC " + replaceSpoilers(messageObject)
 						}
-						else if (messageObject.messageOwner?.media?.ttl_seconds != 0) {
+						else if (messageOwnerMedia.ttlSeconds != 0) {
 							ApplicationLoader.applicationContext.getString(R.string.AttachDestructingPhoto)
 						}
 						else {
@@ -2218,10 +2181,10 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						}
 					}
 					else if (messageObject.isVideo) {
-						if (!messageObject.messageOwner?.message.isNullOrEmpty()) {
+						if (!messageOwnerMessage.isNullOrEmpty()) {
 							"\uD83D\uDCF9 " + replaceSpoilers(messageObject)
 						}
-						else if (messageObject.messageOwner?.media?.ttl_seconds != 0) {
+						else if (messageOwnerMedia?.ttlSeconds != 0) {
 							ApplicationLoader.applicationContext.getString(R.string.AttachDestructingVideo)
 						}
 						else {
@@ -2240,24 +2203,24 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					else if (messageObject.isMusic) {
 						ApplicationLoader.applicationContext.getString(R.string.AttachMusic)
 					}
-					else if (messageObject.messageOwner?.media is TL_messageMediaContact) {
+					else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
 						ApplicationLoader.applicationContext.getString(R.string.AttachContact)
 					}
-					else if (messageObject.messageOwner?.media is TL_messageMediaPoll) {
-						if ((messageObject.messageOwner?.media as? TL_messageMediaPoll)?.poll?.quiz == true) {
+					else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+						if ((messageOwnerMedia as? TLRPC.TLMessageMediaPoll)?.poll?.quiz == true) {
 							ApplicationLoader.applicationContext.getString(R.string.QuizPoll)
 						}
 						else {
 							ApplicationLoader.applicationContext.getString(R.string.Poll)
 						}
 					}
-					else if (messageObject.messageOwner?.media is TL_messageMediaGeo || messageObject.messageOwner?.media is TL_messageMediaVenue) {
+					else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 						ApplicationLoader.applicationContext.getString(R.string.AttachLocation)
 					}
-					else if (messageObject.messageOwner?.media is TL_messageMediaGeoLive) {
+					else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 						ApplicationLoader.applicationContext.getString(R.string.AttachLiveLocation)
 					}
-					else if (messageObject.messageOwner?.media is TL_messageMediaDocument) {
+					else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
 						if (messageObject.isSticker || messageObject.isAnimatedSticker) {
 							val emoji = messageObject.stickerEmoji
 
@@ -2269,7 +2232,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 						else if (messageObject.isGif) {
-							if (!messageObject.messageOwner?.message.isNullOrEmpty()) {
+							if (!messageOwnerMessage.isNullOrEmpty()) {
 								"\uD83C\uDFAC " + replaceSpoilers(messageObject)
 							}
 							else {
@@ -2277,7 +2240,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 						else {
-							if (!messageObject.messageOwner?.message.isNullOrEmpty()) {
+							if (!messageOwnerMessage.isNullOrEmpty()) {
 								"\uD83D\uDCCE " + replaceSpoilers(messageObject)
 							}
 							else {
@@ -2308,18 +2271,19 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 	private val spoilerChars = charArrayOf('⠌', '⡢', '⢑', '⠨')
 
 	private fun replaceSpoilers(messageObject: MessageObject?): String? {
-		val text = messageObject?.messageOwner?.message
+		val messageOwner = messageObject?.messageOwner as? TLRPC.TLMessage ?: return null
+		val text = messageOwner.message
 
-		if (text == null || messageObject.messageOwner == null || messageObject.messageOwner?.entities == null) {
+		if (text == null || messageOwner.entities.isEmpty()) {
 			return null
 		}
 
 		val stringBuilder = StringBuilder(text)
 
-		messageObject.messageOwner?.entities?.forEach {
-			if (it is TL_messageEntitySpoiler) {
-				for (j in 0 until it.length) {
-					stringBuilder.setCharAt(it.offset + j, spoilerChars[j % spoilerChars.size])
+		for (entity in messageOwner.entities) {
+			if (entity is TLRPC.TLMessageEntitySpoiler) {
+				for (j in 0 until entity.length) {
+					stringBuilder.setCharAt(entity.offset + j, spoilerChars[j % spoilerChars.size])
 				}
 			}
 		}
@@ -2332,9 +2296,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			return ApplicationLoader.applicationContext.getString(R.string.YouHaveNewMessage)
 		}
 
-		var dialogId = messageObject.messageOwner?.dialog_id ?: 0L
-		val chatId = messageObject.messageOwner?.peer_id?.chat_id?.takeIf { it != 0L } ?: messageObject.messageOwner?.peer_id?.channel_id ?: 0L
-		var fromId = messageObject.messageOwner?.peer_id?.user_id ?: 0L
+		var dialogId = messageObject.messageOwner?.dialogId ?: 0L
+		val chatId = messageObject.messageOwner?.peerId?.chatId?.takeIf { it != 0L } ?: messageObject.messageOwner?.peerId?.channelId ?: 0L
+		var fromId = messageObject.messageOwner?.peerId?.userId ?: 0L
 
 		if (preview != null) {
 			preview[0] = true
@@ -2359,7 +2323,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						preview[0] = false
 					}
 
-					return if (messageObject.messageOwner?.peer_id?.channel_id != 0L && !messageObject.isSupergroup) {
+					return if (messageObject.messageOwner?.peerId?.channelId != 0L && !messageObject.isSupergroup) {
 						LocaleController.formatString("ChannelMessageNoText", R.string.ChannelMessageNoText, messageObject.localName)
 					}
 					else {
@@ -2398,7 +2362,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		var name: String? = null
 
 		if (fromId > 0) {
-			if (messageObject.messageOwner?.from_scheduled == true) {
+			if ((messageObject.messageOwner as? TLRPC.TLMessage)?.fromScheduled == true) {
 				name = if (dialogId == selfUsedId) {
 					ApplicationLoader.applicationContext.getString(R.string.MessageScheduledReminderNotification)
 				}
@@ -2444,31 +2408,33 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		else {
 			if (chatId == 0L && fromId != 0L) {
 				if (dialogPreviewEnabled && preferences.getBoolean("EnablePreviewAll", true)) {
-					if (messageObject.messageOwner is TL_messageService) {
-						when (messageObject.messageOwner?.action) {
-							is TL_messageActionGeoProximityReached -> {
+					val messageOwner = messageObject.messageOwner
+
+					if (messageOwner is TLRPC.TLMessageService) {
+						when (val action = messageOwner.action) {
+							is TLRPC.TLMessageActionGeoProximityReached -> {
 								msg = messageObject.messageText?.toString()
 							}
 
-							is TL_messageActionUserJoined, is TL_messageActionContactSignUp -> {
+							/*is TLRPC.TLMessageActionUserJoined, */ is TLRPC.TLMessageActionContactSignUp -> {
 								msg = LocaleController.formatString("NotificationContactJoined", R.string.NotificationContactJoined, name)
 							}
 
-							is TL_messageActionUserUpdatedPhoto -> {
-								msg = LocaleController.formatString("NotificationContactNewPhoto", R.string.NotificationContactNewPhoto, name)
-							}
+//							is TLRPC.TLMessageActionUserUpdatedPhoto -> {
+//								msg = LocaleController.formatString("NotificationContactNewPhoto", R.string.NotificationContactNewPhoto, name)
+//							}
+//
+//							is TLRPC.TLMessageActionLoginUnknownLocation -> {
+//								val date = LocaleController.formatString("formatDateAtTime", R.string.formatDateAtTime, LocaleController.getInstance().formatterYear.format(messageObject.messageOwner!!.date.toLong() * 1000), LocaleController.getInstance().formatterDay.format(messageObject.messageOwner!!.date.toLong() * 1000))
+//								msg = LocaleController.formatString("NotificationUnrecognizedDevice", R.string.NotificationUnrecognizedDevice, userConfig.getCurrentUser()?.first_name, date, action?.title, action?.address)
+//							}
 
-							is TL_messageActionLoginUnknownLocation -> {
-								val date = LocaleController.formatString("formatDateAtTime", R.string.formatDateAtTime, LocaleController.getInstance().formatterYear.format(messageObject.messageOwner!!.date.toLong() * 1000), LocaleController.getInstance().formatterDay.format(messageObject.messageOwner!!.date.toLong() * 1000))
-								msg = LocaleController.formatString("NotificationUnrecognizedDevice", R.string.NotificationUnrecognizedDevice, userConfig.getCurrentUser()?.first_name, date, messageObject.messageOwner?.action?.title, messageObject.messageOwner?.action?.address)
-							}
-
-							is TL_messageActionGameScore, is TL_messageActionPaymentSent -> {
+							is TLRPC.TLMessageActionGameScore, is TLRPC.TLMessageActionPaymentSent -> {
 								msg = messageObject.messageText.toString()
 							}
 
-							is TL_messageActionPhoneCall -> {
-								msg = if (messageObject.messageOwner?.action?.video == true) {
+							is TLRPC.TLMessageActionPhoneCall -> {
+								msg = if (action.video) {
 									ApplicationLoader.applicationContext.getString(R.string.CallMessageVideoIncomingMissed)
 								}
 								else {
@@ -2476,8 +2442,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 
-							is TL_messageActionSetChatTheme -> {
-								val emoticon = (messageObject.messageOwner?.action as? TL_messageActionSetChatTheme)?.emoticon
+							is TLRPC.TLMessageActionSetChatTheme -> {
+								val emoticon = action.emoticon
 
 								msg = if (emoticon.isNullOrEmpty()) {
 									if (dialogId == selfUsedId) LocaleController.formatString("ChatThemeDisabledYou", R.string.ChatThemeDisabledYou) else LocaleController.formatString("ChatThemeDisabled", R.string.ChatThemeDisabled, name, emoticon)
@@ -2490,11 +2456,14 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 					}
-					else {
+					else if (messageOwner is TLRPC.TLMessage) {
+						val messageOwnerMessage = messageOwner.message
+						val messageOwnerMedia = messageOwner.media
+
 						if (messageObject.isMediaEmpty) {
 							if (!shortMessage) {
-								if (!messageObject.messageOwner?.message.isNullOrEmpty()) {
-									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, messageObject.messageOwner?.message)
+								if (!messageOwnerMessage.isNullOrEmpty()) {
+									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, messageOwnerMessage)
 									text[0] = true
 								}
 								else {
@@ -2505,13 +2474,13 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								msg = LocaleController.formatString("NotificationMessageNoText", R.string.NotificationMessageNoText, name)
 							}
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaPhoto) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDDBC " + messageObject.messageOwner?.message)
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDDBC $messageOwnerMessage")
 								text[0] = true
 							}
 							else {
-								msg = if (messageObject.messageOwner?.media?.ttl_seconds != 0) {
+								msg = if (messageOwnerMedia.ttlSeconds != 0) {
 									LocaleController.formatString("NotificationMessageSDPhoto", R.string.NotificationMessageSDPhoto, name)
 								}
 								else {
@@ -2520,12 +2489,12 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 						else if (messageObject.isVideo) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCF9 " + messageObject.messageOwner?.message)
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCF9 $messageOwnerMessage")
 								text[0] = true
 							}
 							else {
-								msg = if (messageObject.messageOwner?.media?.ttl_seconds != 0) {
+								msg = if (messageOwnerMedia?.ttlSeconds != 0) {
 									LocaleController.formatString("NotificationMessageSDVideo", R.string.NotificationMessageSDVideo, name)
 								}
 								else {
@@ -2534,7 +2503,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 						else if (messageObject.isGame) {
-							msg = LocaleController.formatString("NotificationMessageGame", R.string.NotificationMessageGame, name, messageObject.messageOwner?.media?.game?.title)
+							msg = LocaleController.formatString("NotificationMessageGame", R.string.NotificationMessageGame, name, (messageOwnerMedia as? TLRPC.TLMessageMediaGame)?.game?.title)
 						}
 						else if (messageObject.isVoice) {
 							msg = LocaleController.formatString("NotificationMessageAudio", R.string.NotificationMessageAudio, name)
@@ -2545,27 +2514,24 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						else if (messageObject.isMusic) {
 							msg = LocaleController.formatString("NotificationMessageMusic", R.string.NotificationMessageMusic, name)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaContact) {
-							val mediaContact = messageObject.messageOwner?.media as? TL_messageMediaContact
-							msg = LocaleController.formatString("NotificationMessageContact2", R.string.NotificationMessageContact2, name, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+							msg = LocaleController.formatString("NotificationMessageContact2", R.string.NotificationMessageContact2, name, ContactsController.formatName(messageOwnerMedia.firstName, messageOwnerMedia.lastName))
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaPoll) {
-							val mediaPoll = messageObject.messageOwner?.media as? TL_messageMediaPoll
-
-							msg = if (mediaPoll?.poll?.quiz == true) {
-								LocaleController.formatString("NotificationMessageQuiz2", R.string.NotificationMessageQuiz2, name, mediaPoll.poll?.question)
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+							msg = if (messageOwnerMedia.poll?.quiz == true) {
+								LocaleController.formatString("NotificationMessageQuiz2", R.string.NotificationMessageQuiz2, name, messageOwnerMedia.poll?.question)
 							}
 							else {
-								LocaleController.formatString("NotificationMessagePoll2", R.string.NotificationMessagePoll2, name, mediaPoll?.poll?.question)
+								LocaleController.formatString("NotificationMessagePoll2", R.string.NotificationMessagePoll2, name, messageOwnerMedia.poll?.question)
 							}
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaGeo || messageObject.messageOwner?.media is TL_messageMediaVenue) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 							msg = LocaleController.formatString("NotificationMessageMap", R.string.NotificationMessageMap, name)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaGeoLive) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 							msg = LocaleController.formatString("NotificationMessageLiveLocation", R.string.NotificationMessageLiveLocation, name)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaDocument) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
 							if (messageObject.isSticker || messageObject.isAnimatedSticker) {
 								val emoji = messageObject.stickerEmoji
 
@@ -2577,8 +2543,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 							else if (messageObject.isGif) {
-								if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83C\uDFAC " + messageObject.messageOwner?.message)
+								if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83C\uDFAC $messageOwnerMessage")
 									text[0] = true
 								}
 								else {
@@ -2586,8 +2552,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 							else {
-								if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCCE " + messageObject.messageOwner?.message)
+								if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCCE $messageOwnerMessage")
 									text[0] = true
 								}
 								else {
@@ -2618,16 +2584,20 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				val isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 
 				if (dialogPreviewEnabled && (!isChannel && preferences.getBoolean("EnablePreviewGroup", true) || isChannel && preferences.getBoolean("EnablePreviewChannel", true))) {
-					if (messageObject.messageOwner is TL_messageService) {
-						if (messageObject.messageOwner?.action is TL_messageActionChatAddUser) {
-							var singleUserId = messageObject.messageOwner?.action?.user_id ?: 0L
+					val messageOwner = messageObject.messageOwner
 
-							if (singleUserId == 0L && messageObject.messageOwner?.action?.users?.size == 1) {
-								singleUserId = messageObject.messageOwner?.action?.users?.firstOrNull() ?: 0L
+					if (messageOwner is TLRPC.TLMessageService) {
+						val action = messageOwner.action
+
+						if (action is TLRPC.TLMessageActionChatAddUser) {
+							var singleUserId = 0L
+
+							if (action.users.size == 1) {
+								singleUserId = action.users.firstOrNull() ?: 0L
 							}
 
 							msg = if (singleUserId != 0L) {
-								if (messageObject.messageOwner?.peer_id?.channel_id != 0L && chat?.megagroup != true) {
+								if (messageObject.messageOwner?.peerId?.channelId != 0L && chat?.megagroup != true) {
 									LocaleController.formatString("ChannelAddedByNotification", R.string.ChannelAddedByNotification, name, chat?.title)
 								}
 								else {
@@ -2653,7 +2623,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 							else {
 								val names = buildString {
-									messageObject.messageOwner?.action?.users?.forEach {
+									action.users.forEach {
 										val user = messagesController.getUser(it)
 
 										if (user != null) {
@@ -2671,18 +2641,19 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								LocaleController.formatString("NotificationGroupAddMember", R.string.NotificationGroupAddMember, name, chat?.title, names)
 							}
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionGroupCall) {
+						else if (action is TLRPC.TLMessageActionGroupCall) {
 							msg = LocaleController.formatString("NotificationGroupCreatedCall", R.string.NotificationGroupCreatedCall, name, chat?.title)
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionGroupCallScheduled) {
+						else if (action is TLRPC.TLMessageActionGroupCallScheduled) {
 							msg = messageObject.messageText?.toString()
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionInviteToGroupCall) {
-							var singleUserId = messageObject.messageOwner?.action?.user_id ?: 0L
+						else if (action is TLRPC.TLMessageActionInviteToGroupCall) {
+							var singleUserId = 0L
 
-							if (singleUserId == 0L && messageObject.messageOwner?.action?.users?.size == 1) {
-								singleUserId = messageObject.messageOwner?.action?.users?.firstOrNull() ?: 0L
+							if (action.users.size == 1) {
+								singleUserId = action.users.firstOrNull() ?: 0L
 							}
+
 							msg = if (singleUserId != 0L) {
 								if (singleUserId == selfUsedId) {
 									LocaleController.formatString("NotificationGroupInvitedYouToCall", R.string.NotificationGroupInvitedYouToCall, name, chat?.title)
@@ -2694,7 +2665,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 							else {
 								val names = buildString {
-									messageObject.messageOwner?.action?.users?.forEach {
+									action.users.forEach {
 										val user = messagesController.getUser(it)
 
 										if (user != null) {
@@ -2712,14 +2683,14 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								LocaleController.formatString("NotificationGroupInvitedToCall", R.string.NotificationGroupInvitedToCall, name, chat?.title, names)
 							}
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChatJoinedByLink) {
+						else if (action is TLRPC.TLMessageActionChatJoinedByLink) {
 							msg = LocaleController.formatString("NotificationInvitedToGroupByLink", R.string.NotificationInvitedToGroupByLink, name, chat?.title)
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChatEditTitle) {
-							msg = LocaleController.formatString("NotificationEditedGroupName", R.string.NotificationEditedGroupName, name, messageObject.messageOwner?.action?.title)
+						else if (action is TLRPC.TLMessageActionChatEditTitle) {
+							msg = LocaleController.formatString("NotificationEditedGroupName", R.string.NotificationEditedGroupName, name, action.title)
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChatEditPhoto || messageObject.messageOwner?.action is TL_messageActionChatDeletePhoto) {
-							msg = if (messageObject.messageOwner?.peer_id?.channel_id != 0L && chat?.megagroup != true) {
+						else if (action is TLRPC.TLMessageActionChatEditPhoto || action is TLRPC.TLMessageActionChatDeletePhoto) {
+							msg = if (messageObject.messageOwner?.peerId?.channelId != 0L && chat?.megagroup != true) {
 								if (messageObject.isVideoAvatar) {
 									LocaleController.formatString("ChannelVideoEditNotification", R.string.ChannelVideoEditNotification, chat?.title)
 								}
@@ -2736,8 +2707,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChatDeleteUser) {
-							msg = when (messageObject.messageOwner?.action?.user_id) {
+						else if (action is TLRPC.TLMessageActionChatDeleteUser) {
+							msg = when (action.userId) {
 								selfUsedId -> {
 									LocaleController.formatString("NotificationGroupKickYou", R.string.NotificationGroupKickYou, name, chat?.title)
 								}
@@ -2747,40 +2718,42 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 
 								else -> {
-									val u2 = messagesController.getUser(messageObject.messageOwner?.action?.user_id) ?: return null
+									val u2 = messagesController.getUser(action.userId) ?: return null
 									LocaleController.formatString("NotificationGroupKickMember", R.string.NotificationGroupKickMember, name, chat?.title, UserObject.getUserName(u2))
 								}
 							}
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChatCreate) {
+						else if (action is TLRPC.TLMessageActionChatCreate) {
 							msg = messageObject.messageText?.toString()
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChannelCreate) {
+						else if (action is TLRPC.TLMessageActionChannelCreate) {
 							msg = messageObject.messageText?.toString()
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChatMigrateTo) {
+						else if (action is TLRPC.TLMessageActionChatMigrateTo) {
 							msg = LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, chat?.title)
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChannelMigrateFrom) {
-							msg = LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, messageObject.messageOwner?.action?.title)
+						else if (action is TLRPC.TLMessageActionChannelMigrateFrom) {
+							msg = LocaleController.formatString("ActionMigrateFromGroupNotify", R.string.ActionMigrateFromGroupNotify, action.title)
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionScreenshotTaken) {
+						else if (action is TLRPC.TLMessageActionScreenshotTaken) {
 							msg = messageObject.messageText?.toString()
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionPinMessage) {
+						else if (action is TLRPC.TLMessageActionPinMessage) {
 							if (!ChatObject.isChannel(chat) || chat.megagroup) {
 								if (messageObject.replyMessageObject == null) {
 									msg = LocaleController.formatString("NotificationActionPinnedNoText", R.string.NotificationActionPinnedNoText, name, chat?.title)
 								}
 								else {
 									val `object` = messageObject.replyMessageObject
+									val messageOwnerMessage = (`object`?.messageOwner as? TLRPC.TLMessage)?.message
+									val messageOwnerMedia =  (`object`?.messageOwner as? TLRPC.TLMessage)?.media
 
 									if (`object`?.isMusic == true) {
 										msg = LocaleController.formatString("NotificationActionPinnedMusic", R.string.NotificationActionPinnedMusic, name, chat?.title)
 									}
 									else if (`object`?.isVideo == true) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCF9 " + `object`.messageOwner?.message
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCF9 $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat?.title)
 										}
 										else {
@@ -2788,8 +2761,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 										}
 									}
 									else if (`object`?.isGif == true) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83C\uDFAC " + `object`.messageOwner?.message
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83C\uDFAC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat?.title)
 										}
 										else {
@@ -2812,27 +2785,26 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 											LocaleController.formatString("NotificationActionPinnedSticker", R.string.NotificationActionPinnedSticker, name, chat?.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaDocument) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCCE " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCCE $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat?.title)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedFile", R.string.NotificationActionPinnedFile, name, chat?.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeo || `object`?.messageOwner?.media is TL_messageMediaVenue) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 										msg = LocaleController.formatString("NotificationActionPinnedGeo", R.string.NotificationActionPinnedGeo, name, chat?.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeoLive) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 										msg = LocaleController.formatString("NotificationActionPinnedGeoLive", R.string.NotificationActionPinnedGeoLive, name, chat?.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaContact) {
-										val mediaContact = messageObject.messageOwner?.media as? TL_messageMediaContact
-										msg = LocaleController.formatString("NotificationActionPinnedContact2", R.string.NotificationActionPinnedContact2, name, chat?.title, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+										msg = LocaleController.formatString("NotificationActionPinnedContact2", R.string.NotificationActionPinnedContact2, name, chat?.title, ContactsController.formatName(messageOwnerMedia.firstName, messageOwnerMedia.lastName))
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPoll) {
-										val mediaPoll = `object`.messageOwner?.media as? TL_messageMediaPoll
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+										val mediaPoll = messageOwnerMedia as? TLRPC.TLMessageMediaPoll
 
 										msg = if (mediaPoll?.poll?.quiz == true) {
 											LocaleController.formatString("NotificationActionPinnedQuiz2", R.string.NotificationActionPinnedQuiz2, name, chat?.title, mediaPoll.poll?.question)
@@ -2841,16 +2813,16 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 											LocaleController.formatString("NotificationActionPinnedPoll2", R.string.NotificationActionPinnedPoll2, name, chat?.title, mediaPoll?.poll?.question)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPhoto) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDDBC " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDDBC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedText", R.string.NotificationActionPinnedText, name, message, chat?.title)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedPhoto", R.string.NotificationActionPinnedPhoto, name, chat?.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGame) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGame) {
 										msg = LocaleController.formatString("NotificationActionPinnedGame", R.string.NotificationActionPinnedGame, name, chat?.title)
 									}
 									else if (!`object`?.messageText.isNullOrEmpty()) {
@@ -2873,13 +2845,15 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 								else {
 									val `object` = messageObject.replyMessageObject
+									val messageOwnerMessage = (`object`?.messageOwner as? TLRPC.TLMessage)?.message
+									val messageOwnerMedia =  (`object`?.messageOwner as? TLRPC.TLMessage)?.media
 
 									if (`object`?.isMusic == true) {
 										msg = LocaleController.formatString("NotificationActionPinnedMusicChannel", R.string.NotificationActionPinnedMusicChannel, chat.title)
 									}
 									else if (`object`?.isVideo == true) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCF9 " + `object`.messageOwner?.message
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCF9 $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
@@ -2887,8 +2861,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 										}
 									}
 									else if (`object`?.isGif == true) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83C\uDFAC " + `object`.messageOwner?.message
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83C\uDFAC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
@@ -2911,27 +2885,26 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 											LocaleController.formatString("NotificationActionPinnedStickerChannel", R.string.NotificationActionPinnedStickerChannel, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaDocument) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDCCE " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDCCE $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedFileChannel", R.string.NotificationActionPinnedFileChannel, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeo || `object`?.messageOwner?.media is TL_messageMediaVenue) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 										msg = LocaleController.formatString("NotificationActionPinnedGeoChannel", R.string.NotificationActionPinnedGeoChannel, chat.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGeoLive) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 										msg = LocaleController.formatString("NotificationActionPinnedGeoLiveChannel", R.string.NotificationActionPinnedGeoLiveChannel, chat.title)
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaContact) {
-										val mediaContact = messageObject.messageOwner?.media as TL_messageMediaContact?
-										msg = LocaleController.formatString("NotificationActionPinnedContactChannel2", R.string.NotificationActionPinnedContactChannel2, chat.title, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+										msg = LocaleController.formatString("NotificationActionPinnedContactChannel2", R.string.NotificationActionPinnedContactChannel2, chat.title, ContactsController.formatName(messageOwnerMedia.firstName, messageOwnerMedia.lastName))
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPoll) {
-										val mediaPoll = `object`.messageOwner?.media as? TL_messageMediaPoll
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+										val mediaPoll = messageOwnerMedia as? TLRPC.TLMessageMediaPoll
 
 										msg = if (mediaPoll?.poll?.quiz == true) {
 											LocaleController.formatString("NotificationActionPinnedQuizChannel2", R.string.NotificationActionPinnedQuizChannel2, chat.title, mediaPoll.poll?.question)
@@ -2940,16 +2913,16 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 											LocaleController.formatString("NotificationActionPinnedPollChannel2", R.string.NotificationActionPinnedPollChannel2, chat.title, mediaPoll?.poll?.question)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaPhoto) {
-										msg = if (!`object`.messageOwner?.message.isNullOrEmpty()) {
-											val message = "\uD83D\uDDBC " + `object`.messageOwner?.message
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+										msg = if (!messageOwnerMessage.isNullOrEmpty()) {
+											val message = "\uD83D\uDDBC $messageOwnerMessage"
 											LocaleController.formatString("NotificationActionPinnedTextChannel", R.string.NotificationActionPinnedTextChannel, chat.title, message)
 										}
 										else {
 											LocaleController.formatString("NotificationActionPinnedPhotoChannel", R.string.NotificationActionPinnedPhotoChannel, chat.title)
 										}
 									}
-									else if (`object`?.messageOwner?.media is TL_messageMediaGame) {
+									else if (messageOwnerMedia is TLRPC.TLMessageMediaGame) {
 										msg = LocaleController.formatString("NotificationActionPinnedGameChannel", R.string.NotificationActionPinnedGameChannel, chat.title)
 									}
 									else if (!`object`?.messageText.isNullOrEmpty()) {
@@ -2967,11 +2940,11 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionGameScore) {
+						else if (action is TLRPC.TLMessageActionGameScore) {
 							msg = messageObject.messageText?.toString()
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionSetChatTheme) {
-							val emoticon = (messageObject.messageOwner?.action as? TL_messageActionSetChatTheme)?.emoticon
+						else if (action is TLRPC.TLMessageActionSetChatTheme) {
+							val emoticon = action.emoticon
 
 							msg = if (emoticon.isNullOrEmpty()) {
 								if (dialogId == selfUsedId) LocaleController.formatString("ChatThemeDisabledYou", R.string.ChatThemeDisabledYou) else LocaleController.formatString("ChatThemeDisabled", R.string.ChatThemeDisabled, name, emoticon)
@@ -2980,23 +2953,26 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								if (dialogId == selfUsedId) LocaleController.formatString("ChangedChatThemeYou", R.string.ChatThemeChangedYou, emoticon) else LocaleController.formatString("ChangedChatThemeTo", R.string.ChatThemeChangedTo, name, emoticon)
 							}
 						}
-						else if (messageObject.messageOwner?.action is TL_messageActionChatJoinedByRequest) {
+						else if (action is TLRPC.TLMessageActionChatJoinedByRequest) {
 							msg = messageObject.messageText?.toString()
 						}
 					}
 					else if (ChatObject.isChannel(chat) && !chat.megagroup) {
+						val messageOwnerMessage = (messageOwner as? TLRPC.TLMessage)?.message
+						val messageOwnerMedia =  (messageOwner as? TLRPC.TLMessage)?.media
+
 						if (messageObject.isMediaEmpty) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, messageObject.messageOwner?.message)
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, messageOwnerMessage)
 								text[0] = true
 							}
 							else {
 								msg = LocaleController.formatString("ChannelMessageNoText", R.string.ChannelMessageNoText, name)
 							}
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaPhoto) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDDBC " + messageObject.messageOwner?.message)
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDDBC $messageOwnerMessage")
 								text[0] = true
 							}
 							else {
@@ -3004,8 +2980,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 						}
 						else if (messageObject.isVideo) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCF9 " + messageObject.messageOwner?.message)
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCF9 $messageOwnerMessage")
 								text[0] = true
 							}
 							else {
@@ -3021,12 +2997,11 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						else if (messageObject.isMusic) {
 							msg = LocaleController.formatString("ChannelMessageMusic", R.string.ChannelMessageMusic, name)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaContact) {
-							val mediaContact = messageObject.messageOwner?.media as? TL_messageMediaContact
-							msg = LocaleController.formatString("ChannelMessageContact2", R.string.ChannelMessageContact2, name, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+							msg = LocaleController.formatString("ChannelMessageContact2", R.string.ChannelMessageContact2, name, ContactsController.formatName(messageOwnerMedia.firstName, messageOwnerMedia.lastName))
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaPoll) {
-							val mediaPoll = messageObject.messageOwner?.media as? TL_messageMediaPoll
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+							val mediaPoll = messageOwnerMedia as? TLRPC.TLMessageMediaPoll
 
 							msg = if (mediaPoll?.poll?.quiz == true) {
 								LocaleController.formatString("ChannelMessageQuiz2", R.string.ChannelMessageQuiz2, name, mediaPoll.poll?.question)
@@ -3035,13 +3010,13 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								LocaleController.formatString("ChannelMessagePoll2", R.string.ChannelMessagePoll2, name, mediaPoll?.poll?.question)
 							}
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaGeo || messageObject.messageOwner?.media is TL_messageMediaVenue) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 							msg = LocaleController.formatString("ChannelMessageMap", R.string.ChannelMessageMap, name)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaGeoLive) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 							msg = LocaleController.formatString("ChannelMessageLiveLocation", R.string.ChannelMessageLiveLocation, name)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaDocument) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
 							if (messageObject.isSticker || messageObject.isAnimatedSticker) {
 								val emoji = messageObject.stickerEmoji
 
@@ -3053,8 +3028,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 							else if (messageObject.isGif) {
-								if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83C\uDFAC " + messageObject.messageOwner?.message)
+								if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83C\uDFAC $messageOwnerMessage")
 									text[0] = true
 								}
 								else {
@@ -3062,8 +3037,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 							else {
-								if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCCE " + messageObject.messageOwner?.message)
+								if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+									msg = LocaleController.formatString("NotificationMessageText", R.string.NotificationMessageText, name, "\uD83D\uDCCE $messageOwnerMessage")
 									text[0] = true
 								}
 								else {
@@ -3082,25 +3057,28 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						}
 					}
 					else {
+						val messageOwnerMessage = (messageOwner as? TLRPC.TLMessage)?.message
+						val messageOwnerMedia =  (messageOwner as? TLRPC.TLMessage)?.media
+
 						msg = if (messageObject.isMediaEmpty) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, messageObject.messageOwner?.message)
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, messageOwnerMessage)
 							}
 							else {
 								LocaleController.formatString("NotificationMessageGroupNoText", R.string.NotificationMessageGroupNoText, name, chat?.title)
 							}
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaPhoto) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83D\uDDBC " + messageObject.messageOwner?.message)
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaPhoto) {
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83D\uDDBC $messageOwnerMessage")
 							}
 							else {
 								LocaleController.formatString("NotificationMessageGroupPhoto", R.string.NotificationMessageGroupPhoto, name, chat?.title)
 							}
 						}
 						else if (messageObject.isVideo) {
-							if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-								LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83D\uDCF9 " + messageObject.messageOwner?.message)
+							if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+								LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83D\uDCF9 $messageOwnerMessage")
 							}
 							else {
 								LocaleController.formatString(" ", R.string.NotificationMessageGroupVideo, name, chat?.title)
@@ -3115,12 +3093,11 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						else if (messageObject.isMusic) {
 							LocaleController.formatString("NotificationMessageGroupMusic", R.string.NotificationMessageGroupMusic, name, chat?.title)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaContact) {
-							val mediaContact = messageObject.messageOwner?.media as? TL_messageMediaContact
-							LocaleController.formatString("NotificationMessageGroupContact2", R.string.NotificationMessageGroupContact2, name, chat?.title, ContactsController.formatName(mediaContact?.first_name, mediaContact?.last_name))
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaContact) {
+							LocaleController.formatString("NotificationMessageGroupContact2", R.string.NotificationMessageGroupContact2, name, chat?.title, ContactsController.formatName(messageOwnerMedia.firstName,messageOwnerMedia.lastName))
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaPoll) {
-							val mediaPoll = messageObject.messageOwner?.media as? TL_messageMediaPoll
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaPoll) {
+							val mediaPoll = messageOwnerMedia as? TLRPC.TLMessageMediaPoll
 
 							if (mediaPoll?.poll?.quiz == true) {
 								LocaleController.formatString("NotificationMessageGroupQuiz2", R.string.NotificationMessageGroupQuiz2, name, chat?.title, mediaPoll.poll?.question)
@@ -3129,16 +3106,16 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								LocaleController.formatString("NotificationMessageGroupPoll2", R.string.NotificationMessageGroupPoll2, name, chat?.title, mediaPoll?.poll?.question)
 							}
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaGame) {
-							LocaleController.formatString("NotificationMessageGroupGame", R.string.NotificationMessageGroupGame, name, chat?.title, messageObject.messageOwner?.media?.game?.title)
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaGame) {
+							LocaleController.formatString("NotificationMessageGroupGame", R.string.NotificationMessageGroupGame, name, chat?.title, messageOwnerMedia.game?.title)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaGeo || messageObject.messageOwner?.media is TL_messageMediaVenue) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaGeo || messageOwnerMedia is TLRPC.TLMessageMediaVenue) {
 							LocaleController.formatString("NotificationMessageGroupMap", R.string.NotificationMessageGroupMap, name, chat?.title)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaGeoLive) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaGeoLive) {
 							LocaleController.formatString("NotificationMessageGroupLiveLocation", R.string.NotificationMessageGroupLiveLocation, name, chat?.title)
 						}
-						else if (messageObject.messageOwner?.media is TL_messageMediaDocument) {
+						else if (messageOwnerMedia is TLRPC.TLMessageMediaDocument) {
 							if (messageObject.isSticker || messageObject.isAnimatedSticker) {
 								val emoji = messageObject.stickerEmoji
 
@@ -3150,16 +3127,16 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 							}
 							else if (messageObject.isGif) {
-								if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-									LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83C\uDFAC " + messageObject.messageOwner?.message)
+								if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+									LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83C\uDFAC $messageOwnerMessage")
 								}
 								else {
 									LocaleController.formatString("NotificationMessageGroupGif", R.string.NotificationMessageGroupGif, name, chat?.title)
 								}
 							}
 							else {
-								if (!shortMessage && !messageObject.messageOwner?.message.isNullOrEmpty()) {
-									LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83D\uDCCE " + messageObject.messageOwner?.message)
+								if (!shortMessage && !messageOwnerMessage.isNullOrEmpty()) {
+									LocaleController.formatString("NotificationMessageGroupText", R.string.NotificationMessageGroupText, name, chat?.title, "\uD83D\uDCCE $messageOwnerMessage")
 								}
 								else {
 									LocaleController.formatString("NotificationMessageGroupDocument", R.string.NotificationMessageGroupDocument, name, chat?.title)
@@ -3217,7 +3194,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun isPersonalMessage(messageObject: MessageObject): Boolean {
-		return messageObject.messageOwner?.peer_id?.chat_id == 0L && messageObject.messageOwner?.peer_id?.channel_id == 0L && (messageObject.messageOwner?.action == null || messageObject.messageOwner?.action is TL_messageActionEmpty)
+		return messageObject.messageOwner?.peerId?.chatId == 0L && messageObject.messageOwner?.peerId?.channelId == 0L && ((messageObject.messageOwner as? TLRPC.TLMessageService)?.action == null || (messageObject.messageOwner as? TLRPC.TLMessageService)?.action is TLRPC.TLMessageActionEmpty)
 	}
 
 	private fun getNotifyOverride(preferences: SharedPreferences, dialogId: Long): Int {
@@ -3355,10 +3332,6 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 	private fun scheduleNotificationDelay(onlineReason: Boolean) {
 		try {
-			if (BuildConfig.DEBUG) {
-				FileLog.d("delay notification start, onlineReason = $onlineReason")
-			}
-
 			notificationDelayWakelock?.acquire(10000)
 
 			notificationsQueue.cancelRunnable(notificationDelayRunnable)
@@ -3416,41 +3389,41 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 		try {
 			val preferences = accountInstance.notificationsSettings
-			val editor = preferences.edit()
 
-			if (what == 0 || what == -1) {
-				val key = "com.beint.elloapp.key$dialogId"
-				val channelId = preferences.getString(key, null)
+			preferences.edit(commit = true) {
+    			if (what == 0 || what == -1) {
+					val key = "com.beint.elloapp.key$dialogId"
+					val channelId = preferences.getString(key, null)
 
-				if (channelId != null) {
-					editor.remove(key).remove(key + "_s")
+					if (channelId != null) {
+						remove(key).remove(key + "_s")
 
-					try {
-						systemNotificationManager?.deleteNotificationChannel(channelId)
-					}
-					catch (e: Exception) {
-						FileLog.e(e)
-					}
-				}
-			}
-
-			if (what == 1 || what == -1) {
-				val key = "com.beint.elloapp.keyia$dialogId"
-				val channelId = preferences.getString(key, null)
-
-				if (channelId != null) {
-					editor.remove(key).remove(key + "_s")
-
-					try {
-						systemNotificationManager?.deleteNotificationChannel(channelId)
-					}
-					catch (e: Exception) {
-						FileLog.e(e)
+						try {
+							systemNotificationManager?.deleteNotificationChannel(channelId)
+						}
+						catch (e: Exception) {
+							FileLog.e(e)
+						}
 					}
 				}
-			}
 
-			editor.commit()
+				if (what == 1 || what == -1) {
+					val key = "com.beint.elloapp.keyia$dialogId"
+					val channelId = preferences.getString(key, null)
+
+					if (channelId != null) {
+						remove(key).remove(key + "_s")
+
+						try {
+							systemNotificationManager?.deleteNotificationChannel(channelId)
+						}
+						catch (e: Exception) {
+							FileLog.e(e)
+						}
+					}
+				}
+
+			}
 		}
 		catch (e: Exception) {
 			FileLog.e(e)
@@ -3475,58 +3448,58 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 		try {
 			val preferences = accountInstance.notificationsSettings
-			val editor = preferences.edit()
 
-			if (what == 0 || what == -1) {
-				val key = when (type) {
-					TYPE_CHANNEL -> "channels"
-					TYPE_GROUP -> "groups"
-					else -> "private"
+			preferences.edit(commit = true) {
+				if (what == 0 || what == -1) {
+					val key = when (type) {
+						TYPE_CHANNEL -> "channels"
+						TYPE_GROUP -> "groups"
+						else -> "private"
+					}
+
+					val channelId = preferences.getString(key, null)
+
+					if (channelId != null) {
+						remove(key).remove(key + "_s")
+
+						try {
+							systemNotificationManager?.deleteNotificationChannel(channelId)
+						}
+						catch (e: Exception) {
+							FileLog.e(e)
+						}
+					}
 				}
 
-				val channelId = preferences.getString(key, null)
-
-				if (channelId != null) {
-					editor.remove(key).remove(key + "_s")
-
-					try {
-						systemNotificationManager?.deleteNotificationChannel(channelId)
+				if (what == 1 || what == -1) {
+					val key = when (type) {
+						TYPE_CHANNEL -> "channels_ia"
+						TYPE_GROUP -> "groups_ia"
+						else -> "private_ia"
 					}
-					catch (e: Exception) {
-						FileLog.e(e)
+
+					val channelId = preferences.getString(key, null)
+
+					if (channelId != null) {
+						remove(key).remove(key + "_s")
+
+						try {
+							systemNotificationManager?.deleteNotificationChannel(channelId)
+						}
+						catch (e: Exception) {
+							FileLog.e(e)
+						}
 					}
 				}
+
+				val overwriteKey = when (type) {
+					TYPE_CHANNEL -> "overwrite_channel"
+					TYPE_GROUP -> "overwrite_group"
+					else -> "overwrite_private"
+				}
+
+				remove(overwriteKey)
 			}
-
-			if (what == 1 || what == -1) {
-				val key = when (type) {
-					TYPE_CHANNEL -> "channels_ia"
-					TYPE_GROUP -> "groups_ia"
-					else -> "private_ia"
-				}
-
-				val channelId = preferences.getString(key, null)
-
-				if (channelId != null) {
-					editor.remove(key).remove(key + "_s")
-
-					try {
-						systemNotificationManager?.deleteNotificationChannel(channelId)
-					}
-					catch (e: Exception) {
-						FileLog.e(e)
-					}
-				}
-			}
-
-			val overwriteKey = when (type) {
-				TYPE_CHANNEL -> "overwrite_channel"
-				TYPE_GROUP -> "overwrite_group"
-				else -> "overwrite_private"
-			}
-
-			editor.remove(overwriteKey)
-			editor.commit()
 		}
 		catch (e: Exception) {
 			FileLog.e(e)
@@ -3553,20 +3526,19 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			try {
 				val preferences = accountInstance.notificationsSettings
 				val values = preferences.all
-				val editor = preferences.edit()
 
-				for ((key, value) in values) {
-					if (key.startsWith("com.beint.elloapp.key")) {
-						if (!key.endsWith("_s")) {
-							val id = value as String
-							systemNotificationManager?.deleteNotificationChannel(id)
+				preferences.edit {
+					for ((key, value) in values) {
+						if (key.startsWith("com.beint.elloapp.key")) {
+							if (!key.endsWith("_s")) {
+								val id = value as String
+								systemNotificationManager?.deleteNotificationChannel(id)
+							}
+
+							remove(key)
 						}
-
-						editor.remove(key)
 					}
 				}
-
-				editor.commit()
 			}
 			catch (e: Exception) {
 				FileLog.e(e)
@@ -3579,7 +3551,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 	}
 
 	@SuppressLint("RestrictedApi")
-	private fun createNotificationShortcut(builder: NotificationCompat.Builder, did: Long, name: String, user: User?, chat: Chat?, person: Person?): String? {
+	private fun createNotificationShortcut(builder: NotificationCompat.Builder, did: Long, name: String, user: TLRPC.User?, chat: Chat?, person: Person?): String? {
 		if (unsupportedNotificationShortcut() || ChatObject.isChannel(chat) && !chat.megagroup) {
 			return null
 		}
@@ -3631,7 +3603,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				IconCompat.createWithAdaptiveBitmap(avatar)
 			}
 			else if (user != null) {
-				IconCompat.createWithResource(ApplicationLoader.applicationContext, if (user.bot) R.drawable.book_bot else R.drawable.book_user)
+				IconCompat.createWithResource(ApplicationLoader.applicationContext, if ((user as? TLRPC.TLUser)?.bot == true) R.drawable.book_bot else R.drawable.book_user)
 			}
 			else {
 				IconCompat.createWithResource(ApplicationLoader.applicationContext, R.drawable.book_group)
@@ -3653,7 +3625,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		return null
 	}
 
-	@TargetApi(26)
+	@RequiresApi(26)
 	private fun ensureGroupsCreated() {
 		val preferences = accountInstance.notificationsSettings
 
@@ -3737,13 +3709,13 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						systemNotificationManager?.deleteNotificationChannel(id)
 					}
 				}
-				editor?.commit()
+				editor?.apply()
 			}
 			catch (e: Exception) {
 				FileLog.e(e)
 			}
 
-			preferences.edit().putBoolean("groupsCreated4", true).commit()
+			preferences.edit { putBoolean("groupsCreated4", true) }
 
 			groupsCreated = true
 		}
@@ -3789,7 +3761,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				}
 
 				val userName = if (user != null) {
-					" (" + ContactsController.formatName(user.first_name, user.last_name) + ")"
+					" (" + ContactsController.formatName(user.firstName, user.lastName) + ")"
 				}
 				else {
 					""
@@ -3820,17 +3792,19 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	@TargetApi(26)
+	@RequiresApi(26)
 	private fun validateChannelId(dialogId: Long, name: String?, vibrationPattern: LongArray?, ledColor: Int, importance: Int, isDefault: Boolean, isInApp: Boolean, isSilent: Boolean, type: Int): String {
-		var name: String? = name
-		var vibrationPattern = vibrationPattern
-		var ledColor = ledColor
+		@Suppress("NAME_SHADOWING") var name: String? = name
+		@Suppress("NAME_SHADOWING") var vibrationPattern = vibrationPattern
+		@Suppress("NAME_SHADOWING") var ledColor = ledColor
+
 		ensureGroupsCreated()
+
 		val preferences = accountInstance.notificationsSettings
 		var key: String
 		val groupId: String
 		val overwriteKey: String?
-		val sound = Uri.parse("android.resource://" + ApplicationLoader.applicationContext.packageName + "/" + R.raw.message_notification_sound)
+		val sound = ("android.resource://" + ApplicationLoader.applicationContext.packageName + "/" + R.raw.message_notification_sound).toUri()
 
 		if (isSilent) {
 			groupId = "other$currentAccount"
@@ -3857,7 +3831,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 		val secretChat = !isDefault && DialogObject.isEncryptedDialog(dialogId)
 		val shouldOverwrite = !isInApp && overwriteKey != null && preferences.getBoolean(overwriteKey, false)
-		var soundHash = Utilities.MD5(sound?.toString() ?: "NoSound")
+		var soundHash = Utilities.MD5(sound.toString())
 
 		if (soundHash != null && soundHash.length > 5) {
 			soundHash = soundHash.substring(0, 5)
@@ -3965,7 +3939,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								}
 
 								if (isDefault) {
-									editor.putInt(getGlobalNotificationsKey(type), 0).commit()
+									editor.putInt(getGlobalNotificationsKey(type), 0).apply()
 
 									when (type) {
 										TYPE_CHANNEL -> {
@@ -4053,7 +4027,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							edited = true
 						}
 
-						editor?.commit()
+						editor?.apply()
 					}
 				}
 			}
@@ -4064,7 +4038,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		}
 
 		if (edited && newSettingsHash != null) {
-			preferences.edit().putString(key, channelId).putString(key + "_s", newSettingsHash).commit()
+			preferences.edit { putString(key, channelId).putString(key + "_s", newSettingsHash) }
 		}
 		else if (shouldOverwrite || newSettingsHash == null || !isInApp || !isDefault) {
 			vibrationPattern?.forEach {
@@ -4072,11 +4046,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			}
 
 			newSettings.append(ledColor)
-
-			if (sound != null) {
-				newSettings.append(sound)
-			}
-
+			newSettings.append(sound)
 			newSettings.append(importance)
 
 			if (!isDefault && secretChat) {
@@ -4131,18 +4101,13 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			builder.setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
 			builder.setUsage(AudioAttributes.USAGE_NOTIFICATION)
 
-			if (sound != null) {
-				notificationChannel.setSound(sound, builder.build())
-			}
-			else {
-				notificationChannel.setSound(null, null)
-			}
+			notificationChannel.setSound(sound, builder.build())
 
 			lastNotificationChannelCreateTime = SystemClock.elapsedRealtime()
 
 			systemNotificationManager?.createNotificationChannel(notificationChannel)
 
-			preferences.edit().putString(key, channelId).putString(key + "_s", newSettingsHash).commit()
+			preferences.edit {putString(key, channelId).putString(key + "_s", newSettingsHash)}
 		}
 
 		return channelId
@@ -4174,11 +4139,11 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				overrideDialogId = lastMessageObject.fromChatId
 			}
 
-			val chatId = lastMessageObject.messageOwner?.peer_id?.chat_id?.takeIf { it != 0L } ?: lastMessageObject.messageOwner?.peer_id?.channel_id ?: 0L
-			var userId = lastMessageObject.messageOwner?.peer_id?.user_id ?: 0L
+			val chatId = lastMessageObject.messageOwner?.peerId?.chatId?.takeIf { it != 0L } ?: lastMessageObject.messageOwner?.peerId?.channelId ?: 0L
+			var userId = lastMessageObject.messageOwner?.peerId?.userId ?: 0L
 
 			if (lastMessageObject.isFromUser && (userId == 0L || userId == userConfig.getClientUserId())) {
-				userId = lastMessageObject.messageOwner?.from_id?.user_id ?: 0L
+				userId = lastMessageObject.messageOwner?.fromId?.userId ?: 0L
 			}
 
 			val user = messagesController.getUser(userId) ?: messagesController.loadUser(userId, classGuid, true)
@@ -4572,20 +4537,6 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				if (AndroidUtilities.needShowPasscode() || SharedConfig.isWaitingForPasscodeEnter) {
 					photoPath = null
 				}
-				else {
-					if (pushDialogs.size() == 1 && Build.VERSION.SDK_INT < 28) {
-						if (chat != null) {
-							if (chat.photo?.photo_small?.volume_id != 0L && chat.photo?.photo_small?.local_id != 0) {
-								photoPath = chat.photo?.photo_small
-							}
-						}
-						else if (user != null) {
-							if (user.photo?.photo_small?.volume_id != 0L && user.photo?.photo_small?.local_id != 0) {
-								photoPath = user.photo?.photo_small
-							}
-						}
-					}
-				}
 			}
 			else {
 				if (pushDialogs.size() == 1 && dialogId != globalSecretChatId) {
@@ -4698,7 +4649,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 								ApplicationLoader.applicationContext.grantUriPermission("com.android.systemui", sound, Intent.FLAG_GRANT_READ_URI_PERMISSION)
 							}
 							else {
-								sound = Uri.parse(soundPath)
+								sound = soundPath.toUri()
 							}
 						}
 					}
@@ -4707,18 +4658,18 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							mBuilder.setSound(Settings.System.DEFAULT_NOTIFICATION_URI, AudioManager.STREAM_NOTIFICATION)
 						}
 						else {
-							if (Build.VERSION.SDK_INT >= 24 && soundPath.startsWith("file://") && !AndroidUtilities.isInternalUri(Uri.parse(soundPath))) {
+							if (Build.VERSION.SDK_INT >= 24 && soundPath.startsWith("file://") && !AndroidUtilities.isInternalUri(soundPath.toUri())) {
 								try {
 									val uri = FileProvider.getUriForFile(ApplicationLoader.applicationContext, ApplicationLoader.applicationId + ".provider", File(soundPath.replace("file://", "")))
 									ApplicationLoader.applicationContext.grantUriPermission("com.android.systemui", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
 									mBuilder.setSound(uri, AudioManager.STREAM_NOTIFICATION)
 								}
 								catch (e: Exception) {
-									mBuilder.setSound(Uri.parse(soundPath), AudioManager.STREAM_NOTIFICATION)
+									mBuilder.setSound(soundPath.toUri(), AudioManager.STREAM_NOTIFICATION)
 								}
 							}
 							else {
-								mBuilder.setSound(Uri.parse(soundPath), AudioManager.STREAM_NOTIFICATION)
+								mBuilder.setSound(soundPath.toUri(), AudioManager.STREAM_NOTIFICATION)
 							}
 						}
 					}
@@ -4754,8 +4705,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			var hasCallback = false
 
 			if (!AndroidUtilities.needShowPasscode() && !SharedConfig.isWaitingForPasscodeEnter && lastMessageObject.dialogId == 777000L) {
-				if (lastMessageObject.messageOwner?.reply_markup != null) {
-					val rows = lastMessageObject.messageOwner?.reply_markup?.rows ?: emptyList()
+				if (lastMessageObject.messageOwner?.replyMarkup != null) {
+					val rows = lastMessageObject.messageOwner?.replyMarkup?.rows ?: emptyList()
 					var a = 0
 					val size = rows.size
 
@@ -4767,7 +4718,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						while (b < size2) {
 							val button = row.buttons[b]
 
-							if (button is TL_keyboardButtonCallback) {
+							if (button is TLRPC.TLKeyboardButtonCallback) {
 								val callbackIntent = Intent(ApplicationLoader.applicationContext, NotificationCallbackReceiver::class.java)
 								callbackIntent.putExtra("currentAccount", currentAccount)
 								callbackIntent.putExtra("did", dialogId)
@@ -4824,58 +4775,59 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun resetNotificationSound(notificationBuilder: NotificationCompat.Builder, dialogId: Long, chatName: String?, vibrationPattern: LongArray?, ledColor: Int, sound: Uri?, importance: Int, isDefault: Boolean, isInApp: Boolean, isSilent: Boolean, chatType: Int) {
-		var sound = sound
+		@Suppress("NAME_SHADOWING") var sound = sound
 		val defaultSound = Settings.System.DEFAULT_RINGTONE_URI
 
 		if (defaultSound != null && sound != null && !TextUtils.equals(defaultSound.toString(), sound.toString())) {
-			val preferences = accountInstance.notificationsSettings
-			val editor = preferences.edit()
-			val newSound = defaultSound.toString()
-			val ringtoneName = ApplicationLoader.applicationContext.getString(R.string.DefaultRingtone)
+			accountInstance.notificationsSettings.edit(commit = true) {
+				val newSound = defaultSound.toString()
+				val ringtoneName = ApplicationLoader.applicationContext.getString(R.string.DefaultRingtone)
 
-			if (isDefault) {
-				when (chatType) {
-					TYPE_CHANNEL -> {
-						editor.putString("ChannelSound", ringtoneName)
+				if (isDefault) {
+					when (chatType) {
+						TYPE_CHANNEL -> {
+							putString("ChannelSound", ringtoneName)
+						}
+
+						TYPE_GROUP -> {
+							putString("GroupSound", ringtoneName)
+						}
+
+						else -> {
+							putString("GlobalSound", ringtoneName)
+						}
 					}
 
-					TYPE_GROUP -> {
-						editor.putString("GroupSound", ringtoneName)
+					when (chatType) {
+						TYPE_CHANNEL -> {
+							putString("ChannelSoundPath", newSound)
+						}
+
+						TYPE_GROUP -> {
+							putString("GroupSoundPath", newSound)
+						}
+
+						else -> {
+							putString("GlobalSoundPath", newSound)
+						}
 					}
 
-					else -> {
-						editor.putString("GlobalSound", ringtoneName)
-					}
+					notificationsController.deleteNotificationChannelGlobalInternal(chatType, -1)
+				}
+				else {
+					putString("sound_$dialogId", ringtoneName)
+					putString("sound_path_$dialogId", newSound)
+
+					deleteNotificationChannelInternal(dialogId, -1)
 				}
 
-				when (chatType) {
-					TYPE_CHANNEL -> {
-						editor.putString("ChannelSoundPath", newSound)
-					}
-
-					TYPE_GROUP -> {
-						editor.putString("GroupSoundPath", newSound)
-					}
-
-					else -> {
-						editor.putString("GlobalSoundPath", newSound)
-					}
-				}
-
-				notificationsController.deleteNotificationChannelGlobalInternal(chatType, -1)
 			}
-			else {
-				editor.putString("sound_$dialogId", ringtoneName)
-				editor.putString("sound_path_$dialogId", newSound)
-
-				deleteNotificationChannelInternal(dialogId, -1)
-			}
-
-			editor.commit()
 
 			sound = Settings.System.DEFAULT_RINGTONE_URI
 
-			notificationBuilder.setChannelId(validateChannelId(dialogId, chatName, vibrationPattern, ledColor, importance, isDefault, isInApp, isSilent, chatType))
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+				notificationBuilder.setChannelId(validateChannelId(dialogId, chatName, vibrationPattern, ledColor, importance, isDefault, isInApp, isSilent, chatType))
+			}
 
 			if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
 				// TODO: Consider calling
@@ -4931,7 +4883,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 		wearNotificationsIds.clear()
 
-		class NotificationHolder(val id: Int, val dialogId: Long, val name: String, val user: User?, val chat: Chat?, val notification: NotificationCompat.Builder) {
+		class NotificationHolder(val id: Int, val dialogId: Long, val name: String, val user: TLRPC.User?, val chat: Chat?, val notification: NotificationCompat.Builder) {
 			fun call() {
 				try {
 					notificationManager?.notify(id, notification.build())
@@ -4986,7 +4938,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				}
 
 				var chat: Chat? = null
-				var user: User? = null
+				var user: TLRPC.User? = null
 				var isChannel = false
 				var isSupergroup = false
 				var name: String?
@@ -5013,8 +4965,14 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						else {
 							name = UserObject.getUserName(user)
 
-							if (user.photo?.photo_small?.volume_id != 0L && user.photo?.photo_small?.local_id != 0) {
-								photoPath = user.photo?.photo_small
+							if (user is TLRPC.TLUser) {
+								val photo = user.photo?.photoSmall
+
+								if (photo != null) {
+									if (photo.volumeId != 0L && photo.localId != 0) {
+										photoPath = photo
+									}
+								}
 							}
 						}
 
@@ -5044,8 +5002,12 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 							name = chat.title
 
-							if (chat.photo?.photo_small?.volume_id != 0L && chat.photo?.photo_small?.local_id != 0) {
-								photoPath = chat.photo?.photo_small
+							val photo = chat.photo?.photoSmall
+
+							if (photo != null) {
+								if (photo.volumeId != 0L && photo.localId != 0) {
+									photoPath = photo
+								}
 							}
 						}
 					}
@@ -5062,7 +5024,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							continue
 						}
 
-						user = messagesController.getUser(encryptedChat.user_id) ?: messagesController.loadUser(encryptedChat.user_id, classGuid, true)
+						user = messagesController.getUser(encryptedChat.userId) ?: messagesController.loadUser(encryptedChat.userId, classGuid, true)
 
 						if (user == null) {
 							b++
@@ -5165,24 +5127,28 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						sender = userConfig.getCurrentUser()
 					}
 
-					try {
-						if (sender?.photo?.photo_small != null && sender.photo?.photo_small?.volume_id != 0L && sender.photo?.photo_small?.local_id != 0) {
-							val personBuilder = Person.Builder().setName(ApplicationLoader.applicationContext.getString(R.string.FromYou))
-							val avatar = fileLoader.getPathToAttach(sender.photo?.photo_small, true)
+					if (sender is TLRPC.TLUser) {
+						try {
+							val photoSmall = sender.photo?.photoSmall
 
-							loadRoundAvatar(avatar, personBuilder)
+							if (photoSmall != null && photoSmall.volumeId != 0L && photoSmall.localId != 0) {
+								val personBuilder = Person.Builder().setName(ApplicationLoader.applicationContext.getString(R.string.FromYou))
+								val avatar = fileLoader.getPathToAttach(photoSmall, true)
 
-							selfPerson = personBuilder.build()
+								loadRoundAvatar(avatar, personBuilder)
 
-							personCache.put(selfUserId, selfPerson)
+								selfPerson = personBuilder.build()
+
+								personCache.put(selfUserId, selfPerson)
+							}
 						}
-					}
-					catch (e: Throwable) {
-						FileLog.e(e)
+						catch (e: Throwable) {
+							FileLog.e(e)
+						}
 					}
 				}
 
-				val needAddPerson = lastMessageObject.messageOwner?.action !is TL_messageActionChatJoinedByRequest
+				val needAddPerson = (lastMessageObject.messageOwner as? TLRPC.TLMessageService)?.action !is TLRPC.TLMessageActionChatJoinedByRequest
 
 				val messagingStyle = if (selfPerson != null && needAddPerson) {
 					NotificationCompat.MessagingStyle(selfPerson)
@@ -5200,7 +5166,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 				val text = StringBuilder()
 				val senderName = arrayOfNulls<String>(1)
 				val preview = BooleanArray(1)
-				var rows: ArrayList<TL_keyboardButtonRow>? = null
+				var rows: List<TLRPC.TLKeyboardButtonRow>? = null
 				var rowsMid = 0
 
 				for (a in messageObjects.indices.reversed()) {
@@ -5210,7 +5176,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 					if (dialogId == selfUserId) {
 						senderName[0] = name
 					}
-					else if (DialogObject.isChatDialog(dialogId) && messageObject.messageOwner?.from_scheduled == true) {
+					else if (DialogObject.isChatDialog(dialogId) && (messageObject.messageOwner as? TLRPC.TLMessage)?.fromScheduled == true) {
 						senderName[0] = ApplicationLoader.applicationContext.getString(R.string.NotificationMessageScheduledName)
 					}
 
@@ -5222,7 +5188,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						text.append("\n\n")
 					}
 
-					if (dialogId != selfUserId && messageObject.messageOwner?.from_scheduled == true && DialogObject.isUserDialog(dialogId)) {
+					if (dialogId != selfUserId && (messageObject.messageOwner as? TLRPC.TLMessage)?.fromScheduled == true && DialogObject.isUserDialog(dialogId)) {
 						message = String.format("%1\$s: %2\$s", ApplicationLoader.applicationContext.getString(R.string.NotificationMessageScheduledName), message)
 						text.append(message)
 					}
@@ -5283,18 +5249,20 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							}
 							else {
 								val fromId = messageObject.senderId
-								var sender = messagesController.getUser(fromId)
+								var sender = messagesController.getUser(fromId) as? TLRPC.TLUser
 
 								if (sender == null) {
-									sender = messagesStorage.getUserSync(fromId)
+									sender = messagesStorage.getUserSync(fromId) as? TLRPC.TLUser
 
 									if (sender != null) {
 										messagesController.putUser(sender, true)
 									}
 								}
 
-								if (sender?.photo?.photo_small != null && sender.photo?.photo_small?.volume_id != 0L && sender.photo?.photo_small?.local_id != 0) {
-									avatar = fileLoader.getPathToAttach(sender.photo?.photo_small, true)
+								val photoSmall = sender?.photo?.photoSmall
+
+								if (photoSmall != null && photoSmall.volumeId != 0L && photoSmall.localId != 0) {
+									avatar = fileLoader.getPathToAttach(photoSmall, true)
 								}
 							}
 
@@ -5392,8 +5360,8 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 						messagingStyle.addMessage(message, messageObject.messageOwner!!.date.toLong() * 1000, person)
 					}
 
-					if (dialogId == BuildConfig.NOTIFICATIONS_BOT_ID && messageObject.messageOwner?.reply_markup != null) {
-						rows = messageObject.messageOwner?.reply_markup?.rows
+					if (dialogId == BuildConfig.NOTIFICATIONS_BOT_ID && messageObject.messageOwner?.replyMarkup != null) {
+						rows = messageObject.messageOwner?.replyMarkup?.rows
 						rowsMid = messageObject.id
 					}
 				}
@@ -5506,7 +5474,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 							while (c < cc) {
 								val button = row.buttons[c]
 
-								if (button is TL_keyboardButtonCallback) {
+								if (button is TLRPC.TLKeyboardButtonCallback) {
 									val callbackIntent = Intent(ApplicationLoader.applicationContext, NotificationCallbackReceiver::class.java)
 									callbackIntent.putExtra("currentAccount", currentAccount)
 									callbackIntent.putExtra("did", dialogId)
@@ -5594,7 +5562,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	@TargetApi(Build.VERSION_CODES.P)
+	@RequiresApi(Build.VERSION_CODES.P)
 	private fun loadRoundAvatar(avatar: File?, personBuilder: Person.Builder) {
 		if (avatar != null) {
 			runCatching {
@@ -5686,79 +5654,79 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 	fun clearDialogNotificationsSettings(did: Long) {
 		val preferences = accountInstance.notificationsSettings
 
-		val editor = preferences.edit()
-		editor.remove("notify2_$did").remove("custom_$did")
+		preferences.edit {
+			remove("notify2_$did").remove("custom_$did")
 
-		messagesStorage.setDialogFlags(did, 0)
+			messagesStorage.setDialogFlags(did, 0)
 
-		val dialog = messagesController.dialogs_dict[did]
-		dialog?.notify_settings = TL_peerNotifySettings()
-
-		editor.commit()
+			val dialog = messagesController.dialogs_dict[did]
+			dialog?.notifySettings = TLRPC.TLPeerNotifySettings()
+		}
 
 		notificationsController.updateServerNotificationsSettings(did, true)
 	}
 
 	fun setDialogNotificationsSettings(dialogId: Long, setting: Int) {
 		val preferences = accountInstance.notificationsSettings
-		val editor = preferences.edit()
-		val dialog = messagesController.dialogs_dict[dialogId]
 
-		if (setting == SETTING_MUTE_UNMUTE) {
-			val defaultEnabled = isGlobalNotificationsEnabled(dialogId)
+		preferences.edit {
+    		val dialog = messagesController.dialogs_dict[dialogId]
 
-			if (defaultEnabled) {
-				editor.remove("notify2_$dialogId")
+			if (setting == SETTING_MUTE_UNMUTE) {
+				val defaultEnabled = isGlobalNotificationsEnabled(dialogId)
+
+				if (defaultEnabled) {
+					remove("notify2_$dialogId")
+				}
+				else {
+					putInt("notify2_$dialogId", 0)
+				}
+
+				messagesStorage.setDialogFlags(dialogId, 0)
+
+				dialog?.notifySettings = TLRPC.TLPeerNotifySettings()
 			}
 			else {
-				editor.putInt("notify2_$dialogId", 0)
-			}
+				var untilTime = connectionsManager.currentTime
 
-			messagesStorage.setDialogFlags(dialogId, 0)
+				when (setting) {
+					SETTING_MUTE_HOUR -> {
+						untilTime += 60 * 60
+					}
 
-			dialog?.notify_settings = TL_peerNotifySettings()
-		}
-		else {
-			var untilTime = connectionsManager.currentTime
+					SETTING_MUTE_8_HOURS -> {
+						untilTime += 60 * 60 * 8
+					}
 
-			when (setting) {
-				SETTING_MUTE_HOUR -> {
-					untilTime += 60 * 60
+					SETTING_MUTE_2_DAYS -> {
+						untilTime += 60 * 60 * 48
+					}
+
+					SETTING_MUTE_FOREVER -> {
+						untilTime = Int.MAX_VALUE
+					}
 				}
 
-				SETTING_MUTE_8_HOURS -> {
-					untilTime += 60 * 60 * 8
+				val flags = if (setting == SETTING_MUTE_FOREVER) {
+					putInt("notify2_$dialogId", 2)
+					1L
+				}
+				else {
+					putInt("notify2_$dialogId", 3)
+					putInt("notifyuntil_$dialogId", untilTime)
+					untilTime.toLong() shl 32 or 1L
 				}
 
-				SETTING_MUTE_2_DAYS -> {
-					untilTime += 60 * 60 * 48
+				getInstance(UserConfig.selectedAccount).removeNotificationsForDialog(dialogId)
+
+				messagesStorage.setDialogFlags(dialogId, flags)
+
+				dialog?.notifySettings = TLRPC.TLPeerNotifySettings().apply {
+					muteUntil = untilTime
 				}
-
-				SETTING_MUTE_FOREVER -> {
-					untilTime = Int.MAX_VALUE
-				}
-			}
-
-			val flags = if (setting == SETTING_MUTE_FOREVER) {
-				editor.putInt("notify2_$dialogId", 2)
-				1L
-			}
-			else {
-				editor.putInt("notify2_$dialogId", 3)
-				editor.putInt("notifyuntil_$dialogId", untilTime)
-				untilTime.toLong() shl 32 or 1L
-			}
-
-			getInstance(UserConfig.selectedAccount).removeNotificationsForDialog(dialogId)
-
-			messagesStorage.setDialogFlags(dialogId, flags)
-
-			dialog?.notify_settings = TL_peerNotifySettings().apply {
-				mute_until = untilTime
 			}
 		}
 
-		editor.commit()
 		updateServerNotificationsSettings(dialogId)
 	}
 
@@ -5774,55 +5742,57 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 		val preferences = accountInstance.notificationsSettings
 
-		val req = TL_account_updateNotifySettings()
-		req.settings = TL_inputPeerNotifySettings()
-		req.settings.flags = req.settings.flags or 1
-		req.settings.show_previews = preferences.getBoolean("content_preview_$dialogId", true)
-		req.settings.flags = req.settings.flags or 2
-		req.settings.silent = preferences.getBoolean("silent_$dialogId", false)
+		val req = TLRPC.TLAccountUpdateNotifySettings()
 
-		val muteType = preferences.getInt("notify2_$dialogId", -1)
+		req.settings = TLRPC.TLInputPeerNotifySettings().also {
+			it.flags = it.flags or 1
+			it.showPreviews = preferences.getBoolean("content_preview_$dialogId", true)
+			it.flags = it.flags or 2
+			it.silent = preferences.getBoolean("silent_$dialogId", false)
 
-		if (muteType != -1) {
-			req.settings.flags = req.settings.flags or 4
+			val muteType = preferences.getInt("notify2_$dialogId", -1)
 
-			if (muteType == 3) {
-				req.settings.mute_until = preferences.getInt("notifyuntil_$dialogId", 0)
+			if (muteType != -1) {
+				it.flags = it.flags or 4
+
+				if (muteType == 3) {
+					it.muteUntil = preferences.getInt("notifyuntil_$dialogId", 0)
+				}
+				else {
+					it.muteUntil = if (muteType != 2) 0 else Int.MAX_VALUE
+				}
+			}
+
+			val soundDocumentId = preferences.getLong("sound_document_id_$dialogId", 0)
+			val soundPath = preferences.getString("sound_path_$dialogId", null)
+
+			it.flags = it.flags or 8
+
+			if (soundDocumentId != 0L) {
+				val ringtoneSound = TLRPC.TLNotificationSoundRingtone()
+				ringtoneSound.id = soundDocumentId
+
+				it.sound = ringtoneSound
+			}
+			else if (soundPath != null) {
+				if (soundPath == "NoSound") {
+				it.sound = TLRPC.TLNotificationSoundNone()
+				}
+				else {
+					val localSound = TLRPC.TLNotificationSoundLocal()
+					localSound.title = preferences.getString("sound_$dialogId", null)
+					localSound.data = soundPath
+
+					it.sound = localSound
+				}
 			}
 			else {
-				req.settings.mute_until = if (muteType != 2) 0 else Int.MAX_VALUE
+				it.sound = TLRPC.TLNotificationSoundDefault()
 			}
 		}
 
-		val soundDocumentId = preferences.getLong("sound_document_id_$dialogId", 0)
-		val soundPath = preferences.getString("sound_path_$dialogId", null)
-
-		req.settings.flags = req.settings.flags or 8
-
-		if (soundDocumentId != 0L) {
-			val ringtoneSound = TL_notificationSoundRingtone()
-			ringtoneSound.id = soundDocumentId
-
-			req.settings.sound = ringtoneSound
-		}
-		else if (soundPath != null) {
-			if (soundPath == "NoSound") {
-				req.settings.sound = TL_notificationSoundNone()
-			}
-			else {
-				val localSound = TL_notificationSoundLocal()
-				localSound.title = preferences.getString("sound_$dialogId", null)
-				localSound.data = soundPath
-
-				req.settings.sound = localSound
-			}
-		}
-		else {
-			req.settings.sound = TL_notificationSoundDefault()
-		}
-
-		req.peer = TL_inputNotifyPeer().apply {
-			peer = messagesController.getInputPeer(dialogId)
+		req.peer = TLRPC.TLInputNotifyPeer().also {
+			it.peer = messagesController.getInputPeer(dialogId)
 		}
 
 		connectionsManager.sendRequest(req)
@@ -5886,9 +5856,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 	fun updateServerNotificationsSettings(type: Int) {
 		val preferences = accountInstance.notificationsSettings
 
-		val req = TL_account_updateNotifySettings()
-		req.settings = TL_inputPeerNotifySettings()
-		req.settings.flags = 5
+		val req = TLRPC.TLAccountUpdateNotifySettings()
+		req.settings = TLRPC.TLInputPeerNotifySettings()
+		req.settings?.flags = 5
 
 		val soundDocumentIdPref: String
 		val soundPathPref: String
@@ -5896,9 +5866,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 		when (type) {
 			TYPE_GROUP -> {
-				req.peer = TL_inputNotifyChats()
-				req.settings.mute_until = preferences.getInt("EnableGroup2", 0)
-				req.settings.show_previews = preferences.getBoolean("EnablePreviewGroup", true)
+				req.peer = TLRPC.TLInputNotifyChats()
+				req.settings?.muteUntil = preferences.getInt("EnableGroup2", 0)
+				req.settings?.showPreviews = preferences.getBoolean("EnablePreviewGroup", true)
 
 				soundNamePref = "GroupSound"
 				soundDocumentIdPref = "GroupSoundDocId"
@@ -5906,9 +5876,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			}
 
 			TYPE_PRIVATE -> {
-				req.peer = TL_inputNotifyUsers()
-				req.settings.mute_until = preferences.getInt("EnableAll2", 0)
-				req.settings.show_previews = preferences.getBoolean("EnablePreviewAll", true)
+				req.peer = TLRPC.TLInputNotifyUsers()
+				req.settings?.muteUntil = preferences.getInt("EnableAll2", 0)
+				req.settings?.showPreviews = preferences.getBoolean("EnablePreviewAll", true)
 
 				soundNamePref = "GlobalSound"
 				soundDocumentIdPref = "GlobalSoundDocId"
@@ -5916,9 +5886,9 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			}
 
 			else -> {
-				req.peer = TL_inputNotifyBroadcasts()
-				req.settings.mute_until = preferences.getInt("EnableChannel2", 0)
-				req.settings.show_previews = preferences.getBoolean("EnablePreviewChannel", true)
+				req.peer = TLRPC.TLInputNotifyBroadcasts()
+				req.settings?.muteUntil = preferences.getInt("EnableChannel2", 0)
+				req.settings?.showPreviews = preferences.getBoolean("EnablePreviewChannel", true)
 
 				soundNamePref = "ChannelSound"
 				soundDocumentIdPref = "ChannelSoundDocId"
@@ -5926,31 +5896,31 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 			}
 		}
 
-		req.settings.flags = req.settings.flags or 8
+		req.settings?.flags = req.settings!!.flags or 8
 
 		val soundDocumentId = preferences.getLong(soundDocumentIdPref, 0)
 		val soundPath = preferences.getString(soundPathPref, "NoSound")
 
 		if (soundDocumentId != 0L) {
-			val ringtoneSound = TL_notificationSoundRingtone()
+			val ringtoneSound = TLRPC.TLNotificationSoundRingtone()
 			ringtoneSound.id = soundDocumentId
 
-			req.settings.sound = ringtoneSound
+			req.settings?.sound = ringtoneSound
 		}
 		else if (soundPath != null) {
 			if (soundPath == "NoSound") {
-				req.settings.sound = TL_notificationSoundNone()
+				req.settings?.sound = TLRPC.TLNotificationSoundNone()
 			}
 			else {
-				val localSound = TL_notificationSoundLocal()
+				val localSound = TLRPC.TLNotificationSoundLocal()
 				localSound.title = preferences.getString(soundNamePref, null)
 				localSound.data = soundPath
 
-				req.settings.sound = localSound
+				req.settings?.sound = localSound
 			}
 		}
 		else {
-			req.settings.sound = TL_notificationSoundDefault()
+			req.settings?.sound = TLRPC.TLNotificationSoundDefault()
 		}
 
 		connectionsManager.sendRequest(req)
@@ -5990,7 +5960,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 	}
 
 	fun setGlobalNotificationsEnabled(type: Int, time: Int) {
-		accountInstance.notificationsSettings.edit().putInt(getGlobalNotificationsKey(type), time).commit()
+		accountInstance.notificationsSettings.edit { putInt(getGlobalNotificationsKey(type), time) }
 		updateServerNotificationsSettings(type)
 		messagesStorage.updateMutedDialogsFiltersCounters()
 		deleteNotificationChannelGlobal(type)
@@ -6003,21 +5973,20 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 		else {
 			val defaultEnabled = getInstance(currentAccount).isGlobalNotificationsEnabled(dialogId)
 			val preferences = MessagesController.getNotificationsSettings(currentAccount)
-			val editor = preferences.edit()
 
-			if (defaultEnabled) {
-				editor.remove("notify2_$dialogId")
+			preferences.edit {
+				if (defaultEnabled) {
+					remove("notify2_$dialogId")
+				}
+				else {
+					putInt("notify2_$dialogId", 0)
+				}
+
+				messagesStorage.setDialogFlags(dialogId, 0)
 			}
-			else {
-				editor.putInt("notify2_$dialogId", 0)
-			}
-
-			messagesStorage.setDialogFlags(dialogId, 0)
-
-			editor.commit()
 
 			val dialog = messagesController.dialogs_dict[dialogId]
-			dialog?.notify_settings = TL_peerNotifySettings()
+			dialog?.notifySettings = TLRPC.TLPeerNotifySettings()
 
 			updateServerNotificationsSettings(dialogId)
 		}
@@ -6107,7 +6076,7 @@ class NotificationsController(instance: Int) : BaseController(instance) {
 
 				OTHER_NOTIFICATIONS_CHANNEL = "Other" + Utilities.random.nextLong()
 
-				preferences?.edit()?.putString("OtherKey", OTHER_NOTIFICATIONS_CHANNEL)?.commit()
+				preferences?.edit { putString("OtherKey", OTHER_NOTIFICATIONS_CHANNEL) }
 			}
 
 			if (notificationChannel == null) {

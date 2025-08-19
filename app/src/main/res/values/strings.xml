@@ -159,10 +159,10 @@
 	<string name="Yesterday">yesterday</string>
 	<string name="NoResult">No results</string>
 	<string name="NoResultFoundFor">No results found for \"%s\".</string>
-	<string name="NoChats">Dive into secure chats, immerse AI Space, discover exciting channels, groups and online courses.</string>
+	<string name="NoChats">Dive into secure chats, immerse AI Space, discover exciting channels, groups and masterclass.</string>
 	<string name="RecentlyViewed">Recently viewed</string>
 	<string name="RecentlyViewedHide">HIDE</string>
-	<string name="NoChatsHelp">• Tap on Search to find any user, channel or group.\n• Tap on the + to start a channel, group or online course.\n• Access settings by clicking on the gear icon.\n• Launch AI Space by tapping on the AI icon.</string>
+	<string name="NoChatsHelp">• Tap on Search to find any user, channel or group.\n• Tap on the + to start a channel, group or masterclass.\n• Access settings by clicking on the gear icon.\n• Launch AI Space by tapping on the AI icon.</string>
 	<string name="NoChatsContactsHelp">Start messaging by clicking the plus button on the bottom right corner.</string>
 	<string name="WaitingForNetwork">Waiting for network…</string>
 	<string name="Connecting">Connecting…</string>
@@ -243,7 +243,7 @@
 	<string name="CompatibilityChat">%1$s is using an older version of Ello, so secret photos will be shown in compatibility mode.\n\nOnce %2$s updates Ello, photos with timers for 1 minute or less will start working in \'Tap and hold to view\' mode, and you will be notified whenever the other party takes a screenshot.</string>
 	<string name="SearchMessages">Messages</string>
 	<string name="Search">Search</string>
-	<string name="ChatsSearchHint">Search everything</string>
+	<string name="ChatsSearchHint">Search</string>
 	<string name="MuteNotifications">Mute forever</string>
 	<string name="MuteFor">Mute for %1$s</string>
 	<string name="MuteFor1h">Mute for 1 hour</string>
@@ -408,10 +408,11 @@
 	<string name="ActionMigrateFromGroupNotify">%1$s was upgraded to a supergroup</string>
 	<string name="NoBlockedGroup2">Users removed from the group by the admins can\'t rejoin via invite links.</string>
 	<string name="NoBlockedChannel2">Users removed from the channel by the admins can\'t rejoin via invite links.</string>
+	<string name="NoBlockedMasterclass">User removed from the masterclass by admins cannot rejoin it via invite links</string>
 	<string name="NewChannel">New channel</string>
 	<string name="EnterChannelName">Channel title</string>
 	<string name="channel_name">Channel name</string>
-	<string name="online_course_name">Online course name</string>
+	<string name="online_course_name">Masterclass name</string>
 	<string name="AddMutual">Search people…</string>
 	<string name="search_contacts_and_usernames">Search contacts and usernames</string>
 	<string name="ChannelUsernameHelp">If the channel has a permanent public link, other users will be able to find it and subscribe.\n\nYou can use Latin (a–z), numbers (0–9), and underscores. The minimum length is 5 characters.</string>
@@ -424,7 +425,7 @@
 	<string name="BioOptionalPlaceholder">Bio (optional)</string>
 	<string name="DescriptionPlaceholder">Description</string>
 	<string name="DescriptionInfo">You can provide an additional description for your channel.</string>
-	<string name="DescriptionOlineCourseInfo">You can provide an additional description for your Online course.</string>
+	<string name="DescriptionOlineCourseInfo">You can provide an additional description for your Masterclass.</string>
 	<string name="DescriptionNewGroup">You can provide an additional description for your group.</string>
 	<string name="GroupSettingsChangedAlert">You have changed some settings in this group. Apply changes?</string>
 	<string name="ChannelSettingsChangedAlert">You have changed some settings in this channel. Apply changes?</string>
@@ -442,7 +443,7 @@
 	<string name="GroupAddMembers">Add Members</string>
 	<string name="ChannelAddSubscribers">Select contacts</string>
 	<string name="LeaveChannelMenu">Unsubscribe</string>
-	<string name="LeavePaidChannelMenu">Confirm cancellation</string>
+	<string name="LeavePaidChannelMenu">Confirm Cancellation</string>
 	<string name="ChannelSettings">Settings</string>
 	<string name="ChannelJoin">Subscribe</string>
 	<string name="ChannelJoinRequest">Subscribe</string>
@@ -493,15 +494,19 @@
 	<string name="ChannelPublicEmptyUsernameTitle">Choose a link</string>
 	<string name="ChannelPublicEmptyUsername">Please choose a link for your public channel, so that people can find it in search and share with others.\n\nIf you\'re not interested, we suggest creating a private channel instead.</string>
 	<string name="ActionCreateChannel">Channel created</string>
+	<string name="ActionCreateMasterclass">Masterclass created</string>
 	<string name="ActionGiftInbound">un1 sent you a gift for **un2**</string>
 	<string name="ActionGiftOutbound">You have sent a gift for **un2**</string>
 	<string name="ActionGiftPremiumTitle">Ello Premium</string>
 	<string name="ActionGiftPremiumSubtitle">for %1$s</string>
 	<string name="ActionGiftPremiumView">View</string>
 	<string name="ActionChannelChangedPhoto">Channel photo changed</string>
+	<string name="ActionMasterclassChangedPhoto">Masterclass photo changed</string>
 	<string name="ActionChannelChangedVideo">Channel video changed</string>
 	<string name="ActionChannelRemovedPhoto">Channel photo removed</string>
+	<string name="ActionMasterclassRemovedPhoto">Masterclass photo changed</string>
 	<string name="ActionChannelChangedTitle">Channel name changed to un2</string>
+	<string name="ActionMasterclassChangedTitle">Masterclass name changed to un2</string>
 	<string name="ChangePublicLimitReached">Sorry, you have reserved too many public usernames. You can revoke the link from one of your older groups or channels, or create a private entity instead.</string>
 	<string name="ChannelCreator">Owner</string>
 	<string name="ChannelAdministrator">Administrator</string>
@@ -516,8 +521,10 @@
 	<string name="ChannelRemoveUserAdmin">Dismiss admin</string>
 	<string name="ChannelEditPermissions">Edit permissions</string>
 	<string name="ChannelMembersInfo">Only channel administrators can see this list.</string>
+	<string name="MasterclassMembersInfo">Only masterclass administrators can see this list.</string>
 	<string name="ChannelLinkInfo">Anyone on Ello will be able to join your channel by following this link.</string>
 	<string name="ChannelAdminsInfo">You can add administrators to help you manage your channel. Tap and hold to remove admins.</string>
+	<string name="MasterclassAdminsInfo">You can add admins to help you manage your masterclass.</string>
 	<string name="ChannelJoinTo">Do you want to join the channel \'%1$s\'?</string>
 	<string name="ChannelCantOpenPrivate">Sorry, this channel is private, so you can’t view its content.</string>
 	<string name="ChannelCantOpenPrivate2">Sorry, this channel is private.</string>
@@ -1019,7 +1026,7 @@
 	<string name="NoRecent">No recent</string>
 	<string name="Message">Message</string>
 	<string name="TypeMessage">Message</string>
-	<string name="ask_ello_ai_anything">Ask me anything</string>
+	<string name="ask_ello_ai_anything">Ask anything</string>
 	<string name="TypeScheduleMessage">Schedule message</string>
 	<string name="ShareMyPhone">SHARE MY PHONE NUMBER</string>
 	<string name="ShareMyContactInfo">Share my contact</string>
@@ -1161,7 +1168,7 @@
 	<string name="AddShortcut">Add to Home screen</string>
 	<string name="SearchMembers">Search members</string>
 	<string name="ChatYourSelf">forward here to save</string>
-	<string name="SavedMessages">My cloud storage</string>
+	<string name="SavedMessages">My Cloud</string>
 	<string name="SavedMessagesInfo">Forward here to save.</string>
 	<string name="ChatYourSelfName">You</string>
 	<string name="GroupEmptyTitle1">You have created a group</string>
@@ -3353,7 +3360,7 @@
 	<string name="Decline">Decline</string>
 	<string name="Deactivate">DELETE NOW</string>
 	<string name="Back">Back</string>
-	<string name="SignUp">Sign Up</string>
+	<string name="SignUp">Sign up</string>
 	<string name="DeclineDeactivate">Decline &amp; Delete</string>
 	<string name="Next">Next</string>
 	<string name="Enable">Enable</string>
@@ -3602,16 +3609,16 @@
 	<string name="PermissionNoCameraMicVideo">**Ello** needs camera and microphone access so that you can send video messages. Tap Settings -> Permissions, and turn **Microphone** and **Camera** on.</string>
 	<string name="PermissionNoLocation">Ello needs access to your location so that you can share it with your friends.</string>
 	<string name="PermissionNoLocationPosition">Ello needs access to your location.</string>
-	<string name="PermissionNoLocationFriends">**Ello** needs access to location so that you can share it with your friends. Tap Settings -> Permissions, and turn **Location** on.</string>
-	<string name="PermissionNoLocationPeopleNearby">**Ello** needs access to location so that you can find people nearby. Tap Settings -> Permissions, and turn **Location** on.</string>
-	<string name="PermissionNoLocationNavigation">**Ello** needs access to location so that you can get directions. Tap Settings -> Permissions, and turn **Location** on.</string>
+	<string name="PermissionNoLocationFriends">**Ello** needs access to location so that you can share it with your friends. You can grant this permission in **System Settings** if you have previously denied the access to it.</string>
+	<string name="PermissionNoLocationPeopleNearby">**Ello** needs access to location so that you can find people nearby.</string>
+	<string name="PermissionNoLocationNavigation">**Ello** needs access to location so that you can get directions.</string>
 	<string name="PermissionNoContactsSharing">**Ello** needs access to contacts so that you can share them with your friends. Tap Settings -> Permissions, and turn **Contacts** on.</string>
 	<string name="PermissionNoStorageAvatar">**Ello** needs storage access so you can upload profile picture. Tap Settings -> Permissions, and turn **Files and media** on.</string>
 	<string name="PermissionDrawAboveOtherApps">Ello needs access to draw above other apps to play videos in Picture-in-Picture mode.</string>
 	<string name="PermissionDrawAboveOtherAppsGroupCall">Overlay mode lets you use push-to-talk and see who is talking even when you are outside of Ello.</string>
 	<string name="PermissionOpenSettings">SETTINGS</string>
 	<string name="PermissionXiaomiLockscreen">Please allow Ello to be shown on the lock screen so that calls can work properly.</string>
-	<string name="PermissionBackgroundLocation">To share your live location in this chat, Ello needs access to your location all the time, including while the app is in the background.\n\nWe will access your location only for the duration you choose, and you can stop sharing it any time. We won\'t use your location for any purpose other than sharing it in this chat.</string>
+	<string name="PermissionBackgroundLocation">To share your live location in this chat, Ello needs access to your location all the time, including while the app is in the background.\n\nWe will access your location only for the duration you choose, and you can stop sharing it any time. We won\'t use your location for any purpose other than sharing it in this chat.\n\nYou can grant this permission in **System Settings** if you have previously denied the access to it.</string>
 	<string name="PermissionDrawAboveOtherAppsTitle">Picture-in-Picture</string>
 	<string name="PermissionDrawAboveOtherAppsGroupCallTitle">Voice Chat Overlay</string>
 	<!--charts-->
@@ -4216,6 +4223,18 @@
 	<string name="PeopleJoined_few">%1$d people joined</string>
 	<string name="PeopleJoined_many">%1$d people joined</string>
 	<string name="PeopleJoined_other">%1$d people joined</string>
+	<string name="JoinedTheGroup_zero">%1$d joined the group</string>
+	<string name="JoinedTheGroup_one">%1$d joined the group</string>
+	<string name="JoinedTheGroup_two">%1$d joined this group</string>
+	<string name="JoinedTheGroup_few">%1$d joined this group</string>
+	<string name="JoinedTheGroup_many">%1$d joined this group</string>
+	<string name="JoinedTheGroup_other">%1$d joined this group</string>
+	<string name="JoinedTheChannel_zero">%1$d joined the channel</string>
+	<string name="JoinedTheChannel_one">%1$d joined the channel</string>
+	<string name="JoinedTheChannel_two">%1$d joined this channel</string>
+	<string name="JoinedTheChannel_few">%1$d joined this channel</string>
+	<string name="JoinedTheChannel_many">%1$d joined this channel</string>
+	<string name="JoinedTheChannel_other">%1$d joined this channel</string>
 	<string name="PeopleJoinedRemaining_other">%1$d remaining</string>
 	<string name="PeopleJoinedRemaining_zero">%1$d remaining</string>
 	<string name="PeopleJoinedRemaining_one">%1$d remaining</string>
@@ -5504,7 +5523,7 @@
 	<string name="PricePerMonth">%1$s / month</string>
 	<string name="PricePerMonthMe">%1$.2f/month</string>
 	<string name="PricePerYear">%1$s/year</string>
-	<string name="PricePerCourse">%1$.2f/course</string>
+	<string name="PricePerCourse">%1$.2f/masterclass</string>
 	<string name="GiftPremiumListFeaturesAndTerms">You can review the list of features and terms of use for Ello Premium *here*.</string>
 	<string name="GiftPremium">Gift Premium</string>
 	<string name="GiftTelegramPremiumTitle">Gift Ello Premium</string>
@@ -5708,12 +5727,12 @@
 	<string name="non_binary">Non-binary</string>
 	<string name="other">Prefer not to say</string>
 	<string name="date_of_birth">Date of birth</string>
-	<string name="welcome_privacy_description">By registering, you agree to the ^1, ^2.</string>
+	<string name="welcome_privacy_description">By creating an account, you agree to the ^1 and ^2.</string>
 	<string name="terms">Terms of Service</string>
 	<string name="privacy">Privacy Policy</string>
 	<string name="verification_code">Verification code</string>
-	<string name="verify_email">Verification code</string>
-	<string name="enter_verification_code">Please enter the verification code that has been sent to your email. Please note that it may take a couple of minutes for the email to be received.</string>
+	<string name="verify_email">Let’s confirm your email</string>
+	<string name="enter_verification_code">To continue, enter your the verification code sent to your email. Check the junk mail if it’s not in your inbox.</string>
 	<string name="resend_code_template">Didn\'t receive verification code? ^1.</string>
 	<string name="resend_email">Resend email</string>
 	<string name="invalid_code">You entered an invalid code. Please try again.</string>
@@ -5733,8 +5752,8 @@
 	<string name="save">Save</string>
 	<string name="personal_public_profile">Personal public account</string>
 	<string name="personal_private_profile">Personal private account</string>
-	<string name="business_public_profile">Public business account</string>
-	<string name="business_private_profile">Private business account</string>
+	<string name="business_public_profile">Business public account</string>
+	<string name="business_private_profile">Business private account</string>
 	<string name="public_account">Public</string>
 	<string name="private_account">Private</string>
 	<string name="personal">Personal</string>
@@ -5756,7 +5775,7 @@
 	<string name="bio">Bio</string>
 	<string name="logout">Log out</string>
 	<string name="more">More</string>
-	<string name="you_can_request_new_code">You can request a new verification code in:</string>
+	<string name="you_can_request_new_code">Please wait before requesting another code:</string>
 	<string name="code_verified">Verification code accepted</string>
 	<string name="my_feed">My Feed</string>
 	<string name="empty_feed_message">A continuously updated list of posts and media content from the channels you follow.</string>
@@ -5827,7 +5846,8 @@
 	<string name="failed_to_set_new_password">Failed to set new password</string>
 	<string name="password_update_successfully">Password updated successfully.</string>
 	<string name="new_channel">New channel</string>
-	<string name="online_course">Online course</string>
+	<string name="masterclass">Masterclass</string>
+	<string name="a_masterclass">a masterclass</string>
 	<string name="new_message">New message</string>
 	<string name="select">Select</string>
 	<string name="channel_type">Channel type</string>
@@ -5877,6 +5897,7 @@
 	<string name="public_channel">Public channel</string>
 	<string name="private_channel">Private channel</string>
 	<string name="subscription_channel">Subscription channel</string>
+	<string name="a_subscription_channel">a subscription channel</string>
 	<string name="Public">Public</string>
 	<string name="Private">Private</string>
 	<string name="invitation_link">Invitation link</string>
@@ -5884,11 +5905,12 @@
 	<string name="paid_channel_create_description">The Subscription Channel is a way for content creators to monetize their expertise and build a sustainable income stream through subscription-based access to their content and community</string>
 	<string name="private_channel_description">Private channels offer a balance between broad reach and controlled access, making them suitable for organizations, businesses, or individuals who want to share content with a specific audience while maintaining some level of privacy and control over the distribution of their content.</string>
 	<string name="public_channel_description">If the channel has a permanent public link, other users will be able to find it and subscribe to it.\n\nYou can use Latin letters (a-z), numbers (0-9), and underscores. The minimum length is 5 characters.</string>
+	<string name="masterclass_type_description">If the Masterclass has a permanent public link, other users will be able to find it and subscribe to it.\n\nYou can use Latin letters (a-z), numbers (0-9), and underscores. The minimum length is 5 characters.</string>
 	<string name="public_link">Public link</string>
 	<string name="link">Link</string>
 	<string name="link_lowercase">link</string>
 	<string name="link_hint">channel_name</string>
-	<string name="course_link_hint">course_name</string>
+	<string name="course_link_hint">masterclassName</string>
 	<string name="link_too_short">Link too short</string>
 	<string name="channel_link_is_empty">Channel link is empty</string>
 	<string name="channel">Channel</string>
@@ -5905,7 +5927,7 @@
 \n 9. Customizable Settings: Admins can adjust various settings like join requests, and comment sections.</string>
 	<string name="what_is_public_channel">What is the Public channel?</string>
 	<string name="what_is_subscription_channel">What is a Subscription Channel?</string>
-	<string name="what_is_online_course_channel">What is an Online course?</string>
+	<string name="what_is_online_course_channel">What is an Masterclass?</string>
 	<string name="what_is_public_channel_description">A Public Channel is a massaging feature where you can share content without cost or technical expertise.  Key features: \n 1. Easy creation: No need for development skills or expenses. \n 2. Unique names: Each channel has a distinct @channel_name and https://ello.team/channel_name. \n 3. Discoverable: Anyone can search for and subscribe to public channels. \n 4. Versatile content: Share various types of media and information. \n 5. Unlimited audience: No cap on subscriber numbers. \n 6. Team management: Option to have multiple administrators. \n 7. Dual updates: New content appears in both feed and chat areas.</string>
 	<string name="what_is_subscription_channel_description">A Subscription Channel is a messaging feature for building recurring revenue by serving and engaging a community on an ongoing basis.  Key features:
 \n 1. It\'s ideal for those aiming to build recurring revenue through community engagement.
@@ -5913,8 +5935,8 @@
 \n 3. Subscribers pay a monthly fee to access new and exclusive content.
 \n 4. It allows creators to receive financial support from their audience.
 \n 5. It\'s described as the "perfect digital product" for selling to an audience interested in ongoing, community-based content.</string>
-	<string name="what_is_online_course_description">Creating Online course lets you turn something you already have — your expertise — into a new source of revenue. If you have the expertise, and a passion for sharing it with the world, then an Online course is the perfect digital product for you to sell.\n\nPeople are eager to learn, whether they want to learn a new hobby, or advance themselves professionally — you can serve them by launching an Online course.\n\nIn the matter of seconds, you will have all of the tools you could ever need to create an Online course to teach people just about anything — from tai chi and cooking online to yoga, playing a guitar and more.</string>
-	<string name="online_course_date_description">Subscribers are allowed to join up\nuntil the end of the online course.</string>
+	<string name="what_is_online_course_description">Creating Masterclass lets you turn something you already have — your expertise — into a new source of revenue. If you have the expertise, and a passion for sharing it with the world, then an Masterclass is the perfect digital product for you to sell.\n\nPeople are eager to learn, whether they want to learn a new hobby, or advance themselves professionally — you can serve them by launching an Masterclass.\n\nIn the matter of seconds, you will have all of the tools you could ever need to create an Masterclass to teach people just about anything — from tai chi and cooking online to yoga, playing a guitar and more.</string>
+	<string name="online_course_date_description">Subscribers are allowed to join up\nuntil the end of the masterclass.</string>
 	<string name="start_date">Start date</string>
 	<string name="end_date">End date</string>
 	<string name="start_date_colon">Start date:</string>
@@ -5935,7 +5957,7 @@
 	<string name="channel_name_required">Please enter channel name</string>
 	<string name="failed_to_load_categories">Failed to load categories</string>
 	<string name="failed_to_load_genres">Failed to load genres</string>
-	<string name="monthly_payment">Monthly payment</string>
+	<string name="monthly_payment">Monthly Subscription</string>
 	<string name="subscription">Subscription</string>
 	<string name="cont_desc_ello_coin">Ello coin</string>
 	<string name="price">Price</string>
@@ -5947,7 +5969,7 @@
 	<string name="administrators">Administrators</string>
 	<string name="subscribers_with_colon">Subscribers:</string>
 	<string name="paid_subscribers">Paid subscribers</string>
-	<string name="online_course_revenue">Online course revenue</string>
+	<string name="online_course_revenue">Masterclass revenue</string>
 	<string name="description">Description</string>
 	<string name="channel_link">Channel link</string>
 	<string name="next_due_date">Next due date</string>
@@ -6004,10 +6026,11 @@
 	<string name="leave">Leave</string>
 	<string name="unpin">Unpin</string>
 	<string name="unmute">Unmute</string>
-	<string name="wrong_login_or_password">Login credentials you entered are incorrect. Please double-check your username and password and try again.</string>
+	<string name="wrong_login_or_password">The username or email you entered is incorrect. Please check it and try again.</string>
 	<string name="world_symbol">World symbol</string>
 	<string name="settings_privacy">Privacy</string>
 	<string name="settings_password_email">Change password and email</string>
+	<string name="settings_email">Change Email</string>
 	<string name="delete_account">Delete account</string>
 	<string name="error_you_entered_an_invalid_password_please_try_again">Error! You entered an invalid password. Please try again.</string>
 	<string name="error_you_entered_an_invalid_email_please_try_again">Error! You entered an invalid email. Please try again.</string>
@@ -6024,7 +6047,7 @@
 	<string name="confirm_new_password">Confirm new password</string>
 	<string name="my_current_subscriptions">My current subscriptions</string>
 	<string name="my_previous_subscriptions">My previous subscriptions</string>
-	<string name="valid_till">Valid till:</string>
+	<string name="valid_till">Renews:</string>
 	<string name="ongoing">Ongoing</string>
 	<string name="price_colon">Price:</string>
 	<string name="active">Active</string>
@@ -6065,11 +6088,13 @@ The Subscription Channel aren’t just geared towards one specific type of busin
 Your fans will pay you monthly. Subscribers will pay you a fee to access new and exclusive content and support you as a creator.
     </string>
 	<string name="info_settings_subscription_channel">Subscribers will pay you a fee to access new and exclusive content and support you as a creator.</string>
+	<string name="info_settings_masterclass">In order to join the masterclass, users will need to pay a one-time fee. However, up until the masterclass end date; after that time, they can’t join.</string>
 	<string name="email_updated_successfully">Email updated successfully</string>
 	<string name="rejected">Rejected</string>
 	<string name="pending">Pending</string>
 	<string name="cancel_subs_confirm">Are you sure you want to cancel this subscription?</string>
 	<string name="subscribe_confirm">Are you sure you want to subscribe to this channel?</string>
+	<string name="continue_subs_confirm">Are you sure you want to continue your subscription?</string>
 	<string name="transactions">Transactions</string>
 	<string name="filter">Filter</string>
 	<string name="current_subscriptions">Current subscriptions</string>
@@ -6107,9 +6132,10 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="scroll_top_top">Scroll to top</string>
 	<string name="welcome_to_wallet">Ello Pay.\nSafe, encrypted and private.</string>
 	<string name="cont_desc_wallet_panda">Panda with wallet</string>
+	<string name="cont_desc_topup_panda">Happy panda with money</string>
 	<string name="wallet_intro_title_info">ELLO Pay is a private, secure, and fast way to pay.</string>
 	<string-array name="wallet_intro_info">
-		<item>Deposit funds to subscribe to subscription channels, access online courses, engage with AI and more.</item>
+		<item>Deposit funds to subscribe to subscription channels, access masterclass, engage with AI and more.</item>
 		<item>Withdraw your earnings directly to your bank account.</item>
 		<item>Enjoy the privacy and confidentiality of your subscriptions and purchases.</item>
 	</string-array>
@@ -6124,12 +6150,15 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="ello_card">Ello Card</string>
 	<string name="top_up">Top up</string>
 	<string name="top_up_wallet">Top up wallet</string>
+	<string name="topup_your_wallet">Top up your wallet</string>
+	<string name="topup_description">Add money to unlock AI bots, subscribe to channels, masterclasses, and more.</string>
 	<string name="deposit">Deposit</string>
 	<string name="group">Group</string>
 
 	<string name="ello" translatable="false">@string/AppName</string>
 	<string name="stripe" translatable="false">Stripe</string>
 	<string name="apple_pay" translatable="false">Apple Pay</string>
+	<string name="google" translatable="false">Google</string>
 	<string name="paypal" translatable="false">PayPal</string>
 	<string name="bank">Bank</string>
 	<string name="bank_card">Bank card</string>
@@ -6156,6 +6185,8 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="success_excl">Success!</string>
 	<string name="error_excl">Error!</string>
 	<string name="you_purchased_format">You have purchased $$coin$$%.2f.</string>
+	<string name="you_purchased_dollar_format">You have purchased $%.2f.</string>
+	<string name="you_deposited_dollar_format">You have deposited $%.2f.</string>
 	<string name="you_withdrew_format">You have withdrawn $$coin$$%.2f.</string>
 	<string name="something_went_wrong">Something went wrong. Please try again.</string>
 	<string name="wallet_fallback_currency" translatable="false">usd</string>
@@ -6170,16 +6201,17 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="monthly_activity">Monthly activity</string>
 	<string name="monthly_stats_amount_format">%s$$coin$$%.0f Last month</string>
 	<string name="simple_coin_format" translatable="false">$$coin$$%.2f</string>
+	<string name="simple_coin_format_for_month">$$coin$$%.2f/mo.</string>
 	<string name="note">Note</string>
 	<string name="earnings_payout_info">We make monthly payouts. As long as you\'ve completed all of the steps to get paid, you\'ll be issued a payment by the end of each month.</string>
 	<string name="no_transactions_yet">It seems you haven\'t made any transactions yet.</string>
-	<string name="course_create_description">In order to join the Online course, users will need to pay a one-time fee. However, up until the Online course\'s end date; after that time, they can\'t join.</string>
+	<string name="course_create_description">In order to join the Masterclass, users will need to pay a one-time fee. However, up until the Masterclass end date; after that time, they can\'t join.</string>
 	<string name="subscription_description"><b>Subscribe now and get these benefits:</b>\n• Full access to exclusive content\n• Communicate with other subscribers\n• Automatic monthly renewal\n• Cancel anytime</string>
 	<string name="course_description"><b>Subscribe now and get these benefits:</b>\n• Full access to exclusive content\n• Engage with others by commenting\n• Life-long access for a one-time payment\n• Cancel anytime</string>
 	<string name="adult_description">People above the age of 18 are only permitted to view this channel. By subscribing to this channel, you are certifying that you are above the age of 18.</string>
 	<string name="subscription_success">You have successfully subscribed to our channel.</string>
-	<string name="online_course_success">You have successfully joined the Online course.</string>
-	<string name="subscription_fail">Insufficient funds on the balance. Please recharge your account and repeat the purchase.</string>
+	<string name="online_course_success">You have successfully joined the Masterclass.</string>
+	<string name="subscription_fail">You do not have enough funds for this purchase. You need to top up your wallet.</string>
 	<string name="insufficient_funds_message">You do not have enough funds for this purchase. You need to top up your wallet.</string>
 	<string name="knob">Knob</string>
 	<string name="sort">Sort</string>
@@ -6213,7 +6245,7 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="cont_desc_ello_card_logo">Ello card logo</string>
 	<string name="transfer_out_methods">Withdrawal methods</string>
 	<string name="subscription_fee">Channel subscription fee</string>
-	<string name="course_fee">Online course fee</string>
+	<string name="course_fee">Masterclass fee</string>
 	<string name="media_sale">Media sale</string>
 	<string name="email_address">Email address</string>
 	<string name="please_do_not_close_the_app_paypal">Please don\'t close this window, while we connect your PayPal account.</string>
@@ -6222,6 +6254,7 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="failed_to_send_verification_code">Failed to send verification code</string>
 	<string name="ai_bot_welcome">Greetings!</string>
 	<string name="ai_bot_welcome_message">I\’m the Ello AI bot and I can assist you with any queries or tasks you may have. Please don\'t hesitate to ask me anything, as it gives me a great pleasure to make your life easier and more fun.</string>
+	<string name="default_ai_bot_welcome_message">Greetings! I\’m the Ello AI bot and I can assist you with any queries or tasks you may have. Please don\'t hesitate to ask me anything, as it gives me a great pleasure to make your life easier and more fun.</string>
 	<string name="ai_bot_expired_message">Sorry, the amount of free generated content has expired. For further use you need to pay.</string>
 	<string name="new_method">New method</string>
 	<string name="radio_button">Radio button</string>
@@ -6329,9 +6362,12 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="ai_buy_free_pictures">25 pieces</string>
 	<string name="ai_buy_request_item">%d for $$coin$$%.02f</string>
 	<string name="ai_buy_picture_item">/ for 1 picture</string>
-	<string name="ai_buy_description">Run out of free prompts?\nBuy the AI pack.</string>
-	<string name="ai_buy_text">AI chat</string>
-	<string name="ai_buy_picture">AI images</string>
+	<string name="ai_buy_description">Run out of prompts?</string>
+	<string name="ai_buy_text">AI Chat</string>
+	<string name="ai_buy_picture">AI Images</string>
+	<string name="ai_buy_image">AI Image</string>
+	<string name="ai_buy_chat_picture">AI Chat and Images</string>
+	<string name="ai_buy_plans">%1$s Plans</string>
 	<string name="ai_buy_notice"><b>Note!</b> At the end of the month, the number of requests is reset to zero.</string>
 	<string name="ai_buy_prompts">Prompts</string>
 
@@ -6365,6 +6401,8 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="ai_buy_text_subitem_14">Users can input data or statistics, and the AI chat can help interpret and explain the insights derived from the data.</string>
 	<string name="ai_buy_text_item_15">Conceptualization:</string>
 	<string name="ai_buy_text_subitem_15">Users can describe concepts, scenarios, or hypothetical situations, and AI chat can provide detailed descriptions or extrapolations.</string>
+	<string name="ai_buy_text_item_16">Internet Research:</string>
+	<string name="ai_buy_text_subitem_16">The AI chat has access to the internet where it can search for real-time data, news, and updates, and provide users with up-to-date and relevant data.</string>
 
 	<string name="ai_buy_picture_item_1">Create Images Based on Prompts:</string>
 	<string name="ai_buy_picture_subitem_1">This AI function allows users to generate images based on textual descriptions or prompts. Users can input detailed descriptions of what they envision, and the AI-powered system will interpret these descriptions to generate corresponding images.</string>
@@ -6404,7 +6442,7 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="currency">Currency</string>
 	<string name="no_earnings_wallet_found">Earnings wallet not found</string>
 	<string name="panda_with_tv_instead_of_head">Panda with TV instead of head</string>
-	<string name="ai_bot_chat_prompts_left">%d %s %s</string>
+	<string name="ai_bot_chat_prompts_left">%d %s</string>
 	<string name="no_prompts_left">No %s prompts, &lt;u>buy more&lt;/u></string>
 	<string name="prompt_text">AI chat</string>
 	<string name="prompt_image">AI image</string>
@@ -6441,7 +6479,7 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="intro_1_msg">Built for creators, artists, and entrepreneurs.</string>
 	<string name="intro_2_msg">Secure chats, calls, and video calls. Public and private groups &amp; channels.</string>
 	<string name="intro_call_time">11:38, 20 min</string>
-	<string name="intro_3_msg">Monetize your <b>Big ideas</b>. Create subscription channels &amp; online courses in the palm of your hand from anywhere.</string>
+	<string name="intro_3_msg">Monetize your <b>Big ideas</b>. Create subscription channels &amp; masterclass in the palm of your hand from anywhere.</string>
 	<string name="intro_price">$10.00/month</string>
 	<string name="intro_4_msg">Selling <b>Media Products</b> is an easy way to generate a new revenue stream.</string>
 	<string name="intro_5_msg"><b>Ello Pay.</b>\nIt\'s simple, secure, and confidential. We accept a great variety of payment methods.</string>
@@ -6464,7 +6502,7 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="banned_panda">Panda with red ban sign</string>
 	<string name="oops">Oops!</string>
 	<string name="sorry">Sorry!</string>
-	<string name="online_course_fee">Online course fee</string>
+	<string name="online_course_fee">Masterclass fee</string>
 	<string name="adding_subscribers_to_channel">Adding subscribers to your Public channel.</string>
 	<string name="how_to_add_users_to_channel">How to add users to your channel.</string>
 	<string name="how_to_add_users_to_group">How to add users to your group.</string>
@@ -6477,8 +6515,8 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="add_subscribers">Add subscribers</string>
 	<string name="unlimited_members">Unlimited members</string>
 	<string name="paid">Paid</string>
-	<string name="online_course_dates">Online course dates</string>
-	<string name="online_course_price">Online course price</string>
+	<string name="online_course_dates">Masterclass dates</string>
+	<string name="online_course_price">Masterclass price</string>
 	<string name="e2e_encrypted">End-to-end Encrypted</string>
 	<string name="support_bot_welcome">🤖 Welcome to our Support Chat! 🌟</string>
 	<string name="support_bot_welcome_message">I\'m a chat bot designed to connect you\nwith our dedicated support agents.\n\nWhether you have questions or\nconcerns, or require troubleshooting,\nour team is here to help.\n\nYour satisfaction is our top priority, and\nwe appreciate your patience as we work\nto resolve any challenges you may have.</string>
@@ -6486,14 +6524,16 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="bot_support_description">🤖 Welcome to our Support Chat! 🌟 \nI\'m a chat bot here to assist you with any issues you might have. We\'re equipped to address your questions, concerns, or troubleshooting needs. Your satisfaction is our priority, and we\'re grateful for your patience as we work to resolve any challenges you encounter. </string>
 	<string name="bot_phoenix_description">I’m AI Chat bot and I can assist you with any tasks you may have. Please don\'t hesitate to ask me anything, as it gives me a great pleasure to make your life easier and more fun.</string>
 	<string name="ello_tips">Ello tips channel</string>
-	<string name="text_prompts">AI chat prompts</string>
-	<string name="image_prompts">AI images prompts</string>
+	<string name="text_prompts">Chat prompts</string>
+	<string name="image_prompts">Image prompts</string>
+	<string name="unlimited_text_prompts">Unlimited chat prompts</string>
+	<string name="unlimited_image_prompts">Unlimited image prompts</string>
 	<string name="ai_prompts_depleted">There are no more free AI prompts available. Purchase individual prompts based on your preferences.</string>
 	<string name="ai_image_prompt">There are no more complimentary Al image prompts available. Please purchase an Al image pack.</string>
 	<string name="ai_text_prompt">There are no more free AI chat prompts available. Purchase individual prompts based on your preferences.</string>
 	<string name="cont_desc_panda_meditating_with_numbers_behind">Panda meditating with numbers behind</string>
 	<string name="incoming_calls_settings">Incoming calls settings</string>
-	<string name="balance_description">By depositing money into a main wallet you can subscribe to subscription channels, enroll in online courses, engage with AI, and access other services.</string>
+	<string name="balance_description">By depositing money into a main wallet you can subscribe to subscription channels, enroll in masterclass, engage with AI, and access other services.</string>
 	<string name="earnings_description">Here is the breakdown of your current earnings balance, that has not yet been distributed. Please note that the final payment amount may differ from the total displayed here. We reserve the right to make adjustments for discrepancies and deductions related to any improper activities. The funds will be converted to your native currency based on the exchange rate provided by your bank.</string>
 	<string name="earnings_wallet_notice">Ello Messenger\'s revenue-sharing model with creators is 70/30. As a channel owner, you will pay a 30% commission when withdrawing your revenues.</string>
 	<string name="business_wallet_notice">All applicable commissions are subtracted from the balance.</string>
@@ -6503,12 +6543,14 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="invite_others_to_chat">Invite others to chat</string>
 	<string name="forgot_password_instruction">If you forgot your password please use \n  &quot;Forgot password&quot; option during log in</string>
 	<string name="msg_invalid_email">You entered an invalid email. Please try again.</string>
+	<string name="msg_email_already_exists">Sorry, this email already exists.</string>
 	<string name="ai_text_pack">AI text pack</string>
 	<string name="ai_image_pack">AI image pack</string>
 	<string name="ai_text">AI Chat</string>
 	<string name="ai_image">AI Images</string>
-	<string name="ai_text_subscription">AI text subscription</string>
-	<string name="ai_image_subscription">AI image subscription</string>
+	<string name="ai_text_subscription">Text subscription</string>
+	<string name="ai_image_subscription">Image subscription</string>
+	<string name="ai_chat_images_subscription">Mixed AI subscription</string>
 	<string name="promote_channel">Promote channel</string>
 	<string name="txt_user_name">Username</string>
 	<string name="txt_user_id">User ID</string>
@@ -6650,10 +6692,10 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="find_recommended_channels">Find recommended channels</string>
 	<string name="insufficient_funds_on_your_account">Insufficient funds on your account</string>
 	<string name="take_prompting_to_the_next_level">AI Space: Your Gateway to Advanced AI bots</string>
-	<string name="ai_empowerment">Discover a world of cutting-edge artificial intelligence at AI Space, your destination for state-of-the-art AI bots. It offers an extensive collection of specialized AI bots, each meticulously crafted to address diverse needs across multiple categories.</string>
+	<string name="ai_empowerment">Discover a world of cutting-edge AI bots at your fingertips, each designed for specific tasks and purposes. Whether you need help with writing, analysis, asking questions, image generations, or anything else, here you will find the AI bot that fits your needs.</string>
 	<string name="ai_chat_prompts_remaining">AI chat prompts</string>
 	<string name="ai_image_prompts_remaining">AI image prompts</string>
-	<string name="buy_ai_pack">Buy AI pack</string>
+	<string name="buy_ai_pack">Select the AI Plan</string>
 	<string name="ai_chat_and_media">AI Chat and Media</string>
 	<string name="ai_phoenix_suns">Phoenix Suns</string>
 	<string name="general_topics_ai_chat_and_image_bot">General topics AI chat and image bot.</string>
@@ -6671,12 +6713,12 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="find_friends">Contacts</string>
 	<string name="search_users_channels_groups">View all your contacts or use the search function to find any user, channel, or group.</string>
 	<string name="create_a_channel_group_or_course">Broadcast</string>
-	<string name="start_channel_group_course">Instantly create channels, online courses and groups.</string>
+	<string name="start_channel_group_course">Instantly create channels, masterclass and groups.</string>
 	<string name="txt_wallet">Ello Pay</string>
 	<string name="description_wallet_currency">All your financial transactions in one secure location.</string>
 	<string name="txt_invite_friends">Earn Instantly</string>
 	<string name="explore_ai">AI Space</string>
-	<string name="invite_for_credits">Invite friends to join and both of you will receive $5 for channel subscriptions, online courses, and engaging with AI.</string>
+	<string name="invite_for_credits">Invite friends to join and both of you will receive $5 for channel subscriptions, masterclass, and engaging with AI.</string>
 	<string name="start_ai_bot_description">Join an exciting world of AI.</string>
 	<string name="txt_fees">Fees</string>
 	<string name="txt_high_fees">You will pay about 50% of your earnings in fees. Ello takes a 30% commission fee, and the remaining portion will cover the Google fee, credit card processing and taxes.</string>
@@ -6686,7 +6728,7 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="ai_cancer_bot_title">Cancer prevention</string>
 	<string name="ai_cancer_bot_description">AI tips for cancer prevention chat bot.</string>
 	<string name="user_is_private">Sorry, this user is private.</string>
-	<string name="ai_buy_text_pictures">AI Images and Chat</string>
+	<string name="ai_buy_text_pictures">AI Chat and Images</string>
 	<string name="ai_buy_text_pictures_request_item">40 Chats 50 Images $$coin$$%.02f</string>
 	<string name="txt_ai_image">AI Image</string>
 	<string name="txt_ai_chat">AI Chat</string>
@@ -6700,26 +6742,189 @@ Your fans will pay you monthly. Subscribers will pay you a fee to access new and
 	<string name="txt_error_empty_message">You cannot save empty message</string>
 	<string name="banned_channel_message">Apologies, but this channel has been blocked due to a violation of Ello Messenger\'s terms of use.</string>
 	<string name="banned_group_message">Apologies, but this group has been blocked due to a violation of Ello Messenger\'s terms of use.</string>
-	<string name="banned_course_message">Apologies, but this online course has been blocked due to a violation of Ello Messenger\'s terms of use.</string>
+	<string name="banned_course_message">Apologies, but this masterclass has been blocked due to a violation of Ello Messenger\'s terms of use.</string>
 	<string name="request_limit_increase">Request limit increase</string>
 	<string name="select_your_email_app">Select your email app</string>
 	<string name="channels_limit_username_prefix">ello.team/%1$s</string>
 	<string name="channels_subscriptions_limit_reached">You have reached the limit of %1$d subscriptions. Try unsubscribing from some channels.</string>
 	<string name="verification_prompt">Please enter the verification code that has been sent to your email. Ensure you also check your spam and junk email folders.</string>
-	<string name="not_now">Now now</string>
-	<string name="confirm_unsubscribe_paid_channel_date">If you confirm and end your subscription now, you can still access it until %s.</string>
+	<string name="not_now">Not now</string>
+	<string name="confirm_unsubscribe_paid_channel_date">Your subscription will remain active until %s. After that, it will not renew.</string>
 	<string name="txt_set_profile_photo">Set Profile Photo</string>
 	<string name="txt_deleted">deleted</string>
 	<string name="system_bots_block_alert">Dear user, you cannot block system bots.</string>
 	<string name="IncomingCallsSystemSetting">Internal calls notifications</string>
-	<string name="verification_code_required_time">You are required to submit the verification code within:</string>
+	<string name="verification_code_required_time">Please wait before requesting another code:</string>
 	<string name="verification_code_expired">It looks like your verification code has expired. Please try again.</string>
 	<string name="system_overloaded">System overloaded!</string>
 	<string name="connection_retries_depleted">We are aware of this issue and are working on it. Please try again later.</string>
 	<string name="quit_app">Quit app</string>
-	<string name="agreement_text">By creating a %1$s, you agree to the terms of the <u>User Agreement</u>.</string>
+	<string name="agreement_text">By creating %1$s, you agree to the terms of the <u>User Agreement</u>.</string>
 	<string name="UserAgreement">User Agreement</string>
 	<string name="recaptcha_verification_failed_title">Verification failed</string>
 	<string name="recaptcha_verification_failed_text">We couldn’t verify you’re human. Please try again.</string>
-	<string name="my_ai_packs">My AI packs</string>
+	<string name="my_ai_packs">My AI Plans</string>
+	<string name="deleted_user">Deleted user</string>
+	<string name="deleted_chat">Deleted chat</string>
+	<string name="buy_pack_or_subscription">Buy Prompts or Unlimited Subscription</string>
+	<string name="unlimited_monthly">Unlimited Monthly</string>
+	<string name="unlimited_prompts">Unlimited prompts</string>
+	<string name="month_unlimited_prompts">/month</string>
+	<string name="pack_for">for</string>
+	<string name="buy_a_pack">Buy a pack</string>
+	<string name="buy_pack_text">Pay $%.2f</string>
+	<string name="buy_unlimited_prompts">Buy unlimited prompts</string>
+	<string name="unlimited_ai_pack_purchase_message">You have purchased an unlimited AI pack of chat prompts</string>
+	<string name="unlimited_ai_pack_image_purchase_message">You have purchased an unlimited AI pack of image prompts</string>
+	<string name="unlimited_ai_pack_mixed_purchase_message">You have purchased an unlimited AI pack of prompts</string>
+	<string name="ai_bot_subscription_days_left">%1$d Days left</string>
+	<string name="popup_insufficient_funds_message">You do not have enough funds in your account to renew your subscription. Please top up your wallet to continue using the service.</string>
+	<string name="renew_subscription">Renew Subscription</string>
+	<string name="subscription_expiration_reminder">We would like to remind you that your subscription expires on %1$s. You can renew it to continue enjoying all the benefits without interruption.</string>
+	<string name="plans_subscription_status">%1$s Pack Active</string>
+	<string name="plans_expires_until">Expires until %1$s</string>
+	<string name="text_pack_active">Pack Active</string>
+	<string name="text_you_have_an_active_subscription">You have an active subscription.</string>
+	<string name="purchase_after_expiry_message">You can purchase a new subscription once the current one expires.</string>
+	<string name="txt_active">Active</string>
+	<string name="secure_and_encrypted">Secure and end-to-end encrypted—your files, always protected.</string>
+	<string name="ai_space_expand_horizons">Unlock new possibilities with built-in AI bots.</string>
+	<string name="channel_monetization">Monetize your content. Get paid for what you create-instantly.</string>
+	<string name="earn_by_sharing">Share your skills. Get paid. It’s that simple.</string>
+	<string name="stay_independent">Help us to stay independent</string>
+	<string name="build_community">Start a movement. Create your community.</string>
+	<string name="channels">Channels are the future, websites are the past.</string>
+	<string name="connect_with_friends">A smarter way to connect, create, and earn.</string>
+	<string name="ello_messenger_cloud_based">• Cloud-based messaging\n• End-to-end encryption for all chats\n• MTProto 2.0 security\n• Open source</string>
+	<string name="ai_space_description">All your favorite AI bots in one place. Chat, create, and get things done—fast and fun with AI Space.</string>
+	<string name="channel_monetization_description">Create. Drop. Earn. From image to video, audio, and posts, turn every story into income.</string>
+	<string name="masterclass_description">Turn your skills into income. Share what you know—and get rewarded.</string>
+	<string name="support_ello_description">Help keep Ello independent and secure! Subscribe to our channel and join our community of privacy-conscious users - you\'ll even get a cool star badge by your name! Your support helps us stay true to our mission: building a fully encrypted, truly secure platform that puts your privacy first. No compromises, no third parties - just cutting-edge AI tech, ironclad security, and lightning-fast performance. Be part of something bigger - support independent tech that respects your privacy.</string>
+	<string name="groups_description">• Host up to 100,000 members\n• Public and Private\n• Admin permissions\n• Free and seamless on all devices</string>
+	<string name="ai_space_brings_together_description">Ello channels provide a fast, simple, and free communication platform accessible worldwide on any mobile device. Channels can be:\n• Public and open to everyone\n• Private with invitation-only access\n• Subscription-based to generate revenue through monthly payments\nEach channel has its own unique URL that can be shared anywhere.</string>
+	<string name="connect_share_groups_description">To connect, type a username in the search bar. Tap the right match to start chatting or add them to your contacts.</string>
+    <string name="cont_desc_ai_bot_logo">AI bot logo</string>
+    <string name="youtube">YouTube</string>
+	<string name="tiktok_social_media_reimagined">TikTok and social media, reimagined.</string>
+	<string name="tiktok_and_social_media_alternative">An alternative to Telegram, WhatsApp, TikTok, and other social platforms — Ello unites video, music, AI, and more, empowering direct creator-to-fan connections with built-in monetization tools.</string>
+	<string name="monetization_for_tiktok_influencers">Turn your content into real income.</string>
+    <string name="tiktok_creators_and_influencers">Creators, break free. Ello gives you unlimited earnings, easy payouts, and real fan connections—without platform restrictions.</string>
+	<string name="individual_prompts">Individual Prompts</string>
+	<string name="meet_ello">Meet Ello, secure AI-messenger built for privacy and monetization.</string>
+	<string name="go_to_settings">Go to settings</string>
+	<string name="search_hint">Users, chats, groups, channels and more.</string>
+	<string-array name="public_reg_tags">
+		<item>Great for public users</item>
+		<item>No phone number</item>
+		<item>Can be contacted by anyone</item>
+		<item>Easy to find</item>
+		<item>Encrypted by default</item>
+		<item>Monetization and AI bots</item>
+	</string-array>
+	<string-array name="private_reg_tags">
+		<item>Encrypted by default</item>
+		<item>Monetization and AI bots</item>
+		<item>No annoying chats and calls</item>
+		<item>No solicitations</item>
+		<item>Maximum privacy and anonymity</item>
+		<item>Chat by invitation only</item>
+	</string-array>
+	<string name="public_account_description">A public account lets anyone find you through a username in the search and contact you. You may receive unsolicited messages or other offers that you find annoying.</string>
+	<string name="private_account_description">A private account only allows people you\'ve added as contacts to see your profile and contact you, essentially hiding your profile from the general public search.</string>
+	<string name="support_our_mission">Support our mission</string>
+	<string name="we_believe_secure_communication">We believe everyone deserves secure, private communication — free from surveillance or tracking.</string>
+	<string name="contribute_text">
+    <b>By joining Ello Plus, you help us:\n\n</b><br/>
+        · Keep Ello free and open to all\n<br/>
+		· Maintain our self-funded, secure infrastructure\n<br/>
+        · Develop new privacy and encryption features\n<br/>
+</string>
+	<string name="donate_as_a_thank_you">As a thank you, you\'ll get a ❤️ next to your name — a symbol of your support for privacy and freedom of communication.</string>
+	<string name="ways_to_give">Ways to Give</string>
+	<string name="as_an_independent_company_we_need_your_support">As an independent company we need your support.</string>
+	<string name="membership">Membership</string>
+	<string name="will_include_special_features_soon">Will include special features soon.</string>
+	<string name="most_popular">Most Popular</string>
+	<string name="donate">Donate</string>
+	<string name="every_contribution">Every contribution, no matter the size, helps protect private conversations for users worldwide.</string>
+	<string-array name="donation_amounts">
+		<item>$1</item>
+		<item>$5</item>
+		<item>$10</item>
+		<item>$25</item>
+		<item>$50</item>
+	</string-array>
+	<string name="subscription_renewal_notice">Ello Plus renews automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel your subscription anytime through the Google Play Store.\n\nYour Google account will be charged at the time of purchase. Any unused promotional offers may be forfeited upon upgrading.</string>
+	<string name="subscription_cost_notice">Subscription cost after the trial period – $%1$s. Trial period (if available) is provided once.</string>
+	<string name="subscription_plan_price">$%d / year</string>
+	<string name="thank_you">Thank you!</string>
+	<string name="your_help_means_so_much_to_us">Your help means so much to us!</string>
+	<string name="cancel_donate_subscription_info">You can cancel your subscription in your profile under "Group &amp; Channels" in the "My Paid Subscriptions" section.</string>
+	<string name="error_passwords_do_not_match">Passwords do not match.</string>
+	<string name="quick_links_support_description">Ask a question, report a bug, or suggest an idea.</string>
+	<string name="tips">Tips</string>
+	<string name="quick_links_tips_description">Elevate your Ello experience with proven tips and tricks for channels, groups or AI bot</string>
+	<string name="restore_purchases_title">What does \"Restore Purchases\" mean?</string>
+	<string name="restore_purchases_description">If you’ve already paid for a subscription or content using this account, we’ll restore access — at no extra cost. You won’t be charged again or start a new subscription.</string>
+	<string name="no_purchases_found">No Purchases Found</string>
+	<string name="no_active_purchases_description">No active purchases or subscriptions were found for this account. Please make sure you\'re using the correct account.</string>
+	<string name="got_it">Got it</string>
+	<string name="try_again">Try Again</string>
+	<string name="purchases_restored">Purchases Restored</string>
+	<string name="purchases_restored_description">Your subscriptions and purchases have been successfully restored. Thank you for staying with us!</string>
+	<string name="restore_failed_title">Restore Failed</string>
+	<string name="restore_failed_description">We couldn’t restore your purchases. Please try again later or check your internet connection.</string>
+	<string name="restore_purchases">Restore Purchases</string>
+	<string name="cancel_membership_subscription_title">Cancel Subscription</string>
+	<string name="cancel_google_subscription_description">You subscribed via Google Play. To cancel your subscription, go to Google Play → Profile → Payments &amp; Subscriptions → Subscriptions and cancel it there.</string>
+	<string name="cancel_subscription_ios_description">Your subscription was made through iOS (App Store). To cancel it, open an Apple device, go to Settings → Apple ID → Subscriptions and cancel it there.</string>
+	<string name="renew_subscription_google_title">Renew Your Subscription via Google Play</string>
+	<string name="renew_subscription_google_message">To keep your subscription active, simply renew it through your Google Play Billing.</string>
+	<string name="renew_subscription_apple_title">Renew Your Subscription via the App Store</string>
+	<string name="renew_subscription_apple_message">To keep your subscription active, simply renew it through your Apple In‑App Purchase.</string>
+	<string name="join_ello_plus">Join Ello Plus</string>
+	<string name="ello_plus_subscription">Ello Plus Subscription</string>
+	<string name="txt_ai_bots">AI BOTS</string>
+	<string name="create_account">Create Account</string>
+	<string name="sign_in">Sign in</string>
+	<string name="secure_login_on_the_way">Your secure login is on the way!</string>
+	<string name="check_spam_folder">If it doesn’t show up soon, take a peek in your spam or junk folder — just in case.</string>
+	<string name="email_verification_notice">We use your email to verify you\'re not a bot. Your data stays private — no spam, ever.</string>
+	<string name="create_username">Create a Username</string>
+	<string name="username_is_how_others_can_find_message_you"><![CDATA[Username is how others can find & message you.]]></string>
+	<string name="great_for_everyday_use">Great for everyday use</string>
+	<string name="for_your_brand_or_company_presence">For your brand or company presence</string>
+	<string name="anyone_can_find_and_connect">Anyone can find and connect</string>
+	<string name="stay_completely_anonymous">Stay completely anonymous</string>
+	<string name="select_your_privacy">Select your privacy</string>
+	<string name="choose_your_account">Choose your account</string>
+	<string name="or">or</string>
+	<string name="link_verification_failed">Something went wrong while verifying your link. Request a new one or contact us.</string>
+	<string name="email_already_in_use">This e-mail is already in use.</string>
+	<string name="share_invite_title">Share link or QR code to invite others</string>
+	<string name="copy_invite_link">Copy invite link</string>
+	<string name="share_invite_link">Share invite link</string>
+	<string name="monthly_subscription_description">Set the price you want each subscriber to pay you monthly.</string>
+	<string name="topup_wallet_taxes">Price included any applicable taxes</string>
+	<string name="will_be_charged">will be charged</string>
+	<string name="invite_friends_description">Share the link or QR code to invite friends to join Ello and start chatting with you.</string>
+	<string name="discover_channels">Discover channels</string>
+	<string name="tap_settings_to_invite_friends">Tap Settings to invite friends</string>
+	<string name="private_account_invites">Private Account Invites</string>
+	<string name="invite_trusted_people">Invite trusted people to connect with you.</string>
+	<string name="email_already_sent">A confirmation email has already been sent. Please check your mail.</string>
+	<string name="email_already_use">This email is reserved and cannot be used.</string>
+	<string name="error_not_account_email">The provided email address does not match your account.</string>
+	<string name="email_in_use_by_another_account">This email is already in use by another account.</string>
+	<string name="magic_link_not_exist_for_auth">No magic link found for the provided authentication data.</string>
+	<string name="magic_link_internal_err">An internal error occurred while accessing the database.</string>
+	<string name="magic_link_invalid_hash">The provided magic link is invalid or does not match.</string>
+	<string name="magic_link_expired">The magic link has expired. It is only valid for 15 minutes.</string>
+	<string name="input_user_deactivated">This user account has been deactivated and cannot perform this action.</string>
+	<string name="account_deletion_check_inbox">Check your inbox to complete account deletion.</string>
+	<string name="account_deletion_email_sent">We’ve sent a confirmation link to your email address. Please open the message and click the link to complete the deletion process. If you don’t see the email, check your spam or junk folder.</string>
+	<string name="child_protection_description">Strongly advised for children for maximum protection from unwanted interactions — username won’t appear in search and only approved contacts can chat</string>
+	<string name="email_app_not_found">Email application not found</string>
+	<string name="show_as_list">Show as list</string>
+	<string name="show_in_chat">Show in chat</string>
 </resources>

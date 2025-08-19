@@ -4,12 +4,15 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.text.Layout
 import android.text.StaticLayout
@@ -17,12 +20,15 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.ColorRes
 import androidx.collection.LongSparseArray
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withTranslation
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.BuildConfig
 import org.telegram.messenger.R
-import org.telegram.tgnet.TLRPC.BotInfo
+import org.telegram.tgnet.TLRPC.TLBotInfo
 import org.telegram.ui.ActionBar.MenuDrawable
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
@@ -108,6 +114,10 @@ class BotCommandsMenuView(context: Context) : View(context) {
 		contentDescription = context.getString(R.string.AccDescrBotMenu)
 	}
 
+	fun setMenuBackgroundColor(@ColorRes id: Int) {
+		paint.color = ResourcesCompat.getColor(resources, id, null)
+	}
+
 	override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
 		val size = MeasureSpec.getSize(widthMeasureSpec) + MeasureSpec.getSize(heightMeasureSpec) shl 16
 
@@ -191,32 +201,20 @@ class BotCommandsMenuView(context: Context) : View(context) {
 				}
 			}
 			else {
-				canvas.save()
-				canvas.translate(AndroidUtilities.dp(8f).toFloat(), AndroidUtilities.dp(4f).toFloat())
-				backDrawable.draw(canvas)
-				canvas.restore()
+				canvas.withTranslation(AndroidUtilities.dp(8f).toFloat(), AndroidUtilities.dp(4f).toFloat()) {
+					backDrawable.draw(this)
+				}
 			}
 
 			if (expandProgress > 0) {
-				canvas.save()
-				canvas.translate(AndroidUtilities.dp(34f).toFloat(), (measuredHeight - menuTextLayout.height) / 2f)
-
-				menuTextLayout.draw(canvas)
-
-				canvas.restore()
+				canvas.withTranslation(AndroidUtilities.dp(34f).toFloat(), (measuredHeight - menuTextLayout.height) / 2f) {
+					menuTextLayout.draw(this)
+				}
 			}
-
-//			if (update) {
-//				onTranslationChanged((menuTextLayout.width + AndroidUtilities.dp(4f)) * expandProgress)
-//			}
 		}
 
 		super.dispatchDraw(canvas)
 	}
-
-//	protected fun onTranslationChanged(translationX: Float) {
-//		// TODO: maybe remove this?
-//	}
 
 	fun setMenuText(menuText: String?): Boolean {
 		@Suppress("NAME_SHADOWING") val menuText = menuText ?: context.getString(R.string.BotsMenuTitle)
@@ -269,7 +267,7 @@ class BotCommandsMenuView(context: Context) : View(context) {
 			return newResult.size
 		}
 
-		fun setBotInfo(botInfo: LongSparseArray<BotInfo>) {
+		fun setBotInfo(botInfo: LongSparseArray<TLBotInfo>) {
 			newResult.clear()
 			newResultHelp.clear()
 
@@ -279,9 +277,9 @@ class BotCommandsMenuView(context: Context) : View(context) {
 				for (a in info.commands.indices) {
 					val botCommand = info.commands[a]
 
-					if (botCommand?.command != null) {
+					if (botCommand.command != null) {
 						newResult.add("/" + botCommand.command)
-						newResultHelp.add(botCommand.description)
+						newResultHelp.add(botCommand.description ?: "")
 					}
 				}
 			}

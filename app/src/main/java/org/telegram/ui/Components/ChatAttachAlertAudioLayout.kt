@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -29,6 +29,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.util.isEmpty
+import androidx.core.util.size
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
@@ -46,12 +48,7 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAudio
-import org.telegram.tgnet.TLRPC.TL_documentAttributeFilename
-import org.telegram.tgnet.tlrpc.TL_message
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_peerUser
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.SharedAudioCell
@@ -433,7 +430,7 @@ class ChatAttachAlertAudioLayout(alert: ChatAttachAlert, context: Context) : Att
 						val messageObject = view.message
 
 						if (messageObject != null) {
-							view.updateButtonState(false, true)
+							view.updateButtonState(ifSame = false, animated = true)
 						}
 					}
 				}
@@ -455,7 +452,7 @@ class ChatAttachAlertAudioLayout(alert: ChatAttachAlert, context: Context) : Att
 						val messageObject1 = view.message
 
 						if (messageObject1 != null) {
-							view.updateButtonState(false, true)
+							view.updateButtonState(ifSame = false, animated = true)
 						}
 					}
 				}
@@ -477,18 +474,18 @@ class ChatAttachAlertAudioLayout(alert: ChatAttachAlert, context: Context) : Att
 		val add = if (selectedAudios.indexOfKey(audioEntry.id) >= 0) {
 			selectedAudios.remove(audioEntry.id)
 			selectedAudiosOrder.remove(audioEntry)
-			view.setChecked(false, true)
+			view.setChecked(checked = false, animated = true)
 			false
 		}
 		else {
-			if (maxSelectedFiles >= 0 && selectedAudios.size() >= maxSelectedFiles) {
+			if (maxSelectedFiles >= 0 && selectedAudios.size >= maxSelectedFiles) {
 				showErrorBox(LocaleController.formatString("PassportUploadMaxReached", R.string.PassportUploadMaxReached, LocaleController.formatPluralString("Files", maxSelectedFiles)))
 				return
 			}
 
 			selectedAudios.put(audioEntry.id, audioEntry)
 			selectedAudiosOrder.add(audioEntry)
-			view.setChecked(true, true)
+			view.setChecked(checked = true, animated = true)
 			true
 		}
 
@@ -496,10 +493,10 @@ class ChatAttachAlertAudioLayout(alert: ChatAttachAlert, context: Context) : Att
 	}
 
 	override val selectedItemsCount: Int
-		get() = selectedAudios.size()
+		get() = selectedAudios.size
 
 	override fun sendSelectedItems(notify: Boolean, scheduleDate: Int) {
-		if (selectedAudios.size() == 0 || delegate == null || sendPressed) {
+		if (selectedAudios.isEmpty() || delegate == null || sendPressed) {
 			return
 		}
 
@@ -540,45 +537,51 @@ class ChatAttachAlertAudioLayout(alert: ChatAttachAlert, context: Context) : Att
 
 						val file = File(audioEntry.path)
 
-						val message = TL_message()
+						val message = TLRPC.TLMessage()
 						message.out = true
 						message.id = id
-						message.peer_id = TL_peerUser()
-						message.from_id = TL_peerUser()
-						message.from_id?.user_id = UserConfig.getInstance(parentAlert.currentAccount).getClientUserId()
-						message.peer_id?.user_id = message.from_id!!.user_id
+						message.peerId = TLRPC.TLPeerUser()
+						message.fromId = TLRPC.TLPeerUser()
+						message.fromId?.userId = UserConfig.getInstance(parentAlert.currentAccount).getClientUserId()
+						message.peerId?.userId = message.fromId!!.userId
 						message.date = (System.currentTimeMillis() / 1000).toInt()
 						message.message = ""
 						message.attachPath = audioEntry.path
-						message.media = TL_messageMediaDocument()
-						message.media?.flags = message.media!!.flags or 3
-						message.media?.document = TL_document()
+
+						val media = TLRPC.TLMessageMediaDocument()
+						val document = TLRPC.TLDocument()
+
+						message.media = media.also {
+							it.flags = it.flags or 3
+							it.document = document
+						}
+
 						message.flags = message.flags or (TLRPC.MESSAGE_FLAG_HAS_MEDIA or TLRPC.MESSAGE_FLAG_HAS_FROM_ID)
 
 						val ext = FileLoader.getFileExtension(file)
 
-						message.media?.document?.id = 0
-						message.media?.document?.access_hash = 0
-						message.media?.document?.file_reference = ByteArray(0)
-						message.media?.document?.date = message.date
-						message.media?.document?.mime_type = "audio/" + ext.ifEmpty { "mp3" }
-						message.media?.document?.size = file.length().toInt().toLong()
-						message.media?.document?.dc_id = 0
+						document.id = 0
+						document.accessHash = 0
+						document.fileReference = ByteArray(0)
+						document.date = message.date
+						document.mimeType = "audio/" + ext.ifEmpty { "mp3" }
+						document.size = file.length().toInt().toLong()
+						document.dcId = 0
 
-						val attributeAudio = TL_documentAttributeAudio()
+						val attributeAudio = TLRPC.TLDocumentAttributeAudio()
 						attributeAudio.duration = audioEntry.duration
 						attributeAudio.title = audioEntry.title
 						attributeAudio.performer = audioEntry.author
 						attributeAudio.flags = attributeAudio.flags or 3
 
-						message.media?.document?.attributes?.add(attributeAudio)
+						document.attributes.add(attributeAudio)
 
-						val fileName = TL_documentAttributeFilename()
-						fileName.file_name = file.name
+						val fileName = TLRPC.TLDocumentAttributeFilename()
+						fileName.fileName = file.name
 
-						message.media?.document?.attributes?.add(fileName)
+						document.attributes.add(fileName)
 
-						audioEntry.messageObject = MessageObject(parentAlert.currentAccount, message, false, true)
+						audioEntry.messageObject = MessageObject(parentAlert.currentAccount, message, generateLayout = false, checkMediaExists = true)
 
 						newAudioEntries.add(audioEntry)
 

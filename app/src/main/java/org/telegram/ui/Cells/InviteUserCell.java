@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -58,7 +58,7 @@ public class InviteUserCell extends FrameLayout {
 
 		if (needCheck) {
 			checkBox = new CheckBox2(context, 21);
-			checkBox.setColor(0, context.getColor(R.color.background), context.getColor(R.color.brand));
+			checkBox.setColor(0, context.getColor(R.color.background), context.getColor(R.color.white));
 			checkBox.setDrawUnchecked(false);
 			checkBox.setDrawBackgroundAsArc(3);
 			addView(checkBox, LayoutHelper.createFrame(24, 24, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 0 : 40, 40, LocaleController.isRTL ? 39 : 0, 0));

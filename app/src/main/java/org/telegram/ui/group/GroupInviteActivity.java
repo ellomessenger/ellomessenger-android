@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.group;
 
@@ -23,6 +23,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -43,7 +44,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
 	private ListAdapter listAdapter;
 	private final long chatId;
 	private boolean loading;
-	private TLRPC.TL_chatInviteExported invite;
+	private TLRPC.ExportedChatInvite invite;
 	private int linkRow;
 	private int linkInfoRow;
 	private int copyLinkRow;
@@ -126,7 +127,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
 				}
 				try {
 					android.content.ClipboardManager clipboard = (android.content.ClipboardManager)ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-					android.content.ClipData clip = android.content.ClipData.newPlainText("label", invite.link);
+					android.content.ClipData clip = android.content.ClipData.newPlainText("label", TLRPCExtensions.getLink(invite));
 					clipboard.setPrimaryClip(clip);
 					BulletinFactory.createCopyLinkBulletin(this).show();
 				}
@@ -141,7 +142,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
 				try {
 					Intent intent = new Intent(Intent.ACTION_SEND);
 					intent.setType("text/plain");
-					intent.putExtra(Intent.EXTRA_TEXT, invite.link);
+					intent.putExtra(Intent.EXTRA_TEXT, TLRPCExtensions.getLink(invite));
 					getParentActivity().startActivityForResult(Intent.createChooser(intent, context.getString(R.string.InviteToGroupByLink)), 500);
 				}
 				catch (Exception e) {
@@ -191,11 +192,11 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
 
 	private void generateLink(final boolean newRequest) {
 		loading = true;
-		TLRPC.TL_messages_exportChatInvite req = new TLRPC.TL_messages_exportChatInvite();
+		var req = new TLRPC.TLMessagesExportChatInvite();
 		req.peer = getMessagesController().getInputPeer(-chatId);
 		final int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 			if (error == null) {
-				invite = (TLRPC.TL_chatInviteExported)response;
+				invite = (TLRPC.TLChatInviteExported)response;
 				if (newRequest) {
 					if (getParentActivity() == null) {
 						return;
@@ -291,7 +292,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
 					break;
 				case 2:
 					TextBlockCell textBlockCell = (TextBlockCell)holder.itemView;
-					textBlockCell.setText(invite != null ? invite.link : "error", false);
+					textBlockCell.setText(invite != null ? TLRPCExtensions.getLink(invite) : "error", false);
 					break;
 			}
 		}

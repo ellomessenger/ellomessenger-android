@@ -4,8 +4,9 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Mykhailo Mykytyn, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
+ * Copyright Shamil Afandiyev, Ello 2025.
  */
 package org.telegram.ui.Components
 
@@ -19,7 +20,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.drawable.ColorDrawable
 import android.text.SpannableStringBuilder
 import android.text.TextUtils
 import android.util.TypedValue
@@ -37,6 +37,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.withSave
 import com.google.android.material.shape.CornerFamily
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.ShapeAppearanceModel
@@ -48,7 +50,10 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.importers
+import org.telegram.tgnet.link
+import org.telegram.tgnet.usage
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
 import org.telegram.ui.ActionBar.ActionBarPopupWindow.ActionBarPopupWindowLayout
@@ -293,19 +298,17 @@ class LinkActionView(context: Context, private val fragment: BaseFragment, botto
 
 						getPointOnScreen(frameLayout, finalContainer, point)
 
-						canvas.save()
+						canvas.withSave {
+							val clipTop = (frameLayout.parent as View).y + frameLayout.y
 
-						val clipTop = (frameLayout.parent as View).y + frameLayout.y
+							if (clipTop < 1) {
+								clipRect(0f, point[1] - clipTop + 1, measuredWidth.toFloat(), measuredHeight.toFloat())
+							}
 
-						if (clipTop < 1) {
-							canvas.clipRect(0f, point[1] - clipTop + 1, measuredWidth.toFloat(), measuredHeight.toFloat())
+							translate(point[0], point[1])
+
+							frameLayout.draw(this)
 						}
-
-						canvas.translate(point[0], point[1])
-
-						frameLayout.draw(canvas)
-
-						canvas.restore()
 					}
 				}
 
@@ -343,7 +346,7 @@ class LinkActionView(context: Context, private val fragment: BaseFragment, botto
 
 				actionBarPopupWindow?.isOutsideTouchable = true
 				actionBarPopupWindow?.isFocusable = true
-				actionBarPopupWindow?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+				actionBarPopupWindow?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
 				actionBarPopupWindow?.animationStyle = R.style.PopupContextAnimation
 				actionBarPopupWindow?.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
 				actionBarPopupWindow?.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
@@ -442,24 +445,22 @@ class LinkActionView(context: Context, private val fragment: BaseFragment, botto
 	}
 
 	private inner class AvatarsContainer(context: Context) : FrameLayout(context) {
-		var countTextView: TextView
-		var avatarsImageView: AvatarsImageView
+		val countTextView = TextView(context)
+
+		val avatarsImageView = object : AvatarsImageView(context, false) {
+			override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+				val n = min(3, usersCount)
+				val x = if (n == 0) 0 else 20 * (n - 1) + 24 + (if (usersCount >= 3) 8 else if(usersCount == 1) 46 else 32)
+				super.onMeasure(MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(x.toFloat()), MeasureSpec.EXACTLY), heightMeasureSpec)
+			}
+		}
 
 		init {
-			avatarsImageView = object : AvatarsImageView(context, false) {
-				override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-					val n = min(3, usersCount)
-					val x = if (n == 0) 0 else 20 * (n - 1) + 24 + 8
-					super.onMeasure(MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(x.toFloat()), MeasureSpec.EXACTLY), heightMeasureSpec)
-				}
-			}
-
 			val linearLayout = LinearLayout(context)
 			linearLayout.orientation = HORIZONTAL
 
 			addView(linearLayout, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.CENTER_HORIZONTAL))
 
-			countTextView = TextView(context)
 			countTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f)
 			countTextView.typeface = Theme.TYPEFACE_BOLD
 
@@ -487,7 +488,7 @@ class LinkActionView(context: Context, private val fragment: BaseFragment, botto
 		builder.show()
 	}
 
-	fun setUsers(usersCount: Int, importers: ArrayList<User>?) {
+	fun setUsers(usersCount: Int, importers: List<User>?) {
 		this.usersCount = usersCount
 
 		if (usersCount == 0) {
@@ -516,7 +517,7 @@ class LinkActionView(context: Context, private val fragment: BaseFragment, botto
 		}
 	}
 
-	fun loadUsers(invite: TLRPC.TL_chatInviteExported?, chatId: Long) {
+	fun loadUsers(invite: TLRPC.ExportedChatInvite?, chatId: Long) {
 		if (invite == null) {
 			setUsers(0, null)
 			return
@@ -525,10 +526,10 @@ class LinkActionView(context: Context, private val fragment: BaseFragment, botto
 		setUsers(invite.usage, invite.importers)
 
 		if (invite.usage > 0 && invite.importers == null && !loadingImporters) {
-			val req = TLRPC.TL_messages_getChatInviteImporters()
+			val req = TLRPC.TLMessagesGetChatInviteImporters()
 			req.link = invite.link
 			req.peer = MessagesController.getInstance(UserConfig.selectedAccount).getInputPeer(-chatId)
-			req.offset_user = TLRPC.TL_inputUserEmpty()
+			req.offsetUser = TLRPC.TLInputUserEmpty()
 			req.limit = min(invite.usage, 3)
 
 			loadingImporters = true
@@ -538,16 +539,16 @@ class LinkActionView(context: Context, private val fragment: BaseFragment, botto
 					loadingImporters = false
 
 					if (error == null) {
-						val inviteImporters = response as TLRPC.TL_messages_chatInviteImporters
+						val inviteImporters = response as TLRPC.TLMessagesChatInviteImporters
 
 						if (invite.importers == null) {
 							invite.importers = ArrayList(3)
 						}
 
-						invite.importers.clear()
+						invite.importers?.clear()
 
 						for (i in inviteImporters.users.indices) {
-							invite.importers.addAll(inviteImporters.users)
+							invite.importers?.addAll(inviteImporters.users)
 						}
 
 						setUsers(invite.usage, invite.importers)

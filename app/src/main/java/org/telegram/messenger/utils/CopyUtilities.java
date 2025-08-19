@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger.utils;
 
@@ -22,14 +22,7 @@ import android.text.style.UnderlineSpan;
 
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MediaDataController;
-import org.telegram.tgnet.tlrpc.MessageEntity;
-import org.telegram.tgnet.tlrpc.TL_messageEntityBold;
-import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji;
-import org.telegram.tgnet.tlrpc.TL_messageEntityItalic;
-import org.telegram.tgnet.tlrpc.TL_messageEntityPre;
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler;
-import org.telegram.tgnet.tlrpc.TL_messageEntityStrike;
-import org.telegram.tgnet.tlrpc.TL_messageEntityUnderline;
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AnimatedEmojiSpan;
 import org.telegram.ui.Components.TypefaceSpan;
 import org.telegram.ui.Components.URLSpanReplacement;
@@ -67,7 +60,7 @@ public class CopyUtilities {
 		}
 
 		Object[] spans = spanned.getSpans(0, spanned.length(), Object.class);
-		ArrayList<MessageEntity> entities = new ArrayList<>(spans.length);
+		ArrayList<TLRPC.MessageEntity> entities = new ArrayList<>(spans.length);
 
 		for (Object span : spans) {
 			int start = spanned.getSpanStart(span);
@@ -77,47 +70,43 @@ public class CopyUtilities {
 				int style = ((StyleSpan)span).getStyle();
 
 				if ((style & Typeface.BOLD) > 0) {
-					entities.add(setEntityStartEnd(new TL_messageEntityBold(), start, end));
+					entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityBold(), start, end));
 				}
 
 				if ((style & Typeface.ITALIC) > 0) {
-					entities.add(setEntityStartEnd(new TL_messageEntityItalic(), start, end));
+					entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityItalic(), start, end));
 				}
 			}
-			else if (span instanceof TypefaceSpan) {
-				TypefaceSpan typefaceSpan = (TypefaceSpan)span;
-
+			else if (span instanceof TypefaceSpan typefaceSpan) {
 				if (typefaceSpan.isBold()) {
-					entities.add(setEntityStartEnd(new TL_messageEntityBold(), start, end));
+					entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityBold(), start, end));
 				}
 
 				if (typefaceSpan.isItalic()) {
-					entities.add(setEntityStartEnd(new TL_messageEntityItalic(), start, end));
+					entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityItalic(), start, end));
 				}
 
 				if (typefaceSpan.isMono()) {
-					entities.add(setEntityStartEnd(new TL_messageEntityPre(), start, end));
+					entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityPre(), start, end));
 				}
 			}
 			else if (span instanceof UnderlineSpan) {
-				entities.add(setEntityStartEnd(new TL_messageEntityUnderline(), start, end));
+				entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityUnderline(), start, end));
 			}
 			else if (span instanceof StrikethroughSpan) {
-				entities.add(setEntityStartEnd(new TL_messageEntityStrike(), start, end));
+				entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityStrike(), start, end));
 			}
-			else if (span instanceof ParsedSpan) {
-				ParsedSpan parsedSpan = (ParsedSpan)span;
+			else if (span instanceof ParsedSpan parsedSpan) {
 				if (parsedSpan.type == TYPE_SPOILER) {
-					entities.add(setEntityStartEnd(new TL_messageEntitySpoiler(), start, end));
+					entities.add(setEntityStartEnd(new TLRPC.TLMessageEntitySpoiler(), start, end));
 				}
 				else if (parsedSpan.type == TYPE_MONO) {
-					entities.add(setEntityStartEnd(new TL_messageEntityPre(), start, end));
+					entities.add(setEntityStartEnd(new TLRPC.TLMessageEntityPre(), start, end));
 				}
 			}
 			else if (span instanceof AnimatedEmojiSpan) {
-				TL_messageEntityCustomEmoji entity = new TL_messageEntityCustomEmoji();
+				var entity = new TLRPC.TLMessageEntityCustomEmoji();
 				entity.documentId = ((AnimatedEmojiSpan)span).documentId;
-				entity.document = ((AnimatedEmojiSpan)span).document;
 				entities.add(setEntityStartEnd(entity, start, end));
 			}
 		}
@@ -146,7 +135,7 @@ public class CopyUtilities {
 		return spannable;
 	}
 
-	private static MessageEntity setEntityStartEnd(MessageEntity entity, int spanStart, int spanEnd) {
+	private static TLRPC.MessageEntity setEntityStartEnd(TLRPC.MessageEntity entity, int spanStart, int spanEnd) {
 		entity.offset = spanStart;
 		entity.length = spanEnd - spanStart;
 		return entity;

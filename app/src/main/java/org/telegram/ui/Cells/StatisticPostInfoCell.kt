@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -26,6 +26,7 @@ import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
 import org.telegram.messenger.utils.gone
 import org.telegram.tgnet.TLRPC.ChatFull
+import org.telegram.tgnet.sizes
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedEmojiDrawable
 import org.telegram.ui.Components.AnimatedEmojiSpan
@@ -129,8 +130,8 @@ open class StatisticPostInfoCell(context: Context, private val chat: ChatFull) :
 			imageView.setImage(ImageLocation.getForObject(size, messageObject.photoThumbsObject), "50_50", ImageLocation.getForObject(thumbSize, messageObject.photoThumbsObject), "b1", 0, messageObject)
 			imageView.setRoundRadius(AndroidUtilities.dp(4f))
 		}
-		else if (chat.chat_photo.sizes.size > 0) {
-			imageView.setImage(ImageLocation.getForPhoto(chat.chat_photo.sizes[0], chat.chat_photo), "50_50", null, null, chat)
+		else if ((chat.chatPhoto?.sizes?.size ?: 0) > 0) {
+			imageView.setImage(ImageLocation.getForPhoto(chat.chatPhoto?.sizes?.firstOrNull(), chat.chatPhoto), "50_50", null, null, chat)
 			imageView.setRoundRadius(AndroidUtilities.dp(46f) shr 1)
 		}
 
@@ -151,7 +152,7 @@ open class StatisticPostInfoCell(context: Context, private val chat: ChatFull) :
 		avatarDrawable.setInfo(memberData.user)
 		imageView.setForUserOrChat(memberData.user, avatarDrawable)
 		imageView.setRoundRadius(AndroidUtilities.dp(46f) shr 1)
-		message.text = memberData.user?.first_name
+		message.text = memberData.user?.firstName
 		date.text = memberData.description
 		views.gone()
 		shares.gone()

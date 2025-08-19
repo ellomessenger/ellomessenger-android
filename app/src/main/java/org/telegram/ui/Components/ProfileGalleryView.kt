@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -40,8 +40,8 @@ import org.telegram.messenger.UserConfig
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_photoEmpty
-import org.telegram.tgnet.TLRPC.TL_photoStrippedSize
+import org.telegram.tgnet.dcId
+import org.telegram.tgnet.videoSizes
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.PinchToZoomHelper
 import kotlin.math.abs
@@ -455,12 +455,12 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 	fun setChatInfo(chatFull: ChatFull?) {
 		chatInfo = chatFull
 
-		if (photos.isNotEmpty() && photos.firstOrNull() == null && chatInfo != null && FileLoader.isSamePhoto(imagesLocations.firstOrNull()?.location, chatInfo?.chat_photo)) {
-			photos[0] = chatInfo?.chat_photo
+		if (photos.isNotEmpty() && photos.firstOrNull() == null && chatInfo != null && FileLoader.isSamePhoto(imagesLocations.firstOrNull()?.location, chatInfo?.chatPhoto)) {
+			photos[0] = chatInfo?.chatPhoto
 
-			if (!chatInfo?.chat_photo?.video_sizes.isNullOrEmpty()) {
-				val videoSize = chatInfo?.chat_photo?.video_sizes?.firstOrNull()
-				videoLocations[0] = ImageLocation.getForPhoto(videoSize, chatInfo?.chat_photo)
+			if (!chatInfo?.chatPhoto?.videoSizes.isNullOrEmpty()) {
+				val videoSize = chatInfo?.chatPhoto?.videoSizes?.firstOrNull()
+				videoLocations[0] = ImageLocation.getForPhoto(videoSize, chatInfo?.chatPhoto)
 				videoFileNames[0] = FileLoader.getAttachFileName(videoSize)
 				callback?.onPhotosLoaded()
 			}
@@ -480,7 +480,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 			return false
 		}
 
-		if (prevImageLocation == null || prevImageLocation?.location?.local_id != imageLocation.location?.local_id) {
+		if (prevImageLocation == null || prevImageLocation?.location?.localId != imageLocation.location?.localId) {
 			if (imagesLocations.isNotEmpty()) {
 				prevImageLocation = imageLocation
 
@@ -622,7 +622,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 					continue
 				}
 
-				if (loc.dcId == thumbLocation.dcId && loc.location?.local_id == thumbLocation.location?.local_id && loc.location?.volume_id == thumbLocation.location?.volume_id || loc.dcId == imageLocation.dcId && loc.location?.local_id == imageLocation.location?.local_id && loc.location?.volume_id == imageLocation.location?.volume_id) {
+				if (loc.dcId == thumbLocation.dcId && loc.location?.localId == thumbLocation.location?.localId && loc.location?.volumeId == thumbLocation.location?.volumeId || loc.dcId == imageLocation.dcId && loc.location?.localId == imageLocation.location?.localId && loc.location?.volumeId == imageLocation.location?.volumeId) {
 					return videoLocations[a]
 				}
 
@@ -804,12 +804,12 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 							thumbsLocations.add(ImageLocation.getForUserOrChat(chat, ImageLocation.TYPE_SMALL))
 							thumbsFileNames.add(null)
 
-							if (chatInfo != null && FileLoader.isSamePhoto(currentImageLocation.location, chatInfo?.chat_photo)) {
-								photos.add(chatInfo?.chat_photo)
+							if (chatInfo != null && FileLoader.isSamePhoto(currentImageLocation.location, chatInfo?.chatPhoto)) {
+								photos.add(chatInfo?.chatPhoto)
 
-								if (!chatInfo?.chat_photo?.video_sizes.isNullOrEmpty()) {
-									val videoSize = chatInfo?.chat_photo?.video_sizes?.firstOrNull()
-									videoLocations.add(ImageLocation.getForPhoto(videoSize, chatInfo?.chat_photo))
+								if (!chatInfo?.chatPhoto?.videoSizes.isNullOrEmpty()) {
+									val videoSize = chatInfo?.chatPhoto?.videoSizes?.firstOrNull()
+									videoLocations.add(ImageLocation.getForPhoto(videoSize, chatInfo?.chatPhoto))
 									videoFileNames.add(FileLoader.getAttachFileName(videoSize))
 								}
 								else {
@@ -829,14 +829,14 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 					}
 
 					for (photo in arrayList) {
-						if (photo is TL_photoEmpty || photo.sizes == null) {
+						if (photo !is TLRPC.TLPhoto || photo.sizes.isEmpty()) {
 							continue
 						}
 
 						var sizeThumb = FileLoader.getClosestPhotoSizeWithSize(photo.sizes, 50)
 
 						for (photoSize in photo.sizes) {
-							if (photoSize is TL_photoStrippedSize) {
+							if (photoSize is TLRPC.TLPhotoStrippedSize) {
 								sizeThumb = photoSize
 								break
 							}
@@ -846,11 +846,11 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 							var cont = false
 
 							for (size in photo.sizes) {
-								if (size.location != null && size.location.local_id == currentImageLocation.location?.local_id && size.location.volume_id == currentImageLocation.location?.volume_id) {
+								if (size.location != null && size.location?.localId == currentImageLocation.location?.localId && size.location?.volumeId == currentImageLocation.location?.volumeId) {
 									photos[0] = photo
 
-									if (photo.video_sizes.isNotEmpty()) {
-										videoLocations[0] = ImageLocation.getForPhoto(photo.video_sizes[0], photo)
+									if (photo.videoSizes.isNotEmpty()) {
+										videoLocations[0] = ImageLocation.getForPhoto(photo.videoSizes[0], photo)
 									}
 
 									cont = true
@@ -867,20 +867,22 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 						val sizeFull = FileLoader.getClosestPhotoSizeWithSize(photo.sizes, 640)
 
 						if (sizeFull != null) {
-							if (photo.dc_id != 0) {
-								sizeFull.location.dc_id = photo.dc_id
-								sizeFull.location.file_reference = photo.file_reference
+							if (photo.dcId != 0) {
+								(sizeFull.location as? TLRPC.TLFileLocation)?.let {
+									it.dcId = photo.dcId
+									// it.fileReference = photo.fileReference
+								}
 							}
 
 							val location = ImageLocation.getForPhoto(sizeFull, photo)
 
 							if (location != null) {
 								imagesLocations.add(location)
-								thumbsFileNames.add(FileLoader.getAttachFileName(if (sizeThumb is TL_photoStrippedSize) sizeFull else sizeThumb))
+								thumbsFileNames.add(FileLoader.getAttachFileName(if (sizeThumb is TLRPC.TLPhotoStrippedSize) sizeFull else sizeThumb))
 								thumbsLocations.add(ImageLocation.getForPhoto(sizeThumb, photo))
 
-								if (photo.video_sizes.isNotEmpty()) {
-									val videoSize = photo.video_sizes[0]
+								if (photo.videoSizes.isNotEmpty()) {
+									val videoSize = photo.videoSizes[0]
 									videoLocations.add(ImageLocation.getForPhoto(videoSize, photo))
 									videoFileNames.add(FileLoader.getAttachFileName(videoSize))
 								}
@@ -1154,7 +1156,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 						item.imageView?.setImageMedia(videoLocations[imageLocationPosition], filter, imagesLocations[imageLocationPosition], null, uploadingImageLocation, null, null, imagesLocationsSizes[imageLocationPosition], 1, parent)
 					}
 					else {
-						val thumbFilter = if (location?.photoSize is TL_photoStrippedSize) "b" else null
+						val thumbFilter = if (location?.photoSize is TLRPC.TLPhotoStrippedSize) "b" else null
 						item.imageView?.setImageMedia(videoLocation, null, imagesLocations[imageLocationPosition], null, thumbsLocations[imageLocationPosition], thumbFilter, null, imagesLocationsSizes[imageLocationPosition], 1, parent)
 					}
 				}
@@ -1165,7 +1167,7 @@ open class ProfileGalleryView : CircularViewPager, NotificationCenterDelegate {
 				needProgress = true
 
 				val location = thumbsLocations[imageLocationPosition]
-				val filter = if (location?.photoSize is TL_photoStrippedSize) "b" else null
+				val filter = if (location?.photoSize is TLRPC.TLPhotoStrippedSize) "b" else null
 				val parent = "avatar_$dialogId"
 
 				item.imageView?.setImageMedia(videoLocation, null, imagesLocations[imageLocationPosition], null, thumbsLocations[imageLocationPosition], filter, null, imagesLocationsSizes[imageLocationPosition], 1, parent)

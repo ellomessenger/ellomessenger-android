@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.statistics
 
@@ -15,7 +15,7 @@ import org.telegram.tgnet.TLRPC
 import java.util.Locale
 import kotlin.math.abs
 
-class OverviewChannelData(stats: TLRPC.TL_stats_broadcastStats) {
+class OverviewChannelData(stats: TLRPC.TLStatsBroadcastStats) {
 	private var followersUp: Boolean
 	private var sharesUp: Boolean
 	private var viewsUp: Boolean
@@ -33,18 +33,19 @@ class OverviewChannelData(stats: TLRPC.TL_stats_broadcastStats) {
 
 	init {
 		val context = ApplicationLoader.applicationContext
+		val followers = stats.followers ?: TLRPC.TLStatsAbsValueAndPrev()
 
-		var dif = (stats.followers.current - stats.followers.previous).toInt()
+		var dif = (followers.current - followers.previous).toInt()
 
-		var difPercent: Float = if (stats.followers.previous == 0.0) {
+		var difPercent: Float = if (followers.previous == 0.0) {
 			0f
 		}
 		else {
-			abs(dif / stats.followers.previous.toFloat() * 100f)
+			abs(dif / followers.previous.toFloat() * 100f)
 		}
 
 		followersTitle = context.getString(R.string.FollowersChartTitle)
-		followersPrimary = AndroidUtilities.formatWholeNumber(stats.followers.current.toInt(), 0)
+		followersPrimary = AndroidUtilities.formatWholeNumber(followers.current.toInt(), 0)
 
 		followersSecondary = if (dif == 0 || difPercent == 0f) {
 			""
@@ -58,17 +59,19 @@ class OverviewChannelData(stats: TLRPC.TL_stats_broadcastStats) {
 
 		followersUp = dif >= 0
 
-		dif = (stats.shares_per_post.current - stats.shares_per_post.previous).toInt()
+		val sharesPerPost = stats.sharesPerPost ?: TLRPC.TLStatsAbsValueAndPrev()
 
-		difPercent = if (stats.shares_per_post.previous == 0.0) {
+		dif = (sharesPerPost.current - sharesPerPost.previous).toInt()
+
+		difPercent = if (sharesPerPost.previous == 0.0) {
 			0f
 		}
 		else {
-			abs(dif / stats.shares_per_post.previous.toFloat() * 100f)
+			abs(dif / sharesPerPost.previous.toFloat() * 100f)
 		}
 
 		sharesTitle = context.getString(R.string.SharesPerPost)
-		sharesPrimary = AndroidUtilities.formatWholeNumber(stats.shares_per_post.current.toInt(), 0)
+		sharesPrimary = AndroidUtilities.formatWholeNumber(sharesPerPost.current.toInt(), 0)
 
 		sharesSecondary = if (dif == 0 || difPercent == 0f) {
 			""
@@ -82,17 +85,19 @@ class OverviewChannelData(stats: TLRPC.TL_stats_broadcastStats) {
 
 		sharesUp = dif >= 0
 
-		dif = (stats.views_per_post.current - stats.views_per_post.previous).toInt()
+		val viewsPerPost = stats.viewsPerPost ?: TLRPC.TLStatsAbsValueAndPrev()
 
-		difPercent = if (stats.views_per_post.previous == 0.0) {
+		dif = (viewsPerPost.current - viewsPerPost.previous).toInt()
+
+		difPercent = if (viewsPerPost.previous == 0.0) {
 			0f
 		}
 		else {
-			abs(dif / stats.views_per_post.previous.toFloat() * 100f)
+			abs(dif / viewsPerPost.previous.toFloat() * 100f)
 		}
 
 		viewsTitle = context.getString(R.string.ViewsPerPost)
-		viewsPrimary = AndroidUtilities.formatWholeNumber(stats.views_per_post.current.toInt(), 0)
+		viewsPrimary = AndroidUtilities.formatWholeNumber(viewsPerPost.current.toInt(), 0)
 
 		viewsSecondary = if (dif == 0 || difPercent == 0f) {
 			""
@@ -106,11 +111,13 @@ class OverviewChannelData(stats: TLRPC.TL_stats_broadcastStats) {
 
 		viewsUp = dif >= 0
 
-		difPercent = if (stats.enabled_notifications.total == 0.0) {
+		val enabledNotifications = stats.enabledNotifications ?: TLRPC.TLStatsPercentValue()
+
+		difPercent = if (enabledNotifications.total == 0.0) {
 			0f
 		}
 		else {
-			(stats.enabled_notifications.part / stats.enabled_notifications.total * 100f).toFloat()
+			(enabledNotifications.part / enabledNotifications.total * 100f).toFloat()
 		}
 
 		notificationsTitle = context.getString(R.string.EnabledNotifications)

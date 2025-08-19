@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Reactions
 
@@ -41,7 +41,13 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withTranslation
 import androidx.core.util.Consumer
+import androidx.core.view.children
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.Recycler
@@ -64,12 +70,13 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_chatReactionsAll
-import org.telegram.tgnet.TLRPC.TL_chatReactionsNone
-import org.telegram.tgnet.TLRPC.TL_chatReactionsSome
-import org.telegram.tgnet.tlrpc.TL_availableReaction
-import org.telegram.tgnet.tlrpc.TL_reactionCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
+import org.telegram.tgnet.TLRPC.TLAvailableReaction
+import org.telegram.tgnet.TLRPC.TLChatReactionsAll
+import org.telegram.tgnet.TLRPC.TLChatReactionsNone
+import org.telegram.tgnet.TLRPC.TLChatReactionsSome
+import org.telegram.tgnet.TLRPC.TLReactionCustomEmoji
+import org.telegram.tgnet.TLRPC.TLReactionEmoji
+import org.telegram.tgnet.reactions
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
@@ -97,7 +104,7 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 	private val linearLayoutManager: LinearLayoutManager
 	private val location = IntArray(2)
 	private val mPath = Path()
-	private val premiumLockedReactions: MutableList<TL_availableReaction> = ArrayList(10)
+	private val premiumLockedReactions: MutableList<TLAvailableReaction> = ArrayList(10)
 	private val rightShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 	private val selectedPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 	private val shadow: Drawable
@@ -180,7 +187,7 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 			}
 		}
 
-		if (nextRecentReaction.visibility == VISIBLE) {
+		if (nextRecentReaction.isVisible) {
 			nextRecentReaction.loopImageView.imageReceiver.moveLottieToFront()
 		}
 
@@ -476,14 +483,15 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 
 		if (skipDraw && reactionsWindow != null) {
 			val alpha = (Utilities.clamp(1f - customEmojiReactionsEnterProgress / 0.2f, 1f, 0f) * (1f - customEmojiReactionsEnterProgress) * 255).toInt()
-			canvas.save()
 
-			//canvas.translate(rect.left - reactionsWindow.drawingRect.left + (rect.width() - reactionsWindow.drawingRect.width()), rect.top - reactionsWindow.drawingRect.top + (rect.height() - reactionsWindow.drawingRect.height()));
+			canvas.withSave {
+				//canvas.translate(rect.left - reactionsWindow.drawingRect.left + (rect.width() - reactionsWindow.drawingRect.width()), rect.top - reactionsWindow.drawingRect.top + (rect.height() - reactionsWindow.drawingRect.height()));
 
-			// canvas.translate(rect.width() - reactionsWindow.drawingRect.width(), (reactionsWindow.drawingRect.bottom() - rect.height()));
+				// canvas.translate(rect.width() - reactionsWindow.drawingRect.width(), (reactionsWindow.drawingRect.bottom() - rect.height()));
 
-			drawBubbles(canvas, br, cPr, sr, alpha)
-			canvas.restore()
+				drawBubbles(this, br, cPr, sr, alpha)
+			}
+
 			return
 		}
 
@@ -520,30 +528,28 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 	}
 
 	private fun drawBubbles(canvas: Canvas, br: Float, cPr: Float, sr: Float, alpha: Int) {
-		canvas.save()
-		canvas.clipRect(0f, rect.bottom, measuredWidth.toFloat(), (measuredHeight + AndroidUtilities.dp(8f)).toFloat())
+		canvas.withClip(0f, rect.bottom, measuredWidth.toFloat(), (measuredHeight + AndroidUtilities.dp(8f)).toFloat()) {
+			var cx = (if (LocaleController.isRTL) bigCircleOffset else width - bigCircleOffset).toFloat()
+			var cy = height - paddingBottom + expandSize()
+			var sPad = AndroidUtilities.dp(3f)
 
-		var cx = (if (LocaleController.isRTL) bigCircleOffset else width - bigCircleOffset).toFloat()
-		var cy = height - paddingBottom + expandSize()
-		var sPad = AndroidUtilities.dp(3f)
+			shadow.alpha = alpha
+			bgPaint.alpha = alpha
+			shadow.setBounds((cx - br - sPad * cPr).toInt(), (cy - br - sPad * cPr).toInt(), (cx + br + sPad * cPr).toInt(), (cy + br + sPad * cPr).toInt())
+			shadow.draw(this)
 
-		shadow.alpha = alpha
-		bgPaint.alpha = alpha
-		shadow.setBounds((cx - br - sPad * cPr).toInt(), (cy - br - sPad * cPr).toInt(), (cx + br + sPad * cPr).toInt(), (cy + br + sPad * cPr).toInt())
-		shadow.draw(canvas)
+			drawCircle(cx, cy, br, bgPaint)
 
-		canvas.drawCircle(cx, cy, br, bgPaint)
+			cx = if (LocaleController.isRTL) bigCircleOffset - bigCircleRadius else width - bigCircleOffset + bigCircleRadius
+			cy = height - smallCircleRadius - sPad + expandSize()
 
-		cx = if (LocaleController.isRTL) bigCircleOffset - bigCircleRadius else width - bigCircleOffset + bigCircleRadius
-		cy = height - smallCircleRadius - sPad + expandSize()
+			sPad = -AndroidUtilities.dp(1f)
 
-		sPad = -AndroidUtilities.dp(1f)
+			shadow.setBounds((cx - br - sPad * cPr).toInt(), (cy - br - sPad * cPr).toInt(), (cx + br + sPad * cPr).toInt(), (cy + br + sPad * cPr).toInt())
+			shadow.draw(this)
 
-		shadow.setBounds((cx - br - sPad * cPr).toInt(), (cy - br - sPad * cPr).toInt(), (cx + br + sPad * cPr).toInt(), (cy + br + sPad * cPr).toInt())
-		shadow.draw(canvas)
-
-		canvas.drawCircle(cx, cy, sr, bgPaint)
-		canvas.restore()
+			drawCircle(cx, cy, sr, bgPaint)
+		}
 
 		shadow.alpha = 255
 		bgPaint.alpha = 255
@@ -607,29 +613,27 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 				}
 			}
 
-			canvas.save()
+			canvas.withSave {
+				var x = recyclerListView.x + view.x
+				val additionalWidth = (view.measuredWidth * view.scaleX - view.measuredWidth) / 2f
 
-			var x = recyclerListView.x + view.x
-			val additionalWidth = (view.measuredWidth * view.scaleX - view.measuredWidth) / 2f
+				if (x - additionalWidth < 0 && view.translationX >= 0) {
+					view.translationX = -(x - additionalWidth) - pullingOffsetX
+				}
+				else if (x + view.measuredWidth + additionalWidth > measuredWidth && view.translationX <= 0) {
+					view.translationX = measuredWidth - x - view.measuredWidth - additionalWidth - pullingOffsetX
+				}
+				else {
+					view.translationX = 0 - pullingOffsetX
+				}
 
-			if (x - additionalWidth < 0 && view.translationX >= 0) {
-				view.translationX = -(x - additionalWidth) - pullingOffsetX
+				x = recyclerListView.x + view.x
+
+				translate(x, recyclerListView.y + view.y)
+				scale(view.scaleX, view.scaleY, view.pivotX, view.pivotY)
+
+				view.draw(this)
 			}
-			else if (x + view.measuredWidth + additionalWidth > measuredWidth && view.translationX <= 0) {
-				view.translationX = measuredWidth - x - view.measuredWidth - additionalWidth - pullingOffsetX
-			}
-			else {
-				view.translationX = 0 - pullingOffsetX
-			}
-
-			x = recyclerListView.x + view.x
-
-			canvas.translate(x, recyclerListView.y + view.y)
-			canvas.scale(view.scaleX, view.scaleY, view.pivotX, view.pivotY)
-
-			view.draw(canvas)
-
-			canvas.restore()
 		}
 		else {
 			val position = recyclerListView.getChildAdapterPosition(view)
@@ -696,21 +700,21 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 		}
 
 		if (reactionsChat != null) {
-			if (reactionsChat.available_reactions is TL_chatReactionsAll) {
+			if (reactionsChat.availableReactions is TLChatReactionsAll) {
 				val chat = MessagesController.getInstance(currentAccount).getChat(reactionsChat.id)
 				allReactionsAvailable = chat != null && !isChannelAndNotMegaGroup(chat)
 				fillRecentReactionsList(visibleReactions)
 			}
-			else if (reactionsChat.available_reactions is TL_chatReactionsSome) {
-				val reactionsSome = reactionsChat.available_reactions as TL_chatReactionsSome
+			else if (reactionsChat.availableReactions is TLChatReactionsSome) {
+				val reactionsSome = reactionsChat.availableReactions as TLChatReactionsSome
 
 				for (s in reactionsSome.reactions) {
 					for (a in MediaDataController.getInstance(currentAccount).enabledReactionsList) {
-						if (s is TL_reactionEmoji && a.reaction == s.emoticon) {
+						if (s is TLReactionEmoji && a.reaction == s.emoticon) {
 							visibleReactions.add(fromTLReaction(s))
 							break
 						}
-						else if (s is TL_reactionCustomEmoji) {
+						else if (s is TLReactionCustomEmoji) {
 							visibleReactions.add(fromTLReaction(s))
 							break
 						}
@@ -790,29 +794,29 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 		}
 	}
 
-	private fun checkPremiumReactions(reactions: MutableList<TL_availableReaction>) {
-		premiumLockedReactions.clear()
-
-		if (UserConfig.getInstance(currentAccount).isPremium) {
-			return
-		}
-
-		try {
-			var i = 0
-
-			while (i < reactions.size) {
-				if (reactions[i].premium) {
-					premiumLockedReactions.add(reactions.removeAt(i))
-					i--
-				}
-
-				i++
-			}
-		}
-		catch (e: Exception) {
-			// ignored
-		}
-	}
+//	private fun checkPremiumReactions(reactions: MutableList<TLAvailableReaction>) {
+//		premiumLockedReactions.clear()
+//
+//		if (UserConfig.getInstance(currentAccount).isPremium) {
+//			return
+//		}
+//
+//		try {
+//			var i = 0
+//
+//			while (i < reactions.size) {
+//				if (reactions[i].premium) {
+//					premiumLockedReactions.add(reactions.removeAt(i))
+//					i--
+//				}
+//
+//				i++
+//			}
+//		}
+//		catch (e: Exception) {
+//			// ignored
+//		}
+//	}
 
 	fun startEnterAnimation() {
 		setTransitionProgress(0f)
@@ -1197,9 +1201,8 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 					setChildScale(ch2, s2)
 				}
 
-				for (i in 1 until recyclerListView.getChildCount() - 1) {
-					val ch = recyclerListView.getChildAt(i)
-					setChildScale(ch, 1f)
+				for (child in recyclerListView.children) {
+					setChildScale(child, 1f)
 				}
 
 				invalidate()
@@ -1401,12 +1404,12 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 				val defaultReaction = MediaDataController.getInstance(currentAccount).reactionsMap[currentReaction!!.emojicon]
 
 				if (defaultReaction != null) {
-					val svgThumb = getSvgThumb(defaultReaction.activate_animation, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 1.0f)
+					val svgThumb = getSvgThumb(defaultReaction.activateAnimation, ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), 1.0f)
 
 					if (svgThumb != null) {
-						val enterImage = ImageLocation.getForDocument(defaultReaction.appear_animation)
-						val pressedImage = ImageLocation.getForDocument(defaultReaction.select_animation)
-						val loopImage = ImageLocation.getForDocument(defaultReaction.select_animation)
+						val enterImage = ImageLocation.getForDocument(defaultReaction.appearAnimation)
+						val pressedImage = ImageLocation.getForDocument(defaultReaction.selectAnimation)
+						val loopImage = ImageLocation.getForDocument(defaultReaction.selectAnimation)
 
 						if (enterImage != null && pressedImage != null && loopImage != null) {
 							fallbackToEmoji = false
@@ -1694,7 +1697,7 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 		if (id == NotificationCenter.chatInfoDidLoad) {
 			val chatFull = args[0] as ChatFull
 
-			if (chatFull.id == waitingLoadingChatId && visibility != VISIBLE && chatFull.available_reactions !is TL_chatReactionsNone) {
+			if (chatFull.id == waitingLoadingChatId && visibility != VISIBLE && chatFull.availableReactions !is TLChatReactionsNone) {
 				setMessage(messageObject, null)
 				visibility = VISIBLE
 				startEnterAnimation()
@@ -1783,16 +1786,13 @@ class ReactionsContainerLayout(private val fragment: BaseFragment, context: Cont
 
 			AndroidUtilities.rectTmp[(cx - sizeHalf).toFloat(), cy - sizeHalf - expandSize, (cx + sizeHalf).toFloat()] = cy + sizeHalf + expandSize
 
-			canvas.save()
-			canvas.scale(child.scaleX, child.scaleY, cx.toFloat(), cy.toFloat())
-			canvas.drawRoundRect(AndroidUtilities.rectTmp, sizeHalf.toFloat(), sizeHalf.toFloat(), backgroundPaint)
-			canvas.restore()
-			canvas.save()
-			canvas.translate(0f, expandSize)
+			canvas.withScale(child.scaleX, child.scaleY, cx.toFloat(), cy.toFloat()) {
+				drawRoundRect(AndroidUtilities.rectTmp, sizeHalf.toFloat(), sizeHalf.toFloat(), backgroundPaint)
+			}
 
-			super.dispatchDraw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(0f, expandSize) {
+				super.dispatchDraw(this)
+			}
 		}
 	}
 

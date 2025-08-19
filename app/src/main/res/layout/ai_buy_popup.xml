@@ -103,7 +103,7 @@
 			android:layout_gravity="center"
 			android:scaleType="centerCrop"
 			android:src="@drawable/ai_buy_popup"
-			android:translationX="66dp"
+			android:translationX="32dp"
 			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
 
 		<com.google.android.material.imageview.ShapeableImageView
@@ -112,7 +112,7 @@
 			android:layout_gravity="center"
 			android:scaleType="fitCenter"
 			android:src="@drawable/ai_switch_thumb"
-			android:translationX="-2dp"
+			android:translationX="-32dp"
 			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
 
 		<com.google.android.material.imageview.ShapeableImageView
@@ -120,8 +120,8 @@
 			android:layout_height="80dp"
 			android:layout_gravity="center"
 			android:scaleType="centerCrop"
-			android:src="@drawable/ai_buy_picture"
-			android:translationX="-2dp"
+			android:src="@drawable/ai_buy_double"
+			android:translationX="-32dp"
 			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
 
 		<com.google.android.material.imageview.ShapeableImageView
@@ -129,36 +129,8 @@
 			android:layout_height="80dp"
 			android:layout_gravity="center"
 			android:scaleType="centerInside"
-			android:src="@drawable/ai_buy_type_picture"
-			android:translationX="-2dp"
-			app:contentPadding="20dp"
-			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
-
-		<com.google.android.material.imageview.ShapeableImageView
-			android:layout_width="88dp"
-			android:layout_height="88dp"
-			android:layout_gravity="center"
-			android:scaleType="fitCenter"
-			android:src="@drawable/ai_switch_thumb"
-			android:translationX="-62dp"
-			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
-
-		<com.google.android.material.imageview.ShapeableImageView
-			android:layout_width="80dp"
-			android:layout_height="80dp"
-			android:layout_gravity="center"
-			android:scaleType="centerCrop"
-			android:src="@drawable/ai_buy_text"
-			android:translationX="-62dp"
-			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
-
-		<com.google.android.material.imageview.ShapeableImageView
-			android:layout_width="80dp"
-			android:layout_height="80dp"
-			android:layout_gravity="center"
-			android:scaleType="centerInside"
-			android:src="@drawable/ai_buy_type_text"
-			android:translationX="-62dp"
+			android:src="@drawable/ai_buy_type_double"
+			android:translationX="-32dp"
 			app:contentPadding="20dp"
 			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
 
@@ -170,6 +142,7 @@
 		android:layout_marginBottom="8dp"
 		android:text="@string/ai_buy_popup_sub_title"
 		android:textColor="@color/dark"
+		android:visibility="gone"
 		android:textSize="@dimen/common_size_14dp" />
 
 	<androidx.constraintlayout.widget.ConstraintLayout
@@ -267,6 +240,7 @@
 				tools:text="200" />
 
 			<TextView
+				android:id="@+id/text_double_ai_chat"
 				android:layout_width="wrap_content"
 				android:layout_height="match_parent"
 				android:layout_marginLeft="12dp"
@@ -303,6 +277,7 @@
 				tools:text="200" />
 
 			<TextView
+				android:id="@+id/text_double_ai_images"
 				android:layout_width="wrap_content"
 				android:layout_height="match_parent"
 				android:layout_marginLeft="12dp"

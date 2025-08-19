@@ -22,7 +22,11 @@ import org.telegram.ui.AvatarImageView
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.LayoutHelper
 
-class ChannelsLimitReachedAdapter : ListAdapter<TLRPC.Chat, ChannelsLimitReachedAdapter.ChannelsLimitReachedViewHolder>(DiffCallBack()) {
+class ChannelsLimitReachedAdapter(private var onClickListener: (TLRPC.Chat) -> Unit = {}) : ListAdapter<TLRPC.Chat, ChannelsLimitReachedAdapter.ChannelsLimitReachedViewHolder>(DiffCallBack()) {
+
+	fun setOnClickListener(item: (TLRPC.Chat) -> Unit) {
+		onClickListener = item
+	}
 
 	override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChannelsLimitReachedViewHolder {
 		return ChannelsLimitReachedViewHolder(
@@ -33,10 +37,15 @@ class ChannelsLimitReachedAdapter : ListAdapter<TLRPC.Chat, ChannelsLimitReached
 
 	override fun onBindViewHolder(holder: ChannelsLimitReachedViewHolder, position: Int) {
 		val item = currentList[position]
+
+		holder.binding.root.setOnClickListener {
+			onClickListener(item)
+		}
+
 		holder.bind(item)
 	}
 
-	inner class ChannelsLimitReachedViewHolder(private val context: Context, private val binding: ItemChannelsLimitReachedBinding) : RecyclerView.ViewHolder(binding.root) {
+	inner class ChannelsLimitReachedViewHolder(private val context: Context, val binding: ItemChannelsLimitReachedBinding) : RecyclerView.ViewHolder(binding.root) {
 
 		private val avatarDrawable = AvatarDrawable().apply { shouldDrawPlaceholder = true }
 		private val avatarImageView = AvatarImageView(binding.root.context)

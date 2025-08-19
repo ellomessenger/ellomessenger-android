@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -13,28 +13,23 @@ import android.graphics.Path
 import org.telegram.messenger.SvgHelper.SvgDrawable
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.PhotoSize
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentAttributeImageSize
-import org.telegram.tgnet.TLRPC.TL_photoPathSize
-import org.telegram.tgnet.TLRPC.TL_wallPaper
-import org.telegram.tgnet.TLRPC.ThemeSettings
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.ActionBar.Theme.ThemeAccent
 import org.telegram.ui.ActionBar.Theme.ThemeInfo
 
 object DocumentObject {
 	@JvmStatic
-	fun getSvgThumb(sizes: ArrayList<PhotoSize>?, color: Int, alpha: Float): SvgDrawable? {
+	fun getSvgThumb(sizes: List<PhotoSize>?, color: Int, alpha: Float): SvgDrawable? {
 		if (sizes.isNullOrEmpty()) {
 			return null
 		}
 
 		var w = 0
 		var h = 0
-		var photoPathSize: TL_photoPathSize? = null
+		var photoPathSize: TLRPC.TLPhotoPathSize? = null
 
 		for (photoSize in sizes) {
-			if (photoSize is TL_photoPathSize) {
+			if (photoSize is TLRPC.TLPhotoPathSize) {
 				photoPathSize = photoSize
 			}
 			else {
@@ -93,19 +88,19 @@ object DocumentObject {
 
 	@JvmStatic
 	fun getSvgThumb(document: TLRPC.Document?, color: Int, alpha: Float, zoom: Float): SvgDrawable? {
-		if (document == null) {
+		if (document == null || document !is TLRPC.TLDocument) {
 			return null
 		}
 
 		var pathThumb: SvgDrawable? = null
 
 		for (size in document.thumbs) {
-			if (size is TL_photoPathSize) {
+			if (size is TLRPC.TLPhotoPathSize) {
 				var w = 512
 				var h = 512
 
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeImageSize) {
+					if (attribute is TLRPC.TLDocumentAttributeImageSize) {
 						w = attribute.w
 						h = attribute.h
 						break
@@ -124,7 +119,7 @@ object DocumentObject {
 		return pathThumb
 	}
 
-	class ThemeDocument(@JvmField var themeSettings: ThemeSettings) : TL_document() {
+	class ThemeDocument(@JvmField var themeSettings: TLRPC.TLThemeSettings) : TLRPC.TLDocument() {
 		@JvmField
 		var wallpaper: TLRPC.Document? = null
 
@@ -135,30 +130,28 @@ object DocumentObject {
 		var accent: ThemeAccent = baseTheme.createNewAccent(themeSettings)
 
 		init {
-			if (themeSettings.wallpaper is TL_wallPaper) {
-				val `object` = themeSettings.wallpaper as TL_wallPaper
+			if (themeSettings.wallpaper is TLRPC.TLWallPaper) {
+				val `object` = themeSettings.wallpaper as TLRPC.TLWallPaper
 
-				val wallpaper = `object`.document
-				this.wallpaper = wallpaper
+				val wallpaper = `object`.document as? TLRPC.TLDocument
 
-				id = wallpaper.id
-				access_hash = wallpaper.access_hash
-				file_reference = wallpaper.file_reference
-				user_id = wallpaper.user_id
-				date = wallpaper.date
-				file_name = wallpaper.file_name
-				mime_type = wallpaper.mime_type
-				size = wallpaper.size
-				thumbs = wallpaper.thumbs
-				version = wallpaper.version
-				dc_id = wallpaper.dc_id
-				key = wallpaper.key
-				iv = wallpaper.iv
-				attributes = wallpaper.attributes
+				if (wallpaper != null) {
+					this.wallpaper = wallpaper
+
+					id = wallpaper.id
+					accessHash = wallpaper.accessHash
+					fileReference = wallpaper.fileReference
+					date = wallpaper.date
+					mimeType = wallpaper.mimeType
+					size = wallpaper.size
+					thumbs.addAll(wallpaper.thumbs)
+					dcId = wallpaper.dcId
+					attributes.addAll(wallpaper.attributes)
+				}
 			}
 			else {
 				id = Int.MIN_VALUE.toLong()
-				dc_id = Int.MIN_VALUE
+				dcId = Int.MIN_VALUE
 			}
 		}
 	}

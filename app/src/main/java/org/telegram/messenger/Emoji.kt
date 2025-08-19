@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -24,6 +24,7 @@ import android.text.Spanned
 import android.text.TextPaint
 import android.text.style.DynamicDrawableSpan
 import android.text.style.ImageSpan
+import androidx.core.content.edit
 import org.telegram.messenger.MessagesController.Companion.getGlobalEmojiSettings
 import org.telegram.ui.Components.AnimatedEmojiSpan
 import java.util.Locale
@@ -69,7 +70,7 @@ object Emoji {
 	}
 
 	@JvmStatic
-	fun preloadEmoji(code: CharSequence) {
+	fun preloadEmoji(code: CharSequence?) {
 		val info = getDrawableInfo(code)
 
 		if (info != null) {
@@ -264,10 +265,10 @@ object Emoji {
 		return emojiOnly[0] > 0
 	}
 
-	fun parseEmojis(cs: CharSequence?, emojiOnly: IntArray?): ArrayList<EmojiSpanRange> {
+	fun parseEmojis(cs: CharSequence?, emojiOnly: IntArray?): List<EmojiSpanRange> {
 		@Suppress("NAME_SHADOWING") var emojiOnly = emojiOnly
 
-		val emojis = ArrayList<EmojiSpanRange>()
+		val emojis = mutableListOf<EmojiSpanRange>()
 
 		if (cs.isNullOrEmpty()) {
 			return emojis
@@ -484,7 +485,8 @@ object Emoji {
 
 				if (drawable != null) {
 					span = EmojiSpan(drawable, DynamicDrawableSpan.ALIGN_BOTTOM, fontMetrics)
-					span.emoji = if (emojiRange.code == null) null else emojiRange.code.toString()
+					span.emoji = emojiRange.code?.toString()
+
 					s.setSpan(span, emojiRange.start, emojiRange.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
 			}
@@ -566,13 +568,13 @@ object Emoji {
 			stringBuilder.append(value)
 		}
 
-		preferences.edit().putString("emojis2", stringBuilder.toString()).commit()
+		preferences.edit { putString("emojis2", stringBuilder.toString()) }
 	}
 
 	@JvmStatic
 	fun clearRecentEmoji() {
 		val preferences = getGlobalEmojiSettings()
-		preferences.edit().putBoolean("filled_default", true).commit()
+		preferences.edit { putBoolean("filled_default", true) }
 
 		emojiUseHistory.clear()
 		recentEmoji.clear()
@@ -621,7 +623,7 @@ object Emoji {
 					}
 				}
 
-				preferences.edit().remove("emojis").commit()
+				preferences.edit { remove("emojis") }
 
 				saveRecentEmoji()
 			}
@@ -645,7 +647,7 @@ object Emoji {
 						emojiUseHistory[newRecent[i]] = newRecent.size - i
 					}
 
-					preferences.edit().putBoolean("filled_default", true).commit()
+					preferences.edit { putBoolean("filled_default", true) }
 
 					saveRecentEmoji()
 				}
@@ -688,7 +690,7 @@ object Emoji {
 			stringBuilder.append(value)
 		}
 
-		preferences.edit().putString("color", stringBuilder.toString()).commit()
+		preferences.edit { putString("color", stringBuilder.toString()) }
 	}
 
 	class EmojiDrawable(private val info: DrawableInfo) : Drawable() {
@@ -719,7 +721,7 @@ object Emoji {
 				return
 			}
 
-			val b = if (fullSize) {
+			val bounds = if (fullSize) {
 				drawRect
 			}
 			else {
@@ -727,15 +729,15 @@ object Emoji {
 			}
 
 			val reject = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-				val rectF = RectF(b)
+				val rectF = RectF(bounds)
 				canvas.quickReject(rectF)
 			}
 			else {
-				@Suppress("DEPRECATION") canvas.quickReject(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(), Canvas.EdgeType.AA)
+				@Suppress("DEPRECATION") canvas.quickReject(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bounds.bottom.toFloat(), Canvas.EdgeType.AA)
 			}
 
 			if (!reject) {
-				canvas.drawBitmap(emojiBmp[info.page.toInt()]?.get(info.page2.toInt())!!, null, b, paint)
+				canvas.drawBitmap(emojiBmp[info.page.toInt()]?.get(info.page2.toInt())!!, null, bounds, paint)
 			}
 		}
 
@@ -745,7 +747,9 @@ object Emoji {
 		}
 
 		override fun setAlpha(alpha: Int) {
-			paint.setAlpha(alpha)
+			// unused
+			// MARK: this was causing emoji-only messages become invisible when there are multiple messages with same emoji
+			// paint.setAlpha(alpha)
 		}
 
 		override fun setColorFilter(cf: ColorFilter?) {
@@ -767,8 +771,8 @@ object Emoji {
 		}
 	}
 
-	data class DrawableInfo(var page: Byte, var page2: Short, var emojiIndex: Int)
-	data class EmojiSpanRange(var start: Int, var end: Int, var code: CharSequence?)
+	data class DrawableInfo(val page: Byte, val page2: Short, val emojiIndex: Int)
+	data class EmojiSpanRange(val start: Int, val end: Int, val code: CharSequence?)
 
 	class EmojiSpan(d: Drawable?, verticalAlignment: Int, @JvmField var fontMetrics: FontMetricsInt?) : ImageSpan(d!!, verticalAlignment) {
 		var size = AndroidUtilities.dp(20f)
@@ -864,10 +868,7 @@ object Emoji {
 		}
 
 		override fun updateDrawState(ds: TextPaint) {
-			if (getDrawable() is EmojiDrawable) {
-				(getDrawable() as EmojiDrawable).placeholderColor = 0x10ffffff and ds.color
-			}
-
+			(getDrawable() as? EmojiDrawable)?.placeholderColor = 0x10ffffff and ds.color
 			super.updateDrawState(ds)
 		}
 	}

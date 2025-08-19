@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
@@ -59,9 +59,15 @@ import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.annotation.DrawableRes
 import androidx.annotation.Keep
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withTranslation
 import androidx.core.util.forEach
+import androidx.core.util.size
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.dynamicanimation.animation.DynamicAnimation
 import androidx.dynamicanimation.animation.FloatValueHolder
 import androidx.dynamicanimation.animation.SpringAnimation
@@ -95,12 +101,9 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_attachMenuBot
-import org.telegram.tgnet.TLRPC.TL_messages_toggleBotInAttachMenu
-import org.telegram.tgnet.TLRPC.TL_payments_paymentForm
-import org.telegram.tgnet.TLRPC.TL_payments_paymentReceipt
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -121,9 +124,6 @@ import org.telegram.ui.Components.LayoutHelper.createFrame
 import org.telegram.ui.Components.LayoutHelper.createLinear
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import org.telegram.ui.PassportActivity
-import org.telegram.ui.PaymentFormActivity
-import org.telegram.ui.PaymentFormActivity.InvoiceStatus
-import org.telegram.ui.PaymentFormActivity.PaymentFormCallback
 import org.telegram.ui.PhotoPickerActivity.PhotoPickerActivityDelegate
 import org.telegram.ui.PhotoPickerSearchActivity
 import org.telegram.ui.sales.CreateMediaSaleFragment
@@ -190,10 +190,9 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 			}
 
 			override fun dispatchDraw(canvas: Canvas) {
-				canvas.save()
-				canvas.clipRect(0f, captionEditTextTopOffset, measuredWidth.toFloat(), measuredHeight.toFloat())
-				super.dispatchDraw(canvas)
-				canvas.restore()
+				canvas.withClip(0f, captionEditTextTopOffset, measuredWidth.toFloat(), measuredHeight.toFloat()) {
+					super.dispatchDraw(this)
+				}
 			}
 		}
 	}
@@ -740,7 +739,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 				for (i in 0 until childCount) {
 					val child = getChildAt(i)
 
-					if (child == null || child.visibility == GONE) {
+					if (child == null || child.isGone) {
 						continue
 					}
 
@@ -797,7 +796,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 				for (i in 0 until count) {
 					val child = getChildAt(i)
 
-					if (child.visibility == GONE) {
+					if (child.isGone) {
 						continue
 					}
 
@@ -856,117 +855,112 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 
 			private fun drawChildBackground(canvas: Canvas, child: View?) {
 				if (child is AttachAlertLayout) {
-					canvas.save()
-					canvas.translate(0f, currentPanTranslationY)
+					canvas.withTranslation(0f, currentPanTranslationY) {
+						val viewAlpha = (255 * child.getAlpha()).toInt()
+						val actionBarType = child.needsActionBar()
+						val offset = AndroidUtilities.dp(13f) + AndroidUtilities.dp(headerView.alpha * 26)
+						var top = getScrollOffsetY(0) - backgroundPaddingTop - offset
 
-					val viewAlpha = (255 * child.getAlpha()).toInt()
-					val actionBarType = child.needsActionBar()
-					val offset = AndroidUtilities.dp(13f) + AndroidUtilities.dp(headerView.alpha * 26)
-					var top = getScrollOffsetY(0) - backgroundPaddingTop - offset
-
-					if (currentSheetAnimationType == 1 || viewChangeAnimator != null) {
-						top += child.getTranslationY().toInt()
-					}
-
-					var y = top + AndroidUtilities.dp(20f)
-					var height = measuredHeight + AndroidUtilities.dp(45f) + backgroundPaddingTop
-					var rad = 1.0f
-					val h = if (actionBarType != 0) ActionBar.getCurrentActionBarHeight() else backgroundPaddingTop
-
-					if (actionBarType == 2) {
-						if (top < h) {
-							rad = max(0f, 1.0f - (h - top) / backgroundPaddingTop.toFloat())
-						}
-					}
-					else if (top + backgroundPaddingTop < h) {
-						var toMove = offset.toFloat()
-
-						if (child === locationLayout) {
-							toMove += AndroidUtilities.dp(11f).toFloat()
-						}
-						else if (child === pollLayout) {
-							toMove -= AndroidUtilities.dp(3f).toFloat()
-						}
-						else {
-							toMove += AndroidUtilities.dp(4f).toFloat()
+						if (currentSheetAnimationType == 1 || viewChangeAnimator != null) {
+							top += child.getTranslationY().toInt()
 						}
 
-						val moveProgress = min(1.0f, (h - top - backgroundPaddingTop) / toMove)
-						val availableToMove = h - toMove
-						val diff = (availableToMove * moveProgress).toInt()
-
-						top -= diff
-						y -= diff
-						height += diff
-						rad = 1.0f - moveProgress
-					}
-
-					if (!inBubbleMode) {
-						top += AndroidUtilities.statusBarHeight
-						y += AndroidUtilities.statusBarHeight
-						height -= AndroidUtilities.statusBarHeight
-					}
-
-					val backgroundColor = if (currentAttachLayout?.hasCustomBackground() == true) {
-						currentAttachLayout?.customBackground ?: ResourcesCompat.getColor(resources, R.color.background, null)
-					}
-					else {
-						ResourcesCompat.getColor(resources, if (forceDarkTheme) R.color.dark_background else R.color.background, null)
-					}
-
-					shadowDrawable.alpha = viewAlpha
-					shadowDrawable.setBounds(0, top, measuredWidth, height)
-					shadowDrawable.draw(canvas)
-
-					if (actionBarType == 2) {
-						Theme.dialogs_onlineCirclePaint.color = backgroundColor
-						Theme.dialogs_onlineCirclePaint.alpha = viewAlpha
-
-						rect.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
-
-						canvas.save()
-						canvas.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() / 2)
-						canvas.drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
-						canvas.restore()
-					}
-					if (rad != 1.0f && actionBarType != 2) {
-						Theme.dialogs_onlineCirclePaint.color = backgroundColor
-						Theme.dialogs_onlineCirclePaint.alpha = viewAlpha
-
-						rect.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
-
-						canvas.save()
-						canvas.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() / 2)
-						canvas.drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
-						canvas.restore()
-					}
-
-					if (headerView.alpha != 1.0f && rad != 0f) {
-						val w = AndroidUtilities.dp(36f)
-
-						rect.set(((measuredWidth - w) / 2).toFloat(), y.toFloat(), ((measuredWidth + w) / 2).toFloat(), (y + AndroidUtilities.dp(4f)).toFloat())
-
-						val color: Int
-						val alphaProgress: Float
+						var y = top + AndroidUtilities.dp(20f)
+						var height = measuredHeight + AndroidUtilities.dp(45f) + backgroundPaddingTop
+						var rad = 1.0f
+						val h = if (actionBarType != 0) ActionBar.getCurrentActionBarHeight() else backgroundPaddingTop
 
 						if (actionBarType == 2) {
-							color = 0x20000000
-							alphaProgress = rad
+							if (top < h) {
+								rad = max(0f, 1.0f - (h - top) / backgroundPaddingTop.toFloat())
+							}
+						}
+						else if (top + backgroundPaddingTop < h) {
+							var toMove = offset.toFloat()
+
+							if (child === locationLayout) {
+								toMove += AndroidUtilities.dp(11f).toFloat()
+							}
+							else if (child === pollLayout) {
+								toMove -= AndroidUtilities.dp(3f).toFloat()
+							}
+							else {
+								toMove += AndroidUtilities.dp(4f).toFloat()
+							}
+
+							val moveProgress = min(1.0f, (h - top - backgroundPaddingTop) / toMove)
+							val availableToMove = h - toMove
+							val diff = (availableToMove * moveProgress).toInt()
+
+							top -= diff
+							y -= diff
+							height += diff
+							rad = 1.0f - moveProgress
+						}
+
+						if (!inBubbleMode) {
+							top += AndroidUtilities.statusBarHeight
+							y += AndroidUtilities.statusBarHeight
+							height -= AndroidUtilities.statusBarHeight
+						}
+
+						val backgroundColor = if (currentAttachLayout?.hasCustomBackground() == true) {
+							currentAttachLayout?.customBackground ?: ResourcesCompat.getColor(resources, R.color.background, null)
 						}
 						else {
-							color = context.getColor(R.color.light_background)
-							alphaProgress = 1.0f - headerView.alpha
+							ResourcesCompat.getColor(resources, if (forceDarkTheme) R.color.dark_background else R.color.background, null)
 						}
 
-						val alpha = Color.alpha(color)
+						shadowDrawable.alpha = viewAlpha
+						shadowDrawable.setBounds(0, top, measuredWidth, height)
+						shadowDrawable.draw(this)
 
-						Theme.dialogs_onlineCirclePaint.color = color
-						Theme.dialogs_onlineCirclePaint.alpha = (alpha * alphaProgress * rad * child.getAlpha()).toInt()
+						if (actionBarType == 2) {
+							Theme.dialogs_onlineCirclePaint.color = backgroundColor
+							Theme.dialogs_onlineCirclePaint.alpha = viewAlpha
 
-						canvas.drawRoundRect(rect, AndroidUtilities.dp(2f).toFloat(), AndroidUtilities.dp(2f).toFloat(), Theme.dialogs_onlineCirclePaint)
+							rect.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
+
+							withClip(rect.left, rect.top, rect.right, rect.top + rect.height() / 2) {
+								drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
+							}
+						}
+						if (rad != 1.0f && actionBarType != 2) {
+							Theme.dialogs_onlineCirclePaint.color = backgroundColor
+							Theme.dialogs_onlineCirclePaint.alpha = viewAlpha
+
+							rect.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
+
+							withClip(rect.left, rect.top, rect.right, rect.top + rect.height() / 2) {
+								drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
+							}
+						}
+
+						if (headerView.alpha != 1.0f && rad != 0f) {
+							val w = AndroidUtilities.dp(36f)
+
+							rect.set(((measuredWidth - w) / 2).toFloat(), y.toFloat(), ((measuredWidth + w) / 2).toFloat(), (y + AndroidUtilities.dp(4f)).toFloat())
+
+							val color: Int
+							val alphaProgress: Float
+
+							if (actionBarType == 2) {
+								color = 0x20000000
+								alphaProgress = rad
+							}
+							else {
+								color = context.getColor(R.color.light_background)
+								alphaProgress = 1.0f - headerView.alpha
+							}
+
+							val alpha = Color.alpha(color)
+
+							Theme.dialogs_onlineCirclePaint.color = color
+							Theme.dialogs_onlineCirclePaint.alpha = (alpha * alphaProgress * rad * child.getAlpha()).toInt()
+
+							drawRoundRect(rect, AndroidUtilities.dp(2f).toFloat(), AndroidUtilities.dp(2f).toFloat(), Theme.dialogs_onlineCirclePaint)
+						}
 					}
-
-					canvas.restore()
 				}
 			}
 
@@ -1043,10 +1037,9 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 
 							rect.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
 
-							canvas.save()
-							canvas.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() / 2)
-							canvas.drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
-							canvas.restore()
+							canvas.withClip(rect.left, rect.top, rect.right, rect.top + rect.height() / 2) {
+								drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
+							}
 						}
 					}
 
@@ -1083,10 +1076,9 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 
 							rect.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
 
-							canvas.save()
-							canvas.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() / 2)
-							canvas.drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
-							canvas.restore()
+							canvas.withClip(rect.left, rect.top, rect.right, rect.top + rect.height() / 2) {
+								drawRoundRect(rect, AndroidUtilities.dp(12f) * rad, AndroidUtilities.dp(12f) * rad, Theme.dialogs_onlineCirclePaint)
+							}
 						}
 
 						if (headerView.alpha != 1.0f && rad != 0f) {
@@ -1154,16 +1146,13 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 				}
 
 			override fun dispatchDraw(canvas: Canvas) {
-				canvas.save()
-				canvas.clipRect(0f, paddingTop + currentPanTranslationY, measuredWidth.toFloat(), measuredHeight + currentPanTranslationY - paddingBottom)
+				canvas.withClip(0f, paddingTop + currentPanTranslationY, measuredWidth.toFloat(), measuredHeight + currentPanTranslationY - paddingBottom) {
+					if ((currentAttachLayout === photoPreviewLayout || nextAttachLayout === photoPreviewLayout || currentAttachLayout === photoLayout) && nextAttachLayout == null) {
+						drawChildBackground(this, currentAttachLayout)
+					}
 
-				if ((currentAttachLayout === photoPreviewLayout || nextAttachLayout === photoPreviewLayout || currentAttachLayout === photoLayout) && nextAttachLayout == null) {
-					drawChildBackground(canvas, currentAttachLayout)
+					super.dispatchDraw(this)
 				}
-
-				super.dispatchDraw(canvas)
-
-				canvas.restore()
 			}
 
 			override fun setTranslationY(translationY: Float) {
@@ -1551,7 +1540,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 			}
 			else if (view is AttachBotButton) {
 				if (view.attachMenuBot != null) {
-					showBotLayout(view.attachMenuBot!!.bot_id)
+					showBotLayout(view.attachMenuBot!!.botId)
 				}
 				else {
 					chatAttachViewDelegate?.didSelectBot(view.currentUser)
@@ -1665,7 +1654,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 						beforeLimit = -9999
 					}
 
-					captionLimitView.setNumber(beforeLimit, captionLimitView.visibility == View.VISIBLE)
+					captionLimitView.setNumber(beforeLimit, captionLimitView.isVisible)
 
 					if (captionLimitView.visibility != View.VISIBLE) {
 						captionLimitView.visible()
@@ -1974,39 +1963,6 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 						webViewLayout.customBackground = color
 					}
 
-					override fun onWebAppOpenInvoice(slug: String, response: TLObject) {
-						val parentFragment: BaseFragment = baseFragment
-						var paymentFormActivity: PaymentFormActivity? = null
-
-						if (response is TL_payments_paymentForm) {
-							MessagesController.getInstance(currentAccount).putUsers(response.users, false)
-							paymentFormActivity = PaymentFormActivity(response, slug, parentFragment)
-						}
-						else if (response is TL_payments_paymentReceipt) {
-							paymentFormActivity = PaymentFormActivity(response)
-						}
-
-						if (paymentFormActivity != null) {
-							webViewLayout.scrollToTop()
-
-							AndroidUtilities.hideKeyboard(webViewLayout)
-
-							val overlayActionBarLayoutDialog = OverlayActionBarLayoutDialog(parentFragment.parentActivity!!)
-
-							overlayActionBarLayoutDialog.show()
-
-							paymentFormActivity.setPaymentFormCallback(PaymentFormCallback { status ->
-								if (status != InvoiceStatus.PENDING) {
-									overlayActionBarLayoutDialog.dismiss()
-								}
-
-								webViewLayout.webViewContainer.onInvoiceStatusUpdate(slug, status.name.lowercase())
-							})
-
-							overlayActionBarLayoutDialog.addFragment(paymentFormActivity)
-						}
-					}
-
 					override fun onWebAppExpand() {
 						if (currentAttachLayout !== webViewLayout) {
 							return
@@ -2144,13 +2100,13 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 			return ColorUtils.calculateLuminance(color) > 0.7f
 		}
 
-	fun onLongClickBotButton(attachMenuBot: TL_attachMenuBot?, currentUser: User?) {
-		val botName = if (attachMenuBot != null) attachMenuBot.short_name else getUserName(currentUser)
+	fun onLongClickBotButton(attachMenuBot: TLRPC.TLAttachMenuBot?, currentUser: TLRPC.User?) {
+		val botName = if (attachMenuBot != null) attachMenuBot.shortName else getUserName(currentUser)
 
 		AlertDialog.Builder(context).setTitle(context.getString(R.string.BotRemoveFromMenuTitle)).setMessage(AndroidUtilities.replaceTags(if (attachMenuBot != null) LocaleController.formatString("BotRemoveFromMenu", R.string.BotRemoveFromMenu, botName)
 		else LocaleController.formatString("BotRemoveInlineFromMenu", R.string.BotRemoveInlineFromMenu, botName))).setPositiveButton(context.getString(R.string.OK)) { _, _ ->
 			if (attachMenuBot != null) {
-				val req = TL_messages_toggleBotInAttachMenu()
+				val req = TLRPC.TLMessagesToggleBotInAttachMenu()
 				req.bot = MessagesController.getInstance(currentAccount).getInputUser(currentUser)
 				req.enabled = false
 
@@ -2158,7 +2114,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 					AndroidUtilities.runOnUIThread {
 						MediaDataController.getInstance(currentAccount).loadAttachMenuBots(cache = false, force = true)
 
-						if (currentAttachLayout === botAttachLayouts[attachMenuBot.bot_id]) {
+						if (currentAttachLayout === botAttachLayouts[attachMenuBot.botId]) {
 							showLayout(photoLayout)
 						}
 					}
@@ -2230,7 +2186,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 			val user = baseFragment.currentUser
 
 			if (user != null || isChannel(chat) && chat.megagroup || !isChannel(chat)) {
-				MessagesController.getNotificationsSettings(currentAccount).edit().putBoolean("silent_" + baseFragment.dialogId, !notify).commit()
+				MessagesController.getNotificationsSettings(currentAccount).edit { putBoolean("silent_" + baseFragment.dialogId, !notify) }
 			}
 		}
 
@@ -2503,8 +2459,8 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 		}
 	}
 
-	fun onRequestPermissionsResultFragment(requestCode: Int) {
-		if (requestCode == 30 && locationLayout != null && currentAttachLayout === locationLayout && isShowing) {
+	fun onRequestPermissionsResultFragment(requestCode: Int, granted: Boolean) {
+		if (requestCode == REQUEST_CODE_LIVE_LOCATION && granted && locationLayout != null && currentAttachLayout === locationLayout && isShowing) {
 			locationLayout?.openShareLiveLocation()
 		}
 	}
@@ -2544,7 +2500,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 
 		if (baseFragment is ChatActivity) {
 			val currentChat = baseFragment.currentChat
-			audioLayout?.setMaxSelectedFiles(if (currentChat != null && !hasAdminRights(currentChat) && currentChat.slowmode_enabled || editingMessageObject != null) 1 else -1)
+			audioLayout?.setMaxSelectedFiles(if (currentChat != null && !hasAdminRights(currentChat) && currentChat.slowmodeEnabled || editingMessageObject != null) 1 else -1)
 		}
 
 		if (show) {
@@ -2597,12 +2553,12 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 		when (baseFragment) {
 			is ChatActivity -> {
 				val currentChat = baseFragment.currentChat
-				documentLayout?.setMaxSelectedFiles(if (currentChat != null && !hasAdminRights(currentChat) && currentChat.slowmode_enabled || editingMessageObject != null) 1 else -1)
+				documentLayout?.setMaxSelectedFiles(if (currentChat != null && !hasAdminRights(currentChat) && currentChat.slowmodeEnabled || editingMessageObject != null) 1 else -1)
 			}
 
 			is CreateMediaSaleFragment -> {
 				val currentChat = baseFragment.currentChat
-				documentLayout?.setMaxSelectedFiles(if (currentChat != null && !hasAdminRights(currentChat) && currentChat.slowmode_enabled || editingMessageObject != null) 1 else -1)
+				documentLayout?.setMaxSelectedFiles(if (currentChat != null && !hasAdminRights(currentChat) && currentChat.slowmodeEnabled || editingMessageObject != null) 1 else -1)
 			}
 
 			else -> {
@@ -3380,7 +3336,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 		buttonsRecyclerView.alpha = 1f
 		buttonsRecyclerView.translationY = 0f
 
-		for (i in 0 until botAttachLayouts.size()) {
+		for (i in 0 until botAttachLayouts.size) {
 			botAttachLayouts.valueAt(i)!!.setMeasureOffsetY(0)
 		}
 
@@ -3720,7 +3676,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 		val revealView: View?
 			get() = null
 
-		fun didSelectBot(user: User?) {}
+		fun didSelectBot(user: TLRPC.User?) {}
 
 		fun needEnterComment(): Boolean {
 			return false
@@ -3942,8 +3898,8 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 		val nameTextView: TextView
 		private val avatarDrawable = AvatarDrawable()
 		private val selector: View?
-		var currentUser: User? = null
-		var attachMenuBot: TL_attachMenuBot? = null
+		var currentUser: TLRPC.User? = null
+		var attachMenuBot: TLRPC.TLAttachMenuBot? = null
 
 		var checkedState = 0f
 			set(value) {
@@ -4076,7 +4032,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 			}
 		}
 
-		fun setUser(user: User?) {
+		fun setUser(user: TLRPC.User?) {
 			if (user == null) {
 				return
 			}
@@ -4085,7 +4041,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 
 			currentUser = user
 
-			nameTextView.text = formatName(user.first_name, user.last_name)
+			nameTextView.text = formatName(user.firstName, user.lastName)
 
 			avatarDrawable.setInfo(user)
 
@@ -4102,14 +4058,14 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 			invalidate()
 		}
 
-		fun setAttachBot(user: User?, bot: TL_attachMenuBot?) {
+		fun setAttachBot(user: TLRPC.User?, bot: TLRPC.TLAttachMenuBot?) {
 			if (user == null || bot == null) {
 				return
 			}
 
 			nameTextView.setTextColor(ResourcesCompat.getColor(context.resources, R.color.dark_gray, null))
 			currentUser = user
-			nameTextView.text = bot.short_name
+			nameTextView.text = bot.shortName
 			avatarDrawable.setInfo(user)
 
 			var animated = true
@@ -4150,7 +4106,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 				val iconDoc = icon.icon
 
 				imageView.imageReceiver.setAllowStartLottieAnimation(false)
-				imageView.setImage(ImageLocation.getForDocument(iconDoc), bot.bot_id.toString(), if (animated) "tgs" else "svg", DocumentObject.getSvgThumb(iconDoc, ResourcesCompat.getColor(context.resources, R.color.light_background, null), 1f), bot)
+				imageView.setImage(ImageLocation.getForDocument(iconDoc), bot.botId.toString(), if (animated) "tgs" else "svg", DocumentObject.getSvgThumb(iconDoc, ResourcesCompat.getColor(context.resources, R.color.light_background, null), 1f), bot)
 			}
 
 			imageView.setSize(AndroidUtilities.dp(28f), AndroidUtilities.dp(28f))
@@ -4167,7 +4123,7 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 	}
 
 	private inner class ButtonsAdapter(private val mContext: Context) : SelectionAdapter() {
-		private val attachMenuBots = mutableListOf<TL_attachMenuBot>()
+		private val attachMenuBots = mutableListOf<TLRPC.TLAttachMenuBot>()
 		private var galleryButton = 0
 		private var attachBotsStartRow = 0
 		private var attachBotsEndRow = 0
@@ -4240,14 +4196,14 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 						position -= attachBotsStartRow
 						child.tag = position
 						val bot = attachMenuBots[position]
-						child.setAttachBot(MessagesController.getInstance(currentAccount).getUser(bot.bot_id), bot)
+						child.setAttachBot(MessagesController.getInstance(currentAccount).getUser(bot.botId), bot)
 						return
 					}
 
 					position -= buttonsCount
 
 					child.tag = position
-					child.setUser(MessagesController.getInstance(currentAccount).getUser(MediaDataController.getInstance(currentAccount).inlineBots[position].peer.user_id))
+					child.setUser(MessagesController.getInstance(currentAccount).getUser(MediaDataController.getInstance(currentAccount).inlineBots[position].peer.userId))
 				}
 			}
 		}
@@ -4379,5 +4335,6 @@ open class ChatAttachAlert @SuppressLint("ClickableViewAccessibility") construct
 		private const val VIEW_TYPE_BUTTON = 0
 		private const val VIEW_TYPE_BOT_BUTTON = 1
 		const val REQUEST_CODE_ATTACH_FILE = 21
+		const val REQUEST_CODE_LIVE_LOCATION = 30
 	}
 }

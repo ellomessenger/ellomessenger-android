@@ -116,8 +116,6 @@ public:
 
     Connection *getConnectionByType(uint32_t connectionType, bool create, int32_t allowPendingKey);
 
-    std::vector<Connection *> getAllConnections();
-
     static void aesIgeEncryption(uint8_t *buffer, uint8_t *key, uint8_t *iv, bool encrypt, bool changeIv, uint32_t length);
 
 private:

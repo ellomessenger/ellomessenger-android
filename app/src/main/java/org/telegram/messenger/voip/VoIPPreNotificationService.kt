@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Telegram, 2024.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger.voip
 
@@ -28,6 +28,8 @@ import android.os.Build
 import android.os.Vibrator
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.ContactsController
@@ -37,17 +39,9 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.XiaomiUtilities
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.PhoneCall
-import org.telegram.tgnet.TLRPC.TL_inputPhoneCall
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonBusy
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonDisconnect
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonHangup
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonMissed
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscarded
-import org.telegram.tgnet.TLRPC.TL_phone_discardCall
-import org.telegram.tgnet.TLRPC.TL_phone_receivedCall
-import org.telegram.tgnet.TLRPC.TL_updates
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.LaunchActivity
 import org.telegram.ui.VoIPFragment
 import org.telegram.ui.VoIPPermissionActivity
@@ -92,7 +86,7 @@ object VoIPPreNotificationService {
 
 				chanIndex++
 
-				nprefs.edit().putInt("calls_notification_channel", chanIndex).apply()
+				nprefs.edit { putInt("calls_notification_channel", chanIndex) }
 			}
 			else {
 				needCreate = false
@@ -226,7 +220,7 @@ object VoIPPreNotificationService {
 							isDefaultUri = true
 						}
 						else {
-							ringtoneUri = Uri.parse(notificationUri)
+							ringtoneUri = notificationUri.toUri()
 						}
 					}
 
@@ -317,7 +311,7 @@ object VoIPPreNotificationService {
 	}
 
 	private fun acknowledge(context: Context, currentAccount: Int, call: PhoneCall, whenAcknowledged: Runnable?) {
-		if (call is TL_phoneCallDiscarded) {
+		if (call is TLRPC.TLPhoneCallDiscarded) {
 			FileLog.w("Call " + call.id + " was discarded before the voip pre notification started, stopping")
 
 			pendingVoIP = null
@@ -341,10 +335,12 @@ object VoIPPreNotificationService {
 			}
 		}
 
-		val req = TL_phone_receivedCall()
-		req.peer = TL_inputPhoneCall()
-		req.peer.id = call.id
-		req.peer.access_hash = call.access_hash
+		val req = TLRPC.TLPhoneReceivedCall()
+
+		req.peer = TLRPC.TLInputPhoneCall().also {
+			it.id = call.id
+			it.accessHash = call.accessHash
+		}
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
@@ -451,19 +447,22 @@ object VoIPPreNotificationService {
 
 		val account = pendingVoIP.getIntExtra("account", UserConfig.selectedAccount)
 
-		val req = TL_phone_discardCall()
-		req.peer = TL_inputPhoneCall()
-		req.peer.access_hash = pendingCall!!.access_hash
-		req.peer.id = pendingCall!!.id
+		val req = TLRPC.TLPhoneDiscardCall()
+
+		req.peer = TLRPC.TLInputPhoneCall().also {
+			it.id = pendingCall?.id ?: 0
+			it.accessHash = pendingCall?.accessHash ?: 0L
+		}
+
 		req.duration = 0
-		req.connection_id = 0
+		req.connectionId = 0
 
 		when (reason) {
-			VoIPService.DISCARD_REASON_DISCONNECT -> req.reason = TL_phoneCallDiscardReasonDisconnect()
-			VoIPService.DISCARD_REASON_MISSED -> req.reason = TL_phoneCallDiscardReasonMissed()
-			VoIPService.DISCARD_REASON_LINE_BUSY -> req.reason = TL_phoneCallDiscardReasonBusy()
-			VoIPService.DISCARD_REASON_HANGUP -> req.reason = TL_phoneCallDiscardReasonHangup()
-			else -> req.reason = TL_phoneCallDiscardReasonHangup()
+			VoIPService.DISCARD_REASON_DISCONNECT -> req.reason = TLRPC.TLPhoneCallDiscardReasonDisconnect()
+			VoIPService.DISCARD_REASON_MISSED -> req.reason = TLRPC.TLPhoneCallDiscardReasonMissed()
+			VoIPService.DISCARD_REASON_LINE_BUSY -> req.reason = TLRPC.TLPhoneCallDiscardReasonBusy()
+			VoIPService.DISCARD_REASON_HANGUP -> req.reason = TLRPC.TLPhoneCallDiscardReasonHangup()
+			else -> req.reason = TLRPC.TLPhoneCallDiscardReasonHangup()
 		}
 
 		FileLog.e("discardCall " + req.reason)
@@ -473,7 +472,7 @@ object VoIPPreNotificationService {
 				FileLog.e("(VoIPPreNotification) error on phone.discardCall: $error")
 			}
 			else {
-				if (response is TL_updates) {
+				if (response is TLRPC.Updates) {
 					MessagesController.getInstance(account).processUpdates(response, false)
 				}
 

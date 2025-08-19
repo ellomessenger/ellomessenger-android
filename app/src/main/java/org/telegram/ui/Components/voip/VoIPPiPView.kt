@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.voip
 
@@ -31,8 +31,10 @@ import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withScale
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.FileLog
@@ -81,13 +83,10 @@ class VoIPPiPView(context: Context, val parentWidth: Int, val parentHeight: Int,
 		override fun onDraw(canvas: Canvas) {
 			val outerDrawable = ResourcesCompat.getDrawable(context.resources, R.drawable.calls_pip_outershadow, null)
 
-			canvas.save()
-			canvas.scale(floatingView.scaleX, floatingView.scaleY, floatingView.left + floatingView.pivotX, floatingView.top + floatingView.pivotY)
-
-			outerDrawable?.setBounds(floatingView.left - AndroidUtilities.dp(2f), floatingView.top - AndroidUtilities.dp(2f), floatingView.right + AndroidUtilities.dp(2f), floatingView.bottom + AndroidUtilities.dp(2f))
-			outerDrawable?.draw(canvas)
-
-			canvas.restore()
+			canvas.withScale(floatingView.scaleX, floatingView.scaleY, floatingView.left + floatingView.pivotX, floatingView.top + floatingView.pivotY) {
+				outerDrawable?.setBounds(floatingView.left - AndroidUtilities.dp(2f), floatingView.top - AndroidUtilities.dp(2f), floatingView.right + AndroidUtilities.dp(2f), floatingView.bottom + AndroidUtilities.dp(2f))
+				outerDrawable?.draw(this)
+			}
 
 			super.onDraw(canvas)
 		}
@@ -222,8 +221,9 @@ class VoIPPiPView(context: Context, val parentWidth: Int, val parentHeight: Int,
 			val x = min(1f, max(0f, point[0]))
 			val y = min(1f, max(0f, point[1]))
 
-			val preferences = ApplicationLoader.applicationContext.getSharedPreferences("voippipconfig", Context.MODE_PRIVATE)
-			preferences.edit().putFloat("relativeX", x).putFloat("relativeY", y).commit()
+			ApplicationLoader.applicationContext.getSharedPreferences("voippipconfig", Context.MODE_PRIVATE).edit {
+				putFloat("relativeX", x).putFloat("relativeY", y)
+			}
 
 			try {
 				windowManager?.removeView(windowView)
@@ -349,10 +349,9 @@ class VoIPPiPView(context: Context, val parentWidth: Int, val parentHeight: Int,
 		private var leftPadding = 0f
 		private var rightPadding = 0f
 		var topPadding = 0f
-		var touchSlop: Float
+		var touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
 
 		init {
-			touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
 
 			outlineProvider = object : ViewOutlineProvider() {
 				override fun getOutline(view: View, outline: Outline) {
@@ -721,7 +720,7 @@ class VoIPPiPView(context: Context, val parentWidth: Int, val parentHeight: Int,
 	}
 
 	companion object {
-		const val ANIMATION_ENTER_TYPE_NONE = 3
+		// const val ANIMATION_ENTER_TYPE_NONE = 3
 		const val ANIMATION_ENTER_TYPE_SCALE = 0
 		const val ANIMATION_ENTER_TYPE_TRANSITION = 1
 		private const val SCALE_EXPANDED = 0.4f

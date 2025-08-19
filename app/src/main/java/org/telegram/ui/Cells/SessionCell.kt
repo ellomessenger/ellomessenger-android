@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -31,9 +31,8 @@ import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
-import org.telegram.tgnet.TLRPC.TL_authorization
-import org.telegram.tgnet.TLRPC.TL_webAuthorization
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedFloat
 import org.telegram.ui.Components.AvatarDrawable
@@ -43,7 +42,6 @@ import org.telegram.ui.Components.DotDividerSpan
 import org.telegram.ui.Components.FlickerLoadingView
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.SessionsActivity
-import java.util.Locale
 
 class SessionCell @JvmOverloads constructor(context: Context, type: Int = SessionsActivity.ALL_SESSIONS) : FrameLayout(context) {
 	private val currentAccount = UserConfig.selectedAccount
@@ -159,25 +157,25 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 	fun setSession(`object`: TLObject?, divider: Boolean) {
 		needDivider = divider
 
-		if (`object` is TL_authorization) {
+		if (`object` is TLRPC.TLAuthorization) {
 			imageView?.setImageDrawable(createDrawable(`object`))
 
 			nameTextView.text = buildString {
-				if (`object`.device_model.isNotEmpty()) {
-					append(`object`.device_model)
+				if (!`object`.deviceModel.isNullOrEmpty()) {
+					append(`object`.deviceModel)
 				}
 
 				if (isEmpty()) {
-					if (`object`.platform.isNotEmpty()) {
+					if (!`object`.platform.isNullOrEmpty()) {
 						append(`object`.platform)
 					}
 
-					if (`object`.system_version.isNotEmpty()) {
-						if (`object`.platform.isNotEmpty()) {
+					if (!`object`.systemVersion.isNullOrEmpty()) {
+						if (!`object`.platform.isNullOrEmpty()) {
 							append(" ")
 						}
 
-						append(`object`.system_version)
+						append(`object`.systemVersion)
 					}
 				}
 			}
@@ -186,7 +184,7 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 				context.getString(R.string.Online)
 			}
 			else {
-				LocaleController.stringForMessageListDate(`object`.date_active.toLong())
+				LocaleController.stringForMessageListDate(`object`.dateActive.toLong())
 			}
 
 			detailExTextView.text = buildSpannedString {
@@ -206,13 +204,13 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 			}
 
 			detailTextView.text = buildString {
-				append(`object`.app_name)
+				append(`object`.appName)
 				append(" ")
-				append(`object`.app_version)
+				append(`object`.appVersion)
 			}
 		}
-		else if (`object` is TL_webAuthorization) {
-			val user = MessagesController.getInstance(currentAccount).getUser(`object`.bot_id)
+		else if (`object` is TLRPC.TLWebAuthorization) {
+			val user = MessagesController.getInstance(currentAccount).getUser(`object`.botId)
 
 			nameTextView.text = `object`.domain
 
@@ -225,14 +223,15 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 				""
 			}
 
-			onlineTextView.text = LocaleController.stringForMessageListDate(`object`.date_active.toLong())
+			onlineTextView.text = LocaleController.stringForMessageListDate(`object`.dateActive.toLong())
 			onlineTextView.setTextColor(ResourcesCompat.getColor(context.resources, R.color.dark_gray, null))
 
 			detailExTextView.text = buildString {
-				if (`object`.ip.isNotEmpty()) {
+				if (!`object`.ip.isNullOrEmpty()) {
 					append(`object`.ip)
 				}
-				if (`object`.region.isNotEmpty()) {
+
+				if (!`object`.region.isNullOrEmpty()) {
 					if (isNotEmpty()) {
 						append(" ")
 					}
@@ -247,7 +246,7 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 					append(name)
 				}
 
-				if (`object`.browser.isNotEmpty()) {
+				if (!`object`.browser.isNullOrEmpty()) {
 					if (isNotEmpty()) {
 						append(", ")
 					}
@@ -255,7 +254,7 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 					append(`object`.browser)
 				}
 
-				if (`object`.platform.isNotEmpty()) {
+				if (!`object`.platform.isNullOrEmpty()) {
 					if (isNotEmpty()) {
 						append(", ")
 					}
@@ -340,14 +339,14 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 	}
 
 	companion object {
-		fun createDrawable(session: TL_authorization): Drawable {
-			var platform = session.platform.lowercase(Locale.getDefault())
+		fun createDrawable(session: TLRPC.TLAuthorization): Drawable {
+			var platform = session.platform?.lowercase() ?: ""
 
 			if (platform.isEmpty()) {
-				platform = session.system_version.lowercase(Locale.getDefault())
+				platform = session.systemVersion?.lowercase() ?: ""
 			}
 
-			val deviceModel = session.device_model.lowercase(Locale.getDefault())
+			val deviceModel = session.deviceModel?.lowercase() ?: ""
 			val iconId: Int
 			val colorKey: String
 
@@ -392,7 +391,7 @@ class SessionCell @JvmOverloads constructor(context: Context, type: Int = Sessio
 				colorKey = Theme.key_avatar_backgroundGreen
 			}
 			else {
-				if (session.app_name.lowercase(Locale.getDefault()).contains("desktop")) {
+				if (session.appName?.lowercase()?.contains("desktop") == true) {
 					iconId = R.drawable.device_desktop_other
 					colorKey = Theme.key_avatar_backgroundCyan
 				}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -30,11 +30,13 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.messageobject.SendAnimationData;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.Premium.PremiumLockIconView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 
@@ -47,7 +49,6 @@ public class StickerCell extends FrameLayout {
 	private float scale;
 	private boolean clearsInputField;
 	private final PremiumLockIconView premiumIconView;
-	private boolean showPremiumLock;
 	private boolean isPremiumSticker;
 
 	public StickerCell(Context context) {
@@ -95,7 +96,7 @@ public class StickerCell extends FrameLayout {
 			premiumIconView.setWaitingImage();
 		}
 		if (document != null) {
-			TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90);
+			TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 90);
 			SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(document, ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), 1.0f);
 			if (MessageObject.canAutoplayAnimatedSticker(document)) {
 				if (svgThumb != null) {
@@ -165,7 +166,7 @@ public class StickerCell extends FrameLayout {
 	}
 
 	@Override
-	protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+	protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 		boolean result = super.drawChild(canvas, child, drawingTime);
 		if (child == imageView && (scaled && scale != 0.8f || !scaled && scale != 1.0f)) {
 			long newTime = System.currentTimeMillis();
@@ -194,16 +195,23 @@ public class StickerCell extends FrameLayout {
 	@Override
 	public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
 		super.onInitializeAccessibilityNodeInfo(info);
+
 		if (sticker == null) {
 			return;
 		}
+
 		String emoji = null;
-		for (int a = 0; a < sticker.attributes.size(); a++) {
-			TLRPC.DocumentAttribute attribute = sticker.attributes.get(a);
-			if (attribute instanceof TLRPC.TL_documentAttributeSticker) {
-				emoji = attribute.alt != null && attribute.alt.length() > 0 ? attribute.alt : null;
+
+		if (sticker instanceof TLRPC.TLDocument document) {
+			for (int a = 0; a < document.attributes.size(); a++) {
+				TLRPC.DocumentAttribute attribute = document.attributes.get(a);
+
+				if (attribute instanceof TLRPC.TLDocumentAttributeSticker) {
+					emoji = attribute.alt != null && attribute.alt.length() > 0 ? attribute.alt : null;
+				}
 			}
 		}
+
 		if (emoji != null) {
 			info.setText(emoji + " " + LocaleController.getString("AttachSticker", R.string.AttachSticker));
 		}
@@ -214,13 +222,8 @@ public class StickerCell extends FrameLayout {
 	}
 
 	private void updatePremiumStatus(boolean animated) {
-		if (isPremiumSticker) {
-			showPremiumLock = true;
-		}
-		else {
-			showPremiumLock = false;
-		}
 		FrameLayout.LayoutParams layoutParams = (LayoutParams)premiumIconView.getLayoutParams();
+
 		if (!UserConfig.getInstance(UserConfig.selectedAccount).isPremium()) {
 			layoutParams.height = layoutParams.width = AndroidUtilities.dp(24);
 			layoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
@@ -235,7 +238,7 @@ public class StickerCell extends FrameLayout {
 			premiumIconView.setPadding(AndroidUtilities.dp(1), AndroidUtilities.dp(1), AndroidUtilities.dp(1), AndroidUtilities.dp(1));
 		}
 		premiumIconView.setLocked(!UserConfig.getInstance(UserConfig.selectedAccount).isPremium());
-		AndroidUtilities.updateViewVisibilityAnimated(premiumIconView, showPremiumLock, 0.9f, animated);
+		AndroidUtilities.updateViewVisibilityAnimated(premiumIconView, isPremiumSticker, 0.9f, animated);
 		invalidate();
 	}
 }

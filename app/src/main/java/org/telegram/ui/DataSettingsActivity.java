@@ -4,15 +4,14 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui;
 
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
-import android.os.Build;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -56,14 +55,9 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 public class DataSettingsActivity extends BaseFragment {
-
 	private ListAdapter listAdapter;
 	private RecyclerListView listView;
-	@SuppressWarnings("FieldCanBeLocal")
-	private LinearLayoutManager layoutManager;
-
 	private ArrayList<File> storageDirs;
-
 	private int mediaDownloadSectionRow;
 	private int mobileRow;
 	private int roamingRow;
@@ -113,11 +107,9 @@ public class DataSettingsActivity extends BaseFragment {
 		storageUsageRow = rowCount++;
 		dataUsageRow = rowCount++;
 		storageNumRow = -1;
-		if (Build.VERSION.SDK_INT >= 19) {
-			storageDirs = AndroidUtilities.getRootDirs();
-			if (storageDirs.size() > 1) {
-				storageNumRow = rowCount++;
-			}
+		storageDirs = AndroidUtilities.getRootDirs();
+		if (storageDirs.size() > 1) {
+			storageNumRow = rowCount++;
 		}
 		usageSection2Row = rowCount++;
 		mediaDownloadSectionRow = rowCount++;
@@ -188,7 +180,7 @@ public class DataSettingsActivity extends BaseFragment {
 
 		listView = new RecyclerListView(context);
 		listView.setVerticalScrollBarEnabled(false);
-		listView.setLayoutManager(layoutManager = new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
+		listView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
 		frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
 		listView.setAdapter(listAdapter);
 		listView.setOnItemClickListener(new RecyclerListView.OnItemClickListenerExtended() {
@@ -344,37 +336,22 @@ public class DataSettingsActivity extends BaseFragment {
 				}
 				else if (position == useLessDataForCallsRow) {
 					final SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-					int selected = 0;
-					switch (preferences.getInt("VoipDataSaving", VoIPHelper.getDataSavingDefault())) {
-						case Instance.DATA_SAVING_NEVER:
-							selected = 0;
-							break;
-						case Instance.DATA_SAVING_ROAMING:
-							selected = 1;
-							break;
-						case Instance.DATA_SAVING_MOBILE:
-							selected = 2;
-							break;
-						case Instance.DATA_SAVING_ALWAYS:
-							selected = 3;
-							break;
-					}
+					int selected = switch (preferences.getInt("VoipDataSaving", VoIPHelper.getDataSavingDefault())) {
+						case Instance.DATA_SAVING_NEVER -> 0;
+						case Instance.DATA_SAVING_ROAMING -> 1;
+						case Instance.DATA_SAVING_MOBILE -> 2;
+						case Instance.DATA_SAVING_ALWAYS -> 3;
+						default -> 0;
+					};
 					Dialog dlg = AlertsCreator.createSingleChoiceDialog(getParentActivity(), new String[]{LocaleController.getString("UseLessDataNever", R.string.UseLessDataNever), LocaleController.getString("UseLessDataOnRoaming", R.string.UseLessDataOnRoaming), LocaleController.getString("UseLessDataOnMobile", R.string.UseLessDataOnMobile), LocaleController.getString("UseLessDataAlways", R.string.UseLessDataAlways)}, LocaleController.getString("VoipUseLessData", R.string.VoipUseLessData), selected, (dialog, which) -> {
 						int val = -1;
-						switch (which) {
-							case 0:
-								val = Instance.DATA_SAVING_NEVER;
-								break;
-							case 1:
-								val = Instance.DATA_SAVING_ROAMING;
-								break;
-							case 2:
-								val = Instance.DATA_SAVING_MOBILE;
-								break;
-							case 3:
-								val = Instance.DATA_SAVING_ALWAYS;
-								break;
-						}
+						val = switch (which) {
+							case 0 -> Instance.DATA_SAVING_NEVER;
+							case 1 -> Instance.DATA_SAVING_ROAMING;
+							case 2 -> Instance.DATA_SAVING_MOBILE;
+							case 3 -> Instance.DATA_SAVING_ALWAYS;
+							default -> val;
+						};
 						if (val != -1) {
 							preferences.edit().putInt("VoipDataSaving", val).commit();
 						}
@@ -468,7 +445,7 @@ public class DataSettingsActivity extends BaseFragment {
 					builder.setTitle(LocaleController.getString("AreYouSureClearDraftsTitle", R.string.AreYouSureClearDraftsTitle));
 					builder.setMessage(LocaleController.getString("AreYouSureClearDrafts", R.string.AreYouSureClearDrafts));
 					builder.setPositiveButton(LocaleController.getString("Delete", R.string.Delete), (dialogInterface, i) -> {
-						TLRPC.TL_messages_clearAllDrafts req = new TLRPC.TL_messages_clearAllDrafts();
+						var req = new TLRPC.TLMessagesClearAllDrafts();
 						getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> getMediaDataController().clearAllDrafts(true)));
 					});
 					builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
@@ -500,7 +477,7 @@ public class DataSettingsActivity extends BaseFragment {
 
 	private class ListAdapter extends RecyclerListView.SelectionAdapter {
 
-		private Context mContext;
+		private final Context mContext;
 
 		public ListAdapter(Context context) {
 			mContext = context;
@@ -516,10 +493,10 @@ public class DataSettingsActivity extends BaseFragment {
 			switch (holder.getItemViewType()) {
 				case 0: {
 					if (position == clearDraftsSectionRow) {
-						holder.itemView.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+						holder.itemView.setBackground(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
 					}
 					else {
-						holder.itemView.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
+						holder.itemView.setBackground(Theme.getThemedDrawable(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
 					}
 					break;
 				}
@@ -532,21 +509,13 @@ public class DataSettingsActivity extends BaseFragment {
 					}
 					else if (position == useLessDataForCallsRow) {
 						SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-						String value = null;
-						switch (preferences.getInt("VoipDataSaving", VoIPHelper.getDataSavingDefault())) {
-							case Instance.DATA_SAVING_NEVER:
-								value = LocaleController.getString("UseLessDataNever", R.string.UseLessDataNever);
-								break;
-							case Instance.DATA_SAVING_MOBILE:
-								value = LocaleController.getString("UseLessDataOnMobile", R.string.UseLessDataOnMobile);
-								break;
-							case Instance.DATA_SAVING_ROAMING:
-								value = LocaleController.getString("UseLessDataOnRoaming", R.string.UseLessDataOnRoaming);
-								break;
-							case Instance.DATA_SAVING_ALWAYS:
-								value = LocaleController.getString("UseLessDataAlways", R.string.UseLessDataAlways);
-								break;
-						}
+						String value = switch (preferences.getInt("VoipDataSaving", VoIPHelper.getDataSavingDefault())) {
+							case Instance.DATA_SAVING_NEVER -> LocaleController.getString("UseLessDataNever", R.string.UseLessDataNever);
+							case Instance.DATA_SAVING_MOBILE -> LocaleController.getString("UseLessDataOnMobile", R.string.UseLessDataOnMobile);
+							case Instance.DATA_SAVING_ROAMING -> LocaleController.getString("UseLessDataOnRoaming", R.string.UseLessDataOnRoaming);
+							case Instance.DATA_SAVING_ALWAYS -> LocaleController.getString("UseLessDataAlways", R.string.UseLessDataAlways);
+							default -> null;
+						};
 						textCell.setTextAndValue(LocaleController.getString("VoipUseLessData", R.string.VoipUseLessData), value, true);
 					}
 					else if (position == dataUsageRow) {

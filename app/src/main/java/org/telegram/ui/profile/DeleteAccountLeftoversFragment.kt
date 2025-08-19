@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.profile
 
@@ -44,8 +44,6 @@ import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_biz_dataRaw
-import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ChatActivity
@@ -144,10 +142,10 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 		}
 
 		val subscriptionsResponse = connectionsManager.performRequest(ElloRpc.getSubscriptionsRequest(ElloRpc.SubscriptionType.ACTIVE_CHANNELS))
-		val subscriptions = (subscriptionsResponse as? TL_biz_dataRaw)?.readData<ElloRpc.Subscriptions>()?.items
+		val subscriptions = (subscriptionsResponse as? TLRPC.TLBizDataRaw)?.readData<ElloRpc.Subscriptions>()?.items
 		val leftoversResponse = connectionsManager.performRequest(ElloRpc.accountDeletionLeftoversRequest())
 
-		if (leftoversResponse is TL_error) {
+		if (leftoversResponse is TLRPC.TLError) {
 			withContext(mainScope.coroutineContext) {
 				progressBar?.hide()
 				Toast.makeText(context, leftoversResponse.text, Toast.LENGTH_SHORT).show()
@@ -158,7 +156,7 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 			return
 		}
 
-		val leftovers = (leftoversResponse as? TL_biz_dataRaw)?.readData<ElloRpc.Leftovers>()
+		val leftovers = (leftoversResponse as? TLRPC.TLBizDataRaw)?.readData<ElloRpc.Leftovers>()
 
 		if (leftovers == null) {
 			withContext(mainScope.coroutineContext) {
@@ -229,8 +227,8 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 			binding.walletNameLabel.text = if (wallet.id == walletHelper.earningsWallet?.id) {
 				setVisibilityForLabels(true)
 
-				binding.frozenBalanceLabel.text = binding.root.context.getString(R.string.simple_coin_format, walletHelper.earnings?.freezeBalance).fillElloCoinLogos()
-				binding.transferBalanceLabel.text = binding.root.context.getString(R.string.simple_coin_format, walletHelper.earnings?.availableBalance).fillElloCoinLogos()
+				binding.frozenBalanceLabel.text = binding.root.context.getString(R.string.simple_coin_format, walletHelper.wallet?.freezeAmount).fillElloCoinLogos()
+				binding.transferBalanceLabel.text = binding.root.context.getString(R.string.simple_coin_format, walletHelper.wallet?.availableAmount).fillElloCoinLogos()
 
 				binding.root.context.getString(R.string.business_wallet)
 			}
@@ -240,7 +238,7 @@ class DeleteAccountLeftoversFragment : BaseFragment() {
 			}
 
 			val amount = if (wallet.id == walletHelper.earningsWallet?.id) {
-				walletHelper.earnings?.availableBalance?.let { walletHelper.earnings?.freezeBalance?.plus(it) }
+				walletHelper.wallet?.availableAmount?.let { walletHelper.wallet?.freezeAmount?.plus(it) }
 			}
 			else {
 				wallet.amount

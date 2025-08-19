@@ -11,10 +11,7 @@ package org.telegram.messenger.voip;
 import android.content.SharedPreferences;
 import android.media.audiofx.AcousticEchoCanceler;
 import android.media.audiofx.NoiseSuppressor;
-import android.os.Build;
 import android.os.SystemClock;
-
-import androidx.annotation.NonNull;
 
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildConfig;
@@ -27,8 +24,9 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Locale;
 
-public class VoIPController {
+import androidx.annotation.NonNull;
 
+public class VoIPController {
 	public static final int NET_TYPE_UNKNOWN = 0;
 	public static final int NET_TYPE_GPRS = 1;
 	public static final int NET_TYPE_EDGE = 2;

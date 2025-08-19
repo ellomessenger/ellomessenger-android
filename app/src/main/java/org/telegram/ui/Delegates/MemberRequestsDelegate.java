@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Delegates;
 
 import android.animation.Animator;
@@ -40,7 +48,8 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
 import org.telegram.ui.ActionBar.ActionBarPopupWindow;
@@ -81,14 +90,11 @@ import static android.view.View.VISIBLE;
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 
 public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener {
-
 	public final boolean isChannel;
 	public boolean isNeedRestoreList;
-
-	private final List<TLRPC.TL_chatInviteImporter> currentImporters = new ArrayList<>();
+	private final List<TLRPC.TLChatInviteImporter> currentImporters = new ArrayList<>();
 	private final LongSparseArray<User> users = new LongSparseArray<>();
-
-	private final ArrayList<TLRPC.TL_chatInviteImporter> allImporters = new ArrayList<>();
+	private final ArrayList<TLRPC.TLChatInviteImporter> allImporters = new ArrayList<>();
 	private final Adapter adapter = new Adapter();
 	private final BaseFragment fragment;
 	private final FrameLayout layoutContainer;
@@ -103,7 +109,7 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 	private RecyclerListView recyclerView;
 	private FlickerLoadingView loadingView;
 
-	private TLRPC.TL_chatInviteImporter importer;
+	private TLRPC.TLChatInviteImporter importer;
 	private PreviewDialog previewDialog;
 
 	private String query;
@@ -145,7 +151,7 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 			recyclerView.setAdapter(adapter);
 			recyclerView.setLayoutManager(layoutManager);
 			recyclerView.setOnItemClickListener(this::onItemClick);
-			recyclerView.setOnScrollListener(listScrollListener);
+			recyclerView.addOnScrollListener(listScrollListener);
 			recyclerView.setSelectorDrawableColor(Theme.getColor(Theme.key_listSelector, fragment.getResourceProvider()));
 			rootLayout.addView(recyclerView, MATCH_PARENT, MATCH_PARENT);
 		}
@@ -227,20 +233,19 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 	}
 
 	public void onItemClick(View view, int position) {
-		if (view instanceof MemberRequestCell) {
+		if (view instanceof MemberRequestCell cell) {
 			if (isSearchExpanded) {
 				AndroidUtilities.hideKeyboard(fragment.getParentActivity().getCurrentFocus());
 			}
-			MemberRequestCell cell = (MemberRequestCell)view;
 			AndroidUtilities.runOnUIThread(() -> {
 				importer = cell.getImporter();
-				User user = users.get(importer.user_id);
+				User user = users.get(importer.userId);
 				if (user == null) {
 					return;
 				}
 				fragment.getMessagesController().putUser(user, false);
 				boolean isLandscape = AndroidUtilities.displaySize.x > AndroidUtilities.displaySize.y;
-				boolean showProfile = user.photo == null || isLandscape;
+				boolean showProfile = TLRPCExtensions.getPhoto(user) == null || isLandscape;
 				if (showProfile) {
 					isNeedRestoreList = true;
 					fragment.dismissCurrentDialog();
@@ -321,7 +326,7 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 	public void loadMembers() {
 		boolean isNeedShowLoading = true;
 		if (isFirstLoading) {
-			TLRPC.TL_messages_chatInviteImporters firstImporters = controller.getCachedImporters(chatId);
+			TLRPC.TLMessagesChatInviteImporters firstImporters = controller.getCachedImporters(chatId);
 			if (firstImporters != null) {
 				isNeedShowLoading = false;
 				isDataLoaded = true;
@@ -342,29 +347,27 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 				AndroidUtilities.runOnUIThread(showLoadingRunnable, 300);
 			}
 
-			TLRPC.TL_chatInviteImporter lastInvitedUser = !isEmptyQuery && !currentImporters.isEmpty() ? currentImporters.get(currentImporters.size() - 1) : null;
-			searchRequestId = controller.getImporters(chatId, lastQuery, lastInvitedUser, users, (response, error) -> {
-				AndroidUtilities.runOnUIThread(() -> {
-					isLoading = false;
+			TLRPC.TLChatInviteImporter lastInvitedUser = !isEmptyQuery && !currentImporters.isEmpty() ? currentImporters.get(currentImporters.size() - 1) : null;
+			searchRequestId = controller.getImporters(chatId, lastQuery, lastInvitedUser, users, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+				isLoading = false;
+				isDataLoaded = true;
+				if (isEmptyQuery) {
+					AndroidUtilities.cancelRunOnUIThread(showLoadingRunnable);
+				}
+				setViewVisible(loadingView, false, false);
+				if (!TextUtils.equals(lastQuery, query)) {
+					return;
+				}
+				if (error == null) {
 					isDataLoaded = true;
-					if (isEmptyQuery) {
-						AndroidUtilities.cancelRunOnUIThread(showLoadingRunnable);
-					}
-					setViewVisible(loadingView, false, false);
-					if (!TextUtils.equals(lastQuery, query)) {
-						return;
-					}
-					if (error == null) {
-						isDataLoaded = true;
-						TLRPC.TL_messages_chatInviteImporters importers = (TLRPC.TL_messages_chatInviteImporters)response;
-						onImportersLoaded(importers, lastQuery, isEmptyOffset, false);
-					}
-				});
-			});
+					TLRPC.TLMessagesChatInviteImporters importers = (TLRPC.TLMessagesChatInviteImporters)response;
+					onImportersLoaded(importers, lastQuery, isEmptyOffset, false);
+				}
+			}));
 		});
 	}
 
-	private void onImportersLoaded(TLRPC.TL_messages_chatInviteImporters importers, String lastQuery, boolean isEmptyOffset, boolean fromCache) {
+	private void onImportersLoaded(TLRPC.TLMessagesChatInviteImporters importers, String lastQuery, boolean isEmptyOffset, boolean fromCache) {
 		for (int i = 0; i < importers.users.size(); ++i) {
 			User user = importers.users.get(i);
 			users.put(user.id, user);
@@ -387,12 +390,12 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 	}
 
 	@Override
-	public void onAddClicked(TLRPC.TL_chatInviteImporter importer) {
+	public void onAddClicked(TLRPC.TLChatInviteImporter importer) {
 		hideChatJoinRequest(importer, true);
 	}
 
 	@Override
-	public void onDismissClicked(TLRPC.TL_chatInviteImporter importer) {
+	public void onDismissClicked(TLRPC.TLChatInviteImporter importer) {
 		hideChatJoinRequest(importer, false);
 	}
 
@@ -444,29 +447,29 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 		return !allImporters.isEmpty();
 	}
 
-	private void hideChatJoinRequest(TLRPC.TL_chatInviteImporter importer, boolean isApproved) {
-		User user = users.get(importer.user_id);
+	private void hideChatJoinRequest(TLRPC.TLChatInviteImporter importer, boolean isApproved) {
+		User user = users.get(importer.userId);
 		if (user == null) {
 			return;
 		}
-		TLRPC.TL_messages_hideChatJoinRequest req = new TLRPC.TL_messages_hideChatJoinRequest();
+		TLRPC.TLMessagesHideChatJoinRequest req = new TLRPC.TLMessagesHideChatJoinRequest();
 		req.approved = isApproved;
 		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(-chatId);
-		req.user_id = MessagesController.getInstance(currentAccount).getInputUser(user);
+		req.userId = MessagesController.getInstance(currentAccount).getInputUser(user);
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
 			if (error == null) {
-				TLRPC.TL_updates updates = (TLRPC.TL_updates)response;
+				TLRPC.TLUpdates updates = (TLRPC.TLUpdates)response;
 				MessagesController.getInstance(currentAccount).processUpdates(updates, false);
 			}
 			AndroidUtilities.runOnUIThread(() -> {
 				if (error == null) {
-					TLRPC.TL_updates updates = (TLRPC.TL_updates)response;
+					TLRPC.TLUpdates updates = (TLRPC.TLUpdates)response;
 					if (!updates.chats.isEmpty()) {
 						TLRPC.Chat chat = updates.chats.get(0);
 						MessagesController.getInstance(currentAccount).loadFullChat(chat.id, 0, true);
 					}
 					for (int i = 0; i < allImporters.size(); ++i) {
-						if (allImporters.get(i).user_id == importer.user_id) {
+						if (allImporters.get(i).userId == importer.userId) {
 							allImporters.remove(i);
 							break;
 						}
@@ -614,13 +617,13 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 		}
 
 		@SuppressLint("NotifyDataSetChanged")
-		public void setItems(List<TLRPC.TL_chatInviteImporter> newItems) {
+		public void setItems(List<TLRPC.TLChatInviteImporter> newItems) {
 			currentImporters.clear();
 			currentImporters.addAll(newItems);
 			notifyDataSetChanged();
 		}
 
-		public void appendItems(List<TLRPC.TL_chatInviteImporter> newItems) {
+		public void appendItems(List<TLRPC.TLChatInviteImporter> newItems) {
 			currentImporters.addAll(newItems);
 			if (currentImporters.size() > newItems.size()) {
 				notifyItemChanged(currentImporters.size() - newItems.size() - 1);
@@ -628,10 +631,10 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 			notifyItemRangeInserted(currentImporters.size() - newItems.size(), newItems.size());
 		}
 
-		public void removeItem(TLRPC.TL_chatInviteImporter item) {
+		public void removeItem(TLRPC.TLChatInviteImporter item) {
 			int position = -1;
 			for (int i = 0; i < currentImporters.size(); ++i) {
-				if (currentImporters.get(i).user_id == item.user_id) {
+				if (currentImporters.get(i).userId == item.userId) {
 					position = i;
 					break;
 				}
@@ -665,7 +668,7 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 		private final ProfileGalleryView viewPager;
 		private final AvatarPreviewPagerIndicator pagerIndicator;
 
-		private TLRPC.TL_chatInviteImporter importer;
+		private TLRPC.TLChatInviteImporter importer;
 		private ValueAnimator animator;
 		private BackupImageView imageView;
 		private BitmapDrawable backgroundDrawable;
@@ -736,7 +739,7 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 					super.dismiss();
 					fragment.dismissCurrentDialog();
 					Bundle args = new Bundle();
-					args.putLong("user_id", importer.user_id);
+					args.putLong("user_id", importer.userId);
 					ChatActivity chatActivity = new ChatActivity(args);
 					fragment.presentFragment(chatActivity);
 				}
@@ -768,21 +771,19 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 			params.dimAmount = 0;
 			params.flags &= ~WindowManager.LayoutParams.FLAG_DIM_BEHIND;
 			params.gravity = Gravity.TOP | Gravity.LEFT;
-			if (Build.VERSION.SDK_INT >= 21) {
-				params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
-			}
+			params.flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
 			if (Build.VERSION.SDK_INT >= 28) {
 				params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
 			}
 			getWindow().setAttributes(params);
 		}
 
-		public void setImporter(TLRPC.TL_chatInviteImporter importer, BackupImageView imageView) {
+		public void setImporter(TLRPC.TLChatInviteImporter importer, BackupImageView imageView) {
 			this.importer = importer;
 			this.imageView = imageView;
 			viewPager.setParentAvatarImage(imageView);
-			viewPager.setData(importer.user_id, true);
-			User user = users.get(importer.user_id);
+			viewPager.setData(importer.userId, true);
+			User user = users.get(importer.userId);
 			nameText.setText(UserObject.getUserName(user));
 			bioText.setText(importer.about);
 			bioText.setVisibility(TextUtils.isEmpty(importer.about) ? GONE : VISIBLE);
@@ -885,7 +886,7 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 
 		private void updateBackgroundBitmap() {
 			int oldAlpha = 255;
-			if (backgroundDrawable != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+			if (backgroundDrawable != null) {
 				oldAlpha = backgroundDrawable.getAlpha();
 			}
 			backgroundDrawable = new BitmapDrawable(getContext().getResources(), getBlurredBitmap());
@@ -911,12 +912,12 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 
 			private final GestureDetector gestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
 				@Override
-				public boolean onDown(MotionEvent e) {
+				public boolean onDown(@NonNull MotionEvent e) {
 					return true;
 				}
 
 				@Override
-				public boolean onSingleTapUp(MotionEvent e) {
+				public boolean onSingleTapUp(@NonNull MotionEvent e) {
 					boolean isTouchInsideContent = pagerShadowDrawable.getBounds().contains((int)e.getX(), (int)e.getY()) || popupLayout.getLeft() < e.getX() && e.getX() < popupLayout.getRight() && popupLayout.getTop() < e.getY() && e.getY() < popupLayout.getBottom();
 					if (!isTouchInsideContent) {
 						dismiss();
@@ -1002,7 +1003,7 @@ public class MemberRequestsDelegate implements MemberRequestCell.OnClickListener
 			}
 
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 //                if (animationProgress < 1f) {
 //                    canvas.save();
 //                }

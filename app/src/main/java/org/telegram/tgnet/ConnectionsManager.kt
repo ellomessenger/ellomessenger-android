@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.tgnet
 
@@ -16,7 +16,6 @@ import android.os.SystemClock
 import android.util.Base64
 import androidx.annotation.Keep
 import com.beint.elloapp.DeviceInfo
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
@@ -39,10 +38,9 @@ import org.telegram.messenger.StatsController
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.utils.getHostByNameSync
+import org.telegram.tgnet.TLRPC.TLConfig
+import org.telegram.tgnet.TLRPC.TLError
 import org.telegram.tgnet.TLRPC.Updates
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_config
-import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.AlertDialog
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -277,7 +275,7 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 
 				native_sendRequest(currentAccount, buffer.address, { response, errorCode, errorText, networkType, timestamp ->
 					var resp: TLObject? = null
-					var error: TL_error? = null
+					var error: TLError? = null
 
 					try {
 						if (response != 0L) {
@@ -290,7 +288,7 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 							}
 						}
 						else if (errorText != null) {
-							error = TL_error()
+							error = TLError()
 							error.code = errorCode
 							error.text = errorText
 
@@ -312,8 +310,8 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 						FileLog.e(e)
 
 						if (error == null) {
-							error = TL_error()
-							error.code = TL_error.UNKNOWN_ERROR
+							error = TLError()
+							error.code = TLError.UNKNOWN_ERROR
 							error.text = e.localizedMessage
 						}
 					}
@@ -393,10 +391,6 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		native_init(currentAccount, version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, systemLangCode, configPath, logPath, regId, cFingerprint, installer, packageId, timezoneOffset, userId, enablePushConnection, ApplicationLoader.isNetworkOnline, ApplicationLoader.currentNetworkType)
 
 		checkConnection()
-	}
-
-	fun resumeNetwork() {
-		native_resumeNetwork(currentAccount, false)
 	}
 
 	fun resumeNetworkMaybe() {
@@ -1145,76 +1139,6 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	private class FirebaseTask(private val currentAccount: Int) : AsyncTask<Void?, Void?, NativeByteBuffer?>() {
-		override fun doInBackground(vararg voids: Void?): NativeByteBuffer? {
-			try {
-				val firebaseRemoteConfig = FirebaseRemoteConfig.getInstance()
-
-				val currentValue = firebaseRemoteConfig.getString("ipconfigv3")
-
-				FileLog.d("current firebase value = $currentValue")
-
-				firebaseRemoteConfig.fetch(0).addOnCompleteListener { finishedTask ->
-					val success = finishedTask.isSuccessful
-
-					Utilities.stageQueue.postRunnable {
-						if (success) {
-							firebaseRemoteConfig.activate().addOnCompleteListener {
-								currentTask = null
-
-								val config = firebaseRemoteConfig.getString("ipconfigv3")
-
-								if (config.isNotEmpty()) {
-									val bytes = Base64.decode(config, Base64.DEFAULT)
-
-									try {
-										val buffer = NativeByteBuffer(bytes.size)
-										buffer.writeBytes(bytes)
-
-										val date = (firebaseRemoteConfig.info.fetchTimeMillis / 1000).toInt()
-
-										native_applyDnsConfig(currentAccount, buffer.address, "", date)
-									}
-									catch (e: Exception) {
-										FileLog.e(e)
-									}
-								}
-								else {
-									FileLog.d("failed to get firebase result")
-									FileLog.d("start dns txt task")
-
-									val task = DnsTxtLoadTask(currentAccount)
-									task.executeOnExecutor(THREAD_POOL_EXECUTOR, null, null, null)
-
-									currentTask = task
-								}
-							}
-						}
-					}
-				}
-			}
-			catch (e: Throwable) {
-				Utilities.stageQueue.postRunnable {
-					FileLog.d("failed to get firebase result")
-					FileLog.d("start dns txt task")
-
-					val task = DnsTxtLoadTask(currentAccount)
-					task.executeOnExecutor(THREAD_POOL_EXECUTOR, null, null, null)
-
-					currentTask = task
-				}
-
-				FileLog.e(e)
-			}
-
-			return null
-		}
-
-		override fun onPostExecute(result: NativeByteBuffer?) {
-			// unused
-		}
-	}
-
 	companion object {
 		@JvmField
 		val CPU_COUNT = Runtime.getRuntime().availableProcessors()
@@ -1392,21 +1316,13 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 
 		@Keep
 		@JvmStatic
-		fun onConnectionRetriesDepleted(currentAccount: Int) {
-			AndroidUtilities.runOnUIThread {
-				NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.CONNECTION_RETRIES_DEPLETED)
-			}
-		}
-
-		@Keep
-		@JvmStatic
 		fun onUnparsedMessageReceived(address: Long, currentAccount: Int) {
 			try {
 				val buff = NativeByteBuffer.wrap(address) ?: return
 				buff.reused = true
 
 				val constructor = buff.readInt32(true)
-				val message = TLClassStore.Instance().TLdeserialize(buff, constructor, true)
+				val message = TLClassStore.instance.deserialize(buff, constructor, true)
 
 				if (message is Updates) {
 					FileLog.d("java received $message")
@@ -1526,12 +1442,6 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 							currentTask = task
 						}
 
-						else -> {
-							FileLog.d("start firebase task")
-							val task = FirebaseTask(currentAccount)
-							task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null, null, null)
-							currentTask = task
-						}
 					}
 				}
 			}
@@ -1601,7 +1511,7 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 				val buff = NativeByteBuffer.wrap(address) ?: return
 				buff.reused = true
 
-				val message = TL_config.TLdeserialize(buff, buff.readInt32(true), true)
+				val message = TLConfig.deserialize(buff, buff.readInt32(true), true)
 
 				if (message != null) {
 					Utilities.stageQueue.postRunnable {
@@ -1632,12 +1542,6 @@ class ConnectionsManager(instance: Int) : BaseController(instance) {
 				}
 				else {
 					native_setProxySettings(a, "", 1080, "", "", "")
-				}
-
-				val accountInstance = AccountInstance.getInstance(a)
-
-				if (accountInstance.userConfig.isClientActivated) {
-					accountInstance.messagesController.checkPromoInfo(true)
 				}
 			}
 		}

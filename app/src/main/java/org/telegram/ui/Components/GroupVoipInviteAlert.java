@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -29,10 +29,10 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Adapters.SearchAdapterHelper;
 import org.telegram.ui.Cells.GraySectionCell;
@@ -63,7 +63,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 	private final LongSparseArray<TLObject> contactsMap = new LongSparseArray<>();
 	private boolean loadingUsers;
 	private boolean firstLoaded;
-	private final LongSparseArray<TLRPC.TL_groupCallParticipant> ignoredUsers;
+	private final LongSparseArray<TLRPC.TLGroupCallParticipant> ignoredUsers;
 	private final HashSet<Long> invitedUsers;
 	private GroupVoipInviteAlertDelegate delegate;
 	private boolean showContacts;
@@ -104,7 +104,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 		keySearchIconUnscrolled = ResourcesCompat.getColor(getContext().getResources(), R.color.dark_gray, null);
 	}
 
-	public GroupVoipInviteAlert(final Context context, int account, TLRPC.Chat chat, TLRPC.ChatFull chatFull, LongSparseArray<TLRPC.TL_groupCallParticipant> participants, HashSet<Long> invited) {
+	public GroupVoipInviteAlert(final Context context, int account, TLRPC.Chat chat, TLRPC.ChatFull chatFull, LongSparseArray<TLRPC.TLGroupCallParticipant> participants, HashSet<Long> invited) {
 		super(context, false, account, null);
 
 		setDimBehindAlpha(75);
@@ -119,8 +119,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 				delegate.copyInviteLink();
 				dismiss();
 			}
-			else if (view instanceof ManageChatUserCell) {
-				ManageChatUserCell cell = (ManageChatUserCell)view;
+			else if (view instanceof ManageChatUserCell cell) {
 				if (invitedUsers.contains(cell.getUserId())) {
 					return;
 				}
@@ -195,10 +194,10 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 		long selfId = UserConfig.getInstance(currentAccount).clientUserId;
 		for (int a = 0, N = contacts.size(); a < N; a++) {
 			TLObject object = contacts.get(a);
-			if (!(object instanceof TLRPC.TL_contact)) {
+			if (!(object instanceof TLRPC.TLContact)) {
 				continue;
 			}
-			long userId = ((TLRPC.TL_contact)object).user_id;
+			long userId = ((TLRPC.TLContact)object).userId;
 			if (userId == selfId || ignoredUsers.indexOfKey(userId) >= 0 || invitedUsers.contains(userId)) {
 				contacts.remove(a);
 				a--;
@@ -208,26 +207,29 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 		int currentTime = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
 		MessagesController messagesController = MessagesController.getInstance(currentAccount);
 		Collections.sort(contacts, (o1, o2) -> {
-			User user1 = messagesController.getUser(((TLRPC.TL_contact)o2).user_id);
-			User user2 = messagesController.getUser(((TLRPC.TL_contact)o1).user_id);
+			User user1 = messagesController.getUser(((TLRPC.TLContact)o2).userId);
+			User user2 = messagesController.getUser(((TLRPC.TLContact)o1).userId);
 			int status1 = 0;
 			int status2 = 0;
-			if (user1 != null) {
-				if (user1.self) {
+
+			if (user1 instanceof TLRPC.TLUser tlUser1) {
+				if (tlUser1.isSelf) {
 					status1 = currentTime + 50000;
 				}
-				else if (user1.status != null) {
-					status1 = user1.status.expires;
+				else if (tlUser1.status != null) {
+					status1 = TLRPCExtensions.getExpires(tlUser1.status);
 				}
 			}
-			if (user2 != null) {
-				if (user2.self) {
+
+			if (user2 instanceof TLRPC.TLUser tlUser2) {
+				if (tlUser2.isSelf) {
 					status2 = currentTime + 50000;
 				}
-				else if (user2.status != null) {
-					status2 = user2.status.expires;
+				else if (tlUser2.status != null) {
+					status2 = TLRPCExtensions.getExpires(tlUser2.status);
 				}
 			}
+
 			if (status1 > 0 && status2 > 0) {
 				if (status1 > status2) {
 					return 1;
@@ -265,20 +267,20 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 			contactsMap.clear();
 			if (info != null) {
 				long selfUserId = UserConfig.getInstance(currentAccount).clientUserId;
-				for (int a = 0, size = info.participants.participants.size(); a < size; a++) {
-					TLRPC.ChatParticipant participant = info.participants.participants.get(a);
-					if (participant.user_id == selfUserId) {
+				for (int a = 0, size = TLRPCExtensions.getParticipants(info.participants).size(); a < size; a++) {
+					TLRPC.ChatParticipant participant = TLRPCExtensions.getParticipants(info.participants).get(a);
+					if (participant.userId == selfUserId) {
 						continue;
 					}
-					if (ignoredUsers != null && ignoredUsers.indexOfKey(participant.user_id) >= 0) {
+					if (ignoredUsers != null && ignoredUsers.indexOfKey(participant.userId) >= 0) {
 						continue;
 					}
-					User user = MessagesController.getInstance(currentAccount).getUser(participant.user_id);
-					if (UserObject.isDeleted(user) || user.bot) {
+					User user = MessagesController.getInstance(currentAccount).getUser(participant.userId);
+					if (UserObject.isDeleted(user) || TLRPCExtensions.getBot(user)) {
 						continue;
 					}
 					participants.add(participant);
-					participantsMap.put(participant.user_id, participant);
+					participantsMap.put(participant.userId, participant);
 				}
 				if (participants.isEmpty()) {
 					showContacts = true;
@@ -298,28 +300,28 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 			if (listViewAdapter != null) {
 				listViewAdapter.notifyDataSetChanged();
 			}
-			TLRPC.TL_channels_getParticipants req = new TLRPC.TL_channels_getParticipants();
+			TLRPC.TLChannelsGetParticipants req = new TLRPC.TLChannelsGetParticipants();
 			req.channel = MessagesController.getInputChannel(currentChat);
-			if (info != null && info.participants_count <= 200) {
-				req.filter = new TLRPC.TL_channelParticipantsRecent();
+			if (info != null && info.participantsCount <= 200) {
+				req.filter = new TLRPC.TLChannelParticipantsRecent();
 			}
 			else {
 				if (!contactsEndReached) {
 					delayResults = 2;
-					req.filter = new TLRPC.TL_channelParticipantsContacts();
+					req.filter = new TLRPC.TLChannelParticipantsContacts();
 					contactsEndReached = true;
 					loadChatParticipants(0, 200, false);
 				}
 				else {
-					req.filter = new TLRPC.TL_channelParticipantsRecent();
+					req.filter = new TLRPC.TLChannelParticipantsRecent();
 				}
 			}
 			req.filter.q = "";
 			req.offset = offset;
 			req.limit = count;
-			int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 				if (error == null) {
-					TL_channels_channelParticipants res = (TL_channels_channelParticipants)response;
+					var res = (TLRPC.TLChannelsChannelParticipants)response;
 					MessagesController.getInstance(currentAccount).putUsers(res.users, false);
 					MessagesController.getInstance(currentAccount).putChats(res.chats, false);
 					long selfId = UserConfig.getInstance(currentAccount).getClientUserId();
@@ -332,7 +334,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 					ArrayList<TLObject> objects;
 					LongSparseArray<TLObject> map;
 					delayResults--;
-					if (req.filter instanceof TLRPC.TL_channelParticipantsContacts) {
+					if (req.filter instanceof TLRPC.TLChannelParticipantsContacts) {
 						objects = contacts;
 						map = contactsMap;
 					}
@@ -357,7 +359,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 							remove = true;
 						}
 						User user = MessagesController.getInstance(currentAccount).getUser(peerId);
-						if (user != null && user.bot || UserObject.isDeleted(user)) {
+						if (user != null && TLRPCExtensions.getBot(user) || UserObject.isDeleted(user)) {
 							remove = true;
 						}
 						if (remove) {
@@ -368,7 +370,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 						}
 					}
 					try {
-						if (info.participants_count <= 200) {
+						if (info.participantsCount <= 200) {
 							int currentTime = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
 							Collections.sort(objects, (lhs, rhs) -> {
 								TLRPC.ChannelParticipant p1 = (TLRPC.ChannelParticipant)lhs;
@@ -377,20 +379,20 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 								User user2 = MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(p2.peer));
 								int status1 = 0;
 								int status2 = 0;
-								if (user1 != null && user1.status != null) {
-									if (user1.self) {
+								if (user1 instanceof TLRPC.TLUser tlUser1 && tlUser1.status != null) {
+									if (tlUser1.isSelf) {
 										status1 = currentTime + 50000;
 									}
 									else {
-										status1 = user1.status.expires;
+										status1 = TLRPCExtensions.getExpires(tlUser1.status);
 									}
 								}
-								if (user2 != null && user2.status != null) {
-									if (user2.self) {
+								if (user2 instanceof TLRPC.TLUser tlUser2 && tlUser2.status != null) {
+									if (tlUser2.isSelf) {
 										status2 = currentTime + 50000;
 									}
 									else {
-										status2 = user2.status.expires;
+										status2 = TLRPCExtensions.getExpires(tlUser2.status);
 									}
 								}
 								if (status1 > 0 && status2 > 0) {
@@ -513,7 +515,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 				}
 
 				@Override
-				public LongSparseArray<TLRPC.TL_groupCallParticipant> getExcludeCallParticipants() {
+				public LongSparseArray<TLRPC.TLGroupCallParticipant> getExcludeCallParticipants() {
 					return ignoredUsers;
 				}
 			});
@@ -555,7 +557,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 			AndroidUtilities.runOnUIThread(() -> {
 				searchRunnable = null;
 
-				final ArrayList<TLObject> participantsCopy = !ChatObject.isChannel(currentChat) && info != null ? new ArrayList<>(info.participants.participants) : null;
+				final ArrayList<TLObject> participantsCopy = !ChatObject.isChannel(currentChat) && info != null ? new ArrayList<>(TLRPCExtensions.getParticipants(info.participants)) : null;
 
 				if (participantsCopy != null) {
 					Utilities.searchQueue.postRunnable(() -> {
@@ -579,7 +581,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 							long userId;
 							TLObject o = participantsCopy.get(a);
 							if (o instanceof TLRPC.ChatParticipant) {
-								userId = ((TLRPC.ChatParticipant)o).user_id;
+								userId = ((TLRPC.ChatParticipant)o).userId;
 							}
 							else if (o instanceof TLRPC.ChannelParticipant) {
 								userId = MessageObject.getPeerId(((TLRPC.ChannelParticipant)o).peer);
@@ -648,8 +650,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 
 		@Override
 		public boolean isEnabled(RecyclerView.ViewHolder holder) {
-			if (holder.itemView instanceof ManageChatUserCell) {
-				ManageChatUserCell cell = (ManageChatUserCell)holder.itemView;
+			if (holder.itemView instanceof ManageChatUserCell cell) {
 				if (invitedUsers.contains(cell.getUserId())) {
 					return false;
 				}
@@ -740,7 +741,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 						user = MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(((TLRPC.ChannelParticipant)object).peer));
 					}
 					else if (object instanceof TLRPC.ChatParticipant) {
-						user = MessagesController.getInstance(currentAccount).getUser(((TLRPC.ChatParticipant)object).user_id);
+						user = MessagesController.getInstance(currentAccount).getUser(((TLRPC.ChatParticipant)object).userId);
 					}
 					else {
 						return;
@@ -856,8 +857,7 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 
 		@Override
 		public boolean isEnabled(RecyclerView.ViewHolder holder) {
-			if (holder.itemView instanceof ManageChatUserCell) {
-				ManageChatUserCell cell = (ManageChatUserCell)holder.itemView;
+			if (holder.itemView instanceof ManageChatUserCell cell) {
 				if (invitedUsers.contains(cell.getUserId())) {
 					return false;
 				}
@@ -932,21 +932,18 @@ public class GroupVoipInviteAlert extends UsersAlertBase {
 					}
 
 					long userId;
-					if (item instanceof TLRPC.TL_contact) {
-						TLRPC.TL_contact contact = (TLRPC.TL_contact)item;
-						userId = contact.user_id;
+					if (item instanceof TLRPC.TLContact contact) {
+						userId = contact.userId;
 					}
-					else if (item instanceof User) {
-						User user = (User)item;
+					else if (item instanceof User user) {
 						userId = user.id;
 					}
-					else if (item instanceof TLRPC.ChannelParticipant) {
-						TLRPC.ChannelParticipant participant = (TLRPC.ChannelParticipant)item;
+					else if (item instanceof TLRPC.ChannelParticipant participant) {
 						userId = MessageObject.getPeerId(participant.peer);
 					}
 					else {
 						TLRPC.ChatParticipant participant = (TLRPC.ChatParticipant)item;
-						userId = participant.user_id;
+						userId = participant.userId;
 					}
 					User user = MessagesController.getInstance(currentAccount).getUser(userId);
 					if (user != null) {

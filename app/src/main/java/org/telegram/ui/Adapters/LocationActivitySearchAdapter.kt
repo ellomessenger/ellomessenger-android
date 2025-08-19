@@ -4,14 +4,14 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Adapters
 
 import android.content.Context
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
+import org.telegram.tgnet.TLRPC.TLMessageMediaVenue
 import org.telegram.ui.Cells.LocationCell
 import org.telegram.ui.Components.FlickerLoadingView
 import org.telegram.ui.Components.RecyclerListView
@@ -42,7 +42,7 @@ open class LocationActivitySearchAdapter(private val mContext: Context) : BaseLo
 		locationCell.setLocation(place, iconUrl, position, position != itemCount - 1)
 	}
 
-	fun getItem(i: Int): TL_messageMediaVenue? {
+	fun getItem(i: Int): TLMessageMediaVenue? {
 		if (isSearching()) {
 			return null
 		}

@@ -4,9 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
-
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
@@ -46,6 +45,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.EmojiThemes;
 import org.telegram.ui.ActionBar.MessageDrawable;
 import org.telegram.ui.ActionBar.Theme;
@@ -84,9 +84,8 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 	private ValueAnimator strokeAlphaAnimator;
 	private TextPaint noThemeTextPaint;
 	private StaticLayout textLayout;
-	private BackupImageView backupImageView;
-	private boolean hasAnimatedEmoji;
-	private int currentType;
+	private final BackupImageView backupImageView;
+	private final int currentType;
 	private float selectionProgress;
 
 	public ThemeSmallPreviewView(Context context, int currentAccount, int currentType) {
@@ -142,7 +141,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 	}
 
 	@Override
-	protected void dispatchDraw(Canvas canvas) {
+	protected void dispatchDraw(@NonNull Canvas canvas) {
 		if (chatThemeItem == null) {
 			super.dispatchDraw(canvas);
 			return;
@@ -174,7 +173,6 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 		boolean darkModeChanged = lastThemeIndex != item.themeIndex;
 		lastThemeIndex = item.themeIndex;
 		this.chatThemeItem = item;
-		hasAnimatedEmoji = false;
 		TLRPC.Document document = null;
 		if (item.chatTheme.getEmoticon() != null) {
 			document = MediaDataController.getInstance(currentAccount).getEmojiAnimatedSticker(item.chatTheme.getEmoticon());
@@ -211,7 +209,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 				changeThemeProgress = 1f;
 			}
 			updatePreviewBackground(themeDrawable);
-			TLRPC.TL_theme theme = item.chatTheme.getTlTheme(lastThemeIndex);
+			var theme = item.chatTheme.getTlTheme(lastThemeIndex);
 			if (theme != null) {
 				final long themeId = theme.id;
 				TLRPC.WallPaper wallPaper = item.chatTheme.getWallpaper(lastThemeIndex);
@@ -219,8 +217,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 					final int intensity = wallPaper.settings.intensity;
 					item.chatTheme.loadWallpaperThumb(lastThemeIndex, result -> {
 						if (result != null && result.first == themeId) {
-							if (item.previewDrawable instanceof MotionBackgroundDrawable) {
-								MotionBackgroundDrawable motionBackgroundDrawable = (MotionBackgroundDrawable)item.previewDrawable;
+							if (item.previewDrawable instanceof MotionBackgroundDrawable motionBackgroundDrawable) {
 								motionBackgroundDrawable.setPatternBitmap(intensity >= 0 ? 100 : -100, prescaleBitmap(result.second), true);
 								motionBackgroundDrawable.setPatternColorFilter(patternColor);
 							}
@@ -240,9 +237,9 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 				if (accent != null && accent.info != null && accent.info.settings.size() > 0) {
 					TLRPC.WallPaper wallPaper = accent.info.settings.get(0).wallpaper;
 
-					if (wallPaper != null && wallPaper.document != null) {
-						TLRPC.Document wallpaperDocument = wallPaper.document;
-						final TLRPC.PhotoSize thumbSize = FileLoader.getClosestPhotoSizeWithSize(wallpaperDocument.thumbs, PATTERN_BITMAP_MAXWIDTH);
+					if (wallPaper instanceof TLRPC.TLWallPaper tlWallPaper && tlWallPaper.document != null) {
+						TLRPC.Document wallpaperDocument = tlWallPaper.document;
+						final TLRPC.PhotoSize thumbSize = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(wallpaperDocument), PATTERN_BITMAP_MAXWIDTH);
 						ImageLocation imageLocation = ImageLocation.getForDocument(thumbSize, wallpaperDocument);
 						ImageReceiver imageReceiver = new ImageReceiver();
 						imageReceiver.setImage(imageLocation, PATTERN_BITMAP_MAXWIDTH + "_" + PATTERN_BITMAP_MAXHEIGHT, null, null, null, 1);
@@ -260,8 +257,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 								}
 								Bitmap resultBitmap = holder.bitmap;
 								if (resultBitmap != null) {
-									if (item.previewDrawable instanceof MotionBackgroundDrawable) {
-										MotionBackgroundDrawable motionBackgroundDrawable = (MotionBackgroundDrawable)item.previewDrawable;
+									if (item.previewDrawable instanceof MotionBackgroundDrawable motionBackgroundDrawable) {
 										motionBackgroundDrawable.setPatternBitmap(wallPaper.settings == null || wallPaper.settings.intensity >= 0 ? 100 : -100, prescaleBitmap(resultBitmap), true);
 										motionBackgroundDrawable.setPatternColorFilter(patternColor);
 										invalidate();
@@ -276,8 +272,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 					ChatThemeController.chatThemeQueue.postRunnable(() -> {
 						Bitmap bitmap = SvgHelper.getBitmap(R.raw.default_pattern, AndroidUtilities.dp(PATTERN_BITMAP_MAXWIDTH), AndroidUtilities.dp(PATTERN_BITMAP_MAXHEIGHT), Color.BLACK, AndroidUtilities.density);
 						AndroidUtilities.runOnUIThread(() -> {
-							if (item.previewDrawable instanceof MotionBackgroundDrawable) {
-								MotionBackgroundDrawable motionBackgroundDrawable = (MotionBackgroundDrawable)item.previewDrawable;
+							if (item.previewDrawable instanceof MotionBackgroundDrawable motionBackgroundDrawable) {
 								motionBackgroundDrawable.setPatternBitmap(100, prescaleBitmap(bitmap), true);
 								motionBackgroundDrawable.setPatternColorFilter(patternColor);
 								invalidate();
@@ -290,7 +285,6 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 
 		if (!animated) {
 			backupImageView.animate().cancel();
-			;
 			backupImageView.setScaleX(1f);
 			backupImageView.setScaleY(1f);
 			AndroidUtilities.cancelRunOnUIThread(animationCancelRunnable);
@@ -396,12 +390,12 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 		themeDrawable.strokePaint.setColor(strokeColor);
 		themeDrawable.strokePaint.setAlpha(strokeAlpha);
 
-		TLRPC.TL_theme tlTheme = chatThemeItem.chatTheme.getTlTheme(chatThemeItem.themeIndex);
+		var tlTheme = chatThemeItem.chatTheme.getTlTheme(chatThemeItem.themeIndex);
 
 		if (tlTheme != null) {
 			int index = chatThemeItem.chatTheme.getSettingsIndex(chatThemeItem.themeIndex);
-			TLRPC.ThemeSettings themeSettings = tlTheme.settings.get(index);
-			fillOutBubblePaint(themeDrawable.outBubblePaintSecond, themeSettings.message_colors);
+			var themeSettings = tlTheme.settings.get(index);
+			fillOutBubblePaint(themeDrawable.outBubblePaintSecond, themeSettings.messageColors);
 
 			themeDrawable.outBubblePaintSecond.setAlpha(255);
 			getPreviewDrawable(tlTheme, index);
@@ -414,7 +408,7 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 		invalidate();
 	}
 
-	private Drawable getPreviewDrawable(TLRPC.TL_theme theme, int settingsIndex) {
+	private Drawable getPreviewDrawable(TLRPC.TLTheme theme, int settingsIndex) {
 		if (chatThemeItem == null) {
 			return null;
 		}
@@ -426,12 +420,12 @@ public class ThemeSmallPreviewView extends FrameLayout implements NotificationCe
 
 		Drawable drawable;
 		if (settingsIndex >= 0) {
-			TLRPC.ThemeSettings themeSettings = theme.settings.get(settingsIndex);
-			TLRPC.WallPaperSettings wallPaperSettings = themeSettings.wallpaper.settings;
-			color1 = wallPaperSettings.background_color;
-			color2 = wallPaperSettings.second_background_color;
-			color3 = wallPaperSettings.third_background_color;
-			color4 = wallPaperSettings.fourth_background_color;
+			TLRPC.TLThemeSettings themeSettings = theme.settings.get(settingsIndex);
+			TLRPC.TLWallPaperSettings wallPaperSettings = themeSettings.wallpaper.settings;
+			color1 = wallPaperSettings.backgroundColor;
+			color2 = wallPaperSettings.secondBackgroundColor;
+			color3 = wallPaperSettings.thirdBackgroundColor;
+			color4 = wallPaperSettings.fourthBackgroundColor;
 		}
 		if (color2 != 0) {
 			MotionBackgroundDrawable motionBackgroundDrawable = new MotionBackgroundDrawable(color1, color2, color3, color4, true);

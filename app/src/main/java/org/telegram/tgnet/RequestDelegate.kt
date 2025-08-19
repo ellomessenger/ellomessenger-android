@@ -8,9 +8,6 @@
  */
 package org.telegram.tgnet
 
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.tlrpc.TLObject
-
 fun interface RequestDelegate {
-    fun run(response: TLObject?, error: TL_error?)
+	fun run(response: TLObject?, error: TLRPC.TLError?)
 }

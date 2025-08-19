@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:background="@color/light_chat_enter_background"
+	android:paddingHorizontal="8dp">
+
+	<ImageView
+		android:id="@+id/iv_heart"
+		android:layout_width="46dp"
+		android:layout_height="46dp"
+		android:src="@drawable/ic_heart_donate_banner"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<TextView
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="10dp"
+		android:layout_marginTop="28dp"
+		android:layout_marginEnd="2dp"
+		android:layout_marginBottom="18dp"
+		android:text="@string/as_an_independent_company_we_need_your_support"
+		android:textColor="@color/dark"
+		android:textSize="12sp"
+		android:textStyle="bold"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toStartOf="@+id/ways_to_give"
+		app:layout_constraintStart_toEndOf="@+id/iv_heart"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/ways_to_give"
+		style="@style/Widget.App.BrandedButtonSmallRadius"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="28dp"
+		android:layout_marginEnd="14dp"
+		android:layout_marginBottom="18dp"
+		android:paddingVertical="8dp"
+		android:text="@string/ways_to_give"
+		android:textColor="@color/dark_fixed"
+		android:textStyle="bold"
+		app:backgroundTint="@color/orange_dark"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
+
+	<FrameLayout
+		android:id="@+id/cancel"
+		android:layout_width="36dp"
+		android:layout_height="36dp"
+		android:clickable="true"
+		android:focusable="true"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="parent">
+
+		<ImageView
+			android:layout_width="12dp"
+			android:layout_height="12dp"
+			android:layout_gravity="center"
+			android:src="@drawable/cancel" />
+
+	</FrameLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

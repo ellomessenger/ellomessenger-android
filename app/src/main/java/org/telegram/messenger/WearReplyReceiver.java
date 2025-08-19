@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger;
 
@@ -14,10 +14,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 
-import androidx.core.app.RemoteInput;
-
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+
+import androidx.core.app.RemoteInput;
 
 public class WearReplyReceiver extends BroadcastReceiver {
 	@Override
@@ -82,7 +82,7 @@ public class WearReplyReceiver extends BroadcastReceiver {
 	}
 
 	private void sendMessage(AccountInstance accountInstance, CharSequence text, long dialog_id, int max_id) {
-		accountInstance.getSendMessagesHelper().sendMessage(text.toString(), dialog_id, null, null, null, true, null, null, null, true, 0, null, false, false, null);
+		accountInstance.getSendMessagesHelper().sendMessage(text.toString(), dialog_id, null, null, null, true, null, null, null, true, 0, null, false);
 		accountInstance.getMessagesController().markDialogAsRead(dialog_id, max_id, max_id, 0, false, 0, 0, true, 0);
 	}
 }

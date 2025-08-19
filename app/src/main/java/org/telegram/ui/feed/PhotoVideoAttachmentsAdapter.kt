@@ -1,10 +1,9 @@
 /*
- * This is the source code of ElloApp
- *  for Android.
+ * This is the source code of Ello for Android.
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -17,7 +16,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.TLRPC
 
-class PhotoVideoAttachmentsAdapter(private val channel: TLRPC.TL_channel?, private val messages: List<MessageObject>, private val contentWidth: Int, private val onClickListener: View.OnClickListener) : RecyclerView.Adapter<PhotoVideoAttachmentViewHolder>() {
+class PhotoVideoAttachmentsAdapter(private val channel: TLRPC.TLChannel?, private val messages: List<MessageObject>, private val contentWidth: Int, private val onClickListener: View.OnClickListener) : RecyclerView.Adapter<PhotoVideoAttachmentViewHolder>() {
 	private var scaleType: ImageView.ScaleType? = null
 	var delegate: FeedViewHolder.Delegate? = null
 

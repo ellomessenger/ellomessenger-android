@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Afandiyev Shamil, Ello 2024
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -30,6 +30,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withClip
 import androidx.core.widget.doAfterTextChanged
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.Emoji
@@ -37,11 +38,8 @@ import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.vibrate
-import org.telegram.tgnet.TLRPC.TL_chatInviteExported
-import org.telegram.tgnet.TLRPC.TL_messages_editExportedChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_exportChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_exportedChatInvite
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AdjustPanLayoutHelper
@@ -60,7 +58,7 @@ import org.telegram.ui.Components.SlideChooseView
 import kotlin.math.max
 
 @SuppressLint("AppCompatCustomView")
-class LinkEditActivity @JvmOverloads constructor(private val type: Int, private val chatId: Long, private val isUser: Boolean = false) : BaseFragment() {
+class LinkEditActivity(private val type: Int, private val chatId: Long) : BaseFragment() {
 	private val defaultDates = intArrayOf(3600, 3600 * 24, 3600 * 24 * 7)
 	private val defaultUses = intArrayOf(1, 10, 100)
 	private val displayedDates = ArrayList<Int>()
@@ -74,7 +72,7 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 	private var finished = false
 	private var firstLayout = true
 	private var ignoreSet = false
-	private var inviteToEdit: TL_chatInviteExported? = null
+	private var inviteToEdit: TLRPC.TLChatInviteExported? = null
 	private var nameEditText: EditText? = null
 	private var scrollView: ScrollView? = null
 	private var timeChooseView: SlideChooseView? = null
@@ -291,17 +289,16 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 
 		approveCell = object : TextCheckCell(context) {
 			override fun onDraw(canvas: Canvas) {
-				canvas.save()
-				canvas.clipRect(0, 0, width, height)
-				super.onDraw(canvas)
-				canvas.restore()
+				canvas.withClip(0, 0, width, height) {
+					super.onDraw(this)
+				}
 			}
 		}
 
 		approveCell?.setBackgroundColor(context.getColor(R.color.dark_gray))
 		approveCell?.setDrawCheckRipple(true)
 		approveCell?.height = 56
-		approveCell?.setTextAndCheck(context.getString(R.string.ApproveNewMembers), false, false)
+		approveCell?.setTextAndCheck(context.getString(R.string.ApproveNewMembers), checked = false, divider = false)
 		approveCell?.setTypeface(Theme.TYPEFACE_BOLD)
 
 		approveCell?.setOnClickListener {
@@ -591,18 +588,18 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 			progressDialog = AlertDialog(parentActivity, 3)
 			progressDialog?.showDelayed(500)
 
-			val req = TL_messages_exportChatInvite()
+			val req = TLRPC.TLMessagesExportChatInvite()
 			req.peer = messagesController.getInputPeer(-chatId)
-			req.legacy_revoke_permanent = false
+			req.legacyRevokePermanent = false
 
 			var i = timeChooseView!!.selectedIndex
 			req.flags = req.flags or 1
 
 			if (i < displayedDates.size) {
-				req.expire_date = displayedDates[i] + connectionsManager.currentTime
+				req.expireDate = displayedDates[i] + connectionsManager.currentTime
 			}
 			else {
-				req.expire_date = 0
+				req.expireDate = 0
 			}
 
 			i = usesChooseView!!.selectedIndex
@@ -610,16 +607,16 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 			req.flags = req.flags or 2
 
 			if (i < displayedUses.size) {
-				req.usage_limit = displayedUses[i]
+				req.usageLimit = displayedUses[i]
 			}
 			else {
-				req.usage_limit = 0
+				req.usageLimit = 0
 			}
 
-			req.request_needed = approveCell!!.isChecked
+			req.requestNeeded = approveCell?.isChecked == true
 
-			if (req.request_needed) {
-				req.usage_limit = 0
+			if (req.requestNeeded) {
+				req.usageLimit = 0
 			}
 
 			req.title = nameEditText!!.text.toString()
@@ -646,8 +643,8 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 		else if (type == EDIT_TYPE) {
 			progressDialog?.dismiss()
 
-			val req = TL_messages_editExportedChatInvite()
-			req.link = inviteToEdit!!.link
+			val req = TLRPC.TLMessagesEditExportedChatInvite()
+			req.link = inviteToEdit?.link
 			req.revoked = false
 			req.peer = messagesController.getInputPeer(-chatId)
 
@@ -657,14 +654,14 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 			if (i < displayedDates.size) {
 				if (currentInviteDate != displayedDates[i]) {
 					req.flags = req.flags or 1
-					req.expire_date = displayedDates[i] + connectionsManager.currentTime
+					req.expireDate = displayedDates[i] + connectionsManager.currentTime
 					edited = true
 				}
 			}
 			else {
 				if (currentInviteDate != 0) {
 					req.flags = req.flags or 1
-					req.expire_date = 0
+					req.expireDate = 0
 					edited = true
 				}
 			}
@@ -674,26 +671,26 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 			if (i < displayedUses.size) {
 				val newLimit = displayedUses[i]
 
-				if (inviteToEdit!!.usage_limit != newLimit) {
+				if (inviteToEdit!!.usageLimit != newLimit) {
 					req.flags = req.flags or 2
-					req.usage_limit = newLimit
+					req.usageLimit = newLimit
 					edited = true
 				}
 			}
 			else {
-				if (inviteToEdit!!.usage_limit != 0) {
+				if (inviteToEdit!!.usageLimit != 0) {
 					req.flags = req.flags or 2
-					req.usage_limit = 0
+					req.usageLimit = 0
 					edited = true
 				}
 			}
 
-			if (inviteToEdit!!.request_needed != approveCell!!.isChecked) {
+			if (inviteToEdit!!.requestNeeded != approveCell!!.isChecked) {
 				req.flags = req.flags or 8
-				req.request_needed = approveCell!!.isChecked
-				if (req.request_needed) {
+				req.requestNeeded = approveCell!!.isChecked
+				if (req.requestNeeded) {
 					req.flags = req.flags or 2
-					req.usage_limit = 0
+					req.usageLimit = 0
 				}
 				edited = true
 			}
@@ -718,8 +715,8 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 						progressDialog?.dismiss()
 
 						if (error == null) {
-							if (response is TL_messages_exportedChatInvite) {
-								inviteToEdit = response.invite as TL_chatInviteExported
+							if (response is TLRPC.TLMessagesExportedChatInvite) {
+								inviteToEdit = response.invite as TLRPC.TLChatInviteExported
 							}
 
 							callback?.onLinkEdited(inviteToEdit, response)
@@ -871,28 +868,28 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 		usesChooseView!!.setOptions(options.size - 1, *options)
 	}
 
-	fun setInviteToEdit(invite: TL_chatInviteExported?) {
+	fun setInviteToEdit(invite: TLRPC.TLChatInviteExported?) {
 		val context = context ?: return
 		inviteToEdit = invite
 
 		if (fragmentView != null && invite != null) {
-			currentInviteDate = if (invite.expire_date > 0) {
-				chooseDate(invite.expire_date)
+			currentInviteDate = if (invite.expireDate > 0) {
+				chooseDate(invite.expireDate)
 				displayedDates[timeChooseView!!.selectedIndex]
 			}
 			else {
 				0
 			}
 
-			if (invite.usage_limit > 0) {
-				chooseUses(invite.usage_limit)
-				usesEditText?.setText(invite.usage_limit.toString())
+			if (invite.usageLimit > 0) {
+				chooseUses(invite.usageLimit)
+				usesEditText?.setText(invite.usageLimit.toString())
 			}
 
-			approveCell?.setBackgroundColor(if (invite.request_needed) context.getColor(R.color.brand_transparent) else context.getColor(R.color.dark_gray))
-			approveCell?.isChecked = invite.request_needed
+			approveCell?.setBackgroundColor(if (invite.requestNeeded) context.getColor(R.color.brand_transparent) else context.getColor(R.color.dark_gray))
+			approveCell?.isChecked = invite.requestNeeded
 
-			setUsesVisible(!invite.request_needed)
+			setUsesVisible(!invite.requestNeeded)
 
 			if (!invite.title.isNullOrEmpty()) {
 				val builder = SpannableStringBuilder(invite.title)
@@ -904,18 +901,19 @@ class LinkEditActivity @JvmOverloads constructor(private val type: Int, private 
 
 	private fun setUsesVisible(isVisible: Boolean) {
 		val context = context ?: return
-		usesHeaderCell?.visibility = if (isVisible) View.VISIBLE else View.GONE
-		usesChooseView?.visibility = if (isVisible) View.VISIBLE else View.GONE
-		usesEditText?.visibility = if (isVisible) View.VISIBLE else View.GONE
-		dividerUses?.visibility = if (isVisible) View.VISIBLE else View.GONE
+		val newVisibility = if (isVisible) View.VISIBLE else View.GONE
+		usesHeaderCell?.visibility = newVisibility
+		usesChooseView?.visibility = newVisibility
+		usesEditText?.visibility = newVisibility
+		dividerUses?.visibility = newVisibility
 		divider?.background = Theme.getThemedDrawable(parentActivity, if (isVisible) R.drawable.greydivider else R.drawable.greydivider_bottom, context.getColor(R.color.shadow))
 	}
 
 	interface Callback {
 		fun onLinkCreated(response: TLObject?)
-		fun onLinkEdited(inviteToEdit: TL_chatInviteExported?, response: TLObject?)
-		fun onLinkRemoved(removedInvite: TL_chatInviteExported?)
-		fun revokeLink(inviteFinal: TL_chatInviteExported?)
+		fun onLinkEdited(inviteToEdit: TLRPC.TLChatInviteExported?, response: TLObject?)
+		fun onLinkRemoved(removedInvite: TLRPC.TLChatInviteExported?)
+		fun revokeLink(inviteFinal: TLRPC.TLChatInviteExported?)
 	}
 
 	override fun finishFragment() {

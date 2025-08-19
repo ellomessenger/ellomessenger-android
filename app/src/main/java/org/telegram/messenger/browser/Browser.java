@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger.browser;
 
@@ -168,11 +168,11 @@ public class Browser {
 		openUrl(context, Uri.parse(url), allowCustom);
 	}
 
-	public static void openUrl(@Nullable Context context, Uri uri, boolean allowCustom) {
+	public static void openUrl(@Nullable Context context, @Nullable Uri uri, boolean allowCustom) {
 		openUrl(context, uri, allowCustom, true);
 	}
 
-	public static void openUrl(@Nullable final Context context, final String url, final boolean allowCustom, boolean tryTelegraph) {
+	public static void openUrl(@Nullable final Context context, @Nullable final String url, final boolean allowCustom, boolean tryTelegraph) {
 		openUrl(context, Uri.parse(url), allowCustom, tryTelegraph);
 	}
 
@@ -193,7 +193,7 @@ public class Browser {
 		);
 	}
 
-	public static void openUrl(@Nullable final Context context, Uri uri, final boolean allowCustom, boolean tryTelegraph) {
+	public static void openUrl(@Nullable final Context context, @Nullable Uri uri, final boolean allowCustom, boolean tryTelegraph) {
 		if (context == null || uri == null) {
 			return;
 		}
@@ -207,7 +207,7 @@ public class Browser {
 					final AlertDialog[] progressDialog = new AlertDialog[]{new AlertDialog(context, 3)};
 
 					Uri finalUri = uri;
-					TLRPC.TL_messages_getWebPagePreview req = new TLRPC.TL_messages_getWebPagePreview();
+					TLRPC.TLMessagesGetWebPagePreview req = new TLRPC.TLMessagesGetWebPagePreview();
 					req.message = uri.toString();
 					final int reqId = ConnectionsManager.getInstance(UserConfig.selectedAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 						try {
@@ -219,9 +219,9 @@ public class Browser {
 						progressDialog[0] = null;
 
 						boolean ok = false;
-						if (response instanceof TLRPC.TL_messageMediaWebPage) {
-							TLRPC.TL_messageMediaWebPage webPage = (TLRPC.TL_messageMediaWebPage)response;
-							if (webPage.webpage instanceof TLRPC.TL_webPage && webPage.webpage.cached_page != null) {
+						if (response instanceof TLRPC.TLMessageMediaWebPage) {
+							TLRPC.TLMessageMediaWebPage webPage = (TLRPC.TLMessageMediaWebPage)response;
+							if (webPage.webpage instanceof TLRPC.TLWebPage && ((TLRPC.TLWebPage)webPage.webpage).cachedPage != null) {
 								NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.openArticle, webPage.webpage, finalUri.toString());
 								ok = true;
 							}
@@ -400,10 +400,19 @@ public class Browser {
 		host = host != null ? host.toLowerCase() : "";
 
 		Matcher prefixMatcher = LaunchActivity.PREFIX_ELLOAPP_PATTERN.matcher(host);
-		if (prefixMatcher.find()) {
-			String domainUrl = String.format(Locale.getDefault(), "https://%s/", ApplicationLoader.applicationContext.getString(R.string.domain));
 
-			uri = Uri.parse(domainUrl + prefixMatcher.group(1) + (TextUtils.isEmpty(uri.getPath()) ? "" : "/" + uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
+		if (host.equals(ApplicationLoader.applicationContext.getString(R.string.domain)) || prefixMatcher.find()) {
+			String domainUrl = String.format(Locale.getDefault(), "https://%s/", ApplicationLoader.applicationContext.getString(R.string.domain));
+			String prefix;
+
+			try {
+				prefix = prefixMatcher.group(1);
+			}
+			catch (Exception e) {
+				prefix = "";
+			}
+
+			uri = Uri.parse(domainUrl + prefix + (TextUtils.isEmpty(uri.getPath()) ? "" : "/" + uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
 
 			host = uri.getHost();
 			host = host != null ? host.toLowerCase() : "";

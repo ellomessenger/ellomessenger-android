@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Mykhailo Mykytyn, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -25,7 +25,7 @@ import org.telegram.messenger.ImageLocation
 import org.telegram.messenger.ImageReceiver
 import org.telegram.messenger.R
 import org.telegram.tgnet.TLRPC
-import org.telegram.ui.ActionBar.Theme
+import org.telegram.tgnet.thumbs
 
 @SuppressLint("AppCompatCustomView")
 open class RLottieImageView(context: Context) : ImageView(context) {
@@ -109,7 +109,7 @@ open class RLottieImageView(context: Context) : ImageView(context) {
 
 		imageReceiver = ImageReceiver()
 
-		if ("video/webm" == document.mime_type) {
+		if ("video/webm" == document.mimeType) {
 			val thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90)
 			imageReceiver?.setImage(ImageLocation.getForDocument(document), w.toString() + "_" + h + "_pcache_" + ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForDocument(thumb, document), null, null, document.size, null, document, 1)
 		}

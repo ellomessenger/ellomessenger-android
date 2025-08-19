@@ -1,6 +1,6 @@
 package org.telegram.ui.aibot
 
 import androidx.recyclerview.widget.RecyclerView
-import org.telegram.messenger.databinding.AiSubscriptionPlanViewHolderBinding
+import org.telegram.messenger.databinding.AiBuyDescriptionItemBinding
 
-class AiBuyViewHolder(val binding: AiSubscriptionPlanViewHolderBinding) : RecyclerView.ViewHolder(binding.root)
+class AiBuyViewHolder(val binding: AiBuyDescriptionItemBinding) : RecyclerView.ViewHolder(binding.root)

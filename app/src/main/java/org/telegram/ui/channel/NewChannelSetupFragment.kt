@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.channel
 
@@ -44,6 +44,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.text.buildSpannedString
+import androidx.core.view.isGone
 import androidx.core.widget.addTextChangedListener
 import androidx.core.widget.doOnTextChanged
 import org.telegram.messenger.AndroidUtilities
@@ -286,7 +287,7 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 
 						messagesController.loadAppConfig()
 
-						val payType = if (isCourse) TLRPC.Chat.PAY_TYPE_BASE else if (isPaid) TLRPC.Chat.PAY_TYPE_SUBSCRIBE else TLRPC.Chat.PAY_TYPE_NONE
+						val payType = if (isCourse) TLRPC.PAY_TYPE_BASE else if (isPaid) TLRPC.PAY_TYPE_SUBSCRIBE else TLRPC.PAY_TYPE_NONE
 						val adult = adultBinding?.checkbox?.isChecked ?: true
 
 						val country = (countrySpinnerLayout?.spinner?.adapter as? CountriesAdapter)?.countries?.find {
@@ -356,7 +357,7 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 			setSpan(ForegroundColorSpan(ContextCompat.getColor(context, R.color.brand)), 0, buttonText.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 		})
 
-		val channelTypeString = context.getString(if (isCourse) R.string.online_course else if (isPaid) R.string.subscription_channel else if (isPublic) R.string.public_channel else R.string.private_channel)
+		val channelTypeString = context.getString(if (isCourse) R.string.masterclass else if (isPaid) R.string.subscription_channel else if (isPublic) R.string.public_channel else R.string.private_channel)
 		actionBar?.setTitle(channelTypeString)
 
 		val sizeNotifierFrameLayout = object : SizeNotifierFrameLayout(context) {
@@ -383,7 +384,7 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 				for (i in 0 until childCount) {
 					val child = getChildAt(i)
 
-					if (child == null || child.visibility == GONE || child === actionBar) {
+					if (child == null || child.isGone || child === actionBar) {
 						continue
 					}
 
@@ -416,7 +417,7 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 				for (i in 0 until count) {
 					val child = getChildAt(i)
 
-					if (child.visibility == GONE) {
+					if (child.isGone) {
 						continue
 					}
 
@@ -939,17 +940,9 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 					messagesController.changeChatAvatar(chatId, null, inputPhoto, inputVideo, videoTimestamp, inputVideoPath, avatar, avatarBig, null)
 				}
 
-				val tlUsers = users?.takeIf { it.isNotEmpty() }?.map {
-					messagesController.getInputUser(messagesController.getUser(it))
-				}
-
-				if (!tlUsers.isNullOrEmpty()) {
-					messagesController.addUsersToChannel(chatId, ArrayList(tlUsers), null)
-				}
-
-				val req = TLRPC.TL_messages_getExportedChatInvites()
+				val req = TLRPC.TLMessagesGetExportedChatInvites()
 				req.peer = messagesController.getInputPeer(-chatId)
-				req.admin_id = messagesController.getInputUser(userConfig.getCurrentUser())
+				req.adminId = messagesController.getInputUser(userConfig.getCurrentUser())
 				req.limit = 1
 
 				connectionsManager.sendRequest(req)
@@ -965,7 +958,17 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 				val args2 = Bundle()
 				args2.putLong("chat_id", chatId)
 
-				presentFragment(ChatActivity(args2), false)
+				val chatActivity = ChatActivity(args2).also { chatActivity ->
+					val tlUsers = users?.map {
+						messagesController.getInputUser(messagesController.getUser(it))
+					}
+
+					if (!tlUsers.isNullOrEmpty()) {
+						messagesController.addUsersToChannel(chatId, tlUsers, chatActivity)
+					}
+				}
+
+				presentFragment(chatActivity, false)
 
 				parentLayout?.postDelayed({
 					parentLayout.removeFragmentsBetween(0, (parentLayout.fragmentsStack?.size ?: 0) - 1)
@@ -1020,7 +1023,7 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
 				if (error == null) {
-					if (response is TLRPC.TL_biz_dataRaw) {
+					if (response is TLRPC.TLBizDataRaw) {
 						val res = response.readData<ElloRpc.ChannelCategoriesResponse>()
 
 						if (res?.categories != null) {
@@ -1042,7 +1045,7 @@ class NewChannelSetupFragment(args: Bundle) : BaseFragment(args), NotificationCe
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
 				if (error == null) {
-					if (response is TLRPC.TL_biz_dataRaw) {
+					if (response is TLRPC.TLBizDataRaw) {
 						val res = response.readData<ElloRpc.GenresResponse>()
 
 						if (res?.genres != null) {

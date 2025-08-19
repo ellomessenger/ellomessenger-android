@@ -3,6 +3,7 @@
 	xmlns:app="http://schemas.android.com/apk/res-auto"
 	android:layout_width="match_parent"
 	android:layout_height="match_parent"
+	android:background="@color/light_background"
 	android:orientation="vertical">
 
 	<ScrollView
@@ -12,24 +13,168 @@
 		<LinearLayout
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
-			android:layout_marginStart="16dp"
-			android:layout_marginEnd="16dp"
-			android:layout_marginBottom="16dp"
-			android:orientation="vertical"
-			android:paddingTop="16dp"
-			android:paddingBottom="16dp">
+			android:orientation="vertical">
 
 			<com.google.android.material.card.MaterialCardView
-				android:id="@+id/bt_find_friends"
+				android:id="@+id/bt_tips"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
-				app:cardCornerRadius="16dp"
+				app:cardCornerRadius="0dp"
 				app:strokeWidth="0dp">
 
 				<LinearLayout
 					android:layout_width="match_parent"
 					android:layout_height="wrap_content"
-					android:background="@color/light_background"
+					android:background="@color/background"
+					android:orientation="horizontal">
+
+					<LinearLayout
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:layout_gravity="center"
+						android:layout_marginStart="16dp"
+						android:background="@drawable/bg_tips"
+						android:gravity="center">
+
+						<ImageView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:src="@drawable/ic_lamp" />
+					</LinearLayout>
+
+					<LinearLayout
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:layout_marginTop="12dp"
+						android:layout_marginBottom="12dp"
+						android:layout_weight="1"
+						android:orientation="vertical">
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginStart="16dp"
+							android:text="@string/tips"
+							android:textColor="@color/dark"
+							android:textSize="16sp"
+							android:textStyle="bold" />
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginStart="16dp"
+							android:layout_marginTop="4sp"
+							android:layout_marginEnd="16dp"
+							android:text="@string/quick_links_tips_description"
+							android:textColor="@color/disabled_text"
+							android:textSize="15sp" />
+
+					</LinearLayout>
+
+					<ImageView
+						android:layout_width="28dp"
+						android:layout_height="28dp"
+						android:layout_gravity="center"
+						android:layout_marginEnd="16dp"
+						android:src="@drawable/ic_forward_arrow" />
+
+				</LinearLayout>
+
+				<View
+					android:layout_width="match_parent"
+					android:layout_height="0.5dp"
+					android:layout_gravity="bottom"
+					android:layout_marginStart="20dp"
+					android:background="@color/divider" />
+
+			</com.google.android.material.card.MaterialCardView>
+
+			<com.google.android.material.card.MaterialCardView
+				android:id="@+id/bt_invite_friends"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:visibility="gone"
+				app:cardCornerRadius="0dp"
+				app:strokeWidth="0dp">
+
+				<LinearLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:background="@color/background"
+					android:orientation="horizontal">
+
+					<LinearLayout
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:layout_gravity="center"
+						android:layout_marginStart="16dp"
+						android:background="@drawable/bg_invite_friends"
+						android:gravity="center">
+
+						<ImageView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:src="@drawable/ic_invite_friends" />
+					</LinearLayout>
+
+					<LinearLayout
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:layout_marginTop="12dp"
+						android:layout_marginBottom="12dp"
+						android:layout_weight="1"
+						android:orientation="vertical">
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginStart="16dp"
+							android:text="@string/txt_invite_friends"
+							android:textColor="@color/dark"
+							android:textSize="16sp"
+							android:textStyle="bold" />
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginStart="16dp"
+							android:layout_marginTop="4sp"
+							android:layout_marginEnd="16dp"
+							android:text="@string/invite_for_credits"
+							android:textColor="@color/disabled_text"
+							android:textSize="15sp" />
+
+					</LinearLayout>
+
+					<ImageView
+						android:layout_width="28dp"
+						android:layout_height="28dp"
+						android:layout_gravity="center"
+						android:layout_marginEnd="16dp"
+						android:src="@drawable/ic_forward_arrow" />
+
+				</LinearLayout>
+
+				<View
+					android:layout_width="match_parent"
+					android:layout_height="0.5dp"
+					android:layout_gravity="bottom"
+					android:layout_marginStart="20dp"
+					android:background="@color/divider" />
+
+			</com.google.android.material.card.MaterialCardView>
+
+			<com.google.android.material.card.MaterialCardView
+				android:id="@+id/bt_find_friends"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				app:cardCornerRadius="0dp"
+				app:strokeWidth="0dp">
+
+				<LinearLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:background="@color/background"
 					android:orientation="horizontal">
 
 					<LinearLayout
@@ -81,8 +226,14 @@
 						android:layout_gravity="center"
 						android:layout_marginEnd="16dp"
 						android:src="@drawable/ic_forward_arrow" />
-
 				</LinearLayout>
+
+				<View
+					android:layout_width="match_parent"
+					android:layout_height="0.5dp"
+					android:layout_gravity="bottom"
+					android:layout_marginStart="20dp"
+					android:background="@color/divider" />
 
 			</com.google.android.material.card.MaterialCardView>
 
@@ -90,14 +241,13 @@
 				android:id="@+id/bt_create_channel_group_course"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
-				android:layout_marginTop="4dp"
-				app:cardCornerRadius="16dp"
+				app:cardCornerRadius="0dp"
 				app:strokeWidth="0dp">
 
 				<LinearLayout
 					android:layout_width="match_parent"
 					android:layout_height="wrap_content"
-					android:background="@color/light_background"
+					android:background="@color/background"
 					android:orientation="horizontal">
 
 					<LinearLayout
@@ -152,20 +302,26 @@
 
 				</LinearLayout>
 
+				<View
+					android:layout_width="match_parent"
+					android:layout_height="0.5dp"
+					android:layout_gravity="bottom"
+					android:layout_marginStart="20dp"
+					android:background="@color/divider" />
+
 			</com.google.android.material.card.MaterialCardView>
 
 			<com.google.android.material.card.MaterialCardView
 				android:id="@+id/bt_wallet"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
-				android:layout_marginTop="4dp"
-				app:cardCornerRadius="16dp"
+				app:cardCornerRadius="0dp"
 				app:strokeWidth="0dp">
 
 				<LinearLayout
 					android:layout_width="match_parent"
 					android:layout_height="wrap_content"
-					android:background="@color/light_background"
+					android:background="@color/background"
 					android:orientation="horizontal">
 
 					<LinearLayout
@@ -221,73 +377,12 @@
 
 				</LinearLayout>
 
-			</com.google.android.material.card.MaterialCardView>
-
-			<com.google.android.material.card.MaterialCardView
-				android:id="@+id/bt_invite_friends"
-				android:layout_width="match_parent"
-				android:layout_height="wrap_content"
-				android:layout_marginTop="4dp"
-				app:cardCornerRadius="16dp"
-				app:strokeWidth="0dp">
-
-				<LinearLayout
+				<View
 					android:layout_width="match_parent"
-					android:layout_height="wrap_content"
-					android:background="@color/light_background"
-					android:orientation="horizontal">
-
-					<LinearLayout
-						android:layout_width="wrap_content"
-						android:layout_height="wrap_content"
-						android:layout_gravity="center"
-						android:layout_marginStart="16dp"
-						android:background="@drawable/bg_invite_friends"
-						android:gravity="center">
-
-						<ImageView
-							android:layout_width="wrap_content"
-							android:layout_height="wrap_content"
-							android:src="@drawable/ic_invite_friends" />
-					</LinearLayout>
-
-					<LinearLayout
-						android:layout_width="wrap_content"
-						android:layout_height="wrap_content"
-						android:layout_marginTop="12dp"
-						android:layout_marginBottom="12dp"
-						android:layout_weight="1"
-						android:orientation="vertical">
-
-						<TextView
-							android:layout_width="wrap_content"
-							android:layout_height="wrap_content"
-							android:layout_marginStart="16dp"
-							android:text="@string/txt_invite_friends"
-							android:textColor="@color/dark"
-							android:textSize="16sp"
-							android:textStyle="bold" />
-
-						<TextView
-							android:layout_width="wrap_content"
-							android:layout_height="wrap_content"
-							android:layout_marginStart="16dp"
-							android:layout_marginTop="4sp"
-							android:layout_marginEnd="16dp"
-							android:text="@string/invite_for_credits"
-							android:textColor="@color/disabled_text"
-							android:textSize="15sp" />
-
-					</LinearLayout>
-
-					<ImageView
-						android:layout_width="28dp"
-						android:layout_height="28dp"
-						android:layout_gravity="center"
-						android:layout_marginEnd="16dp"
-						android:src="@drawable/ic_forward_arrow" />
-
-				</LinearLayout>
+					android:layout_height="0.5dp"
+					android:layout_gravity="bottom"
+					android:layout_marginStart="20dp"
+					android:background="@color/divider" />
 
 			</com.google.android.material.card.MaterialCardView>
 
@@ -295,14 +390,13 @@
 				android:id="@+id/bt_explore_ai"
 				android:layout_width="match_parent"
 				android:layout_height="wrap_content"
-				android:layout_marginTop="4dp"
-				app:cardCornerRadius="16dp"
+				app:cardCornerRadius="0dp"
 				app:strokeWidth="0dp">
 
 				<LinearLayout
 					android:layout_width="match_parent"
 					android:layout_height="wrap_content"
-					android:background="@color/light_background"
+					android:background="@color/background"
 					android:orientation="horizontal">
 
 					<LinearLayout
@@ -357,7 +451,90 @@
 
 				</LinearLayout>
 
+				<View
+					android:layout_width="match_parent"
+					android:layout_height="0.5dp"
+					android:layout_gravity="bottom"
+					android:layout_marginStart="20dp"
+					android:background="@color/divider" />
+
 			</com.google.android.material.card.MaterialCardView>
+
+			<com.google.android.material.card.MaterialCardView
+				android:id="@+id/bt_support"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				app:cardCornerRadius="0dp"
+				app:strokeWidth="0dp">
+
+				<LinearLayout
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:background="@color/background"
+					android:orientation="horizontal">
+
+					<LinearLayout
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:layout_gravity="center"
+						android:layout_marginStart="16dp"
+						android:background="@drawable/bg_explore_ai"
+						android:backgroundTint="@color/avatar_light_blue"
+						android:gravity="center">
+
+						<ImageView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:src="@drawable/ic_headphone" />
+					</LinearLayout>
+
+					<LinearLayout
+						android:layout_width="wrap_content"
+						android:layout_height="wrap_content"
+						android:layout_marginTop="12dp"
+						android:layout_marginBottom="12dp"
+						android:layout_weight="1"
+						android:orientation="vertical">
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginStart="16dp"
+							android:text="@string/Support"
+							android:textColor="@color/dark"
+							android:textSize="16sp"
+							android:textStyle="bold" />
+
+						<TextView
+							android:layout_width="wrap_content"
+							android:layout_height="wrap_content"
+							android:layout_marginStart="16dp"
+							android:layout_marginTop="4sp"
+							android:layout_marginEnd="16dp"
+							android:text="@string/quick_links_support_description"
+							android:textColor="@color/disabled_text"
+							android:textSize="15sp" />
+
+					</LinearLayout>
+
+					<ImageView
+						android:layout_width="28dp"
+						android:layout_height="28dp"
+						android:layout_gravity="center"
+						android:layout_marginEnd="16dp"
+						android:src="@drawable/ic_forward_arrow" />
+
+				</LinearLayout>
+
+				<View
+					android:layout_width="match_parent"
+					android:layout_height="0.5dp"
+					android:layout_gravity="bottom"
+					android:layout_marginStart="20dp"
+					android:background="@color/divider" />
+
+			</com.google.android.material.card.MaterialCardView>
+
 
 		</LinearLayout>
 

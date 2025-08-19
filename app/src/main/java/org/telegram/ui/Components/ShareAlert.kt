@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -55,7 +55,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.collection.LongSparseArray
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withTranslation
 import androidx.core.view.ViewCompat
+import androidx.core.view.isGone
+import androidx.core.view.isNotEmpty
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup
@@ -89,17 +93,21 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.EncryptedChat
-import org.telegram.tgnet.TLRPC.TL_channels_exportMessageLink
-import org.telegram.tgnet.TLRPC.TL_dialog
-import org.telegram.tgnet.TLRPC.TL_encryptedChat
-import org.telegram.tgnet.TLRPC.TL_exportedMessageLink
-import org.telegram.tgnet.TLRPC.TL_groupCallParticipant
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.User.Companion.TLdeserialize
+import org.telegram.tgnet.TLRPC.TLChannelsExportMessageLink
+import org.telegram.tgnet.TLRPC.TLDialog
+import org.telegram.tgnet.TLRPC.TLEncryptedChat
+import org.telegram.tgnet.TLRPC.TLExportedMessageLink
+import org.telegram.tgnet.TLRPC.TLGroupCallParticipant
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.forwards
+import org.telegram.tgnet.setStatusFromExpires
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
 import org.telegram.ui.ActionBar.ActionBarPopupWindow.ActionBarPopupWindowLayout
@@ -173,7 +181,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 	private var containerViewTop = -1
 	private var fullyShown = false
 	private var parentActivity: Activity? = null
-	private var exportedMessageLink: TL_exportedMessageLink? = null
+	private var exportedMessageLink: TLExportedMessageLink? = null
 	private var loadingLink = false
 	private var copyLinkOnEnd = false
 	private var scrollOffsetY = 0
@@ -249,14 +257,14 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 		if (channel) {
 			loadingLink = true
 
-			val req = TL_channels_exportMessageLink()
+			val req = TLChannelsExportMessageLink()
 			req.id = messages?.firstOrNull()?.id ?: 0
-			req.channel = MessagesController.getInstance(currentAccount).getInputChannel(messages?.firstOrNull()?.messageOwner?.peer_id?.channel_id ?: 0)
+			req.channel = MessagesController.getInstance(currentAccount).getInputChannel(messages?.firstOrNull()?.messageOwner?.peerId?.channelId ?: 0)
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
 					if (response != null) {
-						exportedMessageLink = response as TL_exportedMessageLink?
+						exportedMessageLink = response as TLExportedMessageLink?
 
 						if (copyLinkOnEnd) {
 							copyLink()
@@ -496,7 +504,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 				for (i in 0 until childCount) {
 					val child = getChildAt(i)
 
-					if (child == null || child.visibility == GONE) {
+					if (child == null || child.isGone) {
 						continue
 					}
 
@@ -535,7 +543,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 				for (i in 0 until count) {
 					val child = getChildAt(i)
 
-					if (child.visibility == GONE) {
+					if (child.isGone) {
 						continue
 					}
 
@@ -613,79 +621,75 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 			}
 
 			override fun onDraw(canvas: Canvas) {
-				canvas.save()
-				canvas.translate(0f, currentPanTranslationY)
+				canvas.withTranslation(0f, currentPanTranslationY) {
+					var y = scrollOffsetY - backgroundPaddingTop + AndroidUtilities.dp(6f) + topOffset
 
-				var y = scrollOffsetY - backgroundPaddingTop + AndroidUtilities.dp(6f) + topOffset
+					containerViewTop = scrollOffsetY - backgroundPaddingTop - AndroidUtilities.dp(13f) + topOffset
 
-				containerViewTop = scrollOffsetY - backgroundPaddingTop - AndroidUtilities.dp(13f) + topOffset
+					var top = containerViewTop
+					var height = measuredHeight + AndroidUtilities.dp((30 + 30).toFloat()) + backgroundPaddingTop
+					var statusBarHeight = 0
+					var radProgress = 1.0f
 
-				var top = containerViewTop
-				var height = measuredHeight + AndroidUtilities.dp((30 + 30).toFloat()) + backgroundPaddingTop
-				var statusBarHeight = 0
-				var radProgress = 1.0f
+					if (!isFullscreen) {
+						top += AndroidUtilities.statusBarHeight
+						y += AndroidUtilities.statusBarHeight
+						height -= AndroidUtilities.statusBarHeight
 
-				if (!isFullscreen) {
-					top += AndroidUtilities.statusBarHeight
-					y += AndroidUtilities.statusBarHeight
-					height -= AndroidUtilities.statusBarHeight
+						if (fullHeight) {
+							if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight * 2) {
+								val diff = min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight * 2 - top - backgroundPaddingTop)
+								top -= diff
+								height += diff
+								radProgress = 1.0f - min(1.0f, diff * 2 / AndroidUtilities.statusBarHeight.toFloat())
+							}
 
-					if (fullHeight) {
-						if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight * 2) {
-							val diff = min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight * 2 - top - backgroundPaddingTop)
-							top -= diff
-							height += diff
-							radProgress = 1.0f - min(1.0f, diff * 2 / AndroidUtilities.statusBarHeight.toFloat())
+							if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight) {
+								statusBarHeight = min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight - top - backgroundPaddingTop)
+							}
+						}
+					}
+
+					shadowDrawable.setBounds(0, top, measuredWidth, height)
+					shadowDrawable.draw(this)
+
+					if (radProgress != 1.0f) {
+						Theme.dialogs_onlineCirclePaint.color = if (darkTheme) context.getColor(R.color.dark_background) else context.getColor(R.color.background)
+						rect1.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
+						drawRoundRect(rect1, AndroidUtilities.dp(12f) * radProgress, AndroidUtilities.dp(12f) * radProgress, Theme.dialogs_onlineCirclePaint)
+					}
+
+					val w = AndroidUtilities.dp(36f)
+
+					rect1.set(((measuredWidth - w) / 2).toFloat(), y.toFloat(), ((measuredWidth + w) / 2).toFloat(), (y + AndroidUtilities.dp(4f)).toFloat())
+
+					Theme.dialogs_onlineCirclePaint.color = context.getColor(R.color.light_background)
+
+					drawRoundRect(rect1, AndroidUtilities.dp(2f).toFloat(), AndroidUtilities.dp(2f).toFloat(), Theme.dialogs_onlineCirclePaint)
+
+					var flags = systemUiVisibility
+					val shouldBeLightStatusBar = lightStatusBar && statusBarHeight > AndroidUtilities.statusBarHeight * .5f
+					val isLightStatusBar = flags and SYSTEM_UI_FLAG_LIGHT_STATUS_BAR > 0
+
+					if (shouldBeLightStatusBar != isLightStatusBar) {
+						flags = if (shouldBeLightStatusBar) {
+							flags or SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+						}
+						else {
+							flags and SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
 						}
 
-						if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight) {
-							statusBarHeight = min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight - top - backgroundPaddingTop)
-						}
+						systemUiVisibility = flags
 					}
 				}
-
-				shadowDrawable.setBounds(0, top, measuredWidth, height)
-				shadowDrawable.draw(canvas)
-
-				if (radProgress != 1.0f) {
-					Theme.dialogs_onlineCirclePaint.color = if (darkTheme) context.getColor(R.color.dark_background) else context.getColor(R.color.background)
-					rect1.set(backgroundPaddingLeft.toFloat(), (backgroundPaddingTop + top).toFloat(), (measuredWidth - backgroundPaddingLeft).toFloat(), (backgroundPaddingTop + top + AndroidUtilities.dp(24f)).toFloat())
-					canvas.drawRoundRect(rect1, AndroidUtilities.dp(12f) * radProgress, AndroidUtilities.dp(12f) * radProgress, Theme.dialogs_onlineCirclePaint)
-				}
-
-				val w = AndroidUtilities.dp(36f)
-
-				rect1.set(((measuredWidth - w) / 2).toFloat(), y.toFloat(), ((measuredWidth + w) / 2).toFloat(), (y + AndroidUtilities.dp(4f)).toFloat())
-
-				Theme.dialogs_onlineCirclePaint.color = context.getColor(R.color.light_background)
-
-				canvas.drawRoundRect(rect1, AndroidUtilities.dp(2f).toFloat(), AndroidUtilities.dp(2f).toFloat(), Theme.dialogs_onlineCirclePaint)
-
-				var flags = systemUiVisibility
-				val shouldBeLightStatusBar = lightStatusBar && statusBarHeight > AndroidUtilities.statusBarHeight * .5f
-				val isLightStatusBar = flags and SYSTEM_UI_FLAG_LIGHT_STATUS_BAR > 0
-
-				if (shouldBeLightStatusBar != isLightStatusBar) {
-					flags = if (shouldBeLightStatusBar) {
-						flags or SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-					}
-					else {
-						flags and SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-					}
-
-					systemUiVisibility = flags
-				}
-
-				canvas.restore()
 
 				previousTopOffset = topOffset
 			}
 
 			override fun dispatchDraw(canvas: Canvas) {
-				canvas.save()
-				canvas.clipRect(0f, paddingTop + currentPanTranslationY, measuredWidth.toFloat(), measuredHeight + currentPanTranslationY + AndroidUtilities.dp(50f))
-				super.dispatchDraw(canvas)
-				canvas.restore()
+				canvas.withClip(0f, paddingTop + currentPanTranslationY, measuredWidth.toFloat(), measuredHeight + currentPanTranslationY + AndroidUtilities.dp(50f)) {
+					super.dispatchDraw(this)
+				}
 			}
 		}
 
@@ -999,10 +1003,9 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 			}
 
 			override fun dispatchDraw(canvas: Canvas) {
-				canvas.save()
-				canvas.clipRect(0f, captionEditTextTopOffset, measuredWidth.toFloat(), measuredHeight.toFloat())
-				super.dispatchDraw(canvas)
-				canvas.restore()
+				canvas.withClip(0f, captionEditTextTopOffset, measuredWidth.toFloat(), measuredHeight.toFloat()) {
+					super.dispatchDraw(this)
+				}
 			}
 		}
 
@@ -1519,7 +1522,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 				val key = selectedDialogs.keyAt(a)
 
 				if (frameLayout2.tag != null && commentTextView.length() > 0) {
-					SendMessagesHelper.getInstance(currentAccount).sendMessage(text.firstOrNull()?.toString(), key, null, null, null, true, entities, null, null, withSound, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+					SendMessagesHelper.getInstance(currentAccount).sendMessage(text.firstOrNull()?.toString(), key, null, null, null, true, entities, null, null, withSound, 0, null, updateStickersOrder = false)
 				}
 
 				val result = SendMessagesHelper.getInstance(currentAccount).sendMessage(sendingMessageObjects, key, !showSendersName, false, withSound, 0)
@@ -1540,7 +1543,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 				selectedDialogs.remove(key)
 			}
 
-			if (!selectedDialogs.isEmpty) {
+			if (!selectedDialogs.isEmpty()) {
 				onSend(selectedDialogs, sendingMessageObjects!!.size)
 			}
 		}
@@ -1552,10 +1555,10 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 					val key = selectedDialogs.keyAt(a)
 
 					if (frameLayout2.tag != null && commentTextView.length() > 0) {
-						SendMessagesHelper.getInstance(currentAccount).sendMessage(text.firstOrNull()?.toString(), key, null, null, null, true, entities, null, null, withSound, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+						SendMessagesHelper.getInstance(currentAccount).sendMessage(text.firstOrNull()?.toString(), key, null, null, null, true, entities, null, null, withSound, 0, null, updateStickersOrder = false)
 					}
 
-					SendMessagesHelper.getInstance(currentAccount).sendMessage(sendingText[num], key, null, null, null, true, null, null, null, withSound, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+					SendMessagesHelper.getInstance(currentAccount).sendMessage(sendingText[num], key, null, null, null, true, null, null, null, withSound, 0, null, updateStickersOrder = false)
 				}
 			}
 
@@ -1573,7 +1576,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 	private val currentTop: Int
 		get() {
-			if (gridView.childCount != 0) {
+			if (gridView.isNotEmpty()) {
 				val child = gridView.getChildAt(0)
 				val holder = gridView.findContainingViewHolder(child) as RecyclerListView.Holder?
 
@@ -1590,6 +1593,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 		commentTextView.onDestroy()
 	}
 
+	@Deprecated("Deprecated in Java")
 	override fun onBackPressed() {
 		if (commentTextView.isPopupShowing) {
 			commentTextView.hidePopup(true)
@@ -1877,7 +1881,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 	}
 
 	class DialogSearchResult {
-		var dialog: TLRPC.Dialog = TL_dialog()
+		var dialog: TLRPC.Dialog = TLDialog()
 		var `object`: TLObject? = null
 		var date = 0
 		var name: CharSequence? = null
@@ -2140,7 +2144,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 			val allDialogs = MessagesController.getInstance(currentAccount).allDialogs
 
 			for (a in allDialogs.indices) {
-				val dialog = allDialogs[a] as? TL_dialog ?: continue
+				val dialog = allDialogs[a] as? TLDialog ?: continue
 
 				if (dialog.id == selfUserId) {
 					continue
@@ -2148,7 +2152,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 				if (!DialogObject.isEncryptedDialog(dialog.id)) {
 					if (DialogObject.isUserDialog(dialog.id)) {
-						if (dialog.folder_id == 1) {
+						if (dialog.folderId == 1) {
 							archivedDialogs.add(dialog)
 						}
 						else {
@@ -2160,8 +2164,8 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 					else {
 						val chat = MessagesController.getInstance(currentAccount).getChat(-dialog.id)
 
-						if (!(chat == null || isNotInChat(chat) || chat.gigagroup && !hasAdminRights(chat) || isChannel(chat) && !chat.creator && (chat.admin_rights == null || !chat.admin_rights.post_messages) && !chat.megagroup)) {
-							if (dialog.folder_id == 1) {
+						if (!(chat == null || isNotInChat(chat) || chat.gigagroup && !hasAdminRights(chat) || isChannel(chat) && !chat.creator && (chat.adminRights == null || chat.adminRights?.postMessages != true) && !chat.megagroup)) {
+							if (dialog.folderId == 1) {
 								archivedDialogs.add(dialog)
 							}
 							else {
@@ -2270,7 +2274,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 		init {
 			searchAdapterHelper.setDelegate(object : SearchAdapterHelperDelegate {
-				override val excludeCallParticipants: LongSparseArray<TL_groupCallParticipant>?
+				override val excludeCallParticipants: LongSparseArray<TLGroupCallParticipant>?
 					get() = null
 
 				override val excludeUsersIds: LongArray?
@@ -2395,16 +2399,16 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 									val data = cursor.byteBufferValue(0)
 
 									if (data != null) {
-										val user = TLdeserialize(data, data.readInt32(false), false)
+										val user = User.deserialize(data, data.readInt32(false), false)
 
 										data.reuse()
 
 										val dialogSearchResult = dialogsResult[user!!.id]
 
-										user.status?.expires = cursor.intValue(1)
+										user.setStatusFromExpires(cursor.intValue(1))
 
 										if (found == 1) {
-											dialogSearchResult?.name = AndroidUtilities.generateSearchName(user.first_name, user.last_name, q)
+											dialogSearchResult?.name = AndroidUtilities.generateSearchName(user.firstName, user.lastName, q)
 										}
 										else {
 											dialogSearchResult?.name = AndroidUtilities.generateSearchName("@" + user.username, null, "@$q")
@@ -2444,11 +2448,11 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 									val data = cursor.byteBufferValue(0)
 
 									if (data != null) {
-										val chat = Chat.TLdeserialize(data, data.readInt32(false), false)
+										val chat = Chat.deserialize(data, data.readInt32(false), false)
 
 										data.reuse()
 
-										if (!(chat == null || isNotInChat(chat) || isChannel(chat) && !chat.creator && (chat.admin_rights == null || !chat.admin_rights.post_messages) && !chat.megagroup)) {
+										if (!(chat == null || isNotInChat(chat) || isChannel(chat) && !chat.creator && (chat.adminRights == null || chat.adminRights?.postMessages != true) && !chat.megagroup)) {
 											val dialogSearchResult = dialogsResult[-chat.id]
 											dialogSearchResult?.name = AndroidUtilities.generateSearchName(chat.title, null, q)
 											dialogSearchResult?.`object` = chat
@@ -2517,20 +2521,20 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 								val data = cursor.byteBufferValue(0)
 
 								if (data != null) {
-									val user = TLdeserialize(data, data.readInt32(false), false)
+									val user = User.deserialize(data, data.readInt32(false), false)
 
 									data.reuse()
 
 									if (user != null) {
 										val dialogSearchResult = DialogSearchResult()
 
-										user.status?.expires = cursor.intValue(1)
+										user.setStatusFromExpires(cursor.intValue(1))
 
 										dialogSearchResult.dialog.id = user.id
 										dialogSearchResult.`object` = user
 
 										if (found == 1) {
-											dialogSearchResult.name = AndroidUtilities.generateSearchName(user.first_name, user.last_name, q)
+											dialogSearchResult.name = AndroidUtilities.generateSearchName(user.firstName, user.lastName, q)
 										}
 										else {
 											dialogSearchResult.name = AndroidUtilities.generateSearchName("@" + user.username, null, "@$q")
@@ -2725,7 +2729,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 				val recentSearchObject = recentSearchObjects[index]
 				val `object` = recentSearchObject.`object`
-				val dialog: TLRPC.Dialog = TL_dialog()
+				val dialog: TLRPC.Dialog = TLDialog()
 
 				if (`object` is User) {
 					dialog.id = `object`.id
@@ -2754,7 +2758,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 			if (position < arrayList.size) {
 				val `object` = arrayList[position]
-				val dialog: TLRPC.Dialog = TL_dialog()
+				val dialog: TLRPC.Dialog = TLDialog()
 
 				if (`object` is User) {
 					dialog.id = `object`.id
@@ -2823,17 +2827,17 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 							var user: User? = null
 							var did: Long = 0
 
-							if (peer.peer.user_id != 0L) {
-								did = peer.peer.user_id
-								user = MessagesController.getInstance(currentAccount).getUser(peer.peer.user_id)
+							if (peer.peer.userId != 0L) {
+								did = peer.peer.userId
+								user = MessagesController.getInstance(currentAccount).getUser(peer.peer.userId)
 							}
-							else if (peer.peer.channel_id != 0L) {
-								did = -peer.peer.channel_id
-								chat = MessagesController.getInstance(currentAccount).getChat(peer.peer.channel_id)
+							else if (peer.peer.channelId != 0L) {
+								did = -peer.peer.channelId
+								chat = MessagesController.getInstance(currentAccount).getChat(peer.peer.channelId)
 							}
-							else if (peer.peer.chat_id != 0L) {
-								did = -peer.peer.chat_id
-								chat = MessagesController.getInstance(currentAccount).getChat(peer.peer.chat_id)
+							else if (peer.peer.chatId != 0L) {
+								did = -peer.peer.chatId
+								chat = MessagesController.getInstance(currentAccount).getChat(peer.peer.chatId)
 							}
 
 							val animated = did == cell.dialogId
@@ -2856,17 +2860,17 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 					horizontalListView.setOnItemClickListener { view1, position ->
 						val peer = MediaDataController.getInstance(currentAccount).hints[position]
-						val dialog: TLRPC.Dialog = TL_dialog()
+						val dialog: TLRPC.Dialog = TLDialog()
 						var did: Long = 0
 
-						if (peer.peer.user_id != 0L) {
-							did = peer.peer.user_id
+						if (peer.peer.userId != 0L) {
+							did = peer.peer.userId
 						}
-						else if (peer.peer.channel_id != 0L) {
-							did = -peer.peer.channel_id
+						else if (peer.peer.channelId != 0L) {
+							did = -peer.peer.channelId
 						}
-						else if (peer.peer.chat_id != 0L) {
-							did = -peer.peer.chat_id
+						else if (peer.peer.chatId != 0L) {
+							did = -peer.peer.chatId
 						}
 
 						dialog.id = did
@@ -2921,18 +2925,18 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 						if (`object` is User) {
 							id = `object`.id
-							name = formatName(`object`.first_name, `object`.last_name)
+							name = formatName(`object`.firstName, `object`.lastName)
 						}
 						else if (`object` is Chat) {
 							id = -`object`.id
 							name = `object`.title
 						}
-						else if (`object` is TL_encryptedChat) {
-							val user = MessagesController.getInstance(currentAccount).getUser(`object`.user_id)
+						else if (`object` is TLEncryptedChat) {
+							val user = MessagesController.getInstance(currentAccount).getUser(`object`.userId)
 
 							if (user != null) {
 								id = user.id
-								name = formatName(user.first_name, user.last_name)
+								name = formatName(user.firstName, user.lastName)
 							}
 						}
 
@@ -2970,7 +2974,7 @@ open class ShareAlert(context: Context, fragment: ChatActivity?, messages: List<
 
 					if (`object` is User) {
 						id = `object`.id
-						name = formatName(`object`.first_name, `object`.last_name)
+						name = formatName(`object`.firstName, `object`.lastName)
 					}
 					else {
 						val chat = `object` as Chat

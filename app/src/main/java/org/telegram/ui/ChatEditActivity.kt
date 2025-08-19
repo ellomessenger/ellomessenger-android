@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -32,6 +32,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject
 import org.telegram.messenger.FileLog
@@ -47,9 +49,12 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
+import org.telegram.tgnet.bannedCount
+import org.telegram.tgnet.dcId
+import org.telegram.tgnet.participants
+import org.telegram.tgnet.photoBig
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.videoSizes
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -74,6 +79,7 @@ import org.telegram.ui.Components.RLottieDrawable
 import org.telegram.ui.Components.RadialProgressView
 import org.telegram.ui.Components.SizeNotifierFrameLayout
 import org.telegram.ui.Components.UndoView
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import kotlin.math.max
 import kotlin.math.min
@@ -142,14 +148,10 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 				return null
 			}
 
-			var photoBig: TLRPC.FileLocation? = null
 			val chat = messagesController.getChat(chatId)
+			val photoBig = chat?.photo?.photoBig
 
-			if (chat?.photo?.photo_big != null) {
-				photoBig = chat.photo.photo_big
-			}
-
-			if (photoBig != null && photoBig.local_id == fileLocation.local_id && photoBig.volume_id == fileLocation.volume_id && photoBig.dc_id == fileLocation.dc_id) {
+			if (photoBig != null && photoBig.localId == fileLocation.localId && photoBig.volumeId == fileLocation.volumeId && photoBig.dcId == fileLocation.dcId) {
 				val coordinates = IntArray(2)
 
 				avatarImage?.getLocationInWindow(coordinates)
@@ -221,23 +223,22 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 			loadLinksCount()
 		}
 
-		showHistory = currentChat?.show_history == true
+		showHistory = currentChat?.showHistory == true
 
 		return super.onFragmentCreate()
 	}
 
 	private fun loadLinksCount() {
-		val req = TLRPC.TL_messages_getExportedChatInvites()
+		val req = TLRPC.TLMessagesGetExportedChatInvites()
 		req.peer = messagesController.getInputPeer(-chatId)
-		req.admin_id = messagesController.getInputUser(userConfig.getCurrentUser())
+		req.adminId = messagesController.getInputUser(userConfig.getCurrentUser())
 		req.limit = 0
 
-		connectionsManager.sendRequest(req) { response, error ->
+		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (error == null) {
-					val invites = response as TLRPC.TL_messages_exportedChatInvites
-					info?.invitesCount = invites.count
-					messagesStorage.saveChatLinksCount(chatId, invites.count)
+				if (response is TLRPC.TLMessagesExportedChatInvites) {
+					info?.invitesCount = response.count
+					messagesStorage.saveChatLinksCount(chatId, response.count)
 					updateFields(false)
 				}
 			}
@@ -358,7 +359,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 				for (i in 0 until childCount) {
 					val child = getChildAt(i)
 
-					if (child == null || child.visibility == GONE || child === actionBar) {
+					if (child == null || child.isGone || child === actionBar) {
 						continue
 					}
 
@@ -391,7 +392,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 				for (i in 0 until count) {
 					val child = getChildAt(i)
 
-					if (child.visibility == GONE) {
+					if (child.isGone) {
 						continue
 					}
 
@@ -523,21 +524,16 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 
 				val chat = messagesController.getChat(chatId)
 
-				if (chat?.photo?.photo_big != null) {
+				if (chat?.photo?.photoBig != null) {
 					PhotoViewer.getInstance().setParentActivity(this@ChatEditActivity)
 
-					if (chat.photo.dc_id != 0) {
-						chat.photo.photo_big.dc_id = chat.photo.dc_id
+					if (chat.photo?.dcId != 0) {
+						chat.photo?.photoBig?.dcId = chat.photo?.dcId ?: 0
 					}
 
-					val videoLocation = if (info != null && info!!.chat_photo is TL_photo && info!!.chat_photo.video_sizes.isNotEmpty()) {
-						ImageLocation.getForPhoto(info!!.chat_photo.video_sizes[0], info!!.chat_photo)
-					}
-					else {
-						null
-					}
+					val videoLocation = ImageLocation.getForPhoto(info?.chatPhoto?.videoSizes?.firstOrNull(), info?.chatPhoto)
 
-					PhotoViewer.getInstance().openPhotoWithVideo(chat.photo.photo_big, videoLocation, provider)
+					PhotoViewer.getInstance().openPhotoWithVideo(chat.photo.photoBig, videoLocation, provider)
 				}
 			}
 		}
@@ -702,7 +698,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 //			}
 //		}
 
-		if (currentChat?.creator == true && (info == null || info?.can_set_username == true)) {
+		if (currentChat?.creator == true && (info == null || info?.canSetUsername == true)) {
 			typeCell = TextDetailCell(context)
 			typeCell?.background = Theme.getSelectorDrawable(false)
 
@@ -715,7 +711,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 			}
 		}
 
-		if (ChatObject.isChannel(currentChat) && (isChannel && ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_CHANGE_INFO) || !isChannel && ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_PIN))) {
+		if (!isChannel && ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_PIN)) {
 			linkedCell = TextDetailCell(context)
 			linkedCell?.background = Theme.getSelectorDrawable(false)
 
@@ -848,7 +844,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 
 		inviteLinksCell?.setOnClickListener {
 			val fragment = ManageLinksActivity(chatId, 0, 0)
-			fragment.setInfo(info, info!!.exported_invite)
+			fragment.setInfo(info, info?.exportedInvite)
 			presentFragment(fragment)
 		}
 
@@ -945,7 +941,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 			infoContainer?.addView(removedUsersCell, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 		}
 
-		if (memberRequestsCell != null && info != null && info!!.requests_pending > 0) {
+		if (memberRequestsCell != null && info != null && info!!.requestsPending > 0) {
 			infoContainer?.addView(memberRequestsCell, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 		}
 
@@ -1084,7 +1080,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		val hasPhoto: Boolean
 
 		if (currentChat?.photo != null) {
-			avatar = currentChat?.photo?.photo_small
+			avatar = currentChat?.photo?.photoSmall
 			val location = ImageLocation.getForUserOrChat(currentChat, ImageLocation.TYPE_SMALL)
 			avatarImage?.setForUserOrChat(currentChat, avatarDrawable)
 			hasPhoto = location != null
@@ -1166,7 +1162,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 					info = messagesController.getChatFull(chatId)
 
 					if (info != null) {
-						availableReactions = info?.available_reactions
+						availableReactions = info?.availableReactions
 					}
 
 					updateReactionsCell()
@@ -1239,7 +1235,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		val context = context ?: return false
 		val about = info?.about ?: ""
 
-		if (info != null && ChatObject.isChannel(currentChat) && currentChat?.show_history != showHistory || nameTextView != null && currentChat?.title != nameTextView?.text?.toString() || descriptionTextView != null && about != descriptionTextView?.text?.toString() /*|| signMessages != currentChat?.signatures*/) {
+		if (info != null && ChatObject.isChannel(currentChat) && currentChat?.showHistory != showHistory || nameTextView != null && currentChat?.title != nameTextView?.text?.toString() || descriptionTextView != null && about != descriptionTextView?.text?.toString() /*|| signMessages != currentChat?.signatures*/) {
 			val builder = AlertDialog.Builder(parentActivity)
 			builder.setTitle(context.getString(R.string.UserRestrictionsApplyChanges))
 
@@ -1269,7 +1265,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 	private val adminCount: Int
 		get() {
 			return info?.participants?.participants?.count {
-				it is TLRPC.TL_chatParticipantAdmin || it is TLRPC.TL_chatParticipantCreator
+				it is TLRPC.TLChatParticipantAdmin || it is TLRPC.TLChatParticipantCreator
 			} ?: 1
 		}
 
@@ -1288,7 +1284,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 
 		donePressed = true
 
-		if (currentChat?.show_history != showHistory) {
+		if (currentChat?.showHistory != showHistory) {
 			messagesController.toggleGroupInvitesHistory(chatId, showHistory)
 		}
 
@@ -1313,7 +1309,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		var needTitleCheck = false
 		if (currentChat?.title != nameTextView.text?.toString()) {
 			needTitleCheck = true
-			messagesController.changeChatTitle(chatId, nameTextView.text?.toString()) { _, error: TL_error? ->
+			messagesController.changeChatTitle(chatId, nameTextView.text?.toString()) { _, error ->
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
 						finishFragment()
@@ -1322,6 +1318,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 						if (context != null) {
 							AlertDialog.Builder(context!!).setTitle(context?.getString(R.string.cont_desc_error)).setMessage(error.text).setPositiveButton(context?.getString(R.string.OK), null).create().show()
 						}
+
 						donePressed = false
 					}
 				}
@@ -1431,7 +1428,7 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 				currentChat = messagesController.getChat(chatId)
 			}
 
-			availableReactions = info?.available_reactions
+			availableReactions = info?.availableReactions
 		}
 	}
 
@@ -1447,30 +1444,30 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 		val isPrivate = currentChat?.username.isNullOrEmpty()
 
 		if (historyCell != null) {
-			if (info?.location is TLRPC.TL_channelLocation) {
+			if (info?.location is TLRPC.TLChannelLocation) {
 				historyCell?.gone()
 			}
 			else {
-				historyCell?.visibility = if (isPrivate && (info == null || info?.linked_chat_id == 0L)) View.VISIBLE else View.GONE
+				historyCell?.visibility = if (isPrivate && (info == null || info?.linkedChatId == 0L)) View.VISIBLE else View.GONE
 			}
 		}
 
 		settingsSectionCell?.visibility = if (/*signCell == null &&*/ typeCell == null && (linkedCell == null || linkedCell?.visibility != View.VISIBLE) && (historyCell == null || historyCell?.visibility != View.VISIBLE) && (locationCell == null || locationCell?.visibility != View.VISIBLE)) View.GONE else View.VISIBLE
 
-		logCell?.visibility = if ((currentChat?.megagroup != true || currentChat?.gigagroup == true || info != null) && ((info?.participants_count ?: 0) > 200)) View.VISIBLE else View.GONE
+		logCell?.visibility = if ((currentChat?.megagroup != true || currentChat?.gigagroup == true || info != null) && ((info?.participantsCount ?: 0) > 200)) View.VISIBLE else View.GONE
 
 		if (linkedCell != null) {
-			if (info == null || !isChannel && info?.linked_chat_id == 0L) {
+			if (info == null || !isChannel && info?.linkedChatId == 0L) {
 				linkedCell?.gone()
 			}
 			else {
 				linkedCell?.visible()
 
-				if (info?.linked_chat_id == 0L) {
+				if (info?.linkedChatId == 0L) {
 					linkedCell?.setTextAndValue(context?.getString(R.string.Discussion), context?.getString(R.string.DiscussionInfo), true)
 				}
 				else {
-					val chat = messagesController.getChat(info!!.linked_chat_id)
+					val chat = messagesController.getChat(info!!.linkedChatId)
 
 					if (chat == null) {
 						linkedCell?.gone()
@@ -1516,12 +1513,12 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 //		}
 
 		if (typeCell != null) {
-			if (info?.location is TLRPC.TL_channelLocation) {
+			if (info?.location is TLRPC.TLChannelLocation) {
 				val link = if (isPrivate) {
 					context?.getString(R.string.TypeLocationGroupEdit)
 				}
 				else {
-					String.format("https://" + messagesController.linkPrefix + "/%s", currentChat!!.username)
+					String.format(Locale.getDefault(), "https://" + messagesController.linkPrefix + "/%s", currentChat!!.username)
 				}
 
 				typeCell?.setTextAndValue(context?.getString(R.string.TypeLocationGroup), link, historyCell?.visibility == View.VISIBLE || linkedCell?.visibility == View.VISIBLE)
@@ -1542,8 +1539,8 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 					else if (ChatObject.isSubscriptionChannel(currentChat)) {
 						context?.getString(R.string.paid)
 					}
-					else if (ChatObject.isOnlineCourse(currentChat)) {
-						context?.getString(R.string.online_course)
+					else if (ChatObject.isMasterclass(currentChat)) {
+						context?.getString(R.string.masterclass)
 					}
 					else {
 						context?.getString(R.string.TypePublic)
@@ -1564,10 +1561,10 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 				}
 
 				if (isChannel) {
-					typeCell?.setTextAndValue(context?.getString(R.string.ChannelType), type, historyCell != null && historyCell!!.visibility == View.VISIBLE || linkedCell != null && linkedCell!!.visibility == View.VISIBLE)
+					typeCell?.setTextAndValue(context?.getString(R.string.ChannelType), type, historyCell != null && historyCell!!.isVisible || linkedCell != null && linkedCell!!.isVisible)
 				}
 				else {
-					typeCell?.setTextAndValue(context?.getString(R.string.GroupType), type, historyCell != null && historyCell!!.visibility == View.VISIBLE || linkedCell != null && linkedCell!!.visibility == View.VISIBLE)
+					typeCell?.setTextAndValue(context?.getString(R.string.GroupType), type, historyCell != null && historyCell!!.isVisible || linkedCell != null && linkedCell!!.isVisible)
 				}
 			}
 		}
@@ -1585,58 +1582,58 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 						infoContainer?.addView(memberRequestsCell, position, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 					}
 
-					memberRequestsCell?.visibility = if (info!!.requests_pending > 0) View.VISIBLE else View.GONE
+					memberRequestsCell?.visibility = if (info!!.requestsPending > 0) View.VISIBLE else View.GONE
 				}
 
 				if (isChannel) {
-					membersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelSubscribers), String.format("%d", info!!.participants_count), R.drawable.subscribers, true)
-					blockCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelBlacklist), String.format("%d", max(info!!.banned_count, info!!.kicked_count)), R.drawable.ic_removed_users, logCell != null && logCell!!.visibility == View.VISIBLE)
+					membersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelSubscribers), String.format(Locale.getDefault(), "%d", info!!.participantsCount), R.drawable.subscribers, true)
+					blockCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelBlacklist), String.format(Locale.getDefault(), "%d", max(info!!.bannedCount, info!!.kickedCount)), R.drawable.ic_removed_users, logCell != null && logCell!!.isVisible)
 				}
 				else {
 					if (ChatObject.isChannel(currentChat)) {
-						membersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelMembers), String.format("%d", info!!.participants_count), R.drawable.subscribers, removedUsersCell!!.visibility == View.VISIBLE)
+						membersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelMembers), String.format(Locale.getDefault(), "%d", info!!.participantsCount), R.drawable.subscribers, removedUsersCell!!.isVisible)
 					}
 					else {
-						membersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelMembers), String.format("%d", info!!.participants.participants.size), R.drawable.subscribers, memberRequestsCell!!.visibility == View.VISIBLE)
+						membersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelMembers), String.format(Locale.getDefault(), "%d", info!!.participants.participants?.size ?: 0), R.drawable.subscribers, memberRequestsCell!!.isVisible)
 					}
 
 					if (currentChat?.gigagroup == true) {
-						blockCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelBlacklist), String.format("%d", max(info!!.banned_count, info!!.kicked_count)), R.drawable.ic_removed_users, logCell != null && logCell!!.visibility == View.VISIBLE)
+						blockCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelBlacklist), String.format(Locale.getDefault(), "%d", max(info!!.bannedCount, info!!.kickedCount)), R.drawable.ic_removed_users, logCell != null && logCell!!.isVisible)
 					}
 					else {
 						var count = 0
-						val bannedRights = currentChat?.default_banned_rights
+						val bannedRights = currentChat?.defaultBannedRights
 
 						if (bannedRights != null) {
-							if (!bannedRights.send_stickers) {
+							if (!bannedRights.sendStickers) {
 								count++
 							}
 
-							if (!bannedRights.send_media) {
+							if (!bannedRights.sendMedia) {
 								count++
 							}
 
-							if (!bannedRights.embed_links) {
+							if (!bannedRights.embedLinks) {
 								count++
 							}
 
-							if (!bannedRights.send_messages) {
+							if (!bannedRights.sendMessages) {
 								count++
 							}
 
-							if (!bannedRights.pin_messages) {
+							if (!bannedRights.pinMessages) {
 								count++
 							}
 
-							if (!bannedRights.send_polls) {
+							if (!bannedRights.sendPolls) {
 								count++
 							}
 
-							if (!bannedRights.invite_users) {
+							if (!bannedRights.inviteUsers) {
 								count++
 							}
 
-							if (!bannedRights.change_info) {
+							if (!bannedRights.changeInfo) {
 								count++
 							}
 						}
@@ -1644,25 +1641,25 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 							count = 8
 						}
 
-						blockCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelPermissions), String.format("%d/%d", count, 8), R.drawable.msg_permissions, true)
-						removedUsersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelBlacklist), String.format("%d", max(info!!.banned_count, info!!.kicked_count)), R.drawable.ic_removed_users, false)
+						blockCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelPermissions), String.format(Locale.getDefault(), "%d/%d", count, 8), R.drawable.msg_permissions, true)
+						removedUsersCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelBlacklist), String.format(Locale.getDefault(), "%d", max(info!!.bannedCount, info!!.kickedCount)), R.drawable.ic_removed_users, false)
 					}
 
-					memberRequestsCell?.setTextAndValueAndIcon(context?.getString(R.string.MemberRequests), String.format("%d", info!!.requests_pending), R.drawable.msg_requests, logCell != null && logCell!!.visibility == View.VISIBLE)
+					memberRequestsCell?.setTextAndValueAndIcon(context?.getString(R.string.MemberRequests), String.format(Locale.getDefault(), "%d", info!!.requestsPending), R.drawable.msg_requests, logCell != null && logCell!!.isVisible)
 				}
 
-				adminCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelAdministrators), String.format("%d", if (ChatObject.isChannel(currentChat)) info!!.admins_count else adminCount), R.drawable.msg_admins, true)
+				adminCell?.setTextAndValueAndIcon(context?.getString(R.string.ChannelAdministrators), String.format(Locale.getDefault(), "%d", if (ChatObject.isChannel(currentChat)) info!!.adminsCount else adminCount), R.drawable.msg_admins, true)
 			}
 			else {
 				if (isChannel) {
 					membersCell?.setTextAndIcon(context?.getString(R.string.ChannelSubscribers), R.drawable.subscribers, true)
-					blockCell?.setTextAndIcon(context?.getString(R.string.ChannelBlacklist), R.drawable.msg_chats_remove, logCell != null && logCell!!.visibility == View.VISIBLE)
+					blockCell?.setTextAndIcon(context?.getString(R.string.ChannelBlacklist), R.drawable.msg_chats_remove, logCell != null && logCell!!.isVisible)
 				}
 				else {
-					membersCell?.setTextAndIcon(context?.getString(R.string.ChannelMembers), R.drawable.subscribers, logCell != null && logCell!!.visibility == View.VISIBLE)
+					membersCell?.setTextAndIcon(context?.getString(R.string.ChannelMembers), R.drawable.subscribers, logCell != null && logCell!!.isVisible)
 
 					if (currentChat?.gigagroup == true) {
-						blockCell?.setTextAndIcon(context?.getString(R.string.ChannelBlacklist), R.drawable.msg_chats_remove, logCell != null && logCell!!.visibility == View.VISIBLE)
+						blockCell?.setTextAndIcon(context?.getString(R.string.ChannelBlacklist), R.drawable.msg_chats_remove, logCell != null && logCell!!.isVisible)
 					}
 					else {
 						blockCell?.setTextAndIcon(context?.getString(R.string.ChannelPermissions), R.drawable.msg_permissions, true)
@@ -1695,17 +1692,17 @@ class ChatEditActivity(args: Bundle) : BaseFragment(args), ImageUpdaterDelegate,
 	}
 
 	private fun updateReactionsCell() {
-		val finalString = if (availableReactions == null || availableReactions is TLRPC.TL_chatReactionsNone) {
+		val finalString = if (availableReactions == null || availableReactions is TLRPC.TLChatReactionsNone) {
 			context?.getString(R.string.ReactionsOff)
 		}
-		else if (availableReactions is TLRPC.TL_chatReactionsSome) {
-			val someReactions = availableReactions as TLRPC.TL_chatReactionsSome
+		else if (availableReactions is TLRPC.TLChatReactionsSome) {
+			val someReactions = availableReactions as TLRPC.TLChatReactionsSome
 			var count = 0
 
 			for (i in someReactions.reactions.indices) {
 				val someReaction = someReactions.reactions[i]
 
-				if (someReaction is TL_reactionEmoji) {
+				if (someReaction is TLRPC.TLReactionEmoji) {
 					val reaction = mediaDataController.reactionsMap[someReaction.emoticon]
 
 					if (reaction != null && !reaction.inactive) {

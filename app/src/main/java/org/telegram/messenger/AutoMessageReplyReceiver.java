@@ -40,7 +40,7 @@ public class AutoMessageReplyReceiver extends BroadcastReceiver {
 			return;
 		}
 
-		SendMessagesHelper.getInstance(currentAccount).sendMessage(text.toString(), dialogId, null, null, null, true, null, null, null, true, 0, null, false, false, null);
+		SendMessagesHelper.getInstance(currentAccount).sendMessage(text.toString(), dialogId, null, null, null, true, null, null, null, true, 0, null, false);
 
 		MessagesController.getInstance(currentAccount).markDialogAsRead(dialogId, maxId, maxId, 0, false, 0, 0, true, 0);
 	}

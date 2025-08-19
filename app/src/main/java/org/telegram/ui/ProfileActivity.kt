@@ -5,8 +5,8 @@
  *
  * Copyright Nikolai Kudashov, 2013-2018.
  * Copyright Mykhailo Mykytyn, Ello 2023.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -36,7 +36,6 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -70,10 +69,14 @@ import android.widget.*
 import androidx.annotation.Keep
 import androidx.collection.LongSparseArray
 import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.startActivity
 import androidx.core.content.FileProvider
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
 import androidx.core.math.MathUtils
 import androidx.core.text.buildSpannedString
 import androidx.core.text.inSpans
@@ -82,6 +85,9 @@ import androidx.core.view.NestedScrollingParentHelper
 import androidx.core.view.ViewCompat
 import androidx.core.view.children
 import androidx.core.view.doOnPreDraw
+import androidx.core.view.isGone
+import androidx.core.view.isNotEmpty
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -141,18 +147,47 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.SerializedData
+import org.telegram.tgnet.TLChatChannelParticipant
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.TL_messages_exportChatInvite
-import org.telegram.tgnet.TLRPC.TL_user
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.tlrpc.TL_photos_photo
-import org.telegram.tgnet.tlrpc.TL_photos_updateProfilePhoto
-import org.telegram.tgnet.tlrpc.TL_userProfilePhotoEmpty
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.UserFull
+import org.telegram.tgnet.TLRPC.TLChannelsChannelParticipants
+import org.telegram.tgnet.TLRPC.TLChatBannedRights
+import org.telegram.tgnet.TLRPC.TLMessagesExportChatInvite
+import org.telegram.tgnet.TLRPC.TLPhoto
+import org.telegram.tgnet.TLRPC.TLPhotosPhoto
+import org.telegram.tgnet.TLRPC.TLPhotosUpdateProfilePhoto
+import org.telegram.tgnet.TLRPC.TLUser
+import org.telegram.tgnet.TLRPC.TLUserFull
+import org.telegram.tgnet.TLRPC.TLUserProfilePhoto
+import org.telegram.tgnet.TLRPC.TLUserProfilePhotoEmpty
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.accessHash
+import org.telegram.tgnet.bannedCount
+import org.telegram.tgnet.bannedRights
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.botDescription
+import org.telegram.tgnet.botNochats
+import org.telegram.tgnet.business
+import org.telegram.tgnet.cachedPage
+import org.telegram.tgnet.canEdit
+import org.telegram.tgnet.dcId
+import org.telegram.tgnet.emojiStatus
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.fake
+import org.telegram.tgnet.fileReference
+import org.telegram.tgnet.isPublic
+import org.telegram.tgnet.isSelf
+import org.telegram.tgnet.migratedFromChatId
+import org.telegram.tgnet.notifySettings
+import org.telegram.tgnet.participants
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoBig
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.scam
+import org.telegram.tgnet.sizes
+import org.telegram.tgnet.status
+import org.telegram.tgnet.thumbs
+import org.telegram.tgnet.videoSizes
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -163,9 +198,9 @@ import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.AboutLinkCell
+import org.telegram.ui.Cells.AnimatedStatusView
 import org.telegram.ui.Cells.CheckBoxCell
 import org.telegram.ui.Cells.DividerCell
-import org.telegram.ui.Cells.DrawerProfileCell.AnimatedStatusView
 import org.telegram.ui.Cells.GraySectionCell
 import org.telegram.ui.Cells.HeaderCell
 import org.telegram.ui.Cells.NotificationsCheckCell
@@ -212,12 +247,13 @@ import org.telegram.ui.Components.Reactions.VisibleReaction
 import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.ScamDrawable
 import org.telegram.ui.Components.ShareAlert
-import org.telegram.ui.Components.SharedMediaLayout
 import org.telegram.ui.Components.SizeNotifierFrameLayout
 import org.telegram.ui.Components.StickerEmptyView
 import org.telegram.ui.Components.TimerDrawable
 import org.telegram.ui.Components.TranslateAlert
 import org.telegram.ui.Components.UndoView
+import org.telegram.ui.Components.sharedmedia.SharedMediaLayout
+import org.telegram.ui.Components.sharedmedia.SharedMediaPreloader
 import org.telegram.ui.Components.voip.VoIPHelper
 import org.telegram.ui.DialogsActivity.DialogsActivityDelegate
 import org.telegram.ui.SelectAnimatedEmojiDialog.SelectAnimatedEmojiDialogWindow
@@ -246,10 +282,9 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.system.exitProcess
-import org.telegram.tgnet.TLRPC.TL_userProfilePhoto
 
 @SuppressLint("NotifyDataSetChanged")
-class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var sharedMediaPreloader: SharedMediaLayout.SharedMediaPreloader? = null) : BaseFragment(args), NotificationCenterDelegate, DialogsActivityDelegate, SharedMediaLayout.SharedMediaPreloaderDelegate, ImageUpdater.ImageUpdaterDelegate, SharedMediaLayout.Delegate, EditProfileFragment.ChangeBigAvatarCallback {
+class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var sharedMediaPreloader: SharedMediaPreloader? = null) : BaseFragment(args), NotificationCenterDelegate, DialogsActivityDelegate, SharedMediaLayout.SharedMediaPreloaderDelegate, ImageUpdater.ImageUpdaterDelegate, SharedMediaLayout.Delegate, EditProfileFragment.ChangeBigAvatarCallback {
 	private var subscriptionExpireAt: Long = 0L
 	private val visibleChatParticipants = mutableListOf<TLRPC.ChatParticipant>()
 	private val visibleSortedUsers = mutableListOf<Int>()
@@ -260,7 +295,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	private var paidSubscriptions: List<ElloRpc.SubscriptionItem>? = null
 	private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-	var invite: TLRPC.TL_chatInviteExported? = null
+	var invite: TLRPC.TLChatInviteExported? = null
 
 	private val scrimPaint = object : Paint(ANTI_ALIAS_FLAG) {
 		override fun setAlpha(a: Int) {
@@ -372,19 +407,19 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			if (userId != 0L) {
 				val user = messagesController.getUser(userId)
 
-				if (user?.photo?.photo_big != null) {
-					photoBig = user.photo?.photo_big
+				if (user?.photo?.photoBig != null) {
+					photoBig = user.photo?.photoBig
 				}
 			}
 			else if (chatId != 0L) {
 				val chat = messagesController.getChat(chatId)
 
-				if (chat?.photo != null && chat.photo.photo_big != null) {
-					photoBig = chat.photo.photo_big
+				if (chat?.photo != null && chat.photo.photoBig != null) {
+					photoBig = chat.photo.photoBig
 				}
 			}
 
-			if (photoBig != null && photoBig.local_id == fileLocation.local_id && photoBig.volume_id == fileLocation.volume_id && photoBig.dc_id == fileLocation.dc_id) {
+			if (photoBig != null && photoBig.localId == fileLocation.localId && photoBig.volumeId == fileLocation.volumeId && photoBig.dcId == fileLocation.dcId) {
 				val coordinates = IntArray(2)
 
 				avatarImage?.getLocationInWindow(coordinates)
@@ -467,16 +502,16 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	private var isPulledDown = false
 	private var isBot = false
 	private var chatInfo: TLRPC.ChatFull? = null
-	var userInfo: UserFull? = null
+	var userInfo: TLUserFull? = null
 	private var currentBio: CharSequence? = null
 	private var selectedUser: Long = 0
 	private var onlineCount = -1
 	private var sortedUsers: ArrayList<Int>? = null
 	private var currentEncryptedChat: TLRPC.EncryptedChat? = null
 	override var currentChat: TLRPC.Chat? = null
-	private var botInfo: TLRPC.BotInfo? = null
+	private var botInfo: TLRPC.TLBotInfo? = null
 	private var currentChannelParticipant: TLRPC.ChannelParticipant? = null
-	private var currentPassword: TLRPC.TL_account_password? = null
+	private var currentPassword: TLRPC.TLAccountPassword? = null
 	private var avatar: TLRPC.FileLocation? = null
 	private var avatarBig: TLRPC.FileLocation? = null
 	private var uploadingImageLocation: ImageLocation? = null
@@ -610,7 +645,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			val context = context ?: return
 
 			var color1 = ResourcesCompat.getColor(context.resources, R.color.text, null)
-			var color2 = ResourcesCompat.getColor(context.resources, R.color.undead_dark, null)
+			var color2 = ResourcesCompat.getColor(context.resources, R.color.text, null)
 			val c = AndroidUtilities.getOffsetColor(color1, color2, value, 1.0f)
 			nameTextView[1]?.textColor = c
 
@@ -741,8 +776,6 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 			}
 
-			// messagesController.loadFullUser(messagesController.getUser(userId), classGuid, true)
-
 			participantsMap = null
 
 			if (isSelf()) {
@@ -816,7 +849,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				val request = ElloRpc.getSubscriptionsRequest(ElloRpc.SubscriptionType.ACTIVE_CHANNELS)
 
 				connectionsManager.sendRequest(request) { response, _ ->
-					if (response is TLRPC.TL_biz_dataRaw) {
+					if (response is TLRPC.TLBizDataRaw) {
 						val subscriptions = response.readData<ElloRpc.Subscriptions>()
 						val currentSubscription = subscriptions?.items?.find { it.channelId == chatId }
 
@@ -836,7 +869,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		}
 
 		if (sharedMediaPreloader == null) {
-			sharedMediaPreloader = SharedMediaLayout.SharedMediaPreloader(this)
+			sharedMediaPreloader = SharedMediaPreloader(this)
 		}
 
 		sharedMediaPreloader?.addDelegate(this)
@@ -857,10 +890,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		if (userId != 0L) {
 			if (isSelf()) {
-				val req = TLRPC.TL_account_getPassword()
+				val req = TLRPC.TLAccountGetPassword()
 
 				connectionsManager.sendRequest(req) { response, _ ->
-					if (response is TLRPC.TL_account_password) {
+					if (response is TLRPC.TLAccountPassword) {
 						currentPassword = response
 					}
 				}
@@ -871,35 +904,31 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	}
 
 	private fun loadInviteLinks() {
-		val req = TLRPC.TL_messages_getExportedChatInvites()
+		val req = TLRPC.TLMessagesGetExportedChatInvites()
 		req.peer = messagesController.getInputPeer(userId)
-		req.admin_id = messagesController.getInputUser(userConfig.clientUserId)
+		req.adminId = messagesController.getInputUser(userConfig.clientUserId)
 
-		connectionsManager.sendRequest(req) { resp, err ->
-			if (err == null) {
-				val invites: TLRPC.TL_messages_exportedChatInvites = resp as TLRPC.TL_messages_exportedChatInvites
+		connectionsManager.sendRequest(req) { response, _ ->
+			if (response is TLRPC.TLMessagesExportedChatInvites) {
+				invitesCount = response.count
 
-				invitesCount = invites.count
+				if (response.count > 0) {
+					val chatInvite = response.invites.first()
 
-				if (invites.count > 0) {
-					val chatInvite: TLRPC.ExportedChatInvite? = invites.invites?.get(0)
+					inviteLink = (chatInvite as? TLRPC.TLChatInviteExported)?.link ?: ""
 
-					if (chatInvite != null) {
-						inviteLink = (chatInvite as TLRPC.TL_chatInviteExported).link
-
-						AndroidUtilities.runOnUIThread {
-							listAdapter?.notifyItemChanged(shareLinkRow)
-						}
+					AndroidUtilities.runOnUIThread {
+						listAdapter?.notifyItemChanged(shareLinkRow)
 					}
 				}
 				else {
-					@Suppress("NAME_SHADOWING") val req = TL_messages_exportChatInvite()
-					req.legacy_revoke_permanent = true
+					@Suppress("NAME_SHADOWING") val req = TLMessagesExportChatInvite()
+					req.legacyRevokePermanent = true
 					req.peer = MessagesController.getInstance(currentAccount).getInputPeer(userId)
 
-					connectionsManager.sendRequest(req) { response, error ->
-						if (error == null && response != null) {
-							invite = response as TLRPC.TL_chatInviteExported
+					connectionsManager.sendRequest(req) { response2, _ ->
+						if (response2 is TLRPC.TLChatInviteExported) {
+							invite = response2
 							inviteLink = invite?.link ?: ""
 
 							AndroidUtilities.runOnUIThread {
@@ -1097,7 +1126,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								else {
 									val builder = AlertDialog.Builder(parentActivity)
 									builder.setTitle(parentActivity.getString(R.string.BlockUser))
-									builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("AreYouSureBlockContact2", R.string.AreYouSureBlockContact2, ContactsController.formatName(user.first_name, user.last_name))))
+									builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("AreYouSureBlockContact2", R.string.AreYouSureBlockContact2, ContactsController.formatName(user.firstName, user.lastName))))
 
 									builder.setPositiveButton(parentActivity.getString(R.string.BlockContact)) { _, _ ->
 										messagesController.blockPeer(userId)
@@ -1123,7 +1152,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							}
 							else {
 								messagesController.unblockPeer(userId)
-								sendMessagesHelper.sendMessage("/start", userId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+								sendMessagesHelper.sendMessage("/start", userId, null, null, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 								finishFragment()
 							}
 						}
@@ -1188,7 +1217,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						val self = isSelf()
 
 						if (self) {
-							val user = userInfo?.user ?: messagesController.getUser(userInfo?.id)
+							val user = messagesController.getUser(userInfo?.id)
 							val args = Bundle()
 							args.putLong("user_id", userId)
 							args.putString("username", user?.username ?: "")
@@ -1220,13 +1249,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							val did = dids[0]
 							val chat = MessagesController.getInstance(currentAccount).getChat(-did)
 
-							if (chat != null && (chat.creator || chat.admin_rights != null && chat.admin_rights.add_admins)) {
+							if (chat != null && (chat.creator || chat.adminRights?.addAdmins == true)) {
 								messagesController.checkIsInChat(chat, user) { isInChatAlready, rightsAdmin, currentRank ->
 									AndroidUtilities.runOnUIThread {
 										val editRightsActivity = ChatRightsEditActivity(userId, -did, rightsAdmin, null, null, currentRank, ChatRightsEditActivity.TYPE_ADD_BOT, true, !isInChatAlready, null)
 
 										editRightsActivity.setDelegate(object : ChatRightsEditActivityDelegate {
-											override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+											override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 												disableProfileAnimation = true
 												fragment.removeSelfFromStack()
 												notificationCenter.removeObserver(this@ProfileActivity, NotificationCenter.closeChats)
@@ -1275,6 +1304,16 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						presentFragment(fragment)
 					}
 
+					report -> {
+						val idToReport = if (userId != 0L) userId else abs(chatId)
+
+						if (idToReport == 0L) {
+							return
+						}
+
+						AlertsCreator.createReportAlert(parentActivity, idToReport, 0, this@ProfileActivity, null)
+					}
+
 					share -> {
 						try {
 							var text: String? = null
@@ -1282,27 +1321,27 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							if (userId != 0L) {
 								val user = messagesController.getUser(userId) ?: return
 
-								text = String.format("https://" + messagesController.linkPrefix + "/%s", user.username)
+								text = String.format(Locale.getDefault(), "https://" + messagesController.linkPrefix + "/%s", user.username)
 
-								//MARK: When sharing a user or bot, the message is sent along with a description, if you need to in the future, uncomment this code
+								// MARK: When sharing a user or bot, the message is sent along with a description, if you need to in the future, uncomment this code
 //								text = if (botInfo != null && userInfo != null && !TextUtils.isEmpty(userInfo!!.about)) {
-//									String.format("%s https://" + messagesController.linkPrefix + "/%s", userInfo!!.about, user.username)
+//									String.format(Locale.getDefault(), "%s https://" + messagesController.linkPrefix + "/%s", userInfo!!.about, user.username)
 //								}
 //								else {
-//									String.format("https://" + messagesController.linkPrefix + "/%s", user.username)
+//									String.format(Locale.getDefault(), "https://" + messagesController.linkPrefix + "/%s", user.username)
 //								}
 							}
 							else if (chatId != 0L) {
 								val chat = messagesController.getChat(chatId) ?: return
 
-								text = String.format("https://" + messagesController.linkPrefix + "/%s", chat.username)
+								text = String.format(Locale.getDefault(), "https://" + messagesController.linkPrefix + "/%s", chat.username)
 
-								//MARK: When sharing a channel or group, the message is sent along with a description, if you need to in the future, uncomment this code
+								// MARK: When sharing a channel or group, the message is sent along with a description, if you need to in the future, uncomment this code
 //								text = if (chatInfo != null && !TextUtils.isEmpty(chatInfo!!.about)) {
-//									String.format("%s\nhttps://" + messagesController.linkPrefix + "/%s", chatInfo!!.about, chat.username)
+//									String.format(Locale.getDefault(), "%s\nhttps://" + messagesController.linkPrefix + "/%s", chatInfo!!.about, chat.username)
 //								}
 //								else {
-//									String.format("https://" + messagesController.linkPrefix + "/%s", chat.username)
+//									String.format(Locale.getDefault(), "https://" + messagesController.linkPrefix + "/%s", chat.username)
 //								}
 							}
 
@@ -1348,7 +1387,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							val user = messagesController.getUser(userId)
 
 							if (user != null) {
-								VoIPHelper.startCall(user, id == video_call_item, userInfo != null && userInfo!!.video_calls_available, parentActivity, userInfo, accountInstance)
+								VoIPHelper.startCall(user, id == video_call_item, userInfo != null && userInfo!!.videoCallsAvailable, parentActivity, userInfo, accountInstance)
 							}
 						}
 						else if (chatId != 0L) {
@@ -1398,20 +1437,21 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						showDialog(GiftPremiumBottomSheet(this@ProfileActivity, messagesController.getUser(userId)))
 					}
 
-					start_secret_chat -> {
-						val builder = AlertDialog.Builder(parentActivity)
-						builder.setTitle(parentActivity.getString(R.string.AreYouSureSecretChatTitle))
-						builder.setMessage(parentActivity.getString(R.string.AreYouSureSecretChat))
-
-						builder.setPositiveButton(parentActivity.getString(R.string.Start)) { _, _ ->
-							creatingChat = true
-							secretChatHelper.startSecretChat(parentActivity, messagesController.getUser(userId))
-						}
-
-						builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
-
-						showDialog(builder.create())
-					}
+					// MARK: uncomment to enable secret chats
+//					start_secret_chat -> {
+//						val builder = AlertDialog.Builder(parentActivity)
+//						builder.setTitle(parentActivity.getString(R.string.AreYouSureSecretChatTitle))
+//						builder.setMessage(parentActivity.getString(R.string.AreYouSureSecretChat))
+//
+//						builder.setPositiveButton(parentActivity.getString(R.string.Start)) { _, _ ->
+//							creatingChat = true
+//							secretChatHelper.startSecretChat(parentActivity, messagesController.getUser(userId))
+//						}
+//
+//						builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
+//
+//						showDialog(builder.create())
+//					}
 
 					gallery_menu_save -> {
 						if ((Build.VERSION.SDK_INT <= 28 || BuildVars.NO_SCOPED_STORAGE) && parentActivity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -1434,7 +1474,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 										val self = isSelf()
 
 										return if (self) {
-											AndroidUtilities.dp(BottomNavigationPanel.height.toFloat())
+											AndroidUtilities.dp(BottomNavigationPanel.HEIGHT.toFloat())
 										}
 										else {
 											0
@@ -1465,11 +1505,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 						avatarsViewPager?.startMovePhotoToBegin(position)
 
-						val req = TL_photos_updateProfilePhoto()
-						req.id = TLRPC.TL_inputPhoto()
-						req.id?.id = photo.id
-						req.id?.access_hash = photo.access_hash
-						req.id?.file_reference = photo.file_reference
+						val req = TLPhotosUpdateProfilePhoto()
+
+						req.id = TLRPC.TLInputPhoto().also {
+							it.id = photo.id
+							it.accessHash = photo.accessHash
+							it.fileReference = photo.fileReference
+						}
 
 						val userConfig = userConfig
 
@@ -1477,16 +1519,16 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							AndroidUtilities.runOnUIThread {
 								avatarsViewPager?.finishSettingMainPhoto()
 
-								if (response is TL_photos_photo) {
+								if (response is TLPhotosPhoto) {
 									messagesController.putUsers(response.users, false)
 
-									val user = messagesController.getUser(userConfig.clientUserId)
+									val user = messagesController.getUser(userConfig.clientUserId) as? TLUser
 
-									if (response.photo is TL_photo) {
+									if (response.photo is TLPhoto) {
 										avatarsViewPager?.replaceFirstPhoto(photo, response.photo)
 
 										if (user != null) {
-											user.photo?.photo_id = response.photo?.id ?: 0L
+											user.photo?.photoId = response.photo?.id ?: 0L
 											userConfig.setCurrentUser(user)
 											userConfig.saveConfig(true)
 										}
@@ -1495,17 +1537,17 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							}
 						}
 
-						undoView?.showWithAction(userId, UndoView.ACTION_PROFILE_PHOTO_CHANGED, if (photo.video_sizes.isEmpty()) null else 1)
+						undoView?.showWithAction(userId, UndoView.ACTION_PROFILE_PHOTO_CHANGED, if (photo.videoSizes.isNullOrEmpty()) null else 1)
 
-						val user = messagesController.getUser(userConfig.clientUserId)
+						val user = messagesController.getUser(userConfig.clientUserId) as? TLUser
 						val bigSize = FileLoader.getClosestPhotoSizeWithSize(photo.sizes, 800)
 
 						if (user != null) {
 							val smallSize = FileLoader.getClosestPhotoSizeWithSize(photo.sizes, 90)
 
-							user.photo?.photo_id = photo.id
-							user.photo?.photo_small = smallSize?.location
-							user.photo?.photo_big = bigSize?.location
+							user.photo?.photoId = photo.id
+							user.photo?.photoSmall = smallSize?.location
+							user.photo?.photoBig = bigSize?.location
 
 							userConfig.setCurrentUser(user)
 							userConfig.saveConfig(true)
@@ -1561,25 +1603,29 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								val nextPhoto = avatarsViewPager.getPhoto(1)
 
 								if (nextPhoto != null) {
-									userConfig.getCurrentUser()?.photo = TL_userProfilePhoto()
+									userConfig.getCurrentUser()?.photo = TLUserProfilePhoto().also {
+										it.photoId = nextPhoto.id
+									}
 
 									val smallSize = FileLoader.getClosestPhotoSizeWithSize(nextPhoto.sizes, 90)
 									val bigSize = FileLoader.getClosestPhotoSizeWithSize(nextPhoto.sizes, 1000)
 
 									if (smallSize != null && bigSize != null) {
-										userConfig.getCurrentUser()?.photo?.photo_small = smallSize.location
-										userConfig.getCurrentUser()?.photo?.photo_big = bigSize.location
+										userConfig.getCurrentUser()?.photo?.let {
+											it.photoSmall = smallSize.location
+											it.photoBig = bigSize.location
+										}
 									}
 								}
 								else {
-									userConfig.getCurrentUser()?.photo = TL_userProfilePhotoEmpty()
+									userConfig.getCurrentUser()?.photo = TLUserProfilePhotoEmpty()
 								}
 
 								if (position == 0 && photo != null && nextPhoto == null) {
-									val inputPhoto = TLRPC.TL_inputPhoto()
+									val inputPhoto = TLRPC.TLInputPhoto()
 									inputPhoto.id = photo.id
-									inputPhoto.access_hash = photo.access_hash
-									inputPhoto.file_reference = photo.file_reference ?: ByteArray(0)
+									inputPhoto.accessHash = photo.accessHash
+									inputPhoto.fileReference = photo.fileReference ?: ByteArray(0)
 
 									messagesController.deleteUserPhoto(inputPhoto, isLastPhoto = avatarsViewPager.realCount == 1)
 								}
@@ -1588,10 +1634,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								}
 							}
 							else {
-								val inputPhoto = TLRPC.TL_inputPhoto()
+								val inputPhoto = TLRPC.TLInputPhoto()
 								inputPhoto.id = photo.id
-								inputPhoto.access_hash = photo.access_hash
-								inputPhoto.file_reference = photo.file_reference ?: ByteArray(0)
+								inputPhoto.accessHash = photo.accessHash
+								inputPhoto.fileReference = photo.fileReference ?: ByteArray(0)
 
 								messagesController.deleteUserPhoto(inputPhoto)
 
@@ -1956,7 +2002,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			override fun dispatchDraw(canvas: Canvas) {
 				whitePaint.color = ResourcesCompat.getColor(context.resources, R.color.background, null)
 
-				if (listView!!.visibility == VISIBLE) {
+				if (listView!!.isVisible) {
 					grayPaint.color = ResourcesCompat.getColor(context.resources, R.color.light_background, null)
 
 					if (transitionAnimationInProgress) {
@@ -2065,16 +2111,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								progress = 1f
 							}
 
-							canvas.save()
-							canvas.translate(fragmentContextView.x, fragmentContextView.y)
-
-							fragmentContextView.setDrawOverlay(true)
-							fragmentContextView.setCollapseTransition(true, extraHeight, progress)
-							fragmentContextView.draw(canvas)
-							fragmentContextView.setCollapseTransition(false, extraHeight, progress)
-							fragmentContextView.setDrawOverlay(false)
-
-							canvas.restore()
+							canvas.withTranslation(fragmentContextView.x, fragmentContextView.y) {
+								fragmentContextView.setDrawOverlay(true)
+								fragmentContextView.setCollapseTransition(true, extraHeight, progress)
+								fragmentContextView.draw(this)
+								fragmentContextView.setCollapseTransition(false, extraHeight, progress)
+								fragmentContextView.setDrawOverlay(false)
+							}
 						}
 					}
 				}
@@ -2084,21 +2127,17 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 
 				if (scrimView != null) {
-					val c = canvas.save()
+					canvas.withTranslation(scrimView!!.left.toFloat(), scrimView!!.top.toFloat()) {
+						if (scrimView === actionBar?.backButton) {
+							val r = max(scrimView!!.measuredWidth, scrimView!!.measuredHeight) / 2
+							val wasAlpha = actionBarBackgroundPaint.alpha
+							actionBarBackgroundPaint.alpha = (wasAlpha * (scrimPaint.alpha / 255f) / 0.3f).toInt()
+							canvas.drawCircle(r.toFloat(), r.toFloat(), r * 0.7f, actionBarBackgroundPaint)
+							actionBarBackgroundPaint.alpha = wasAlpha
+						}
 
-					canvas.translate(scrimView!!.left.toFloat(), scrimView!!.top.toFloat())
-
-					if (scrimView === actionBar?.backButton) {
-						val r = max(scrimView!!.measuredWidth, scrimView!!.measuredHeight) / 2
-						val wasAlpha = actionBarBackgroundPaint.alpha
-						actionBarBackgroundPaint.alpha = (wasAlpha * (scrimPaint.alpha / 255f) / 0.3f).toInt()
-						canvas.drawCircle(r.toFloat(), r.toFloat(), r * 0.7f, actionBarBackgroundPaint)
-						actionBarBackgroundPaint.alpha = wasAlpha
+						scrimView?.draw(canvas)
 					}
-
-					scrimView?.draw(canvas)
-
-					canvas.restoreToCount(c)
 				}
 			}
 
@@ -2114,7 +2153,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		val users = if ((chatInfo?.participants?.participants?.size ?: 0) > 5) sortedUsers else null
 
-		sharedMediaLayout = object : SharedMediaLayout(context, did, sharedMediaPreloader, userInfo?.common_chats_count ?: 0, sortedUsers, chatInfo, users != null, this@ProfileActivity, this@ProfileActivity, VIEW_TYPE_PROFILE_ACTIVITY) {
+		sharedMediaLayout = object : SharedMediaLayout(context, did, sharedMediaPreloader, userInfo?.commonChatsCount ?: 0, sortedUsers, chatInfo, users != null, this@ProfileActivity, this@ProfileActivity, VIEW_TYPE_PROFILE_ACTIVITY) {
 			override fun onSelectedTabChanged() {
 				updateSelectedMediaTabText()
 			}
@@ -2150,7 +2189,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				return this@ProfileActivity.onMemberClick(participant, isLong)
 			}
 
-			override fun drawBackgroundWithBlur(canvas: Canvas, y: Float, rectTmp2: Rect?, backgroundPaint: Paint?) {
+			override fun drawBackgroundWithBlur(canvas: Canvas, y: Float, rectTmp2: Rect, backgroundPaint: Paint) {
 				contentView?.drawBlurRect(canvas, listView!!.y + getY() + y, rectTmp2, backgroundPaint, true)
 			}
 
@@ -2580,14 +2619,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 
 					builder.setPositiveButton(parentActivity.getString(R.string.ReportChat)) { _, _ ->
-						val req = TLRPC.TL_messages_reportReaction()
-						req.user_id = messagesController.getInputUser(userId)
+						val req = TLRPC.TLMessagesReportReaction()
+						req.reactionPeer = messagesController.getInputPeer(userId)
 						req.peer = messagesController.getInputPeer(reportReactionFromDialogId)
 						req.id = reportReactionMessageId
 
-						connectionsManager.sendRequest(req) { _, _ ->
-							// unused
-						}
+						connectionsManager.sendRequest(req)
 
 						if (cells[0]?.isChecked == true) {
 							val user = messagesController.getUser(userId)
@@ -2628,49 +2665,45 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						val defaultEnabled = notificationsController.isGlobalNotificationsEnabled(did)
 
 						if (checked) {
-							val preferences = MessagesController.getNotificationsSettings(currentAccount)
-							val editor = preferences.edit()
+							MessagesController.getNotificationsSettings(currentAccount).edit {
+								if (defaultEnabled) {
+									remove("notify2_$did")
+								}
+								else {
+									putInt("notify2_$did", 0)
+								}
 
-							if (defaultEnabled) {
-								editor.remove("notify2_$did")
+								messagesStorage.setDialogFlags(did, 0)
+
 							}
-							else {
-								editor.putInt("notify2_$did", 0)
-							}
-
-							messagesStorage.setDialogFlags(did, 0)
-
-							editor.commit()
 
 							val dialog = messagesController.dialogs_dict[did]
-							dialog?.notify_settings = TLRPC.TL_peerNotifySettings()
+							dialog?.notifySettings = TLRPC.TLPeerNotifySettings()
 						}
 						else {
 							val untilTime = Int.MAX_VALUE
-							val preferences = MessagesController.getNotificationsSettings(currentAccount)
-							val editor = preferences.edit()
 
-							val flags = if (!defaultEnabled) {
-								editor.remove("notify2_$did")
-								0L
+							MessagesController.getNotificationsSettings(currentAccount).edit {
+								val flags = if (!defaultEnabled) {
+									remove("notify2_$did")
+									0L
+								}
+								else {
+									putInt("notify2_$did", 2)
+									1L
+								}
+
+								notificationsController.removeNotificationsForDialog(did)
+								messagesStorage.setDialogFlags(did, flags)
 							}
-							else {
-								editor.putInt("notify2_$did", 2)
-								1L
-							}
-
-							notificationsController.removeNotificationsForDialog(did)
-							messagesStorage.setDialogFlags(did, flags)
-
-							editor.commit()
 
 							val dialog = messagesController.dialogs_dict[did]
 
 							if (dialog != null) {
-								dialog.notify_settings = TLRPC.TL_peerNotifySettings()
+								dialog.notifySettings = TLRPC.TLPeerNotifySettings()
 
 								if (defaultEnabled) {
-									dialog.notify_settings.mute_until = untilTime
+									dialog.notifySettings?.muteUntil = untilTime
 								}
 							}
 						}
@@ -2692,7 +2725,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						override fun toggleSound() {
 							val preferences = MessagesController.getNotificationsSettings(currentAccount)
 							val enabled = !preferences.getBoolean("sound_enabled_$did", true)
-							preferences.edit().putBoolean("sound_enabled_$did", enabled).commit()
+
+							preferences.edit { putBoolean("sound_enabled_$did", enabled) }
 
 							if (BulletinFactory.canShowBulletin(this@ProfileActivity)) {
 								BulletinFactory.createSoundEnabledBulletin(this@ProfileActivity, if (enabled) NotificationsController.SETTING_SOUND_ON else NotificationsController.SETTING_SOUND_OFF).show()
@@ -2764,10 +2798,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 				else if (position in membersStartRow until membersEndRow) {
 					val participant = if (sortedUsers.isNullOrEmpty()) {
-						chatInfo!!.participants.participants[position - membersStartRow]
+						chatInfo?.participants?.participants?.getOrNull(position - membersStartRow)
 					}
 					else {
-						chatInfo!!.participants.participants[sortedUsers!![position - membersStartRow]]
+						chatInfo?.participants?.participants?.getOrNull(sortedUsers!![position - membersStartRow])
 					}
 
 					onMemberClick(participant, false)
@@ -2779,9 +2813,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					processOnClickOrPress(position, view)
 				}
 				else if (position == locationRow) {
-					if (chatInfo!!.location is TLRPC.TL_channelLocation) {
+					if (chatInfo!!.location is TLRPC.TLChannelLocation) {
 						val fragment = LocationActivity(LocationActivity.LOCATION_TYPE_GROUP_VIEW)
-						fragment.setChatLocation(chatId, chatInfo!!.location as TLRPC.TL_channelLocation)
+						fragment.setChatLocation(chatId, chatInfo!!.location as TLRPC.TLChannelLocation)
 						presentFragment(fragment)
 					}
 				}
@@ -2888,7 +2922,6 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 				}
 				else if (position == aiChatBotRow) {
-//					loadBotUser { openBot() }
 					presentFragment(AiSpaceFragment())
 				}
 				else if (position == referralRow) {
@@ -2902,7 +2935,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 				else if (position == inviteRow) {
 					if (userInfo != null) {
-						val fragment = ManageLinksActivity(userId, invite?.admin_id ?: 0L)
+						val fragment = ManageLinksActivity(userId, invite?.adminId ?: 0L)
 						fragment.setInfo(userInfo!!, invite)
 						presentFragment(fragment)
 					}
@@ -3045,7 +3078,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 									3 -> {
 										BuildVars.logsEnabled = !BuildVars.logsEnabled
 										val sharedPreferences = ApplicationLoader.applicationContext.getSharedPreferences("systemConfig", Context.MODE_PRIVATE)
-										sharedPreferences.edit().putBoolean("logsEnabled", BuildVars.logsEnabled).commit()
+										sharedPreferences.edit().putBoolean("logsEnabled", BuildVars.logsEnabled).apply()
 										updateRowsIds()
 										listAdapter?.notifyDataSetChanged()
 									}
@@ -3057,9 +3090,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 									5 -> {
 										messagesStorage.clearSentMedia()
 										SharedConfig.setNoSoundHintShowed(false)
+
 										val editor = MessagesController.getGlobalMainSettings().edit()
-										editor.remove("archivehint").remove("proximityhint").remove("archivehint_l").remove("gifhint").remove("reminderhint").remove("soundHint").remove("themehint").remove("bganimationhint").remove("filterhint").commit()
-										MessagesController.getEmojiSettings(currentAccount).edit().remove("featured_hidden").commit()
+										editor.remove("archivehint").remove("proximityhint").remove("archivehint_l").remove("gifhint").remove("reminderhint").remove("soundHint").remove("themehint").remove("bganimationhint").remove("filterhint").apply()
+
+										MessagesController.getEmojiSettings(currentAccount).edit { remove("featured_hidden") }
+
 										SharedConfig.textSelectionHintShows = 0
 										SharedConfig.lockRecordAudioVideoHint = 0
 										SharedConfig.stickersReorderingHintUsed = false
@@ -3292,14 +3328,14 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			val chat = messagesController.getChat(banFromGroup)
 
 			if (currentChannelParticipant == null) {
-				val req = TLRPC.TL_channels_getParticipant()
+				val req = TLRPC.TLChannelsGetParticipant()
 				req.channel = MessagesController.getInputChannel(chat)
 				req.participant = messagesController.getInputPeer(userId)
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					if (response != null) {
 						AndroidUtilities.runOnUIThread {
-							currentChannelParticipant = (response as TLRPC.TL_channels_channelParticipant).participant
+							currentChannelParticipant = (response as TLRPC.TLChannelsChannelParticipant).participant
 						}
 					}
 				}
@@ -3319,9 +3355,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			frameLayout.addView(frameLayout1, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 51, Gravity.LEFT or Gravity.BOTTOM))
 
 			frameLayout1.setOnClickListener {
-				val fragment = ChatRightsEditActivity(userId, banFromGroup, null, chat?.default_banned_rights, currentChannelParticipant?.banned_rights, "", ChatRightsEditActivity.TYPE_BANNED, edit = true, addingNew = false, addingNewBotHash = null)
+				val fragment = ChatRightsEditActivity(userId, banFromGroup, null, chat?.defaultBannedRights, currentChannelParticipant?.bannedRights, "", ChatRightsEditActivity.TYPE_BANNED, edit = true, addingNew = false, addingNewBotHash = null)
 				fragment.setDelegate(object : ChatRightsEditActivityDelegate {
-					override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+					override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 						removeSelfFromStack()
 					}
 
@@ -3614,7 +3650,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				writeButton?.contentDescription = context.getString(R.string.AccDescrChangeProfilePicture)
 				writeButton?.setPadding(AndroidUtilities.dp(2f), 0, 0, AndroidUtilities.dp(2f))
 
-				//MARK: Hidden implementation of the gallery open button that was in frameLayout, instead the implementation has been moved to a separate container: VIEW_TYPE_SET_PROFILE_PHOTO
+				// MARK: Hidden implementation of the gallery open button that was in frameLayout, instead the implementation has been moved to a separate container: VIEW_TYPE_SET_PROFILE_PHOTO
 				writeButton?.gone()
 			}
 			else {
@@ -3700,7 +3736,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 		})
 
-		undoView = UndoView(context, null, false)
+		undoView = UndoView(context, false)
 
 		frameLayout.addView(undoView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.BOTTOM or Gravity.LEFT, 8f, 0f, 8f, 8f))
 
@@ -3874,13 +3910,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 					canvas.restore()
 
-					if (writeButton != null && writeButton!!.visibility == View.VISIBLE && writeButton!!.alpha > 0) {
-						canvas.save()
-						val s = 0.5f + 0.5f * alpha
-						canvas.scale(s, s, writeButton!!.x + writeButton!!.measuredWidth / 2f, writeButton!!.y + writeButton!!.measuredHeight / 2f)
-						canvas.translate(writeButton!!.x, writeButton!!.y)
-						writeButton?.draw(canvas)
-						canvas.restore()
+					if (writeButton != null && writeButton!!.isVisible && writeButton!!.alpha > 0) {
+						canvas.withSave {
+							val s = 0.5f + 0.5f * alpha
+							scale(s, s, writeButton!!.x + writeButton!!.measuredWidth / 2f, writeButton!!.y + writeButton!!.measuredHeight / 2f)
+							translate(writeButton!!.x, writeButton!!.y)
+							writeButton?.draw(this)
+						}
 					}
 
 					canvas.restore()
@@ -3934,7 +3970,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		else {
 			shouldOpenBot = true
 
-			val botUser = TL_user()
+			val botUser = TLUser()
 			botUser.id = botId
 
 			if (botId == BuildConfig.SUPPORT_BOT_ID) {
@@ -3953,10 +3989,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		var visible = false
 
 		if (currentEncryptedChat == null) {
-			if (userInfo != null && userInfo!!.ttl_period > 0) {
+			if (userInfo != null && userInfo!!.ttlPeriod > 0) {
 				visible = true
 			}
-			else if (chatInfo != null && ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_DELETE_MESSAGES) && chatInfo!!.ttl_period > 0) {
+			else if (chatInfo != null && ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_DELETE_MESSAGES) && chatInfo!!.ttlPeriod > 0) {
 				visible = true
 			}
 		}
@@ -4011,26 +4047,26 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		val popupLayout = object : SelectAnimatedEmojiDialog(this@ProfileActivity, context!!, true, max(0, ecenter), TYPE_EMOJI_STATUS, topMarginDp) {
 			override fun onEmojiSelected(view: View, documentId: Long?, document: TLRPC.Document?, until: Int?) {
-				val req = TLRPC.TL_account_updateEmojiStatus()
+				val req = TLRPC.TLAccountUpdateEmojiStatus()
 
 				if (documentId == null) {
-					req.emoji_status = TLRPC.TL_emojiStatusEmpty()
+					req.emojiStatus = TLRPC.TLEmojiStatusEmpty()
 				}
 				else if (until != null) {
-					req.emoji_status = TLRPC.TL_emojiStatusUntil()
-					(req.emoji_status as TLRPC.TL_emojiStatusUntil).document_id = documentId
-					(req.emoji_status as TLRPC.TL_emojiStatusUntil).until = until
+					req.emojiStatus = TLRPC.TLEmojiStatusUntil()
+					(req.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId = documentId
+					(req.emojiStatus as TLRPC.TLEmojiStatusUntil).until = until
 				}
 				else {
-					req.emoji_status = TLRPC.TL_emojiStatus()
-					(req.emoji_status as TLRPC.TL_emojiStatus).document_id = documentId
+					req.emojiStatus = TLRPC.TLEmojiStatus()
+					(req.emojiStatus as TLRPC.TLEmojiStatus).documentId = documentId
 				}
 
 				val user = MessagesController.getInstance(currentAccount).getUser(getInstance(currentAccount).getClientUserId())
 
 				if (user != null) {
-					user.emoji_status = req.emoji_status
-					MessagesController.getInstance(currentAccount).updateEmojiStatusUntilUpdate(user.id, user.emoji_status)
+					user.emojiStatus = req.emojiStatus
+					MessagesController.getInstance(currentAccount).updateEmojiStatusUntilUpdate(user.id, user.emojiStatus)
 					NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.userEmojiStatusUpdated, user)
 				}
 
@@ -4053,7 +4089,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				updateEmojiStatusEffectPosition()
 
 				connectionsManager.sendRequest(req) { res, _ ->
-					if (res !is TLRPC.TL_boolTrue) {
+					if (res !is TLRPC.TLBoolTrue) {
 						// TODO: reject
 					}
 				}
@@ -4067,8 +4103,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		val user = messagesController.getUser(userId)
 
-		if (user != null && user.emoji_status is TLRPC.TL_emojiStatusUntil && (user.emoji_status as TLRPC.TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
-			popupLayout.setExpireDateHint((user.emoji_status as TLRPC.TL_emojiStatusUntil).until)
+		if (user != null && user.emojiStatus is TLRPC.TLEmojiStatusUntil && (user.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+			popupLayout.setExpireDateHint((user.emojiStatus as TLRPC.TLEmojiStatusUntil).until)
 		}
 
 		popupLayout.setSelected(if (emojiStatusDrawable[1] != null && emojiStatusDrawable[1]!!.drawable is AnimatedEmojiDrawable) (emojiStatusDrawable[1]!!.drawable as AnimatedEmojiDrawable).documentId else null)
@@ -4100,34 +4136,29 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		if (userId != 0L) {
 			val user = messagesController.getUser(userId)
 
-			if (user?.photo != null && user.photo?.photo_big != null) {
+			if (user?.photo != null && user.photo?.photoBig != null) {
 				PhotoViewer.getInstance().setParentActivity(this@ProfileActivity)
 
-				if (user.photo?.dc_id != 0) {
-					user.photo?.photo_big?.dc_id = user.photo?.dc_id ?: 0
+				if (user.photo?.dcId != 0) {
+					user.photo?.photoBig?.dcId = user.photo?.dcId ?: 0
 				}
 
-				PhotoViewer.getInstance().openPhoto(user.photo?.photo_big, provider)
+				PhotoViewer.getInstance().openPhoto(user.photo?.photoBig, provider)
 			}
 		}
 		else if (chatId != 0L) {
 			val chat = messagesController.getChat(chatId)
 
-			if (chat?.photo?.photo_big != null) {
+			if (chat?.photo?.photoBig != null) {
 				PhotoViewer.getInstance().setParentActivity(this@ProfileActivity)
 
-				if (chat.photo.dc_id != 0) {
-					chat.photo.photo_big.dc_id = chat.photo.dc_id
+				if (chat.photo?.dcId != 0) {
+					chat.photo.photoBig?.dcId = chat.photo?.dcId ?: 0
 				}
 
-				val videoLocation = if (chatInfo != null && chatInfo!!.chat_photo is TL_photo && chatInfo!!.chat_photo.video_sizes.isNotEmpty()) {
-					ImageLocation.getForPhoto(chatInfo!!.chat_photo.video_sizes[0], chatInfo!!.chat_photo)
-				}
-				else {
-					null
-				}
+				val videoLocation = ImageLocation.getForPhoto(chatInfo?.chatPhoto?.videoSizes?.firstOrNull(), chatInfo?.chatPhoto)
 
-				PhotoViewer.getInstance().openPhotoWithVideo(chat.photo.photo_big, videoLocation, provider)
+				PhotoViewer.getInstance().openPhotoWithVideo(chat.photo.photoBig, videoLocation, provider)
 			}
 		}
 	}
@@ -4145,7 +4176,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					return
 				}
 
-				imageUpdater?.openMenu(user.photo?.photo_big != null && user.photo !is TL_userProfilePhotoEmpty, {
+				imageUpdater?.openMenu(user.photo?.photoBig != null && user.photo !is TLUserProfilePhotoEmpty, {
 					MessagesController.getInstance(currentAccount).deleteUserPhoto(null)
 					cameraDrawable?.currentFrame = 0
 					cellCameraDrawable?.currentFrame = 0
@@ -4179,7 +4210,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				else {
 					val user = messagesController.getUser(userId)
 
-					if (user == null || user is TLRPC.TL_userEmpty) {
+					if (user == null || user is TLRPC.TLUserEmpty) {
 						return
 					}
 
@@ -4220,12 +4251,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	}
 
 	private fun openDiscussion() {
-		if (chatInfo == null || chatInfo!!.linked_chat_id == 0L) {
+		if (chatInfo == null || chatInfo!!.linkedChatId == 0L) {
 			return
 		}
 
 		val args = Bundle()
-		args.putLong("chat_id", chatInfo!!.linked_chat_id)
+		args.putLong("chat_id", chatInfo!!.linkedChatId)
 
 		if (!messagesController.checkCanOpenChat(args, this@ProfileActivity)) {
 			return
@@ -4246,13 +4277,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		val parentActivity = parentActivity ?: return false
 
 		if (b) {
-			val user = messagesController.getUser(participant.user_id)
+			val user = messagesController.getUser(participant.userId)
 
-			if (user == null || participant.user_id == userConfig.getClientUserId()) {
+			if (user == null || participant.userId == userConfig.getClientUserId()) {
 				return false
 			}
 
-			selectedUser = participant.user_id
+			selectedUser = participant.userId
 
 			val allowKick: Boolean
 			var canEditAdmin: Boolean
@@ -4261,29 +4292,29 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			val channelParticipant: TLRPC.ChannelParticipant?
 
 			if (ChatObject.isChannel(currentChat)) {
-				channelParticipant = (participant as TLRPC.TL_chatChannelParticipant).channelParticipant
+				channelParticipant = (participant as TLChatChannelParticipant).channelParticipant
 
 				canEditAdmin = ChatObject.canAddAdmins(currentChat)
 
-				if (canEditAdmin && (channelParticipant is TLRPC.TL_channelParticipantCreator || channelParticipant is TLRPC.TL_channelParticipantAdmin && !channelParticipant.can_edit)) {
+				if (canEditAdmin && (channelParticipant is TLRPC.TLChannelParticipantCreator || channelParticipant is TLRPC.TLChannelParticipantAdmin && !channelParticipant.canEdit)) {
 					canEditAdmin = false
 				}
 
-				canRestrict = ChatObject.canBlockUsers(currentChat) && (!(channelParticipant is TLRPC.TL_channelParticipantAdmin || channelParticipant is TLRPC.TL_channelParticipantCreator) || channelParticipant.can_edit)
+				canRestrict = ChatObject.canBlockUsers(currentChat) && (!(channelParticipant is TLRPC.TLChannelParticipantAdmin || channelParticipant is TLRPC.TLChannelParticipantCreator) || channelParticipant.canEdit)
 				allowKick = canRestrict
 
 				if (currentChat!!.gigagroup) {
 					canRestrict = false
 				}
 
-				editingAdmin = channelParticipant is TLRPC.TL_channelParticipantAdmin
+				editingAdmin = channelParticipant is TLRPC.TLChannelParticipantAdmin
 			}
 			else {
 				channelParticipant = null
-				allowKick = currentChat!!.creator || participant is TLRPC.TL_chatParticipant && (ChatObject.canBlockUsers(currentChat) || participant.inviter_id == userConfig.getClientUserId())
+				allowKick = currentChat!!.creator || participant is TLRPC.TLChatParticipant && (ChatObject.canBlockUsers(currentChat) || participant.inviterId == userConfig.getClientUserId())
 				canEditAdmin = currentChat!!.creator
 				canRestrict = currentChat!!.creator
-				editingAdmin = participant is TLRPC.TL_chatParticipantAdmin
+				editingAdmin = participant is TLRPC.TLChatParticipantAdmin
 			}
 
 			val items = if (resultOnly) null else ArrayList<String>()
@@ -4340,14 +4371,14 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				else {
 					val action = actions[i]
 
-					if (action == 1 && (channelParticipant is TLRPC.TL_channelParticipantAdmin || participant is TLRPC.TL_chatParticipantAdmin)) {
+					if (action == 1 && (channelParticipant is TLRPC.TLChannelParticipantAdmin || participant is TLRPC.TLChatParticipantAdmin)) {
 						val builder2 = AlertDialog.Builder(parentActivity)
 						builder2.setTitle(parentActivity.getString(R.string.AppName))
-						builder2.setMessage(LocaleController.formatString("AdminWillBeRemoved", R.string.AdminWillBeRemoved, ContactsController.formatName(user.first_name, user.last_name)))
+						builder2.setMessage(LocaleController.formatString("AdminWillBeRemoved", R.string.AdminWillBeRemoved, ContactsController.formatName(user.firstName, user.lastName)))
 
 						builder2.setPositiveButton(parentActivity.getString(R.string.OK)) { _, _ ->
 							if (channelParticipant != null) {
-								openRightsEdit(action, user, participant, channelParticipant.admin_rights, channelParticipant.banned_rights, channelParticipant.rank, editingAdmin)
+								openRightsEdit(action, user, participant, channelParticipant.adminRights, channelParticipant.bannedRights, channelParticipant.rank, editingAdmin)
 							}
 							else {
 								openRightsEdit(action, user, participant, null, null, "", editingAdmin)
@@ -4359,7 +4390,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 					else {
 						if (channelParticipant != null) {
-							openRightsEdit(action, user, participant, channelParticipant.admin_rights, channelParticipant.banned_rights, channelParticipant.rank, editingAdmin)
+							openRightsEdit(action, user, participant, channelParticipant.adminRights, channelParticipant.bannedRights, channelParticipant.rank, editingAdmin)
 						}
 						else {
 							openRightsEdit(action, user, participant, null, null, "", editingAdmin)
@@ -4376,13 +4407,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 		}
 		else {
-			if (participant.user_id == userConfig.getClientUserId()) {
+			if (participant.userId == userConfig.getClientUserId()) {
 				return false
 			}
 
-			val user = messagesController.getUser(participant.user_id)
+			val user = messagesController.getUser(participant.userId)
 
-			if (user != null && !user.is_public) {
+			if (user != null && !user.isPublic) {
 				val builder2 = AlertDialog.Builder(parentActivity)
 				builder2.setTitle(parentActivity.getString(R.string.AppName))
 				builder2.setMessage(parentActivity.getString(R.string.user_is_private))
@@ -4393,10 +4424,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 			if (user == null) {
 				ioScope.launch {
-					val userInner = messagesController.loadUser(participant.user_id, classGuid, true)
+					val userInner = messagesController.loadUser(participant.userId, classGuid, true)
 
 					mainScope.launch {
-						if (userInner != null && !userInner.is_public) {
+						if (userInner != null && !userInner.isPublic) {
 							val builder2 = AlertDialog.Builder(parentActivity)
 							builder2.setTitle(parentActivity.getString(R.string.AppName))
 							builder2.setMessage(parentActivity.getString(R.string.user_is_private))
@@ -4405,7 +4436,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						}
 						else {
 							val args = Bundle()
-							args.putLong("user_id", userInner?.id ?: participant.user_id)
+							args.putLong("user_id", userInner?.id ?: participant.userId)
 							args.putBoolean("preload_messages", true)
 							presentFragment(ProfileActivity(args))
 						}
@@ -4416,7 +4447,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 			else {
 				val args = Bundle()
-				args.putLong("user_id", participant.user_id)
+				args.putLong("user_id", participant.userId)
 				args.putBoolean("preload_messages", true)
 				presentFragment(ProfileActivity(args))
 			}
@@ -4425,53 +4456,53 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		return true
 	}
 
-	private fun openRightsEdit(action: Int, user: User, participant: TLRPC.ChatParticipant?, adminRights: TLRPC.TL_chatAdminRights?, bannedRights: TL_chatBannedRights?, rank: String?, editingAdmin: Boolean) {
+	private fun openRightsEdit(action: Int, user: User, participant: TLRPC.ChatParticipant?, adminRights: TLRPC.TLChatAdminRights?, bannedRights: TLChatBannedRights?, rank: String?, editingAdmin: Boolean) {
 		val needShowBulletin = BooleanArray(1)
 
-		val fragment = object : ChatRightsEditActivity(user.id, chatId, adminRights, currentChat?.default_banned_rights, bannedRights, rank, action, true, false, null) {
+		val fragment = object : ChatRightsEditActivity(user.id, chatId, adminRights, currentChat?.defaultBannedRights, bannedRights, rank, action, true, false, null) {
 			override fun onTransitionAnimationEnd(isOpen: Boolean, backward: Boolean) {
 				if (!isOpen && backward && needShowBulletin[0] && BulletinFactory.canShowBulletin(this@ProfileActivity)) {
-					BulletinFactory.createPromoteToAdminBulletin(this@ProfileActivity, user.first_name).show()
+					BulletinFactory.createPromoteToAdminBulletin(this@ProfileActivity, user.firstName).show()
 				}
 			}
 		}
 
 		fragment.setDelegate(object : ChatRightsEditActivityDelegate {
-			override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+			override fun didSetRights(rights: Int, rightsAdmin: TLRPC.TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 				if (action == 0) {
-					if (participant is TLRPC.TL_chatChannelParticipant) {
+					if (participant is TLChatChannelParticipant) {
 						if (rights == 1) {
-							participant.channelParticipant = TLRPC.TL_channelParticipantAdmin()
-							participant.channelParticipant.flags = participant.channelParticipant.flags or 4
+							participant.channelParticipant = TLRPC.TLChannelParticipantAdmin().also {
+								it.flags = it.flags or 4
+							}
 						}
 						else {
-							participant.channelParticipant = TLRPC.TL_channelParticipant()
+							participant.channelParticipant = TLRPC.TLChannelParticipant()
 						}
 
-						participant.channelParticipant.inviter_id = userConfig.getClientUserId()
-						participant.channelParticipant.peer = TLRPC.TL_peerUser()
-						participant.channelParticipant.peer.user_id = participant.user_id
-						participant.channelParticipant.date = participant.date
-						participant.channelParticipant.banned_rights = rightsBanned
-						participant.channelParticipant.admin_rights = rightsAdmin
-						participant.channelParticipant.rank = rank
+						participant.channelParticipant?.inviterId = userConfig.getClientUserId()
+						participant.channelParticipant?.userId = participant.userId
+						participant.channelParticipant?.date = participant.date
+						participant.channelParticipant?.bannedRights = rightsBanned
+						participant.channelParticipant?.adminRights = rightsAdmin
+						participant.channelParticipant?.rank = rank
 					}
 					else if (participant != null) {
-						val newParticipant: TLRPC.ChatParticipant = if (rights == 1) {
-							TLRPC.TL_chatParticipantAdmin()
+						val newParticipant = if (rights == 1) {
+							TLRPC.TLChatParticipantAdmin()
 						}
 						else {
-							TLRPC.TL_chatParticipant()
+							TLRPC.TLChatParticipant()
 						}
 
-						newParticipant.user_id = participant.user_id
+						newParticipant.userId = participant.userId
 						newParticipant.date = participant.date
-						newParticipant.inviter_id = participant.inviter_id
+						newParticipant.inviterId = participant.inviterId
 
 						val index = chatInfo?.participants?.participants?.indexOf(participant) ?: -1
 
 						if (index >= 0) {
-							chatInfo!!.participants.participants[index] = newParticipant
+							chatInfo?.participants?.participants?.set(index, newParticipant)
 						}
 					}
 
@@ -4484,23 +4515,25 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						if (currentChat!!.megagroup && chatInfo != null && chatInfo!!.participants != null) {
 							var changed = false
 
-							for (a in chatInfo!!.participants.participants.indices) {
-								val p = (chatInfo!!.participants.participants[a] as TLRPC.TL_chatChannelParticipant).channelParticipant
+							val chatInfoParticipants = chatInfo?.participants?.participants
 
-								if (MessageObject.getPeerId(p.peer) == participant!!.user_id) {
-									chatInfo!!.participants_count--
-									chatInfo!!.participants.participants.removeAt(a)
-									changed = true
-									break
+							if (chatInfoParticipants != null) {
+								for (a in chatInfoParticipants.indices) {
+									val p = (chatInfoParticipants[a] as? TLChatChannelParticipant)?.channelParticipant
+
+									if (p?.userId == participant?.userId) {
+										chatInfo!!.participantsCount--
+										chatInfoParticipants.removeAt(a)
+										changed = true
+										break
+									}
 								}
-							}
 
-							if (chatInfo != null && chatInfo!!.participants != null) {
-								for (a in chatInfo!!.participants.participants.indices) {
-									val p = chatInfo!!.participants.participants[a]
+								for (a in chatInfoParticipants.indices) {
+									val p = chatInfoParticipants[a]
 
-									if (p.user_id == participant!!.user_id) {
-										chatInfo!!.participants.participants.removeAt(a)
+									if (p.userId == participant?.userId) {
+										chatInfoParticipants.removeAt(a)
 										changed = true
 										break
 									}
@@ -4579,7 +4612,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 
 			channelInfoRow, userInfoRow, locationRow, bioRow -> {
-				if (position == bioRow && userInfo?.about.isNullOrBlank() && messagesController.getUser(userId)?.bot_description.isNullOrBlank()) {
+				if (position == bioRow && userInfo?.about.isNullOrBlank() && messagesController.getUser(userId)?.botDescription.isNullOrBlank()) {
 					return false
 				}
 
@@ -4587,14 +4620,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					return false
 				}
 
-				val text = if (position == locationRow) {
-					if (chatInfo != null && chatInfo!!.location is TLRPC.TL_channelLocation) (chatInfo!!.location as TLRPC.TL_channelLocation).address else null
-				}
-				else if (position == channelInfoRow) {
-					if (chatInfo != null) chatInfo!!.about else null
-				}
-				else {
-					if (userInfo != null) userInfo!!.about else null
+				val text = when (position) {
+					locationRow -> (chatInfo?.location as? TLRPC.TLChannelLocation)?.address
+					channelInfoRow -> chatInfo?.about
+					else -> userInfo?.about
 				}
 
 				if (text.isNullOrEmpty()) {
@@ -4650,7 +4679,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					if (LanguageDetector.hasSupport()) {
 						LanguageDetector.detectLanguage(text, { fromLang: String? ->
 							fromLanguage[0] = fromLang
-							withTranslate[0] = (fromLang != null) && (fromLang != toLang || (fromLang == "und")) && (translateButtonEnabled && !RestrictedLanguagesSelectActivity.getRestrictedLanguages().contains(fromLang) || (currentChat != null && (currentChat!!.has_link || currentChat!!.username != null)) && (("uk" == fromLang) || ("ru" == fromLang)))
+							withTranslate[0] = (fromLang != null) && (fromLang != toLang || (fromLang == "und")) && (translateButtonEnabled && !RestrictedLanguagesSelectActivity.getRestrictedLanguages().contains(fromLang) || (currentChat != null && (currentChat!!.hasLink || currentChat!!.username != null)) && (("uk" == fromLang) || ("ru" == fromLang)))
 							showMenu.run()
 						}) { error ->
 							FileLog.e("mlkit: failed to detect language in selection", error)
@@ -4693,16 +4722,16 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		val delay = if (participantsMap!!.size() != 0 && reload) 300 else 0
 
-		val req = TLRPC.TL_channels_getParticipants()
+		val req = TLRPC.TLChannelsGetParticipants()
 		req.channel = messagesController.getInputChannel(chatId)
-		req.filter = TLRPC.TL_channelParticipantsRecent()
+		req.filter = TLRPC.TLChannelParticipantsRecent()
 		req.offset = if (reload) 0 else participantsMap!!.size()
 		req.limit = 200
 
 		val reqId = connectionsManager.sendRequest(req) { response, error ->
 			AndroidUtilities.runOnUIThread({
 				if (error == null) {
-					val res = response as TL_channels_channelParticipants
+					val res = response as TLChannelsChannelParticipants
 					messagesController.putUsers(res.users, false)
 					messagesController.putChats(res.chats, false)
 
@@ -4712,26 +4741,26 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 					if (req.offset == 0) {
 						participantsMap!!.clear()
-						chatInfo!!.participants = TLRPC.TL_chatParticipants()
+						chatInfo!!.participants = TLRPC.TLChatParticipants()
 						messagesStorage.putUsersAndChats(res.users, res.chats, true, true)
 						messagesStorage.updateChannelUsers(chatId, res.participants)
 					}
 
 					for (a in res.participants.indices) {
-						val participant = TLRPC.TL_chatChannelParticipant()
+						val participant = TLChatChannelParticipant()
 						participant.channelParticipant = res.participants[a]
-						participant.inviter_id = participant.channelParticipant.inviter_id
-						participant.user_id = MessageObject.getPeerId(participant.channelParticipant.peer)
-						participant.date = participant.channelParticipant.date
+						participant.inviterId = participant.channelParticipant?.inviterId ?: 0L
+						participant.userId = MessageObject.getPeerId(participant.channelParticipant?.peer).takeIf { it != 0L } ?: participant.channelParticipant?.userId ?: 0L
+						participant.date = participant.channelParticipant?.date ?: 0
 
-						if (participantsMap!!.indexOfKey(participant.user_id) < 0) {
+						if (participantsMap!!.indexOfKey(participant.userId) < 0) {
 							if (chatInfo?.participants == null) {
-								chatInfo?.participants = TLRPC.TL_chatParticipants()
+								chatInfo?.participants = TLRPC.TLChatParticipants()
 							}
 
 							chatInfo?.participants?.participants?.add(participant)
 
-							participantsMap?.put(participant.user_id, participant)
+							participantsMap?.put(participant.userId, participant)
 						}
 					}
 				}
@@ -4876,7 +4905,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			val users = LongSparseArray<TLObject?>()
 
 			chatInfo?.participants?.participants?.forEach {
-				users.put(it.user_id, null)
+				users.put(it.userId, null)
 			}
 
 			fragment.ignoreUsers = users
@@ -4884,51 +4913,44 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		fragment.setDelegate(object : GroupCreateActivity.ContactsAddActivityDelegate {
 			override fun didSelectUsers(users: List<User>, fwdCount: Int) {
-				val currentParticipants = HashSet<Long>()
+//				val currentParticipants = HashSet<Long>()
+//
+//				if (chatInfo?.participants?.participants != null) {
+//					for (i in chatInfo!!.participants.participants.indices) {
+//						currentParticipants.add(chatInfo!!.participants.participants[i].userId)
+//					}
+//				}
 
-				if (chatInfo?.participants?.participants != null) {
-					for (i in chatInfo!!.participants.participants.indices) {
-						currentParticipants.add(chatInfo!!.participants.participants[i].user_id)
-					}
-				}
-
-				var a = 0
-				val n = users.size
-
-				while (a < n) {
-					val user = users[a]
-
+				for (user in users) {
 					messagesController.addUserToChat(chatId, user, fwdCount, null, this@ProfileActivity, null)
 
-					if (!currentParticipants.contains(user.id)) {
-						if (chatInfo?.participants == null) {
-							chatInfo?.participants = TLRPC.TL_chatParticipants()
-						}
-
-						if (ChatObject.isChannel(currentChat)) {
-							val channelParticipant1 = TLRPC.TL_chatChannelParticipant()
-							channelParticipant1.channelParticipant = TLRPC.TL_channelParticipant()
-							channelParticipant1.channelParticipant.inviter_id = userConfig.getClientUserId()
-							channelParticipant1.channelParticipant.peer = TLRPC.TL_peerUser()
-							channelParticipant1.channelParticipant.peer.user_id = user.id
-							channelParticipant1.channelParticipant.date = connectionsManager.currentTime
-							channelParticipant1.user_id = user.id
-
-							chatInfo?.participants?.participants?.add(channelParticipant1)
-						}
-						else {
-							val participant = TLRPC.TL_chatParticipant()
-							participant.user_id = user.id
-							participant.inviter_id = accountInstance.userConfig.clientUserId
-							chatInfo?.participants?.participants?.add(participant)
-						}
-
-						chatInfo!!.participants_count++
-
-						messagesController.putUser(user, false)
-					}
-
-					a++
+//					if (!currentParticipants.contains(user.id)) {
+//						if (chatInfo?.participants == null) {
+//							chatInfo?.participants = TLRPC.TLChatParticipants()
+//						}
+//
+//						if (ChatObject.isChannel(currentChat)) {
+//							val channelParticipant1 = TLRPC.TLChatChannelParticipant()
+//							channelParticipant1.channelParticipant = TLRPC.TLChannelParticipant()
+//							channelParticipant1.channelParticipant.inviterId = userConfig.getClientUserId()
+//							channelParticipant1.channelParticipant.peer = TLRPC.TLPeerUser()
+//							channelParticipant1.channelParticipant.peer.userId = user.id
+//							channelParticipant1.channelParticipant.date = connectionsManager.currentTime
+//							channelParticipant1.userId = user.id
+//
+//							chatInfo?.participants?.participants?.add(channelParticipant1)
+//						}
+//						else {
+//							val participant = TLRPC.TLChatParticipant()
+//							participant.userId = user.id
+//							participant.inviterId = accountInstance.userConfig.clientUserId
+//							chatInfo?.participants?.participants?.add(participant)
+//						}
+//
+//						chatInfo!!.participantsCount++
+//
+//						messagesController.putUser(user, false)
+//					}
 				}
 
 				updateListAnimated(true)
@@ -5014,7 +5036,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				mediaCounterTextView!!.setText(LocaleController.formatPluralString("Videos", mediaCount[MediaDataController.MEDIA_VIDEOS_ONLY]))
 			}
 			else {
-				val str = String.format("%s, %s", LocaleController.formatPluralString("Photos", mediaCount[MediaDataController.MEDIA_PHOTOS_ONLY]), LocaleController.formatPluralString("Videos", mediaCount[MediaDataController.MEDIA_VIDEOS_ONLY]))
+				val str = String.format(Locale.getDefault(), "%s, %s", LocaleController.formatPluralString("Photos", mediaCount[MediaDataController.MEDIA_PHOTOS_ONLY]), LocaleController.formatPluralString("Videos", mediaCount[MediaDataController.MEDIA_VIDEOS_ONLY]))
 				mediaCounterTextView!!.setText(str)
 			}
 		}
@@ -5034,7 +5056,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			mediaCounterTextView!!.setText(LocaleController.formatPluralString("GIFs", mediaCount[MediaDataController.MEDIA_GIF]))
 		}
 		else if (id == 6) {
-			mediaCounterTextView!!.setText(LocaleController.formatPluralString("CommonGroups", userInfo!!.common_chats_count))
+			mediaCounterTextView!!.setText(LocaleController.formatPluralString("CommonGroups", userInfo!!.commonChatsCount))
 		}
 		else if (id == 7) {
 			mediaCounterTextView!!.setText(onlineTextView[1]!!.getText())
@@ -5074,7 +5096,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					var setVisible = diff > 0.2f && !searchMode && (imageUpdater == null || setAvatarRow == -1)
 
 					if (setVisible && chatId != 0L) {
-						setVisible = ChatObject.isChannel(currentChat) && !currentChat!!.megagroup && chatInfo != null && chatInfo!!.linked_chat_id != 0L
+						setVisible = ChatObject.isChannel(currentChat) && !currentChat!!.megagroup && chatInfo != null && chatInfo!!.linkedChatId != 0L
 					}
 
 					val currentVisible = writeButton!!.tag == null
@@ -5426,7 +5448,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 				qrItemAnimation = AnimatorSet()
 
-				if (!(qrItem.visibility == View.GONE && !setQrVisible)) {
+				if (!(qrItem.isGone && !setQrVisible)) {
 					qrItem.visibility = View.VISIBLE
 				}
 
@@ -5660,7 +5682,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					return
 				}
 
-				chatInfo?.online_count = (args[1] as Int)
+				chatInfo?.onlineCount = (args[1] as Int)
 
 				updateOnlineCount(true)
 				updateProfileData(false)
@@ -5729,18 +5751,18 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				if (chatFull.id == chatId) {
 					val byChannelUsers = args[2] as Boolean
 
-					if (chatInfo is TLRPC.TL_channelFull) {
+					if (chatInfo is TLRPC.TLChannelFull) {
 						if (chatFull.participants == null) {
 							chatFull.participants = chatInfo?.participants
 						}
 					}
 
-					val loadChannelParticipants = chatInfo == null && chatFull is TLRPC.TL_channelFull
+					val loadChannelParticipants = chatInfo == null && chatFull is TLRPC.TLChannelFull
 
 					chatInfo = chatFull
 
-					if (mergeDialogId == 0L && chatInfo!!.migrated_from_chat_id != 0L) {
-						mergeDialogId = -chatInfo!!.migrated_from_chat_id
+					if (mergeDialogId == 0L && chatInfo!!.migratedFromChatId != 0L) {
+						mergeDialogId = -chatInfo!!.migratedFromChatId
 						mediaDataController.getMediaCount(mergeDialogId, MediaDataController.MEDIA_PHOTOVIDEO, classGuid, true)
 					}
 
@@ -5773,9 +5795,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 
 			NotificationCenter.botInfoDidLoad -> {
-				val info = args[0] as TLRPC.BotInfo
+				val info = args[0] as TLRPC.TLBotInfo
 
-				if (info.user_id == userId) {
+				if (info.userId == userId) {
 					botInfo = info
 					updateListAnimated(false)
 				}
@@ -5785,10 +5807,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				val uid = args[0] as Long
 
 				if (uid == userId) {
-					userInfo = args[1] as UserFull
+					userInfo = args[1] as TLUserFull
 
 					if (imageUpdater != null) {
-						if (userInfo?.about != currentBio || messagesController.getUser(userId)?.bot_description != currentBio) {
+						if (userInfo?.about != currentBio || messagesController.getUser(userId)?.botDescription != currentBio) {
 							listAdapter?.notifyItemChanged(bioRow)
 						}
 					}
@@ -5802,7 +5824,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 						updateListAnimated(false)
 
-						sharedMediaLayout?.setCommonGroupsCount(userInfo?.common_chats_count ?: 0)
+						sharedMediaLayout?.setCommonGroupsCount(userInfo?.commonChatsCount ?: 0)
 
 						updateSelectedMediaTabText()
 
@@ -5840,25 +5862,26 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 
 			NotificationCenter.didReceiveNewMessages -> {
-				val scheduled = args[2] as Boolean
-
-				if (scheduled) {
-					return
-				}
-
-				val did = getDialogId()
-
-				if (did == args[0] as Long) {
-					val arr = args[1] as List<MessageObject>
-
-					for (a in arr.indices) {
-						val obj = arr[a]
-
-						if (currentEncryptedChat != null && obj.messageOwner?.action is TLRPC.TL_messageEncryptedAction && obj.messageOwner?.action?.encryptedAction is TLRPC.TL_decryptedMessageActionSetMessageTTL) {
-							listAdapter?.notifyDataSetChanged()
-						}
-					}
-				}
+				// MARK: uncomment to enable secret chats
+//				val scheduled = args[2] as Boolean
+//
+//				if (scheduled) {
+//					return
+//				}
+//
+//				val did = getDialogId()
+//
+//				if (did == args[0] as Long) {
+//					val arr = args[1] as List<MessageObject>
+//
+//					for (a in arr.indices) {
+//						val obj = arr[a]
+//
+//						if (currentEncryptedChat != null && obj.messageOwner?.action is TLRPC.TLMessageEncryptedAction && obj.messageOwner?.action?.encryptedAction is TLRPC.TLDecryptedMessageActionSetMessageTTL) {
+//							listAdapter?.notifyDataSetChanged()
+//						}
+//					}
+//				}
 			}
 
 			NotificationCenter.emojiLoaded -> {
@@ -5887,7 +5910,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			return
 		}
 
-		val ttl = userInfo?.ttl_period ?: chatInfo?.ttl_period ?: 0
+		val ttl = userInfo?.ttlPeriod ?: chatInfo?.ttlPeriod ?: 0
 
 		autoDeleteItemDrawable?.setTime(ttl)
 		autoDeletePopupWrapper?.updateItems(ttl)
@@ -5904,9 +5927,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			timeItem?.visibility = View.VISIBLE
 		}
 		else if (userInfo != null) {
-			timerDrawable?.setTime(userInfo!!.ttl_period)
+			timerDrawable?.setTime(userInfo!!.ttlPeriod)
 
-			if (needTimerImage && userInfo!!.ttl_period != 0) {
+			if (needTimerImage && userInfo!!.ttlPeriod != 0) {
 				timeItem?.tag = 1
 				timeItem?.visibility = View.VISIBLE
 			}
@@ -5916,9 +5939,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 		}
 		else if (chatInfo != null) {
-			timerDrawable?.setTime(chatInfo!!.ttl_period)
+			timerDrawable?.setTime(chatInfo!!.ttlPeriod)
 
-			if (needTimerImage && chatInfo!!.ttl_period != 0) {
+			if (needTimerImage && chatInfo!!.ttlPeriod != 0) {
 				timeItem?.tag = 1
 				timeItem?.visibility = View.VISIBLE
 			}
@@ -5970,7 +5993,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			setParentActivityTitle(it)
 		}
 
-		//MARK: the layout broke after changing the channel type to private
+		// MARK: the layout broke after changing the channel type to private
 //		if (listAdapter != null) {
 //			firstLayout = true
 //			listAdapter?.notifyDataSetChanged()
@@ -5993,7 +6016,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	}
 
 	override fun isSwipeBackEnabled(event: MotionEvent): Boolean {
-		if (avatarsViewPager != null && avatarsViewPager!!.visibility == View.VISIBLE && avatarsViewPager!!.realCount > 1) {
+		if (avatarsViewPager != null && avatarsViewPager!!.isVisible && avatarsViewPager!!.realCount > 1) {
 			avatarsViewPager?.getHitRect(rect)
 
 			if (rect.contains(event.x.toInt(), event.y.toInt() - actionBar!!.measuredHeight)) {
@@ -6126,24 +6149,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		listView?.alpha = progress
 		listView?.translationX = AndroidUtilities.dp(48f) - AndroidUtilities.dp(48f) * progress
 
-//		var color = if (playProfileAnimation == 2 && avatarColor != 0) {
-//			avatarColor
-//		}
-//		else {
-//			AvatarDrawable.getProfileBackColorForId()
-//		}
-
 		var color = ResourcesCompat.getColor(context.resources, R.color.avatar_background, null)
-
-//		var actionBarColor = if (actionBarAnimationColorFrom != 0) {
-//			actionBarAnimationColorFrom
-//		}
-//		else {
-//			ResourcesCompat.getColor(context.resources, R.color.background, null)
-//		}
-
 		var actionBarColor = ResourcesCompat.getColor(context.resources, R.color.background, null)
-
 		val actionBarColor2 = actionBarColor
 
 		if (SharedConfig.chatBlurEnabled()) {
@@ -6153,31 +6160,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		topView?.setBackgroundColor(ColorUtils.blendARGB(actionBarColor, color, progress))
 		timerDrawable?.setBackgroundColor(ColorUtils.blendARGB(actionBarColor2, color, progress))
 
-		actionBar?.setItemsColor(ResourcesCompat.getColor(context.resources, R.color.brand_day_night, null), false)
-
-		color = ResourcesCompat.getColor(context.resources, R.color.dark, null)
-
-		val titleColor = ResourcesCompat.getColor(context.resources, R.color.dark, null)
-
-		for (i in 0..1) {
-			if (nameTextView[i] == null || i == 1 && playProfileAnimation == 2) {
-				continue
-			}
-
-			nameTextView[i]?.textColor = ColorUtils.blendARGB(titleColor, color, progress)
-		}
-
-//		color = if (isOnline[0]) ResourcesCompat.getColor(context.resources, R.color.dark_gray, null) else AvatarDrawable.getProfileTextColorForId()
-//
-//		val subtitleColor = ResourcesCompat.getColor(context.resources, R.color.dark_gray, null)
-//
-//		for (i in 0..1) {
-//			if (onlineTextView[i] == null || i == 1 && playProfileAnimation == 2) {
-//				continue
-//			}
-//
-//			 onlineTextView[i]?.textColor = ColorUtils.blendARGB(subtitleColor, color, progress)
-//		}
+		actionBar?.setItemsColor(ResourcesCompat.getColor(context.resources, R.color.action_bar_item, null), false)
 
 		extraHeight = initialAnimationExtraHeight * progress
 
@@ -6484,10 +6467,11 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		sortedUsers?.clear()
 
-		if (chatInfo is TLRPC.TL_chatFull || chatInfo is TLRPC.TL_channelFull && chatInfo!!.participants_count <= 200 && chatInfo?.participants != null) {
-			for (a in chatInfo!!.participants.participants.indices) {
-				val participant = chatInfo!!.participants.participants[a]
-				val user = messagesController.getUser(participant.user_id)
+		if (chatInfo is TLRPC.TLChatFull || chatInfo is TLRPC.TLChannelFull && chatInfo!!.participantsCount <= 200) {
+			val chatInfoParticipants = chatInfo?.participants?.participants ?: return
+
+			chatInfoParticipants.forEachIndexed { index, participant ->
+				val user = messagesController.getUser(participant.userId)
 
 				user?.status?.let {
 					if ((it.expires > currentTime || user.id == userConfig.getClientUserId()) && it.expires > 10000) {
@@ -6495,12 +6479,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 				}
 
-				sortedUsers?.add(a)
+				sortedUsers?.add(index)
 			}
+
 			try {
 				sortedUsers?.sortWith { lhs, rhs ->
-					val user1 = messagesController.getUser(chatInfo!!.participants.participants[(rhs)!!].user_id)
-					val user2 = messagesController.getUser(chatInfo!!.participants.participants[(lhs)!!].user_id)
+					val user1 = messagesController.getUser(chatInfoParticipants[rhs].userId)
+					val user2 = messagesController.getUser(chatInfoParticipants[lhs].userId)
 					var status1 = 0
 					var status2 = 0
 
@@ -6508,7 +6493,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						if (user1.bot) {
 							status1 = -110
 						}
-						else if (user1.self) {
+						else if (user1.isSelf) {
 							status1 = currentTime + 50000
 						}
 						else if (user1.status != null) {
@@ -6520,7 +6505,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						if (user2.bot) {
 							status2 = -110
 						}
-						else if (user2.self) {
+						else if (user2.isSelf) {
 							status2 = currentTime + 50000
 						}
 						else if (user2.status != null) {
@@ -6568,16 +6553,16 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				sharedMediaLayout?.setChatUsers(sortedUsers, chatInfo)
 			}
 		}
-		else if (chatInfo is TLRPC.TL_channelFull && chatInfo!!.participants_count > 200) {
-			onlineCount = chatInfo!!.online_count
+		else if (chatInfo is TLRPC.TLChannelFull && chatInfo!!.participantsCount > 200) {
+			onlineCount = chatInfo!!.onlineCount
 		}
 	}
 
 	fun setChatInfo(value: TLRPC.ChatFull?) {
 		chatInfo = value
 
-		if (chatInfo != null && chatInfo!!.migrated_from_chat_id != 0L && mergeDialogId == 0L) {
-			mergeDialogId = -chatInfo!!.migrated_from_chat_id
+		if (chatInfo != null && chatInfo!!.migratedFromChatId != 0L && mergeDialogId == 0L) {
+			mergeDialogId = -chatInfo!!.migratedFromChatId
 			mediaDataController.getMediaCounts(mergeDialogId, classGuid)
 		}
 
@@ -6596,10 +6581,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			return
 		}
 
-		if (chatInfo is TLRPC.TL_channelFull && chatInfo?.participants != null) {
-			for (a in chatInfo!!.participants.participants.indices) {
-				val chatParticipant = chatInfo!!.participants.participants[a]
-				participantsMap?.put(chatParticipant.user_id, chatParticipant)
+		if (chatInfo is TLRPC.TLChannelFull) {
+			val chatInfoParticipants = chatInfo?.participants?.participants
+
+			if (chatInfoParticipants != null) {
+				for (chatParticipant in chatInfoParticipants) {
+					participantsMap?.put(chatParticipant.userId, chatParticipant)
+				}
 			}
 		}
 	}
@@ -6613,7 +6601,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				BulletinFactory.createRemoveFromChatBulletin(this, user, currentChat!!.title).show()
 			}
 
-			if (chatInfo!!.participants.participants.remove(participant)) {
+			if (chatInfo?.participants?.participants?.remove(participant) == true) {
 				updateListAnimated(true)
 			}
 		}
@@ -6774,7 +6762,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 
 			if (isSelf()) {
-//				if (avatarBig == null && (user!!.photo == null || user.photo.photo_big !is TLRPC.TL_fileLocation_layer97 && user.photo.photo_big !is TLRPC.TL_fileLocationToBeDeprecated) && (avatarsViewPager == null || avatarsViewPager!!.realCount == 0)) {
+//				if (avatarBig == null && (user!!.photo == null || user.photo.photoBig !is TLRPC.TLFileLocationLayer97 && user.photo.photoBig !is TLRPC.TLFileLocationToBeDeprecated) && (avatarsViewPager == null || avatarsViewPager!!.realCount == 0)) {
 //					setAvatarRow = rowCount++
 //					setAvatarSectionRow = rowCount++
 //				}
@@ -6885,12 +6873,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				if (user != null && !TextUtils.isEmpty(user.username)) {
 					userAboutHeaderRow = rowCount++
 
-					if (messagesController.getUser(userId)?.is_public == true) {
+					if (messagesController.getUser(userId)?.isPublic == true) {
 						usernameRow = rowCount++
 					}
 				}
 
-				if ((userInfo != null && !TextUtils.isEmpty(userInfo?.about)) || (user?.bot == true && user.id == BuildConfig.AI_BOT_ID || user?.id == BuildConfig.SUPPORT_BOT_ID/* && !user.bot_description.isNullOrEmpty()*/)) {
+				if ((userInfo != null && !TextUtils.isEmpty(userInfo?.about)) || (user?.bot == true && user.id == BuildConfig.AI_BOT_ID || user?.id == BuildConfig.SUPPORT_BOT_ID/* && !user.botDescription.isNullOrEmpty()*/)) {
 					userInfoRow = rowCount++
 				}
 
@@ -6904,7 +6892,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 				infoSectionRow = rowCount++
 
-				if (currentEncryptedChat is TLRPC.TL_encryptedChat) {
+				if (currentEncryptedChat is TLRPC.TLEncryptedChat) {
 					settingsTimerRow = rowCount++
 					settingsKeyRow = rowCount++
 					secretSettingsSectionRow = rowCount++
@@ -6917,7 +6905,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 				}
 
-				if (user != null && isBot && !user.bot_nochats) {
+				if (user != null && isBot && !user.botNochats) {
 					addToGroupButtonRow = rowCount++
 					addToGroupInfoRow = rowCount++
 				}
@@ -6927,7 +6915,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					reportDividerRow = rowCount++
 				}
 
-				if (hasMedia || userInfo != null && userInfo!!.common_chats_count != 0) {
+				if (hasMedia || userInfo != null && userInfo!!.commonChatsCount != 0) {
 					sharedMediaRow = rowCount++
 				}
 				else if (lastSectionRow == -1 && needSendMessage) {
@@ -6938,8 +6926,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 		}
 		else if (chatId != 0L) {
-			if (chatInfo != null && (!chatInfo?.about.isNullOrEmpty() || chatInfo?.location is TLRPC.TL_channelLocation) || !currentChat?.username.isNullOrEmpty()) {
-				if (LocaleController.isRTL && ChatObject.isChannel(currentChat) && chatInfo != null && currentChat?.megagroup != true && chatInfo?.linked_chat_id != 0L) {
+			if (chatInfo != null && (!chatInfo?.about.isNullOrEmpty() || chatInfo?.location is TLRPC.TLChannelLocation) || !currentChat?.username.isNullOrEmpty()) {
+				if (LocaleController.isRTL && ChatObject.isChannel(currentChat) && chatInfo != null && currentChat?.megagroup != true && chatInfo?.linkedChatId != 0L) {
 					emptyRow = rowCount++
 				}
 				if (chatInfo != null && !ChatObject.isChannel(currentChat) && !TextUtils.isEmpty(currentChat?.username)) {
@@ -6956,7 +6944,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					channelInfoRow = rowCount++
 				}
 
-				if (publicLinkRow == -1 && chatInfo?.location is TLRPC.TL_channelLocation) {
+				if (publicLinkRow == -1 && chatInfo?.location is TLRPC.TLChannelLocation) {
 					locationRow = rowCount++
 				}
 				if (publicLinkRow == -1) {
@@ -6975,7 +6963,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					subscriptionExpireRow = rowCount++
 				}
 
-				if (ChatObject.isOnlineCourse(currentChat)) {
+				if (ChatObject.isMasterclass(currentChat)) {
 					subscriptionBeginRow = rowCount++
 					subscriptionExpireRow = rowCount++
 				}
@@ -6985,17 +6973,17 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					subscriptionCostSectionRow = rowCount++
 				}
 
-				if (chatInfo != null && (currentChat!!.creator || chatInfo!!.can_view_participants)) {
+				if (chatInfo != null && (currentChat!!.creator || chatInfo!!.canViewParticipants)) {
 					// membersHeaderRow = rowCount++
 					subscribersRow = rowCount++
 
-					if (chatInfo!!.requests_pending > 0) {
+					if (chatInfo!!.requestsPending > 0) {
 						subscribersRequestsRow = rowCount++
 					}
 
 					administratorsRow = rowCount++
 
-					if (chatInfo!!.banned_count != 0 || chatInfo!!.kicked_count != 0) {
+					if (chatInfo!!.bannedCount != 0 || chatInfo!!.kickedCount != 0) {
 						blockedUsersRow = rowCount++
 					}
 
@@ -7004,12 +6992,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 
 			if (ChatObject.isChannel(currentChat)) {
-				if (chatInfo != null && currentChat!!.megagroup && chatInfo!!.participants != null && chatInfo!!.participants.participants.isNotEmpty()) {
-					if (!ChatObject.isNotInChat(currentChat) && ChatObject.canAddUsers(currentChat) && chatInfo!!.participants_count < messagesController.maxMegagroupCount) {
+				if (chatInfo != null && currentChat!!.megagroup && chatInfo!!.participants != null && !chatInfo!!.participants.participants.isNullOrEmpty()) {
+					if (!ChatObject.isNotInChat(currentChat) && ChatObject.canAddUsers(currentChat) && chatInfo!!.participantsCount < messagesController.maxMegagroupCount) {
 						addMemberRow = rowCount++
 					}
 
-					val count = chatInfo!!.participants.participants.size
+					val count = chatInfo!!.participants.participants?.size ?: 0
 
 					if ((count <= 5 || !hasMedia || usersForceShowingIn == 1) && usersForceShowingIn != 2) {
 						if (addMemberRow == -1) {
@@ -7020,7 +7008,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						rowCount += count
 						membersEndRow = rowCount
 						membersSectionRow = rowCount++
-						visibleChatParticipants.addAll(chatInfo!!.participants.participants)
+						visibleChatParticipants.addAll(chatInfo!!.participants.participants!!)
 
 						if (sortedUsers != null) {
 							visibleSortedUsers.addAll(sortedUsers!!)
@@ -7045,19 +7033,19 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 				}
 
-				if (lastSectionRow == -1 && currentChat!!.left && !currentChat!!.kicked) {
+				if (lastSectionRow == -1 && currentChat!!.left /*&& !currentChat!!.kicked*/) {
 					joinRow = rowCount++
 					lastSectionRow = rowCount++
 				}
 			}
 			else if (chatInfo != null) {
-				if (chatInfo!!.participants !is TLRPC.TL_chatParticipantsForbidden) {
+				if (chatInfo!!.participants !is TLRPC.TLChatParticipantsForbidden) {
 
-					if (ChatObject.canAddUsers(currentChat) || currentChat!!.default_banned_rights == null || !currentChat!!.default_banned_rights.invite_users) {
+					if (ChatObject.canAddUsers(currentChat) || currentChat!!.defaultBannedRights == null || currentChat?.defaultBannedRights?.inviteUsers == false) {
 						addMemberRow = rowCount++
 					}
 
-					val count = chatInfo!!.participants.participants.size
+					val count = chatInfo?.participants?.participants?.size ?: 0
 
 					if (count <= 5 || !hasMedia) {
 						if (addMemberRow == -1) {
@@ -7065,13 +7053,16 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						}
 
 						membersStartRow = rowCount
-						rowCount += chatInfo!!.participants.participants.size
+						rowCount += chatInfo?.participants?.participants?.size ?: 0
 						membersEndRow = rowCount
 						membersSectionRow = rowCount++
-						visibleChatParticipants.addAll(chatInfo!!.participants.participants)
 
-						if (sortedUsers != null) {
-							visibleSortedUsers.addAll(sortedUsers!!)
+						chatInfo?.participants?.participants?.let {
+							visibleChatParticipants.addAll(it)
+						}
+
+						sortedUsers?.let {
+							visibleSortedUsers.addAll(it)
 						}
 
 						sharedMediaLayout?.setChatUsers(null, null)
@@ -7153,11 +7144,11 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		val reportSpam = MessagesController.getNotificationsSettings(currentAccount).getBoolean("dialog_bar_report$dialogId", false)
 
-		if (emojiStatus is TLRPC.TL_emojiStatus && !reportSpam) {
-			emojiStatusDrawable[a]!![emojiStatus.document_id] = animated
+		if (emojiStatus is TLRPC.TLEmojiStatus && !reportSpam) {
+			emojiStatusDrawable[a]!![emojiStatus.documentId] = animated
 		}
-		else if (emojiStatus is TLRPC.TL_emojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt() && !reportSpam) {
-			emojiStatusDrawable[a]!![emojiStatus.document_id] = animated
+		else if (emojiStatus is TLRPC.TLEmojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt() && !reportSpam) {
+			emojiStatusDrawable[a]!![emojiStatus.documentId] = animated
 		}
 		else {
 			emojiStatusDrawable[a]!![getPremiumCrossfadeDrawable()] = animated
@@ -7190,8 +7181,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	private fun getUserAccountTypeString(): SpannedString {
 		val context = context ?: return SpannedString("")
 		val user = messagesController.getUser(userId) ?: return SpannedString("")
-		val privacyType = if (user.is_public) context.getString(R.string.public_account) else context.getString(R.string.private_account)
-		val personalType = if (user.is_business) context.getString(R.string.business) else context.getString(R.string.personal)
+		val privacyType = if (user.isPublic) context.getString(R.string.public_account) else context.getString(R.string.private_account)
+		val personalType = if (user.business) context.getString(R.string.business) else context.getString(R.string.personal)
 		val username = user.username?.run { "@$this" }
 
 		return buildSpannedString {
@@ -7210,7 +7201,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	private fun isPublicProfile(): Boolean {
 		val user = messagesController.getUser(userId)
 
-		return user?.is_public == true
+		return user?.isPublic == true
 	}
 
 	private fun updateProfileData(reload: Boolean) {
@@ -7236,11 +7227,11 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			val user = messagesController.getUser(userId)
 
 			if (user == null) {
-				messagesController.loadFullUser(TL_user().apply { id = userId }, classGuid, true)
+				messagesController.loadFullUser(TLUser().apply { id = userId }, classGuid, true)
 				return
 			}
 
-			val photoBig = user.photo?.photo_big
+			val photoBig = user.photo?.photoBig
 
 			avatarDrawable?.setInfo(user)
 
@@ -7277,7 +7268,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				fileLoader.loadFile(imageLocation, user, null, FileLoader.PRIORITY_LOW, 1)
 			}
 
-			if (user.self) {
+			if (user.isSelf) {
 				for (row in getFilteredAccountsRows()) {
 					listAdapter?.notifyItemChanged(row)
 				}
@@ -7337,19 +7328,22 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						nameTextViewRightDrawableContentDescription = parentActivity.getString(R.string.ScamMessage)
 					}
 					else if (user.verified) {
-						rightIcon = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.verified_icon, null)
+						rightIcon = if (messagesController.isPremiumUser(user)) {
+							ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.verified_donated_icon, null)
+						}
+						else {
+							ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.verified_icon, null)
+						}
 						nameTextViewRightDrawableContentDescription = parentActivity.getString(R.string.AccDescrVerified)
 					}
-					else if (user.emoji_status is TLRPC.TL_emojiStatus || user.emoji_status is TLRPC.TL_emojiStatusUntil && (user.emoji_status as TLRPC.TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+					else if (user.emojiStatus is TLRPC.TLEmojiStatus || user.emojiStatus is TLRPC.TLEmojiStatusUntil && (user.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
 						rightIconIsStatus = true
 						rightIconIsPremium = false
-						rightIcon = getEmojiStatusDrawable(user.emoji_status, false, a)
+						rightIcon = getEmojiStatusDrawable(user.emojiStatus, false, a)
 						nameTextViewRightDrawableContentDescription = parentActivity.getString(R.string.AccDescrPremium)
 					}
 					else if (messagesController.isPremiumUser(user)) {
-						rightIconIsStatus = false
-						rightIconIsPremium = true
-						rightIcon = getEmojiStatusDrawable(null, false, a)
+						rightIcon = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.donated, null)
 						nameTextViewRightDrawableContentDescription = parentActivity.getString(R.string.AccDescrPremium)
 					}
 					else if (messagesController.isDialogMuted(if (dialogId != 0L) dialogId else userId)) {
@@ -7366,17 +7360,20 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						rightIcon = getScamDrawable(if (user.scam) 0 else 1)
 					}
 					else if (user.verified) {
-						rightIcon = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.verified_icon, null)
+						rightIcon = if (messagesController.isPremiumUser(user)) {
+							ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.verified_donated_icon, null)
+						}
+						else {
+							ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.verified_icon, null)
+						}
 					}
-					else if (user.emoji_status is TLRPC.TL_emojiStatus || user.emoji_status is TLRPC.TL_emojiStatusUntil && (user.emoji_status as TLRPC.TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+					else if (user.emojiStatus is TLRPC.TLEmojiStatus || user.emojiStatus is TLRPC.TLEmojiStatusUntil && (user.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
 						rightIconIsStatus = true
 						rightIconIsPremium = false
-						rightIcon = getEmojiStatusDrawable(user.emoji_status, true, a)
+						rightIcon = getEmojiStatusDrawable(user.emojiStatus, true, a)
 					}
 					else if (messagesController.isPremiumUser(user)) {
-						rightIconIsStatus = false
-						rightIconIsPremium = true
-						rightIcon = getEmojiStatusDrawable(null, true, a)
+						rightIcon = ResourcesCompat.getDrawable(parentActivity.resources, R.drawable.donated, null)
 					}
 				}
 
@@ -7388,11 +7385,11 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					nameTextView[a]!!.rightDrawableOutside = true
 				}
 
-				if (user.self) {
+				if (user.isSelf) {
 					val request = ElloRpc.getSubscriptionsRequest(ElloRpc.SubscriptionType.ACTIVE_CHANNELS)
 
 					connectionsManager.sendRequest(request) { response, _ ->
-						if (response is TLRPC.TL_biz_dataRaw) {
+						if (response is TLRPC.TLBizDataRaw) {
 							val subscriptions = response.readData<ElloRpc.Subscriptions>()
 
 							paidSubscriptions = subscriptions?.items
@@ -7404,73 +7401,75 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 				}
 
-				if (user.self && messagesController.isPremiumUser(user)) {
-					nameTextView[a]!!.setRightDrawableOnClick {
-						showStatusSelect()
-					}
+				if (user.isSelf && messagesController.isPremiumUser(user)) {
+					//MARK: disabled clicking on premium button
+//					nameTextView[a]!!.setRightDrawableOnClick {
+//						showStatusSelect()
+//					}
 				}
 
-				if (!user.self && messagesController.isPremiumUser(user)) {
+				if (!user.isSelf && messagesController.isPremiumUser(user)) {
 					val textView = nameTextView[a]
 
-					textView?.setRightDrawableOnClick {
-						val premiumPreviewBottomSheet = PremiumPreviewBottomSheet(this@ProfileActivity, currentAccount, user, null)
-						val coordinates = IntArray(2)
-
-						textView.getLocationOnScreen(coordinates)
-
-						premiumPreviewBottomSheet.startEnterFromX = textView.rightDrawableX.toFloat()
-						premiumPreviewBottomSheet.startEnterFromY = textView.rightDrawableY.toFloat()
-						premiumPreviewBottomSheet.startEnterFromScale = textView.scaleX
-						premiumPreviewBottomSheet.startEnterFromX1 = textView.left.toFloat()
-						premiumPreviewBottomSheet.startEnterFromY1 = textView.top.toFloat()
-						premiumPreviewBottomSheet.startEnterFromView = textView
-
-						if ((textView.rightDrawable === emojiStatusDrawable[1]) && (emojiStatusDrawable[1] != null) && emojiStatusDrawable[1]!!.drawable is AnimatedEmojiDrawable) {
-							premiumPreviewBottomSheet.startEnterFromScale *= 0.98f
-
-							val document = (emojiStatusDrawable[1]!!.drawable as AnimatedEmojiDrawable).document
-
-							if (document != null) {
-								val icon = BackupImageView(parentActivity)
-								val filter = "160_160"
-								val mediaLocation: ImageLocation?
-								val mediaFilter: String
-								val thumbDrawable = DocumentObject.getSvgThumb(document.thumbs, ResourcesCompat.getColor(it.context.resources, R.color.light_background, null), 0.2f)
-								val thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90)
-
-								if (("video/webm" == document.mime_type)) {
-									mediaLocation = ImageLocation.getForDocument(document)
-									mediaFilter = filter + "_" + ImageLoader.AUTOPLAY_FILTER
-									thumbDrawable?.overrideWidthAndHeight(512, 512)
-								}
-								else {
-									if (thumbDrawable != null && MessageObject.isAnimatedStickerDocument(document, false)) {
-										thumbDrawable.overrideWidthAndHeight(512, 512)
-									}
-
-									mediaLocation = ImageLocation.getForDocument(document)
-									mediaFilter = filter
-								}
-
-								icon.setLayerNum(7)
-								icon.setRoundRadius(AndroidUtilities.dp(4f))
-								icon.setImage(mediaLocation, mediaFilter, ImageLocation.getForDocument(thumb, document), "140_140", thumbDrawable, document)
-
-								if ((emojiStatusDrawable[1]!!.drawable as AnimatedEmojiDrawable).canOverrideColor()) {
-									icon.setColorFilter(PorterDuffColorFilter(ResourcesCompat.getColor(parentActivity.resources, R.color.brand, null), PorterDuff.Mode.MULTIPLY))
-								}
-								else {
-									premiumPreviewBottomSheet.statusStickerSet = MessageObject.getInputStickerSet(document)
-								}
-
-								premiumPreviewBottomSheet.overrideTitleIcon = icon
-								premiumPreviewBottomSheet.isEmojiStatus = true
-							}
-						}
-
-						showDialog(premiumPreviewBottomSheet)
-					}
+					//MARK: disabled clicking on premium button
+//					textView?.setRightDrawableOnClick {
+//						val premiumPreviewBottomSheet = PremiumPreviewBottomSheet(this@ProfileActivity, currentAccount, user, null)
+//						val coordinates = IntArray(2)
+//
+//						textView.getLocationOnScreen(coordinates)
+//
+//						premiumPreviewBottomSheet.startEnterFromX = textView.rightDrawableX.toFloat()
+//						premiumPreviewBottomSheet.startEnterFromY = textView.rightDrawableY.toFloat()
+//						premiumPreviewBottomSheet.startEnterFromScale = textView.scaleX
+//						premiumPreviewBottomSheet.startEnterFromX1 = textView.left.toFloat()
+//						premiumPreviewBottomSheet.startEnterFromY1 = textView.top.toFloat()
+//						premiumPreviewBottomSheet.startEnterFromView = textView
+//
+//						if ((textView.rightDrawable === emojiStatusDrawable[1]) && (emojiStatusDrawable[1] != null) && emojiStatusDrawable[1]!!.drawable is AnimatedEmojiDrawable) {
+//							premiumPreviewBottomSheet.startEnterFromScale *= 0.98f
+//
+//							val document = (emojiStatusDrawable[1]!!.drawable as AnimatedEmojiDrawable).document
+//
+//							if (document != null) {
+//								val icon = BackupImageView(parentActivity)
+//								val filter = "160_160"
+//								val mediaLocation: ImageLocation?
+//								val mediaFilter: String
+//								val thumbDrawable = DocumentObject.getSvgThumb(document.thumbs, ResourcesCompat.getColor(it.context.resources, R.color.light_background, null), 0.2f)
+//								val thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90)
+//
+//								if (("video/webm" == document.mime_type)) {
+//									mediaLocation = ImageLocation.getForDocument(document)
+//									mediaFilter = filter + "_" + ImageLoader.AUTOPLAY_FILTER
+//									thumbDrawable?.overrideWidthAndHeight(512, 512)
+//								}
+//								else {
+//									if (thumbDrawable != null && MessageObject.isAnimatedStickerDocument(document, false)) {
+//										thumbDrawable.overrideWidthAndHeight(512, 512)
+//									}
+//
+//									mediaLocation = ImageLocation.getForDocument(document)
+//									mediaFilter = filter
+//								}
+//
+//								icon.setLayerNum(7)
+//								icon.setRoundRadius(AndroidUtilities.dp(4f))
+//								icon.setImage(mediaLocation, mediaFilter, ImageLocation.getForDocument(thumb, document), "140_140", thumbDrawable, document)
+//
+//								if ((emojiStatusDrawable[1]!!.drawable as AnimatedEmojiDrawable).canOverrideColor()) {
+//									icon.setColorFilter(PorterDuffColorFilter(ResourcesCompat.getColor(parentActivity.resources, R.color.brand, null), PorterDuff.Mode.MULTIPLY))
+//								}
+//								else {
+//									premiumPreviewBottomSheet.statusStickerSet = MessageObject.getInputStickerSet(document)
+//								}
+//
+//								premiumPreviewBottomSheet.overrideTitleIcon = icon
+//								premiumPreviewBottomSheet.isEmojiStatus = true
+//							}
+//						}
+//
+//						showDialog(premiumPreviewBottomSheet)
+//					}
 				}
 			}
 
@@ -7494,14 +7493,14 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			val profileStatusString: String
 
 			if (ChatObject.isChannel(chat)) {
-				if (chatInfo == null || !currentChat!!.megagroup && (chatInfo!!.participants_count == 0 || ChatObject.hasAdminRights(currentChat) || chatInfo!!.can_view_participants)) {
+				if (chatInfo == null || !currentChat!!.megagroup && (chatInfo!!.participantsCount == 0 || ChatObject.hasAdminRights(currentChat) || chatInfo!!.canViewParticipants)) {
 					if (currentChat!!.megagroup) {
 						profileStatusString = parentActivity.getString(R.string.Loading).lowercase()
 						statusString = profileStatusString
 					}
 					else {
-						if (ChatObject.isOnlineCourse(chat)) {
-							profileStatusString = parentActivity.getString(R.string.online_course).lowercase()
+						if (ChatObject.isMasterclass(chat)) {
+							profileStatusString = parentActivity.getString(R.string.masterclass).lowercase()
 							statusString = profileStatusString
 						}
 						else if (ChatObject.isSubscriptionChannel(chat) || ChatObject.isPaidChannel(chat)) {
@@ -7520,13 +7519,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				}
 				else {
 					if (currentChat!!.megagroup) {
-						if (onlineCount > 1 && chatInfo!!.participants_count != 0) {
-							statusString = String.format("%s, %s", LocaleController.formatPluralString("Members", chatInfo!!.participants_count), LocaleController.formatPluralString("OnlineCount", min(onlineCount, chatInfo!!.participants_count)))
-							profileStatusString = String.format("%s, %s", LocaleController.formatPluralStringComma("Members", chatInfo!!.participants_count), LocaleController.formatPluralStringComma("OnlineCount", min(onlineCount, chatInfo!!.participants_count)))
+						if (onlineCount > 1 && chatInfo!!.participantsCount != 0) {
+							statusString = String.format(Locale.getDefault(), "%s, %s", LocaleController.formatPluralString("Members", chatInfo!!.participantsCount), LocaleController.formatPluralString("OnlineCount", min(onlineCount, chatInfo!!.participantsCount)))
+							profileStatusString = String.format(Locale.getDefault(), "%s, %s", LocaleController.formatPluralStringComma("Members", chatInfo!!.participantsCount), LocaleController.formatPluralStringComma("OnlineCount", min(onlineCount, chatInfo!!.participantsCount)))
 						}
 						else {
-							if (chatInfo!!.participants_count == 0) {
-								if (chat.has_geo) {
+							if (chatInfo!!.participantsCount == 0) {
+								if (chat.hasGeo) {
 									profileStatusString = parentActivity.getString(R.string.MegaLocation).lowercase()
 									statusString = profileStatusString
 								}
@@ -7540,14 +7539,14 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								}
 							}
 							else {
-								statusString = LocaleController.formatPluralString("Members", chatInfo!!.participants_count)
-								profileStatusString = LocaleController.formatPluralStringComma("Members", chatInfo!!.participants_count)
+								statusString = LocaleController.formatPluralString("Members", chatInfo!!.participantsCount)
+								profileStatusString = LocaleController.formatPluralStringComma("Members", chatInfo!!.participantsCount)
 							}
 						}
 					}
 					else {
-						statusString = LocaleController.formatPluralString("Subscribers", chatInfo!!.participants_count)
-						profileStatusString = LocaleController.formatPluralStringComma("Subscribers", chatInfo!!.participants_count)
+						statusString = LocaleController.formatPluralString("Subscribers", chatInfo!!.participantsCount)
+						profileStatusString = LocaleController.formatPluralStringComma("Subscribers", chatInfo!!.participantsCount)
 					}
 				}
 			}
@@ -7561,14 +7560,14 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					statusString = profileStatusString
 				}
 				else {
-					var count = chat!!.participants_count
+					var count = chat?.participantsCount ?: 0
 
 					if (chatInfo != null) {
-						count = chatInfo!!.participants.participants.size
+						count = chatInfo?.participants?.participants?.size ?: 0
 					}
 
 					if (count != 0 && onlineCount > 1) {
-						profileStatusString = String.format("%s, %s", LocaleController.formatPluralString("Members", count), LocaleController.formatPluralString("OnlineCount", onlineCount))
+						profileStatusString = String.format(Locale.getDefault(), "%s, %s", LocaleController.formatPluralString("Members", count), LocaleController.formatPluralString("OnlineCount", onlineCount))
 						statusString = profileStatusString
 					}
 					else {
@@ -7643,13 +7642,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					if (currentChat!!.megagroup && chatInfo != null && onlineCount > 0) {
 						onlineTextView[a]!!.setText(if (a == 0) statusString else profileStatusString)
 					}
-					else if (a == 0 && ChatObject.isChannel(currentChat) && chatInfo != null && chatInfo!!.participants_count != 0 && (currentChat!!.megagroup || currentChat!!.broadcast)) {
+					else if (a == 0 && ChatObject.isChannel(currentChat) && chatInfo != null && chatInfo!!.participantsCount != 0 && (currentChat!!.megagroup || currentChat!!.broadcast)) {
 						val result = IntArray(1)
-						val shortNumber = LocaleController.formatShortNumber(chatInfo!!.participants_count, result)
+						val shortNumber = LocaleController.formatShortNumber(chatInfo!!.participantsCount, result)
 
 						if (currentChat!!.megagroup) {
-							if (chatInfo!!.participants_count == 0) {
-								if (chat?.has_geo == true) {
+							if (chatInfo!!.participantsCount == 0) {
+								if (chat?.hasGeo == true) {
 									onlineTextView[a]!!.setText(parentActivity.getString(R.string.MegaLocation).lowercase())
 								}
 								else if (!chat?.username.isNullOrEmpty()) {
@@ -7660,11 +7659,11 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								}
 							}
 							else {
-								onlineTextView[a]!!.setText(LocaleController.formatPluralString("Members", result[0]).replace(String.format("%d", result[0]), shortNumber))
+								onlineTextView[a]!!.setText(LocaleController.formatPluralString("Members", result[0]).replace(String.format(Locale.getDefault(), "%d", result[0]), shortNumber))
 							}
 						}
 						else {
-							onlineTextView[a]!!.setText(LocaleController.formatPluralString("Subscribers", result[0]).replace(String.format("%d", result[0]), shortNumber))
+							onlineTextView[a]!!.setText(LocaleController.formatPluralString("Subscribers", result[0]).replace(String.format(Locale.getDefault(), "%d", result[0]), shortNumber))
 						}
 					}
 					else {
@@ -7682,7 +7681,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			var photoBig: TLRPC.FileLocation? = null
 
 			if (chat?.photo != null) {
-				photoBig = chat.photo.photo_big
+				photoBig = chat.photo.photoBig
 			}
 
 			avatarDrawable?.setInfo(chat)
@@ -7753,9 +7752,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				selfUser = true
 			}
 			else {
-				if (userInfo?.phone_calls_available == true && userInfo?.id != 333000L && userInfo?.id != BuildConfig.NOTIFICATIONS_BOT_ID && userInfo?.id != 42777L) {
+				if (userInfo?.phoneCallsAvailable == true && userInfo?.id != 333000L && userInfo?.id != BuildConfig.NOTIFICATIONS_BOT_ID && userInfo?.id != 42777L) {
 					callItemVisible = true
-					videoCallItemVisible = userInfo?.video_calls_available == true
+					videoCallItemVisible = userInfo?.videoCallsAvailable == true
 				}
 
 				if (isBot || contactsController.contactsDict[userId] == null) {
@@ -7777,12 +7776,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							otherItem?.addSubItem(add_contact, R.drawable.msg_addcontact, context.getString(R.string.AddContact))
 						}
 
-						if (user.is_public) {
+						if (user.isPublic) {
 							otherItem?.addSubItem(share_contact, R.drawable.msg_share, context.getString(R.string.ShareContact))
 						}
 
 						if (isBot) {
 							otherItem?.addSubItem(clear_history, R.drawable.msg_clear, context.getString(R.string.ClearHistory))
+							otherItem?.addSubItem(report, R.drawable.ic_error, context.getString(R.string.ReportChat))
 						}
 
 						val item = if (isBot) {
@@ -7801,7 +7801,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 //						createAutoDeleteItem(context)
 //					}
 
-					if (user.is_public) {
+					if (user.isPublic) {
 						otherItem?.addSubItem(share_contact, R.drawable.msg_share, context.getString(R.string.ShareContact))
 					}
 
@@ -7814,7 +7814,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 				// TODO: uncomment to enable "Gift Premium" and "Start secret chat" actions
 //				if (!UserObject.isDeleted(user) && !isBot && currentEncryptedChat == null && !userBlocked && userId != 333000L && userId != BuildConfig.NOTIFICATIONS_BOT_ID && userId != 42777L) {
-//					if (!user.premium && !BuildVars.IS_BILLING_UNAVAILABLE && !user.self && userInfo != null && !messagesController.premiumLocked && userInfo!!.premium_gifts.isNotEmpty()) {
+//					if (!user.premium && !BuildVars.IS_BILLING_UNAVAILABLE && !user.isSelf && userInfo != null && !messagesController.premiumLocked && userInfo!!.premium_gifts.isNotEmpty()) {
 //						otherItem?.addSubItem(gift_premium, R.drawable.msg_gift_premium, LocaleController.getString(R.string.GiftPremium))
 //					}
 //
@@ -7846,7 +7846,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 //						hasVoiceChatItem = true
 //					}
 
-					if (chatInfo?.can_view_stats == true && !chat.megagroup && (chat.creator || chat.admin_rights != null)) {
+					if (chatInfo?.canViewStats == true && !chat.megagroup && (chat.creator || chat.adminRights != null)) {
 						otherItem?.addSubItem(statistics, R.drawable.msg_stats, context.getString(R.string.ViewAnalytics))
 					}
 
@@ -7859,7 +7859,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					canSearchMembers = true
 					otherItem?.addSubItem(search_members, R.drawable.msg_search, context.getString(R.string.SearchMembers))
 
-					if (!chat.creator && !chat.left && !chat.kicked) {
+					if (!chat.creator && !chat.left /*&& !chat.kicked*/) {
 						val item = otherItem?.addSubItem(leave_group, R.drawable.msg_leave, context.getString(R.string.LeaveMegaMenu))
 						item?.setColors(ResourcesCompat.getColor(context.resources, R.color.purple, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
@@ -7868,10 +7868,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					if (!TextUtils.isEmpty(chat.username)) {
 						otherItem?.addSubItem(share, R.drawable.msg_share, context.getString(R.string.BotShare))
 					}
-					if (chatInfo != null && chatInfo!!.linked_chat_id != 0L) {
+					if (chatInfo != null && chatInfo!!.linkedChatId != 0L) {
 						otherItem?.addSubItem(view_discussion, R.drawable.msg_discussion, context.getString(R.string.ViewDiscussion))
 					}
-					if (!currentChat!!.creator && !currentChat!!.left && !currentChat!!.kicked) {
+					if (!currentChat!!.creator && !currentChat!!.left /* && !currentChat!!.kicked*/) {
 						val item = otherItem?.addSubItem(leave_group, R.drawable.msg_leave, context.getString(R.string.LeaveChannelMenu))
 						item?.setColors(ResourcesCompat.getColor(context.resources, R.color.purple, null), ResourcesCompat.getColor(context.resources, R.color.purple, null))
 					}
@@ -8022,7 +8022,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 //		var ttl = 0
 //
 //		if (userInfo != null || chatInfo != null) {
-//			ttl = if (userInfo != null) userInfo!!.ttl_period else chatInfo!!.ttl_period
+//			ttl = if (userInfo != null) userInfo!!.ttlPeriod else chatInfo!!.ttlPeriod
 //		}
 //
 //		autoDeleteItemDrawable = TimerDrawable.getTtlIcon(ttl)
@@ -8040,7 +8040,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 //		messagesController.setDialogHistoryTTL(did, time)
 //
 //		if (userInfo != null || chatInfo != null) {
-//			undoView?.showWithAction(did, action, messagesController.getUser(did), if (userInfo != null) userInfo!!.ttl_period else chatInfo!!.ttl_period, null, null)
+//			undoView?.showWithAction(did, action, messagesController.getUser(did), if (userInfo != null) userInfo!!.ttlPeriod else chatInfo!!.ttlPeriod, null, null)
 //		}
 //	}
 
@@ -8077,7 +8077,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		val user = messagesController.getUser(userId)
 
-		sendMessagesHelper.sendMessage(user, did, null, null, null, null, true, 0, false, null)
+		sendMessagesHelper.sendMessage(user, did, null, null, null, null, true, 0)
 
 		if (!message.isNullOrEmpty()) {
 			val accountInstance = AccountInstance.getInstance(currentAccount)
@@ -8090,7 +8090,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		imageUpdater?.onRequestPermissionsResultFragment(requestCode, permissions, grantResults)
 
-		if (requestCode == 101 || requestCode == 102) {
+		if (requestCode == VoIPHelper.REQUEST_CODE_RECORD_AUDIO || requestCode == VoIPHelper.REQUEST_CODE_CAMERA) {
 			val user = messagesController.getUser(userId) ?: return
 			var allGranted = true
 
@@ -8102,13 +8102,13 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			}
 
 			if (grantResults.isNotEmpty() && allGranted) {
-				VoIPHelper.startCall(user, requestCode == 102, userInfo?.video_calls_available == true, parentActivity, userInfo, accountInstance)
+				VoIPHelper.startCall(user, requestCode == VoIPHelper.REQUEST_CODE_CAMERA, userInfo?.videoCallsAvailable == true, parentActivity, userInfo, accountInstance)
 			}
 			else {
 				VoIPHelper.permissionDenied(parentActivity, null, requestCode)
 			}
 		}
-		else if (requestCode == 103) {
+		else if (requestCode == VoIPHelper.REQUEST_CODE_MERGED) {
 			if (currentChat == null) {
 				return
 			}
@@ -8143,141 +8143,6 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	override fun dismissDialogOnPause(dialog: Dialog): Boolean {
 		return (imageUpdater == null || imageUpdater!!.dismissDialogOnPause(dialog)) && super.dismissDialogOnPause(dialog)
 	}
-
-//	private fun searchExpandTransition(enter: Boolean): Animator {
-//		if (enter) {
-//			AndroidUtilities.requestAdjustResize(parentActivity, classGuid)
-//			AndroidUtilities.setAdjustResizeToNothing(parentActivity, classGuid)
-//		}
-//
-//		searchViewTransition?.removeAllListeners()
-//		searchViewTransition?.cancel()
-//
-//		val valueAnimator = ValueAnimator.ofFloat(searchTransitionProgress, if (enter) 0f else 1f)
-//		val offset = extraHeight
-//
-//		searchListView?.translationY = offset
-//		searchListView?.visibility = View.VISIBLE
-//		searchItem?.visibility = View.VISIBLE
-//		listView?.visibility = View.VISIBLE
-//
-//		needLayout(true)
-//
-//		avatarContainer?.visibility = View.VISIBLE
-//		nameTextView[1]?.visibility = View.VISIBLE
-//		onlineTextView[1]?.visibility = View.VISIBLE
-//		actionBar?.onSearchFieldVisibilityChanged(searchTransitionProgress > 0.5f)
-//
-//		val itemVisibility = if (searchTransitionProgress > 0.5f) View.VISIBLE else View.GONE
-//
-//		otherItem?.visibility = itemVisibility
-//
-//		if (qrItem != null) {
-//			updateQrItemVisibility(false)
-//		}
-//
-//		searchItem?.visibility = itemVisibility
-//		searchItem?.searchContainer?.visibility = if (searchTransitionProgress > 0.5f) View.GONE else View.VISIBLE
-//		searchListView?.setEmptyView(emptyView)
-//		avatarContainer?.isClickable = false
-//
-//		valueAnimator.addUpdateListener {
-//			searchTransitionProgress = valueAnimator.animatedValue as Float
-//
-//			var progressHalf = (searchTransitionProgress - 0.5f) / 0.5f
-//			var progressHalfEnd = (0.5f - searchTransitionProgress) / 0.5f
-//
-//			if (progressHalf < 0) {
-//				progressHalf = 0f
-//			}
-//			if (progressHalfEnd < 0) {
-//				progressHalfEnd = 0f
-//			}
-//
-//			searchTransitionOffset = (-offset * (1f - searchTransitionProgress)).toInt()
-//			searchListView?.translationY = offset * searchTransitionProgress
-//			emptyView?.translationY = offset * searchTransitionProgress
-//			listView?.translationY = -offset * (1f - searchTransitionProgress)
-//			listView?.scaleX = 1f - 0.01f * (1f - searchTransitionProgress)
-//			listView?.scaleY = 1f - 0.01f * (1f - searchTransitionProgress)
-//			listView?.alpha = searchTransitionProgress
-//
-//			needLayout(true)
-//
-//			listView?.alpha = progressHalf
-//			searchListView?.alpha = 1f - searchTransitionProgress
-//			searchListView?.scaleX = 1f + 0.05f * searchTransitionProgress
-//			searchListView?.scaleY = 1f + 0.05f * searchTransitionProgress
-//			emptyView?.alpha = 1f - progressHalf
-//			avatarContainer?.alpha = progressHalf
-//			nameTextView[1]?.alpha = progressHalf
-//			onlineTextView[1]?.alpha = progressHalf
-//			searchItem?.searchField?.alpha = progressHalfEnd
-//
-//			if (enter && searchTransitionProgress < 0.7f) {
-//				searchItem?.requestFocusOnSearchView()
-//			}
-//
-//			searchItem?.searchContainer?.visibility = if (searchTransitionProgress < 0.5f) View.VISIBLE else View.GONE
-//
-//			val visibility = if (searchTransitionProgress > 0.5f) View.VISIBLE else View.GONE
-//
-//			otherItem?.visibility = visibility
-//			otherItem?.alpha = progressHalf
-//
-//			if (qrItem != null) {
-//				qrItem?.alpha = progressHalf
-//				updateQrItemVisibility(false)
-//			}
-//
-//			searchItem?.visibility = visibility
-//			actionBar?.onSearchFieldVisibilityChanged(searchTransitionProgress < 0.5f)
-//
-//			otherItem?.alpha = progressHalf
-//			searchItem?.alpha = progressHalf
-//			topView?.invalidate()
-//			fragmentView?.invalidate()
-//		}
-//
-//		valueAnimator.addListener(object : AnimatorListenerAdapter() {
-//			override fun onAnimationEnd(animation: Animator) {
-//				updateSearchViewState(enter)
-//
-//				avatarContainer?.isClickable = true
-//
-//				if (enter) {
-//					searchItem?.requestFocusOnSearchView()
-//				}
-//
-//				needLayout(true)
-//
-//				searchViewTransition = null
-//
-//				fragmentView?.invalidate()
-//
-//				if (enter) {
-//					invalidateScroll = true
-//					saveScrollPosition()
-//					AndroidUtilities.requestAdjustResize(parentActivity, classGuid)
-//					emptyView?.preventMoving = false
-//				}
-//			}
-//		})
-//
-//		if (!enter) {
-//			invalidateScroll = true
-//			saveScrollPosition()
-//			AndroidUtilities.requestAdjustNothing(parentActivity, classGuid)
-//			emptyView?.preventMoving = true
-//		}
-//
-//		valueAnimator.duration = 220
-//		valueAnimator.interpolator = CubicBezierInterpolator.DEFAULT
-//
-//		searchViewTransition = valueAnimator
-//
-//		return valueAnimator
-//	}
 
 	private fun updateSearchViewState(enter: Boolean) {
 		val hide = if (enter) View.GONE else View.VISIBLE
@@ -8332,7 +8197,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	override fun didUploadPhoto(photo: TLRPC.InputFile?, video: TLRPC.InputFile?, videoStartTimestamp: Double, videoPath: String?, bigSize: TLRPC.PhotoSize, smallSize: TLRPC.PhotoSize) {
 		AndroidUtilities.runOnUIThread {
 			if (photo != null || video != null) {
-				val req = TLRPC.TL_photos_uploadProfilePhoto()
+				val req = TLRPC.TLPhotosUploadProfilePhoto()
 
 				if (photo != null) {
 					req.file = photo
@@ -8342,7 +8207,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				if (video != null) {
 					req.video = video
 					req.flags = req.flags or 2
-					req.video_start_ts = videoStartTimestamp
+					req.videoStartTs = videoStartTimestamp
 					req.flags = req.flags or 4
 				}
 
@@ -8351,7 +8216,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						avatarsViewPager?.removeUploadingImage(uploadingImageLocation)
 
 						if (error == null) {
-							var user = messagesController.getUser(userConfig.getClientUserId())
+							var user = messagesController.getUser(userConfig.getClientUserId()) as? TLUser
 
 							if (user == null) {
 								user = userConfig.getCurrentUser()
@@ -8366,21 +8231,22 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								userConfig.setCurrentUser(user)
 							}
 
-							val photosPhoto = response as TL_photos_photo
+							val photosPhoto = response as TLPhotosPhoto
 							val sizes = photosPhoto.photo?.sizes
 							val small = FileLoader.getClosestPhotoSizeWithSize(sizes, 150)
 							val big = FileLoader.getClosestPhotoSizeWithSize(sizes, 800)
-							val videoSize = photosPhoto.photo?.video_sizes?.firstOrNull()
+							val videoSize = photosPhoto.photo?.videoSizes?.firstOrNull()
 
-							user.photo = TLRPC.TL_userProfilePhoto()
-							user.photo?.photo_id = photosPhoto.photo?.id ?: 0L
+							user.photo = TLUserProfilePhoto().also {
+								it.photoId = photosPhoto.photo?.id ?: 0L
+							}
 
 							if (small != null) {
-								user.photo?.photo_small = small.location
+								user.photo?.photoSmall = small.location
 							}
 
 							if (big != null) {
-								user.photo?.photo_big = big.location
+								user.photo?.photoBig = big.location
 							}
 
 							if (small != null && avatar != null) {
@@ -8389,8 +8255,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 								src.renameTo(destFile)
 
-								val oldKey = avatar?.volume_id?.toString() + "_" + avatar?.local_id + "@50_50"
-								val newKey = small.location.volume_id.toString() + "_" + small.location.local_id + "@50_50"
+								val oldKey = avatar?.volumeId?.toString() + "_" + avatar?.localId + "@50_50"
+								val newKey = small.location?.volumeId?.toString() + "_" + small.location?.localId + "@50_50"
 
 								ImageLocation.getForUserOrChat(user, ImageLocation.TYPE_SMALL)?.let {
 									ImageLoader.getInstance().replaceImageInCache(oldKey, newKey, it, false)
@@ -8746,7 +8612,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 	private fun saveScrollPosition() {
 		val listView = listView ?: return
 
-		if (layoutManager != null && listView.childCount > 0) {
+		if (layoutManager != null && listView.isNotEmpty()) {
 			var view: View? = null
 			var position = -1
 			var top = Int.MAX_VALUE
@@ -8799,7 +8665,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		}
 
 		if (userId != 0L) {
-			args.putBoolean(QrFragment.IS_PUBLIC, userInfo?.is_public == true)
+			args.putBoolean(QrFragment.IS_PUBLIC, userInfo?.isPublic == true)
 		}
 		else if (chatId != 0L) {
 			val isPrivate = currentChat?.let { currentChat ->
@@ -8838,15 +8704,15 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			for (i in privacyRules.indices) {
 				val rule = privacyRules[i]
 
-				if (rule is TLRPC.TL_privacyValueAllowAll) {
+				if (rule is TLRPC.TLPrivacyValueAllowAll) {
 					type = 0
 					break
 				}
-				else if (rule is TLRPC.TL_privacyValueDisallowAll) {
+				else if (rule is TLRPC.TLPrivacyValueDisallowAll) {
 					type = 2
 					break
 				}
-				else if (rule is TLRPC.TL_privacyValueAllowContacts) {
+				else if (rule is TLRPC.TLPrivacyValueAllowContacts) {
 					type = 1
 					break
 				}
@@ -9119,13 +8985,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 					if (a == previousSelectedPotision && abs(previousSelectedProgress - 1.0f) > 0.0001f) {
 						progress = previousSelectedProgress
-						canvas.save()
-						canvas.clipRect(x + width * progress, y.toFloat(), (x + width).toFloat(), (y + AndroidUtilities.dp(2f)).toFloat())
-						rect[x.toFloat(), y.toFloat(), (x + width).toFloat()] = (y + AndroidUtilities.dp(2f)).toFloat()
-						barPaint.alpha = (0x55 * alpha).toInt()
-						canvas.drawRoundRect(rect, AndroidUtilities.dp(1f).toFloat(), AndroidUtilities.dp(1f).toFloat(), barPaint)
-						baseAlpha = 0x50
-						canvas.restore()
+						canvas.withClip(x + width * progress, y.toFloat(), (x + width).toFloat(), (y + AndroidUtilities.dp(2f)).toFloat()) {
+							rect.set(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + AndroidUtilities.dp(2f)).toFloat())
+							barPaint.alpha = (0x55 * alpha).toInt()
+							drawRoundRect(rect, AndroidUtilities.dp(1f).toFloat(), AndroidUtilities.dp(1f).toFloat(), barPaint)
+							baseAlpha = 0x50
+						}
 						invalidate = true
 					}
 					else if (a == selectedPosition) {
@@ -9350,10 +9215,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 		override fun drawList(blurCanvas: Canvas, top: Boolean) {
 			super.drawList(blurCanvas, top)
-			blurCanvas.save()
-			blurCanvas.translate(0f, listView!!.y)
-			sharedMediaLayout?.drawListForBlur(blurCanvas)
-			blurCanvas.restore()
+
+			blurCanvas.withTranslation(0f, listView?.y ?: 0f) {
+				sharedMediaLayout?.drawListForBlur(this)
+			}
 		}
 	}
 
@@ -9624,7 +9489,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 				}
 
-				VIEW_TYPE_SET_PROFILE_PHOTO  -> {
+				VIEW_TYPE_SET_PROFILE_PHOTO -> {
 					view = AddProfilePhotoLayoutBinding.inflate(LayoutInflater.from(mContext)).root
 				}
 
@@ -9782,7 +9647,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						}
 					}
 
-					view.setBackground(ColorDrawable(Color.TRANSPARENT))
+					view.setBackground(Color.TRANSPARENT.toDrawable())
 				}
 
 				VIEW_TYPE_SHARED_MEDIA -> {
@@ -9995,12 +9860,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 							detailCell.setTextAndValue(linkHeader, link, true)
 						}
 
-						//MARK: sets text parameters for the user profile
+						// MARK: sets text parameters for the user profile
 						detailCell.initTextParams()
 					}
 					else if (position == locationRow) {
-						if (chatInfo != null && chatInfo!!.location is TLRPC.TL_channelLocation) {
-							val location = chatInfo!!.location as TLRPC.TL_channelLocation
+						if (chatInfo != null && chatInfo!!.location is TLRPC.TLChannelLocation) {
+							val location = chatInfo!!.location as TLRPC.TLChannelLocation
 							detailCell.setTextAndValue(location.address, parentActivity.getString(R.string.AttachLocation), false)
 						}
 					}
@@ -10020,12 +9885,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 					when (position) {
 						userInfoRow -> {
-							val user = userInfo?.user ?: messagesController.getUser(userInfo?.id)
+							val user = messagesController.getUser(userInfo?.id)
 							val addLinks = isBot || user != null && userInfo?.about != null
 							var description: String? = null
 
 							val bio = when {
-								isBot && user?.id == BuildConfig.AI_BOT_ID /* && !user.bot_description.isNullOrEmpty()*/ -> {
+								isBot && user?.id == BuildConfig.AI_BOT_ID /* && !user.botDescription.isNullOrEmpty()*/ -> {
 									description = aboutLinkCell.context.getString(R.string.UserBio)
 
 									val info = userInfo?.about
@@ -10048,7 +9913,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						}
 
 						channelInfoRow -> {
-							var text = chatInfo!!.about
+							var text = chatInfo?.about ?: ""
 
 							while (text.contains("\n\n\n")) {
 								text = text.replace("\n\n\n", "\n\n")
@@ -10058,10 +9923,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						}
 
 						bioRow -> {
-							val user = userInfo?.user ?: messagesController.getUser(userInfo?.id)
+							val user = messagesController.getUser(userInfo?.id)
 
 							currentBio = if (user?.id == BuildConfig.AI_BOT_ID) {
-								val value = user.bot_description
+								val value = user.botDescription
 								aboutLinkCell.setTextAndValue(value, parentActivity.getString(R.string.UserBio), true)
 								value
 							}
@@ -10079,9 +9944,9 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 					if (position == bioRow) {
 						aboutLinkCell.setOnClickListener {
-							val user = userInfo?.user ?: messagesController.getUser(userInfo?.id)
+							val user = messagesController.getUser(userInfo?.id)
 
-							if (user?.self == true) {
+							if (user?.isSelf == true) {
 								val args = Bundle()
 								args.putLong("user_id", userId)
 								args.putString("username", user.username)
@@ -10105,7 +9970,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					cell.setTextValueIcon(parentActivity.getString(R.string.AddAccount), ProfileSectionCell.NO_VALUE, R.drawable.ic_add)
 				}
 
-				VIEW_TYPE_SET_PROFILE_PHOTO  -> {
+				VIEW_TYPE_SET_PROFILE_PHOTO -> {
 					val binding = AddProfilePhotoLayoutBinding.bind(holder.itemView)
 
 					val writeButton = RLottieImageView(mContext)
@@ -10133,7 +9998,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 									return@setOnClickListener
 								}
 
-								imageUpdater?.openMenu(user.photo?.photo_big != null && user.photo !is TL_userProfilePhotoEmpty, {
+								imageUpdater?.openMenu(user.photo?.photoBig != null && user.photo !is TLUserProfilePhotoEmpty, {
 									MessagesController.getInstance(currentAccount).deleteUserPhoto(null)
 									cameraDrawable.currentFrame = 0
 									cellCameraDrawable.currentFrame = 0
@@ -10167,7 +10032,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								else {
 									val user = messagesController.getUser(userId)
 
-									if (user == null || user is TLRPC.TL_userEmpty) {
+									if (user == null || user is TLRPC.TLUserEmpty) {
 										return@setOnClickListener
 									}
 
@@ -10387,10 +10252,10 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					else if (position == subscribersRow) {
 						if (chatInfo != null) {
 							if (ChatObject.isChannel(currentChat) && !currentChat!!.megagroup) {
-								textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelSubscribers), String.format("%d", chatInfo!!.participants_count), R.drawable.subscribers, position != membersSectionRow - 1)
+								textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelSubscribers), String.format(Locale.getDefault(), "%d", chatInfo!!.participantsCount), R.drawable.subscribers, position != membersSectionRow - 1)
 							}
 							else {
-								textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelMembers), String.format("%d", chatInfo!!.participants_count), R.drawable.subscribers, position != membersSectionRow - 1)
+								textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelMembers), String.format(Locale.getDefault(), "%d", chatInfo!!.participantsCount), R.drawable.subscribers, position != membersSectionRow - 1)
 							}
 						}
 						else {
@@ -10404,12 +10269,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 					else if (position == subscribersRequestsRow) {
 						if (chatInfo != null) {
-							textCell.setTextAndValueAndIcon(mContext.getString(R.string.SubscribeRequests), String.format("%d", chatInfo!!.requests_pending), R.drawable.msg_requests, position != membersSectionRow - 1)
+							textCell.setTextAndValueAndIcon(mContext.getString(R.string.SubscribeRequests), String.format(Locale.getDefault(), "%d", chatInfo!!.requestsPending), R.drawable.msg_requests, position != membersSectionRow - 1)
 						}
 					}
 					else if (position == administratorsRow) {
 						if (chatInfo != null) {
-							textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelAdministrators), String.format("%d", chatInfo!!.admins_count), R.drawable.administrators, position != membersSectionRow - 1)
+							textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelAdministrators), String.format(Locale.getDefault(), "%d", chatInfo!!.adminsCount), R.drawable.administrators, position != membersSectionRow - 1)
 						}
 						else {
 							textCell.setTextAndIcon(mContext.getString(R.string.ChannelAdministrators), R.drawable.administrators, position != membersSectionRow - 1)
@@ -10417,7 +10282,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 					else if (position == blockedUsersRow) {
 						if (chatInfo != null) {
-							textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelBlacklist), String.format("%d", max(chatInfo!!.banned_count, chatInfo!!.kicked_count)), R.drawable.demote, position != membersSectionRow - 1)
+							textCell.setTextAndValueAndIcon(mContext.getString(R.string.ChannelBlacklist), String.format(Locale.getDefault(), "%d", max(chatInfo!!.bannedCount, chatInfo!!.kickedCount)), R.drawable.demote, position != membersSectionRow - 1)
 						}
 						else {
 							textCell.setTextAndIcon(mContext.getString(R.string.ChannelBlacklist), R.drawable.user_add, position != membersSectionRow - 1)
@@ -10506,7 +10371,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						textCell.imageLeft = 23
 					}
 					else if (position == subscriptionCostRow) {
-						val txtResId = if (ChatObject.isOnlineCourse(currentChat)) {
+						val txtResId = if (ChatObject.isMasterclass(currentChat)) {
 							R.string.online_course_fee
 						}
 						else {
@@ -10518,16 +10383,16 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 					else if (position == subscriptionExpireRow) {
 						if (ChatObject.isSubscriptionChannel(currentChat)) {
-							textCell.setTextAndValueAndIcon(mContext.getString(R.string.next_due_date), String.format("%s", LocaleController.getInstance().chatFullDate.format(subscriptionExpireAt * 1000L)), R.drawable.ic_calendar_brand, true)
+							textCell.setTextAndValueAndIcon(mContext.getString(R.string.next_due_date), String.format(Locale.getDefault(), "%s", LocaleController.getInstance().chatFullDate.format(subscriptionExpireAt * 1000L)), R.drawable.ic_calendar_brand, true)
 						}
 						else {
-							textCell.setTextAndValueAndIcon(mContext.getString(R.string.end_date), String.format("%s", LocaleController.getInstance().chatFullDate.format(currentChat?.end_date ?: 0L)), R.drawable.ic_calendar_brand, true)
+							textCell.setTextAndValueAndIcon(mContext.getString(R.string.end_date), String.format(Locale.getDefault(), "%s", LocaleController.getInstance().chatFullDate.format(currentChat?.endDate ?: 0L)), R.drawable.ic_calendar_brand, true)
 						}
 
 						textCell.valueTextView.textColor = ResourcesCompat.getColor(mContext.resources, R.color.text, null)
 					}
 					else if (position == subscriptionBeginRow) {
-						textCell.setTextAndValueAndIcon(mContext.getString(R.string.start_date), String.format("%s", LocaleController.getInstance().chatFullDate.format(currentChat?.start_date ?: 0L)), R.drawable.ic_calendar_brand, true)
+						textCell.setTextAndValueAndIcon(mContext.getString(R.string.start_date), String.format(Locale.getDefault(), "%s", LocaleController.getInstance().chatFullDate.format(currentChat?.startDate ?: 0L)), R.drawable.ic_calendar_brand, true)
 						textCell.valueTextView.textColor = ResourcesCompat.getColor(mContext.resources, R.color.text, null)
 					}
 				}
@@ -10641,30 +10506,30 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 					}
 
 					if (part != null) {
-						val role = if (part is TLRPC.TL_chatChannelParticipant) {
+						val role = if (part is TLChatChannelParticipant) {
 							val channelParticipant = part.channelParticipant
 
-							if (!TextUtils.isEmpty(channelParticipant.rank)) {
-								channelParticipant.rank
+							if (!channelParticipant?.rank.isNullOrEmpty()) {
+								channelParticipant?.rank
 							}
 							else {
 								when (channelParticipant) {
-									is TLRPC.TL_channelParticipantCreator -> mContext.getString(R.string.ChannelCreator)
-									is TLRPC.TL_channelParticipantAdmin -> mContext.getString(R.string.ChannelAdmin)
+									is TLRPC.TLChannelParticipantCreator -> mContext.getString(R.string.ChannelCreator)
+									is TLRPC.TLChannelParticipantAdmin -> mContext.getString(R.string.ChannelAdmin)
 									else -> null
 								}
 							}
 						}
 						else {
 							when (part) {
-								is TLRPC.TL_chatParticipantCreator -> mContext.getString(R.string.ChannelCreator)
-								is TLRPC.TL_chatParticipantAdmin -> mContext.getString(R.string.ChannelAdmin)
+								is TLRPC.TLChatParticipantCreator -> mContext.getString(R.string.ChannelCreator)
+								is TLRPC.TLChatParticipantAdmin -> mContext.getString(R.string.ChannelAdmin)
 								else -> null
 							}
 						}
 
 						userCell.setAdminRole(role)
-						userCell.setData(messagesController.getUser(part.user_id), null, null, 0, position != membersEndRow - 1)
+						userCell.setData(messagesController.getUser(part.userId), null, null, 0, position != membersEndRow - 1)
 					}
 				}
 
@@ -10825,7 +10690,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		intent.type = "text/plain"
 		intent.putExtra(Intent.EXTRA_TEXT, link)
 
-		startActivity(context, Intent.createChooser(intent, context.getString(R.string.BotShare)), null)
+		context.startActivity(Intent.createChooser(intent, context.getString(R.string.BotShare)), null)
 	}
 
 	fun inviteLink(): String {
@@ -10838,7 +10703,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			user?.username ?: ""
 		}
 
-		if (userInfo?.is_public == false && inviteLink.isNotBlank()) {
+		if (userInfo?.isPublic == false && inviteLink.isNotBlank()) {
 			return inviteLink
 		}
 
@@ -10860,7 +10725,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						Bulletin.removeDelegate(this@ProfileActivity)
 					}
 
-					override fun getBottomOffset(tag: Int) = AndroidUtilities.dp(BottomNavigationPanel.height.toFloat())
+					override fun getBottomOffset(tag: Int) = AndroidUtilities.dp(BottomNavigationPanel.HEIGHT.toFloat())
 				})
 
 				BulletinFactory.of(this@ProfileActivity).createCopyBulletin(ApplicationLoader.applicationContext.getString(R.string.LinkCopied)).show()
@@ -11032,7 +10897,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 
 			loadingFaqPage = true
 
-			val req2 = TLRPC.TL_messages_getWebPage()
+			val req2 = TLRPC.TLMessagesGetWebPage()
 			req2.url = parentActivity.getString(R.string.TelegramFaqUrl)
 			req2.hash = 0
 
@@ -11040,20 +10905,20 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				if (response2 is TLRPC.WebPage) {
 					val arrayList = ArrayList<FaqSearchResult>()
 
-					if (response2.cached_page != null) {
+					if (response2.cachedPage != null) {
 						var a = 0
-						val n = response2.cached_page.blocks.size
+						val n = response2.cachedPage?.blocks?.size ?: 0
 
 						while (a < n) {
-							val block = response2.cached_page.blocks[a]
+							val block = response2.cachedPage?.blocks?.get(a)
 
-							if (block is TLRPC.TL_pageBlockList) {
+							if (block is TLRPC.TLPageBlockList) {
 								var paragraph: String? = null
 
 								if (a != 0) {
-									val prevBlock = response2.cached_page.blocks[a - 1]
+									val prevBlock = response2.cachedPage?.blocks?.get(a - 1)
 
-									if (prevBlock is TLRPC.TL_pageBlockParagraph) {
+									if (prevBlock is TLRPC.TLPageBlockParagraph) {
 										paragraph = ArticleViewer.getPlainText(prevBlock.text).toString()
 									}
 								}
@@ -11064,11 +10929,11 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 								while (b < n2) {
 									val item = block.items[b]
 
-									if (item is TLRPC.TL_pageListItemText) {
+									if (item is TLRPC.TLPageListItemText) {
 										val url = ArticleViewer.getUrl(item.text)
-										val text = ArticleViewer.getPlainText(item.text).toString()
+										val text = ArticleViewer.getPlainText(item.text)?.toString()
 
-										if (TextUtils.isEmpty(url) || TextUtils.isEmpty(text)) {
+										if (url.isNullOrEmpty() || text.isNullOrEmpty()) {
 											b++
 											continue
 										}
@@ -11086,7 +10951,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 									b++
 								}
 							}
-							else if (block is TLRPC.TL_pageBlockAnchor) {
+							else if (block is TLRPC.TLPageBlockAnchor) {
 								break
 							}
 
@@ -11263,12 +11128,12 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 				a++
 			}
 
-			MessagesController.getGlobalMainSettings().edit().putStringSet("settingsSearchRecent2", toSave).commit()
+			MessagesController.getGlobalMainSettings().edit { putStringSet("settingsSearchRecent2", toSave) }
 		}
 
 		fun clearRecent() {
 			recentSearches.clear()
-			MessagesController.getGlobalMainSettings().edit().remove("settingsSearchRecent2").commit()
+			MessagesController.getGlobalMainSettings().edit { remove("settingsSearchRecent2") }
 			notifyDataSetChanged()
 		}
 
@@ -11515,7 +11380,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 						visibleChatParticipants[newItemPosition - membersStartRow]
 					}
 
-					return oldItem.user_id == newItem.user_id
+					return oldItem.userId == newItem.userId
 				}
 			}
 
@@ -11680,6 +11545,7 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		private const val leave_group = 7
 		private const val invite_to_group = 9
 		private const val share = 10
+		private const val report = 11
 		private const val edit_channel = 12
 		private const val add_shortcut = 14
 		private const val call_item = 15
@@ -11687,7 +11553,8 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 		private const val search_members = 17
 		private const val add_member = 18
 		private const val statistics = 19
-		private const val start_secret_chat = 20
+
+		// private const val start_secret_chat = 20
 		private const val gallery_menu_save = 21
 		private const val view_discussion = 22
 		private const val edit_name = 30
@@ -11737,5 +11604,4 @@ class ProfileActivity @JvmOverloads constructor(args: Bundle?, private var share
 			avatarsViewPager?.addUploadingImage(ImageLocation.getForLocal(avatarBig).also { uploadingImageLocation = it }, ImageLocation.getForLocal(avatar))
 		}
 	}
-
 }

@@ -4,9 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
-
 package org.telegram.ui;
 
 import android.animation.Animator;
@@ -43,7 +42,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -136,14 +135,14 @@ public class NewContactActivity extends BaseFragment implements AdapterView.OnIt
 					}
 					donePressed = true;
 					showEditDoneProgress(true, true);
-					final TLRPC.TL_contacts_importContacts req = new TLRPC.TL_contacts_importContacts();
-					final TLRPC.TL_inputPhoneContact inputPhoneContact = new TLRPC.TL_inputPhoneContact();
-					inputPhoneContact.first_name = firstNameField.getText().toString();
-					inputPhoneContact.last_name = lastNameField.getText().toString();
+					final TLRPC.TLContactsImportContacts req = new TLRPC.TLContactsImportContacts();
+					final var inputPhoneContact = new TLRPC.TLInputContact();
+					inputPhoneContact.firstName = firstNameField.getText().toString();
+					inputPhoneContact.lastName = lastNameField.getText().toString();
 					inputPhoneContact.phone = "+" + codeField.getText().toString() + phoneField.getText().toString();
 					req.contacts.add(inputPhoneContact);
 					int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
-						final TLRPC.TL_contacts_importedContacts res = (TLRPC.TL_contacts_importedContacts)response;
+						final TLRPC.TLContactsImportedContacts res = (TLRPC.TLContactsImportedContacts)response;
 						AndroidUtilities.runOnUIThread(() -> {
 							donePressed = false;
 							if (res != null) {
@@ -158,7 +157,7 @@ public class NewContactActivity extends BaseFragment implements AdapterView.OnIt
 									showEditDoneProgress(false, true);
 									AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
 									builder.setTitle(LocaleController.getString("ContactNotRegisteredTitle", R.string.ContactNotRegisteredTitle));
-									builder.setMessage(LocaleController.formatString("ContactNotRegistered", R.string.ContactNotRegistered, ContactsController.formatName(inputPhoneContact.first_name, inputPhoneContact.last_name)));
+									builder.setMessage(LocaleController.formatString("ContactNotRegistered", R.string.ContactNotRegistered, ContactsController.formatName(inputPhoneContact.firstName, inputPhoneContact.lastName)));
 									builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
 									builder.setPositiveButton(LocaleController.getString("Invite", R.string.Invite), (dialog, which) -> {
 										try {

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -33,6 +33,7 @@ import org.telegram.messenger.Utilities;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.Cells.ChatActionCell;
 import org.telegram.ui.Cells.ChatMessageCell;
 import org.telegram.ui.Components.Bulletin;
@@ -45,26 +46,25 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
 
+import androidx.annotation.NonNull;
+
 public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCenterDelegate {
 	private final int ANIMATION_JSON_VERSION = 1;
 	private final String INTERACTIONS_STICKER_PACK = "EmojiAnimations";
-
 	ChatActivity chatActivity;
 	int currentAccount;
-	TLRPC.TL_messages_stickerSet set;
+	TLRPC.TLMessagesStickerSet set;
 	boolean inited = false;
 	HashMap<String, ArrayList<TLRPC.Document>> emojiInteractionsStickersMap = new HashMap<>();
 	HashMap<Long, Integer> lastAnimationIndex = new HashMap<>();
 	Random random = new Random();
 	private boolean attached;
-
 	int lastTappedMsgId = -1;
 	long lastTappedTime = 0;
 	String lastTappedEmoji;
 	ArrayList<Long> timeIntervals = new ArrayList<>();
 	ArrayList<Integer> animationIndexes = new ArrayList<>();
 	Runnable sentInteractionsRunnable;
-
 	Runnable hintRunnable;
 	private final static HashSet<String> supportedEmoji = new HashSet<>();
 	private final static HashSet<String> excludeEmojiFromPack = new HashSet<>();
@@ -131,7 +131,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 				stickersMap.put(set.documents.get(i).id, set.documents.get(i));
 			}
 			for (int i = 0; i < set.packs.size(); i++) {
-				TLRPC.TL_stickerPack pack = set.packs.get(i);
+				var pack = set.packs.get(i);
 				if (!excludeEmojiFromPack.contains(pack.emoticon) && pack.documents.size() > 0) {
 					supportedEmoji.add(pack.emoticon);
 					ArrayList<TLRPC.Document> stickers = new ArrayList<>();
@@ -163,9 +163,9 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 		}
 		else if (id == NotificationCenter.onEmojiInteractionsReceived) {
 			long dialogId = (long)args[0];
-			TLRPC.TL_sendMessageEmojiInteraction action = (TLRPC.TL_sendMessageEmojiInteraction)args[1];
+			var action = (TLRPC.TLSendMessageEmojiInteraction)args[1];
 			if (dialogId == this.dialogId && supportedEmoji.contains(action.emoticon)) {
-				int messageId = action.msg_id;
+				int messageId = action.msgId;
 				if (action.interaction.data != null) {
 					try {
 						JSONObject jsonObject = new JSONObject(action.interaction.data);
@@ -174,12 +174,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 							JSONObject actionObject = array.getJSONObject(i);
 							int animation = actionObject.optInt("i", 1) - 1;
 							double time = actionObject.optDouble("t", 0.0);
-							AndroidUtilities.runOnUIThread(new Runnable() {
-								@Override
-								public void run() {
-									findViewAndShowAnimation(messageId, animation);
-								}
-							}, (long)(time * 1000));
+							AndroidUtilities.runOnUIThread(() -> findViewAndShowAnimation(messageId, animation), (long)(time * 1000));
 						}
 					}
 					catch (JSONException e) {
@@ -207,11 +202,10 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 		ChatMessageCell bestView = null;
 		for (int i = 0; i < listView.getChildCount(); i++) {
 			View child = listView.getChildAt(i);
-			if (child instanceof ChatMessageCell) {
-				ChatMessageCell cell = (ChatMessageCell)child;
+			if (child instanceof ChatMessageCell cell) {
 				String stickerEmoji = cell.getMessageObject().getStickerEmoji();
 				if (stickerEmoji == null) {
-					stickerEmoji = cell.getMessageObject().messageOwner.message;
+					stickerEmoji = TLRPCExtensions.getMessage(cell.getMessageObject().messageOwner);
 				}
 				if (cell.getPhotoImage().hasNotThumb() && stickerEmoji != null) {
 					if (cell.getMessageObject().getId() == messageId) {
@@ -241,13 +235,11 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 					View child = listView.getChildAt(k);
 					ImageReceiver photoImage = null;
 					MessageObject messageObject = null;
-					if (child instanceof ChatMessageCell) {
-						ChatMessageCell cell = (ChatMessageCell)child;
+					if (child instanceof ChatMessageCell cell) {
 						messageObject = cell.getMessageObject();
 						photoImage = cell.getPhotoImage();
 					}
-					else if (child instanceof ChatActionCell) {
-						ChatActionCell cell = (ChatActionCell)child;
+					else if (child instanceof ChatActionCell cell) {
 						messageObject = cell.getMessageObject();
 						photoImage = cell.getPhotoImage();
 					}
@@ -355,10 +347,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 			return show;
 		}
 		Integer printingType = MessagesController.getInstance(currentAccount).getPrintingStringType(dialogId, threadMsgId);
-		boolean canShowHint = true;
-		if (printingType != null && printingType == 5) {
-			canShowHint = false;
-		}
+		boolean canShowHint = printingType == null || printingType != 5;
 		if (canShowHint && hintRunnable == null && show && (Bulletin.getVisibleBulletin() == null || !Bulletin.getVisibleBulletin().isShowing()) && SharedConfig.emojiInteractionsHintCount > 0 && UserConfig.getInstance(currentAccount).getClientUserId() != chatActivity.currentUser.id) {
 			SharedConfig.updateEmojiInteractionsHintCount(SharedConfig.emojiInteractionsHintCount - 1);
 			TLRPC.Document document;
@@ -370,17 +359,14 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 			}
 			StickerSetBulletinLayout layout = new StickerSetBulletinLayout(chatActivity.getParentActivity(), null, StickerSetBulletinLayout.TYPE_EMPTY, document);
 			layout.subtitleTextView.setVisibility(View.GONE);
-			layout.titleTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("EmojiInteractionTapHint", R.string.EmojiInteractionTapHint, chatActivity.currentUser.getFirst_name())));
+			layout.titleTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("EmojiInteractionTapHint", R.string.EmojiInteractionTapHint, chatActivity.currentUser.firstName)));
 			layout.titleTextView.setTypeface(null);
 			layout.titleTextView.setMaxLines(3);
 			layout.titleTextView.setSingleLine(false);
 			Bulletin bulletin = Bulletin.make(chatActivity, layout, Bulletin.DURATION_LONG);
-			AndroidUtilities.runOnUIThread(hintRunnable = new Runnable() {
-				@Override
-				public void run() {
-					bulletin.show();
-					hintRunnable = null;
-				}
+			AndroidUtilities.runOnUIThread(hintRunnable = () -> {
+				bulletin.show();
+				hintRunnable = null;
 			}, 1500);
 		}
 		return show;
@@ -462,7 +448,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 		}
 		String emoji = messageObject.getStickerEmoji();
 		if (emoji == null) {
-			emoji = messageObject.messageOwner.message;
+			emoji = TLRPCExtensions.getMessage(messageObject.messageOwner);
 		}
 		emoji = unwrapEmoji(emoji);
 		if (!supportedEmoji.contains(emoji)) {
@@ -505,7 +491,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 		MessageObject messageObject = view.getMessageObject();
 		String emoji = messageObject.getStickerEmoji();
 		if (emoji == null) {
-			emoji = messageObject.messageOwner.message;
+			emoji = TLRPCExtensions.getMessage(messageObject.messageOwner);
 		}
 		if (emoji == null) {
 			return false;
@@ -540,19 +526,17 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 						return false;
 					}
 					TLRPC.InputStickerSet inputStickerSet = messageObject.getInputStickerSet();
-					TLRPC.TL_messages_stickerSet stickerSet = null;
-					if (inputStickerSet.short_name != null) {
-						stickerSet = MediaDataController.getInstance(currentAccount).getStickerSetByName(inputStickerSet.short_name);
+					TLRPC.TLMessagesStickerSet stickerSet = null;
+					if (TLRPCExtensions.getShortName(inputStickerSet) != null) {
+						stickerSet = MediaDataController.getInstance(currentAccount).getStickerSetByName(TLRPCExtensions.getShortName(inputStickerSet));
 					}
 					if (stickerSet == null) {
-						stickerSet = MediaDataController.getInstance(currentAccount).getStickerSetById(inputStickerSet.id);
+						stickerSet = MediaDataController.getInstance(currentAccount).getStickerSetById(TLRPCExtensions.getId(inputStickerSet));
 					}
 					if (stickerSet == null) {
-						TLRPC.TL_messages_getStickerSet req = new TLRPC.TL_messages_getStickerSet();
+						var req = new TLRPC.TLMessagesGetStickerSet();
 						req.stickerset = inputStickerSet;
-						ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-							showStickerSetBulletin((TLRPC.TL_messages_stickerSet)response, messageObject);
-						}));
+						ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> showStickerSetBulletin((TLRPC.TLMessagesStickerSet)response, messageObject)));
 					}
 					else {
 						showStickerSetBulletin(stickerSet, messageObject);
@@ -622,11 +606,11 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 					drawingObject.imageReceiver.setImage(imageLocation, w + "_" + w + "_pcache_compress", null, "tgs", set, 1);
 					drawingObject.imageReceiver.setDelegate(new ImageReceiver.ImageReceiverDelegate() {
 						@Override
-						public void didSetImage(ImageReceiver imageReceiver, boolean set, boolean thumb, boolean memCache) {
+						public void didSetImage(@NonNull ImageReceiver imageReceiver, boolean set, boolean thumb, boolean memCache) {
 						}
 
 						@Override
-						public void onAnimationReady(ImageReceiver imageReceiver) {
+						public void onAnimationReady(@NonNull ImageReceiver imageReceiver) {
 							if (sendTap && messageObject.isAnimatedAnimatedEmoji() && imageReceiver.getLottieAnimation() != null && !imageReceiver.getLottieAnimation().hasVibrationPattern()) {
 								view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
 							}
@@ -700,7 +684,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 		return false;
 	}
 
-	private void showStickerSetBulletin(TLRPC.TL_messages_stickerSet stickerSet, MessageObject messageObject) {
+	private void showStickerSetBulletin(TLRPC.TLMessagesStickerSet stickerSet, MessageObject messageObject) {
 		if (MessagesController.getInstance(currentAccount).premiumLocked || chatActivity.getParentActivity() == null) {
 			return;
 		}
@@ -743,10 +727,10 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 		if (lastTappedMsgId == 0) {
 			return;
 		}
-		TLRPC.TL_sendMessageEmojiInteraction interaction = new TLRPC.TL_sendMessageEmojiInteraction();
-		interaction.msg_id = lastTappedMsgId;
+		var interaction = new TLRPC.TLSendMessageEmojiInteraction();
+		interaction.msgId = lastTappedMsgId;
 		interaction.emoticon = lastTappedEmoji;
-		interaction.interaction = new TLRPC.TL_dataJSON();
+		interaction.interaction = new TLRPC.TLDataJSON();
 		JSONObject jsonObject = new JSONObject();
 		try {
 			jsonObject.put("v", ANIMATION_JSON_VERSION);
@@ -768,9 +752,9 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 		}
 		interaction.interaction.data = jsonObject.toString();
 
-		TLRPC.TL_messages_setTyping req = new TLRPC.TL_messages_setTyping();
+		var req = new TLRPC.TLMessagesSetTyping();
 		if (threadMsgId != 0) {
-			req.top_msg_id = threadMsgId;
+			req.topMsgId = threadMsgId;
 			req.flags |= 1;
 		}
 		req.action = interaction;
@@ -801,10 +785,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
 
 	public boolean checkPosition(ChatMessageCell messageCell, float chatListViewPaddingTop, int bottom) {
 		float y = messageCell.getY() + messageCell.getPhotoImage().getCenterY();
-		if (y > chatListViewPaddingTop && y < bottom) {
-			return true;
-		}
-		return false;
+		return y > chatListViewPaddingTop && y < bottom;
 	}
 
 	public void cancelAllAnimations() {

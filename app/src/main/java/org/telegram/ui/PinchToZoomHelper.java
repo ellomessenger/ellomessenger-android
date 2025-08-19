@@ -4,25 +4,18 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Outline;
-import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
-import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.TextureView;
@@ -42,6 +35,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.WebFile;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.Components.AnimatedFileDrawable;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
@@ -51,57 +45,41 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 public class PinchToZoomHelper {
-
 	private final ViewGroup parentView;
 	private final ViewGroup fragmentView;
-
 	private ZoomOverlayView overlayView;
 	private View child;
 	private ImageReceiver childImage;
-
 	private ImageReceiver fullImage = new ImageReceiver();
-
 	private boolean inOverlayMode;
-
 	float parentOffsetX;
 	float parentOffsetY;
-
 	float fragmentOffsetX;
 	float fragmentOffsetY;
-
 	float pinchCenterX;
 	float pinchCenterY;
-
 	private float imageX;
 	private float imageY;
 	private float imageHeight;
 	private float imageWidth;
-
 	private float fullImageHeight;
 	private float fullImageWidth;
-
 	private float finishProgress;
 	private float progressToFullView;
 	ValueAnimator finishTransition;
 	private MessageObject messageObject;
-
 	Callback callback;
 	ClipBoundsListener clipBoundsListener;
-
 	float pinchStartCenterX;
 	float pinchStartCenterY;
 	float pinchStartDistance;
 	float pinchTranslationX;
 	float pinchTranslationY;
 	boolean isInPinchToZoomTouchMode;
-
 	private int pointerId1, pointerId2;
-
 	float pinchScale;
-
 	private float enterProgress;
 	private final float[] clipTopBottom = new float[2];
-
 	private boolean isHardwareVideo;
 
 	public PinchToZoomHelper(ViewGroup parentView, ViewGroup fragmentView) {
@@ -367,81 +345,30 @@ public class PinchToZoomHelper {
 		private final TextureView videoTextureView;
 		private final AspectRatioFrameLayout aspectRatioFrameLayout;
 		private final BackupImageView backupImageView;
-		private Path aspectPath = new Path();
-		private Paint aspectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
 		public ZoomOverlayView(Context context) {
 			super(context);
 
-			if (Build.VERSION.SDK_INT >= 21) {
-				videoPlayerContainer = new FrameLayout(context);
-				videoPlayerContainer.setOutlineProvider(new ViewOutlineProvider() {
+			videoPlayerContainer = new FrameLayout(context);
 
-					@TargetApi(Build.VERSION_CODES.LOLLIPOP)
-					@Override
-					public void getOutline(View view, Outline outline) {
-						ImageReceiver imageReceiver = (ImageReceiver)view.getTag(R.id.parent_tag);
-						if (imageReceiver != null) {
-							int[] rad = imageReceiver.getRoundRadius();
-							int maxRad = 0;
-							for (int a = 0; a < 4; a++) {
-								maxRad = Math.max(maxRad, rad[a]);
-							}
-							outline.setRoundRect(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight(), maxRad);
+			videoPlayerContainer.setOutlineProvider(new ViewOutlineProvider() {
+				@Override
+				public void getOutline(View view, Outline outline) {
+					ImageReceiver imageReceiver = (ImageReceiver)view.getTag(R.id.parent_tag);
+					if (imageReceiver != null) {
+						int[] rad = imageReceiver.getRoundRadius();
+						int maxRad = 0;
+						for (int a = 0; a < 4; a++) {
+							maxRad = Math.max(maxRad, rad[a]);
 						}
-						else {
-							outline.setOval(0, 0, AndroidUtilities.roundMessageSize, AndroidUtilities.roundMessageSize);
-						}
+						outline.setRoundRect(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight(), maxRad);
 					}
-				});
-				videoPlayerContainer.setClipToOutline(true);
-			}
-			else {
-				videoPlayerContainer = new FrameLayout(context) {
-
-					final RectF rect = new RectF();
-
-					@Override
-					protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-						super.onSizeChanged(w, h, oldw, oldh);
-						aspectPath.reset();
-						ImageReceiver imageReceiver = (ImageReceiver)getTag(R.id.parent_tag);
-						if (imageReceiver != null) {
-							int[] rad = imageReceiver.getRoundRadius();
-							int maxRad = 0;
-							for (int a = 0; a < 4; a++) {
-								maxRad = Math.max(maxRad, rad[a]);
-							}
-							rect.set(0, 0, w, h);
-							aspectPath.addRoundRect(rect, AndroidUtilities.dp(4), AndroidUtilities.dp(4), Path.Direction.CW);
-						}
-						else {
-							aspectPath.addCircle(w / 2, h / 2, w / 2, Path.Direction.CW);
-						}
-						aspectPath.toggleInverseFillType();
+					else {
+						outline.setOval(0, 0, AndroidUtilities.roundMessageSize, AndroidUtilities.roundMessageSize);
 					}
-
-					@Override
-					public void setVisibility(int visibility) {
-						super.setVisibility(visibility);
-						if (visibility == VISIBLE) {
-							setLayerType(View.LAYER_TYPE_HARDWARE, null);
-						}
-					}
-
-					@Override
-					protected void dispatchDraw(@NonNull Canvas canvas) {
-						super.dispatchDraw(canvas);
-						if (getTag() == null) {
-							canvas.drawPath(aspectPath, aspectPaint);
-						}
-					}
-				};
-				aspectPath = new Path();
-				aspectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-				aspectPaint.setColor(0xff000000);
-				aspectPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
-			}
+				}
+			});
+			videoPlayerContainer.setClipToOutline(true);
 
 			backupImageView = new BackupImageView(context);
 			videoPlayerContainer.addView(backupImageView);
@@ -550,10 +477,9 @@ public class PinchToZoomHelper {
 				if (childImage != null) {
 					if (progressToFullView != 1f) {
 						childImage.draw(canvas);
-						fullImage.setImageCoordinates(childImage.getImageX(), childImage.getImageY(), childImage.getImageWidth(), childImage.getImageHeight());
-						fullImage.draw(canvas);
 					}
-					else {
+
+					if (fullImage != null) {
 						fullImage.setImageCoordinates(childImage.getImageX(), childImage.getImageY(), childImage.getImageWidth(), childImage.getImageHeight());
 						fullImage.draw(canvas);
 					}
@@ -579,27 +505,27 @@ public class PinchToZoomHelper {
 	}
 
 	private ImageLocation getImageLocation(MessageObject message, int[] size) {
-		if (message.messageOwner instanceof TLRPC.TL_messageService) {
-			if (message.messageOwner.action instanceof TLRPC.TL_messageActionUserUpdatedPhoto) {
-				return null;
-			}
-			else {
-				TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(message.photoThumbs, AndroidUtilities.getPhotoSize());
-				if (sizeFull != null) {
-					if (size != null) {
-						size[0] = sizeFull.size;
-						if (size[0] == 0) {
-							size[0] = -1;
-						}
+		if (message.messageOwner instanceof TLRPC.TLMessageService) {
+//			if (messageService.action instanceof TLRPC.TLMessageActionUserUpdatedPhoto) {
+//				return null;
+//			}
+//			else {
+			TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(message.photoThumbs, AndroidUtilities.getPhotoSize());
+			if (sizeFull != null) {
+				if (size != null) {
+					size[0] = sizeFull.size;
+					if (size[0] == 0) {
+						size[0] = -1;
 					}
-					return ImageLocation.getForObject(sizeFull, message.photoThumbsObject);
 				}
-				else if (size != null) {
-					size[0] = -1;
-				}
+				return ImageLocation.getForObject(sizeFull, message.photoThumbsObject);
 			}
+			else if (size != null) {
+				size[0] = -1;
+			}
+//			}
 		}
-		else if (message.messageOwner.media instanceof TLRPC.TL_messageMediaPhoto && message.messageOwner.media.photo != null || message.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage && message.messageOwner.media.webpage != null) {
+		else if (TLRPCExtensions.getMedia(message.messageOwner) instanceof TLRPC.TLMessageMediaPhoto mediaPhoto && mediaPhoto.photo != null || TLRPCExtensions.getMedia(message.messageOwner) instanceof TLRPC.TLMessageMediaWebPage mediaWebPage && mediaWebPage.webpage != null) {
 			if (message.isGif()) {
 				return ImageLocation.getForDocument(message.getDocument());
 			}
@@ -619,13 +545,13 @@ public class PinchToZoomHelper {
 				}
 			}
 		}
-		else if (message.messageOwner.media instanceof TLRPC.TL_messageMediaInvoice) {
-			return ImageLocation.getForWebFile(WebFile.createWithWebDocument(((TLRPC.TL_messageMediaInvoice)message.messageOwner.media).photo));
+		else if (TLRPCExtensions.getMedia(message.messageOwner) instanceof TLRPC.TLMessageMediaInvoice mediaInvoice) {
+			return ImageLocation.getForWebFile(WebFile.createWithWebDocument(mediaInvoice.photo));
 		}
 		else if (message.getDocument() != null) {
 			TLRPC.Document document = message.getDocument();
 			if (MessageObject.isDocumentHasThumb(message.getDocument())) {
-				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90);
+				TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 90);
 				if (size != null) {
 					size[0] = thumb.size;
 					if (size[0] == 0) {

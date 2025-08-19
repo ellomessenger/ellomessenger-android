@@ -4,16 +4,20 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.group
 
-import android.animation.*
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.Context
 import android.content.Intent
-import android.graphics.*
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
@@ -21,7 +25,9 @@ import android.text.InputFilter.LengthFilter
 import android.text.Spannable
 import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
-import android.view.*
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -30,15 +36,27 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.text.buildSpannedString
 import androidx.core.view.children
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.core.widget.ContentLoadingProgressBar
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import org.telegram.messenger.*
+import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.ChatObject
+import org.telegram.messenger.FileLog
+import org.telegram.messenger.ImageLocation
+import org.telegram.messenger.LocaleController
+import org.telegram.messenger.MessagesController
+import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
+import org.telegram.messenger.R
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.vibrate
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.address
+import org.telegram.tgnet.lat
+import org.telegram.tgnet.lon
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -49,11 +67,20 @@ import org.telegram.ui.Cells.GroupCreateUserCell
 import org.telegram.ui.Cells.HeaderCell
 import org.telegram.ui.Cells.TextSettingsCell
 import org.telegram.ui.ChatActivity
-import org.telegram.ui.Components.*
+import org.telegram.ui.Components.AvatarDrawable
+import org.telegram.ui.Components.BackupImageView
+import org.telegram.ui.Components.EditTextEmoji
+import org.telegram.ui.Components.GroupCreateDividerItemDecoration
+import org.telegram.ui.Components.ImageUpdater
 import org.telegram.ui.Components.ImageUpdater.ImageUpdaterDelegate
+import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.LayoutHelper.createFrame
 import org.telegram.ui.Components.LayoutHelper.createLinear
+import org.telegram.ui.Components.RadialProgressView
+import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
+import org.telegram.ui.Components.SizeNotifierFrameLayout
+import org.telegram.ui.Components.TypefaceSpan
 import org.telegram.ui.LocationActivity
 import java.util.concurrent.CountDownLatch
 import kotlin.math.min
@@ -71,7 +98,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 	private var progressBar: ContentLoadingProgressBar? = null
 	private var avatarAnimation: AnimatorSet? = null
 	private var avatarProgressView: RadialProgressView? = null
-	private val avatarDrawable: AvatarDrawable
+	private val avatarDrawable = AvatarDrawable()
 	private var editTextContainer: FrameLayout? = null
 	private var avatar: TLRPC.FileLocation? = null
 	private var avatarBig: TLRPC.FileLocation? = null
@@ -84,7 +111,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 	private var donePressed = false
 	private var imageUpdater: ImageUpdater? = null
 	private var nameToSet: String?
-	private val chatType: Int
+	private val chatType = args.getInt("chatType", ChatObject.CHAT_TYPE_CHAT)
 	private val forImport: Boolean
 	private var currentGroupCreateAddress: String?
 	private val currentGroupCreateLocation: Location?
@@ -99,8 +126,6 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 	private var delegate: GroupCreateFinalActivityDelegate? = null
 
 	init {
-		chatType = args.getInt("chatType", ChatObject.CHAT_TYPE_CHAT)
-		avatarDrawable = AvatarDrawable()
 		avatarDrawable.shouldDrawPlaceholder = false
 		currentGroupCreateAddress = args.getString("address")
 
@@ -150,7 +175,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 				loadedUsers.removeAll(emptyUsers)
 
 				val filledUsers = emptyUsers.mapNotNull {
-					messagesController.getUserFull(it.id)?.user
+					messagesController.getUser(it.id)
 				}
 
 				loadedUsers.addAll(filledUsers)
@@ -296,7 +321,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 						else {
 							needShowProgress(true)
 							delegate?.didStartChatCreation()
-							reqId = messagesController.createChat(title, selectedContacts ?: emptyList(), bioContainer?.text, chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, this@GroupCreateFinalActivity, false, TLRPC.Chat.PAY_TYPE_NONE, null, 0.0, null, null)
+							reqId = messagesController.createChat(title, selectedContacts ?: emptyList(), bioContainer?.text, chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, this@GroupCreateFinalActivity, false, TLRPC.PAY_TYPE_NONE, null, 0.0, null, null)
 						}
 					}
 				}
@@ -327,7 +352,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 				for (i in 0 until childCount) {
 					val child = getChildAt(i)
 
-					if (child == null || child.visibility == GONE || child === actionBar) {
+					if (child == null || child.isGone || child === actionBar) {
 						continue
 					}
 
@@ -360,7 +385,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 				for (i in 0 until count) {
 					val child = getChildAt(i)
 
-					if (child.visibility == GONE) {
+					if (child.isGone) {
 						continue
 					}
 
@@ -457,7 +482,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 				val avatarImage = avatarImage ?: return
 				val avatarProgressView = avatarProgressView ?: return
 
-				if (avatarProgressView.visibility == VISIBLE) {
+				if (avatarProgressView.isVisible) {
 					paint.alpha = (0x55 * avatarImage.imageReceiver.currentAlpha * avatarProgressView.alpha).toInt()
 					canvas.drawCircle(measuredWidth / 2.0f, measuredHeight / 2.0f, measuredWidth / 2.0f, paint)
 				}
@@ -569,8 +594,8 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 				fragment.setDialogId(0)
 
 				fragment.setDelegate { location, _, _, _ ->
-					currentGroupCreateLocation?.latitude = location.geo.lat
-					currentGroupCreateLocation?.longitude = location.geo._long
+					currentGroupCreateLocation?.latitude = location.geo?.lat ?: 0.0
+					currentGroupCreateLocation?.longitude = location.geo?.lon ?: 0.0
 
 					currentGroupCreateAddress = location.address
 				}
@@ -606,7 +631,7 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 
 				if (createAfterUpload) {
 					delegate?.didStartChatCreation()
-					reqId = messagesController.createChat(editText!!.text.toString(), selectedContacts ?: emptyList(), bioContainer?.text, chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, this@GroupCreateFinalActivity, false, TLRPC.Chat.PAY_TYPE_NONE, null, 0.0, null, null)
+					reqId = messagesController.createChat(editText!!.text.toString(), selectedContacts ?: emptyList(), bioContainer?.text, chatType, forImport, currentGroupCreateLocation, currentGroupCreateAddress, this@GroupCreateFinalActivity, false, TLRPC.PAY_TYPE_NONE, null, 0.0, null, null)
 				}
 
 				showAvatarProgress(show = false, animated = true)
@@ -827,11 +852,11 @@ class GroupCreateFinalActivity(args: Bundle) : BaseFragment(args), NotificationC
 
 				TYPE_USER -> {
 					val cell = holder.itemView as GroupCreateUserCell
-					var user = messagesController.getUser(selectedContacts!![position - usersStartRow])
+					val user = messagesController.getUser(selectedContacts!![position - usersStartRow])
 
-					if (user == null || user.username.isNullOrEmpty()) {
-						user = messagesController.getUserFull(selectedContacts!![position - usersStartRow])?.user
-					}
+//					if (user == null || user.username.isNullOrEmpty()) {
+//						user = messagesController.getUserFull(selectedContacts!![position - usersStartRow])?.user
+//					}
 
 					cell.setObject(user, null, null)
 				}

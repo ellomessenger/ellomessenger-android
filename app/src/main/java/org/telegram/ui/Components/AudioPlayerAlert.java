@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components;
 
@@ -73,7 +73,8 @@ import org.telegram.messenger.Utilities;
 import org.telegram.messenger.audioinfo.AudioInfo;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -140,7 +141,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 	private final ImageView playButton;
 	private final PlayPauseDrawable playPauseDrawable;
 	private final FrameLayout blurredView;
-	private final BackupImageView bigAlbumConver;
+	private final BackupImageView bigAlbumCover;
 	private boolean blurredAnimationInProgress;
 	private final View[] buttons = new View[5];
 	private long lastBufferedPositionCheck;
@@ -189,8 +190,8 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 
 			private final RectF rect = new RectF();
 			private boolean ignoreLayout = false;
-			private int lastMeasturedHeight;
-			private int lastMeasturedWidth;
+			private int lastMeasuredHeight;
+			private int lastMeasuredWidth;
 
 			@Override
 			public boolean onTouchEvent(MotionEvent e) {
@@ -201,12 +202,12 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 			protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 				int totalHeight = MeasureSpec.getSize(heightMeasureSpec);
 				int w = MeasureSpec.getSize(widthMeasureSpec);
-				if (totalHeight != lastMeasturedHeight || w != lastMeasturedWidth) {
+				if (totalHeight != lastMeasuredHeight || w != lastMeasuredWidth) {
 					if (blurredView.getTag() != null) {
 						showAlbumCover(false, false);
 					}
-					lastMeasturedWidth = w;
-					lastMeasturedHeight = totalHeight;
+					lastMeasuredWidth = w;
+					lastMeasuredHeight = totalHeight;
 				}
 				ignoreLayout = true;
 				if (!isFullscreen) {
@@ -283,7 +284,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 			}
 
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				if (playlist.size() <= 1) {
 					shadowDrawable.setBounds(0, getMeasuredHeight() - playerLayout.getMeasuredHeight() - backgroundPaddingTop, getMeasuredWidth(), getMeasuredHeight());
 					shadowDrawable.draw(canvas);
@@ -398,16 +399,16 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 			if (DialogObject.isEncryptedDialog(did)) {
 				TLRPC.EncryptedChat encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(did));
 				if (encryptedChat != null) {
-					User user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.user_id);
+					User user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.userId);
 					if (user != null) {
-						actionBar.setTitle(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+						actionBar.setTitle(ContactsController.formatName(user.firstName, user.lastName));
 					}
 				}
 			}
 			else if (DialogObject.isUserDialog(did)) {
 				User user = MessagesController.getInstance(currentAccount).getUser(did);
 				if (user != null) {
-					actionBar.setTitle(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+					actionBar.setTitle(ContactsController.formatName(user.firstName, user.lastName));
 				}
 			}
 			else {
@@ -512,7 +513,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 			@Override
 			protected void onImageUpdated(ImageReceiver imageReceiver) {
 				if (blurredView.getTag() != null) {
-					bigAlbumConver.setImageBitmap(imageReceiver.getBitmap());
+					bigAlbumCover.setImageBitmap(imageReceiver.getBitmap());
 				}
 			}
 		};
@@ -549,8 +550,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 						return;
 					}
 					String query = textView.getText().toString();
-					if (parentActivity.getActionBarLayout().getLastFragment() instanceof DialogsActivity) {
-						DialogsActivity dialogsActivity = (DialogsActivity)parentActivity.getActionBarLayout().getLastFragment();
+					if (parentActivity.getActionBarLayout().getLastFragment() instanceof DialogsActivity dialogsActivity) {
 						if (!dialogsActivity.onlyDialogsAdapter()) {
 							dialogsActivity.setShowSearch(query, FiltersView.FILTER_INDEX_MUSIC);
 							dismiss();
@@ -1176,12 +1176,12 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 		blurredView.setVisibility(View.INVISIBLE);
 		getContainer().addView(blurredView);
 
-		bigAlbumConver = new BackupImageView(context);
-		bigAlbumConver.setAspectFit(true);
-		bigAlbumConver.setRoundRadius(AndroidUtilities.dp(8));
-		bigAlbumConver.setScaleX(0.9f);
-		bigAlbumConver.setScaleY(0.9f);
-		blurredView.addView(bigAlbumConver, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP, 30, 30, 30, 30));
+		bigAlbumCover = new BackupImageView(context);
+		bigAlbumCover.setAspectFit(true);
+		bigAlbumCover.setRoundRadius(AndroidUtilities.dp(8));
+		bigAlbumCover.setScaleX(0.9f);
+		bigAlbumCover.setScaleY(0.9f);
+		blurredView.addView(bigAlbumCover, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP, 30, 30, 30, 30));
 
 		updateTitle(false);
 		updateRepeatButton();
@@ -1416,7 +1416,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 					for (int a = 0; a < dids.size(); a++) {
 						long did = dids.get(a);
 						if (message != null) {
-							SendMessagesHelper.getInstance(currentAccount).sendMessage(message.toString(), did, null, null, null, true, null, null, null, true, 0, null, false, false, null);
+							SendMessagesHelper.getInstance(currentAccount).sendMessage(message.toString(), did, null, null, null, true, null, null, null, true, 0, null, false);
 						}
 						SendMessagesHelper.getInstance(currentAccount).sendMessage(fmessages, did, false, false, true, 0);
 					}
@@ -1507,9 +1507,9 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 			}
 			else {
 				TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-did);
-				if (chat != null && chat.migrated_to != null) {
+				if (chat != null && TLRPCExtensions.getMigratedTo(chat) != null) {
 					args.putLong("migrated_to", did);
-					did = -chat.migrated_to.channel_id;
+					did = -TLRPCExtensions.getMigratedTo(chat).channelId;
 				}
 				args.putLong("chat_id", -did);
 			}
@@ -1537,7 +1537,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 			if (path == null || path.length() == 0) {
 				path = FileLoader.getInstance(currentAccount).getPathToMessage(messageObject.messageOwner).toString();
 			}
-			MediaController.saveFile(path, parentActivity, 3, fileName, messageObject.getDocument() != null ? messageObject.getDocument().mime_type : "", () -> BulletinFactory.of((FrameLayout)containerView).createDownloadBulletin(BulletinFactory.FileType.AUDIO).show());
+			MediaController.saveFile(path, parentActivity, 3, fileName, messageObject.getDocument() != null ? messageObject.getDocument().mimeType : "", () -> BulletinFactory.of((FrameLayout)containerView).createDownloadBulletin(BulletinFactory.FileType.AUDIO).show());
 		}
 	}
 
@@ -1547,7 +1547,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 				return;
 			}
 			blurredView.setTag(1);
-			bigAlbumConver.setImageBitmap(coverContainer.getImageReceiver().getBitmap());
+			bigAlbumCover.setImageBitmap(coverContainer.getImageReceiver().getBitmap());
 			blurredAnimationInProgress = true;
 			BaseFragment fragment = parentActivity.getActionBarLayout().fragmentsStack.get(parentActivity.getActionBarLayout().fragmentsStack.size() - 1);
 			View fragmentView = fragment.getFragmentView();
@@ -1568,7 +1568,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 					blurredAnimationInProgress = false;
 				}
 			}).start();
-			bigAlbumConver.animate().scaleX(1f).scaleY(1f).setDuration(180).start();
+			bigAlbumCover.animate().scaleX(1f).scaleY(1f).setDuration(180).start();
 		}
 		else {
 			if (blurredView.getVisibility() != View.VISIBLE) {
@@ -1581,18 +1581,18 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 					@Override
 					public void onAnimationEnd(Animator animation) {
 						blurredView.setVisibility(View.INVISIBLE);
-						bigAlbumConver.setImageBitmap(null);
+						bigAlbumCover.setImageBitmap(null);
 						blurredAnimationInProgress = false;
 					}
 				}).start();
-				bigAlbumConver.animate().scaleX(0.9f).scaleY(0.9f).setDuration(180).start();
+				bigAlbumCover.animate().scaleX(0.9f).scaleY(0.9f).setDuration(180).start();
 			}
 			else {
 				blurredView.setAlpha(0.0f);
 				blurredView.setVisibility(View.INVISIBLE);
-				bigAlbumConver.setImageBitmap(null);
-				bigAlbumConver.setScaleX(0.9f);
-				bigAlbumConver.setScaleY(0.9f);
+				bigAlbumCover.setImageBitmap(null);
+				bigAlbumCover.setScaleX(0.9f);
+				bigAlbumCover.setScaleY(0.9f);
 			}
 		}
 	}
@@ -1605,8 +1605,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 				int count = listView.getChildCount();
 				for (int a = 0; a < count; a++) {
 					View view = listView.getChildAt(a);
-					if (view instanceof AudioPlayerCell) {
-						AudioPlayerCell cell = (AudioPlayerCell)view;
+					if (view instanceof AudioPlayerCell cell) {
 						MessageObject messageObject = cell.getMessageObject();
 						if (messageObject != null && (messageObject.isVoice() || messageObject.isMusic())) {
 							cell.updateButtonState(false, true);
@@ -1635,8 +1634,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 				int count = listView.getChildCount();
 				for (int a = 0; a < count; a++) {
 					View view = listView.getChildAt(a);
-					if (view instanceof AudioPlayerCell) {
-						AudioPlayerCell cell = (AudioPlayerCell)view;
+					if (view instanceof AudioPlayerCell cell) {
 						MessageObject messageObject1 = cell.getMessageObject();
 						if (messageObject1 != null && (messageObject1.isVoice() || messageObject1.isMusic())) {
 							cell.updateButtonState(false, true);
@@ -2036,8 +2034,8 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 
 	private ImageLocation getArtworkThumbImageLocation(MessageObject messageObject) {
 		final TLRPC.Document document = messageObject.getDocument();
-		TLRPC.PhotoSize thumb = document != null ? FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 360) : null;
-		if (!(thumb instanceof TLRPC.TL_photoSize) && !(thumb instanceof TLRPC.TL_photoSizeProgressive)) {
+		TLRPC.PhotoSize thumb = document != null ? FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 360) : null;
+		if (!(thumb instanceof TLRPC.TLPhotoSize) && !(thumb instanceof TLRPC.TLPhotoSizeProgressive)) {
 			thumb = null;
 		}
 		if (thumb != null) {
@@ -2219,7 +2217,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 		private int activeIndex;
 		private AnimatorSet animatorSet;
 		private LinearGradient gradientShader;
-		private int stableOffest = -1;
+		private int stableOffset = -1;
 
 		public ClippingTextViewSwitcher(@NonNull Context context) {
 			super(context);
@@ -2246,13 +2244,13 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 		}
 
 		@Override
-		protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+		protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 			final int index = child == textViews[0] ? 0 : 1;
 			final boolean result;
 			boolean hasStableRect = false;
-			if (stableOffest > 0 && textViews[activeIndex].getAlpha() != 1f && textViews[activeIndex].getLayout() != null) {
+			if (stableOffset > 0 && textViews[activeIndex].getAlpha() != 1f && textViews[activeIndex].getLayout() != null) {
 				float x1 = textViews[activeIndex].getLayout().getPrimaryHorizontal(0);
-				float x2 = textViews[activeIndex].getLayout().getPrimaryHorizontal(stableOffest);
+				float x2 = textViews[activeIndex].getLayout().getPrimaryHorizontal(stableOffset);
 				hasStableRect = true;
 				if (x1 == x2) {
 					hasStableRect = false;
@@ -2310,16 +2308,16 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 				return;
 			}
 
-			stableOffest = 0;
+			stableOffset = 0;
 			int n = Math.min(text.length(), currentText.length());
 			for (int i = 0; i < n; i++) {
 				if (text.charAt(i) != currentText.charAt(i)) {
 					break;
 				}
-				stableOffest++;
+				stableOffset++;
 			}
-			if (stableOffest <= 3) {
-				stableOffest = -1;
+			if (stableOffset <= 3) {
+				stableOffset = -1;
 			}
 
 			final int index = activeIndex == 0 ? 1 : 0;
@@ -2499,26 +2497,37 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 								resultArray.add(messageObject);
 								break;
 							}
-							TLRPC.Document document;
+
+							TLRPC.Document document = null;
+
 							if (messageObject.type == 0) {
-								document = messageObject.messageOwner.media.webpage.document;
-							}
-							else {
-								document = messageObject.messageOwner.media.document;
-							}
-							boolean ok = false;
-							for (int c = 0; c < document.attributes.size(); c++) {
-								TLRPC.DocumentAttribute attribute = document.attributes.get(c);
-								if (attribute instanceof TLRPC.TL_documentAttributeAudio) {
-									if (attribute.performer != null) {
-										ok = attribute.performer.toLowerCase().contains(q);
-									}
-									if (!ok && attribute.title != null) {
-										ok = attribute.title.toLowerCase().contains(q);
-									}
-									break;
+								var webpage = TLRPCExtensions.getWebpage(TLRPCExtensions.getMedia(messageObject.messageOwner));
+
+								if (webpage != null) {
+									document = TLRPCExtensions.getDocument(webpage);
 								}
 							}
+							else {
+								document = TLRPCExtensions.getDocument(TLRPCExtensions.getMedia(messageObject.messageOwner));
+							}
+
+							boolean ok = false;
+
+							if (document instanceof TLRPC.TLDocument tlDocument) {
+								for (int c = 0; c < tlDocument.attributes.size(); c++) {
+									TLRPC.DocumentAttribute attribute = tlDocument.attributes.get(c);
+									if (attribute instanceof TLRPC.TLDocumentAttributeAudio attr) {
+										if (attr.performer != null) {
+											ok = attr.performer.toLowerCase().contains(q);
+										}
+										if (!ok && attr.title != null) {
+											ok = attr.title.toLowerCase().contains(q);
+										}
+										break;
+									}
+								}
+							}
+
 							if (ok) {
 								resultArray.add(messageObject);
 								break;

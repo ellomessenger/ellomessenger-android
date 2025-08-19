@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
@@ -46,9 +46,12 @@ import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.Peer
-import org.telegram.tgnet.TLRPC.TL_channels_sendAsPeers
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.ChatActivity
@@ -56,12 +59,12 @@ import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import org.telegram.ui.PremiumPreviewFragment
 import kotlin.math.min
 
-open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context: Context, parentFragment: ChatActivity?, messagesController: MessagesController, private val chatFull: ChatFull, private val sendAsPeers: TL_channels_sendAsPeers?, selectCallback: OnSelectCallback) : ActionBarPopupWindow(context) {
+open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context: Context, parentFragment: ChatActivity?, messagesController: MessagesController, private val chatFull: ChatFull, private val sendAsPeers: TLRPC.TLChannelsSendAsPeers?, selectCallback: OnSelectCallback) : ActionBarPopupWindow(context) {
 	var dimView: View
 	var recyclerContainer: LinearLayout
 	var headerText: TextView
 	protected var runningCustomSprings = false
-	private val scrimPopupContainerLayout: FrameLayout
+	private val scrimPopupContainerLayout = BackButtonFrameLayout(context)
 	private val headerShadow = View(context)
 	private val recyclerView: RecyclerListView
 	private val layoutManager: LinearLayoutManager
@@ -77,7 +80,6 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 	private val bulletins = mutableListOf<Bulletin>()
 
 	init {
-		scrimPopupContainerLayout = BackButtonFrameLayout(context)
 		scrimPopupContainerLayout.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat()))
 
 		setContentView(scrimPopupContainerLayout)
@@ -90,7 +92,7 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 		var shadowDrawable = ContextCompat.getDrawable(context, R.drawable.popup_fixed_alert)?.mutate()
 		shadowDrawable?.colorFilter = PorterDuffColorFilter(context.getColor(R.color.background), PorterDuff.Mode.MULTIPLY)
 
-		scrimPopupContainerLayout.setBackground(shadowDrawable)
+		scrimPopupContainerLayout.background = shadowDrawable
 
 		val padding = Rect()
 
@@ -151,19 +153,19 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 				val peer = peerObj.peer
 				var peerId: Long = 0
 
-				if (peer.channel_id != 0L) {
-					peerId = -peer.channel_id
+				if (peer.channelId != 0L) {
+					peerId = -peer.channelId
 				}
 
-				if (peerId == 0L && peer.user_id != 0L) {
-					peerId = peer.user_id
+				if (peerId == 0L && peer.userId != 0L) {
+					peerId = peer.userId
 				}
 
 				if (peerId < 0) {
 					val chat = messagesController.getChat(-peerId)
 
 					if (chat != null) {
-						if (peerObj.premium_required) {
+						if (peerObj.premiumRequired) {
 							val str = SpannableString(TextUtils.ellipsize(chat.title, senderView.title.paint, (maxWidth - AndroidUtilities.dp(100f)).toFloat(), TextUtils.TruncateAt.END).toString() + " d")
 
 							val span = ColoredImageSpan(R.drawable.msg_mini_premiumlock)
@@ -181,11 +183,11 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 							senderView.title.text = chat.title
 						}
 
-						senderView.subtitle.text = LocaleController.formatPluralString(if (isChannel(chat) && !chat.megagroup) "Subscribers" else "Members", chat.participants_count)
+						senderView.subtitle.text = LocaleController.formatPluralString(if (isChannel(chat) && !chat.megagroup) "Subscribers" else "Members", chat.participantsCount)
 						senderView.avatar.setAvatar(chat)
 					}
 
-					senderView.avatar.setSelected(if (chatFull.default_send_as != null) chatFull.default_send_as.channel_id == peer.channel_id else position == 0, false)
+					senderView.avatar.setSelected(if (chatFull.defaultSendAs != null) chatFull.defaultSendAs.channelId == peer.channelId else position == 0, false)
 				}
 				else {
 					val user = messagesController.getUser(peerId)
@@ -196,7 +198,7 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 						senderView.avatar.setAvatar(user)
 					}
 
-					senderView.avatar.setSelected(if (chatFull.default_send_as != null) chatFull.default_send_as.user_id == peer.user_id else position == 0, false)
+					senderView.avatar.setSelected(if (chatFull.defaultSendAs != null) chatFull.defaultSendAs.userId == peer.userId else position == 0, false)
 				}
 			}
 
@@ -224,7 +226,7 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 				return@setOnItemClickListener
 			}
 
-			if (peerObj.premium_required && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium) {
+			if (peerObj.premiumRequired && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium) {
 				runCatching {
 					view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
 				}
@@ -314,7 +316,9 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 
 			clicked = true
 
-			selectCallback.onPeerSelected(recyclerView, view as SenderView, peerObj.peer)
+			peerObj.peer?.let {
+				selectCallback.onPeerSelected(recyclerView, view as SenderView, it)
+			}
 		}
 
 		recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER)
@@ -376,7 +380,7 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 		recyclerContainer.pivotY = 0f
 
 		val peers = sendAsPeers?.peers ?: listOf()
-		val defPeer = if (chatFull.default_send_as != null) chatFull.default_send_as else null
+		val defPeer = if (chatFull.defaultSendAs != null) chatFull.defaultSendAs else null
 
 		if (defPeer != null) {
 			val itemHeight = AndroidUtilities.dp((14 + AVATAR_SIZE_DP).toFloat())
@@ -385,7 +389,7 @@ open class SenderSelectPopup @SuppressLint("WrongConstant") constructor(context:
 			for (i in peers.indices) {
 				val p = peers[i].peer
 
-				if (p.channel_id != 0L && p.channel_id == defPeer.channel_id || p.user_id != 0L && p.user_id == defPeer.user_id || p.chat_id != 0L && p.chat_id == defPeer.chat_id) {
+				if (p.channelId != 0L && p.channelId == defPeer.channelId || p.userId != 0L && p.userId == defPeer.userId || p.chatId != 0L && p.chatId == defPeer.chatId) {
 					var off = 0
 
 					if (i != peers.size - 1 && recyclerView.measuredHeight < totalRecyclerHeight) {

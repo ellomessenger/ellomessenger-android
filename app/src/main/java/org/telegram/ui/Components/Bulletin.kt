@@ -1232,7 +1232,13 @@ open class Bulletin {
 				contentLayout.setWideScreenParams(ViewGroup.LayoutParams.MATCH_PARENT, Gravity.NO_GRAVITY)
 			}
 
-			return Bulletin(fragment.getLayoutContainer(), contentLayout, duration)
+			val container = fragment.getLayoutContainer()
+
+			if (container == null) {
+				return EmptyBulletin()
+			}
+
+			return Bulletin(container, contentLayout, duration)
 		}
 
 		fun find(containerLayout: FrameLayout): Bulletin? {

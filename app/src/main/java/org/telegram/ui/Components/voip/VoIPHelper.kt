@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.voip
 
@@ -28,6 +28,7 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
@@ -47,23 +48,11 @@ import org.telegram.messenger.voip.Instance
 import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.InputPeer
-import org.telegram.tgnet.TLRPC.TL_chatFull
-import org.telegram.tgnet.TLRPC.TL_inputPeerChannel
-import org.telegram.tgnet.TLRPC.TL_inputPeerChat
-import org.telegram.tgnet.TLRPC.TL_inputPeerUser
-import org.telegram.tgnet.TLRPC.TL_inputPhoneCall
-import org.telegram.tgnet.TLRPC.TL_messageActionPhoneCall
-import org.telegram.tgnet.TLRPC.TL_peerChannel
-import org.telegram.tgnet.TLRPC.TL_peerChat
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonBusy
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonMissed
-import org.telegram.tgnet.TLRPC.TL_phone_setCallRating
-import org.telegram.tgnet.TLRPC.TL_updates
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.UserFull
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.rtmpStream
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
@@ -86,17 +75,20 @@ import kotlin.contracts.contract
 
 @OptIn(ExperimentalContracts::class)
 object VoIPHelper {
+	const val REQUEST_CODE_RECORD_AUDIO = 101
+	const val REQUEST_CODE_CAMERA = 102
+	const val REQUEST_CODE_MERGED = 103
 	private const val VOIP_SUPPORT_ID = 4244000
 	var lastCallTime: Long = 0
 
 	@JvmStatic
-	fun startCall(user: User?, videoCall: Boolean, canVideoCall: Boolean, activity: Activity?, userFull: UserFull?, accountInstance: AccountInstance) {
+	fun startCall(user: TLRPC.User?, videoCall: Boolean, canVideoCall: Boolean, activity: Activity?, userFull: TLRPC.TLUserFull?, accountInstance: AccountInstance) {
 		if (activity == null) {
 			return
 		}
 
-		if (userFull?.phone_calls_private == true) {
-			AlertDialog.Builder(activity).setTitle(activity.getString(R.string.VoipFailed)).setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("CallNotAvailable", R.string.CallNotAvailable, ContactsController.formatName(user?.first_name, user?.last_name)))).setPositiveButton(activity.getString(R.string.OK), null).show()
+		if (userFull?.phoneCallsPrivate == true) {
+			AlertDialog.Builder(activity).setTitle(activity.getString(R.string.VoipFailed)).setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("CallNotAvailable", R.string.CallNotAvailable, ContactsController.formatName(user?.firstName, user?.lastName)))).setPositiveButton(activity.getString(R.string.OK), null).show()
 			return
 		}
 
@@ -142,7 +134,7 @@ object VoIPHelper {
 			initiateCall(user, null, null, videoCall, canVideoCall, false, null, activity, null, accountInstance)
 		}
 		else {
-			activity.requestPermissions(permissions.toTypedArray(), if (videoCall) 102 else 101)
+			activity.requestPermissions(permissions.toTypedArray(), if (videoCall) REQUEST_CODE_CAMERA else REQUEST_CODE_RECORD_AUDIO)
 		}
 	}
 
@@ -183,7 +175,7 @@ object VoIPHelper {
 		val permissions = mutableListOf<String>()
 		val call = accountInstance.messagesController.getGroupCall(chat?.id, false)
 
-		if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED && !(call != null && call.call?.rtmp_stream == true)) {
+		if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED && !(call != null && call.call?.rtmpStream == true)) {
 			permissions.add(Manifest.permission.RECORD_AUDIO)
 		}
 
@@ -195,11 +187,11 @@ object VoIPHelper {
 			initiateCall(null, chat, hash, videoCall = false, canVideoCall = false, createCall, checkJoiner, activity, fragment, accountInstance)
 		}
 		else {
-			activity.requestPermissions(permissions.toTypedArray(), 103)
+			activity.requestPermissions(permissions.toTypedArray(), REQUEST_CODE_MERGED)
 		}
 	}
 
-	private fun initiateCall(user: User?, chat: Chat?, hash: String?, videoCall: Boolean, canVideoCall: Boolean, createCall: Boolean, checkJoiner: Boolean?, activity: Activity?, fragment: BaseFragment?, accountInstance: AccountInstance) {
+	private fun initiateCall(user: TLRPC.User?, chat: Chat?, hash: String?, videoCall: Boolean, canVideoCall: Boolean, createCall: Boolean, checkJoiner: Boolean?, activity: Activity?, fragment: BaseFragment?, accountInstance: AccountInstance) {
 		if (activity == null || (user == null && chat == null)) {
 			return
 		}
@@ -218,7 +210,7 @@ object VoIPHelper {
 				if (callerId > 0) {
 					val callUser = voIPService.user!!
 
-					oldName = ContactsController.formatName(callUser.first_name, callUser.last_name)
+					oldName = ContactsController.formatName(callUser.firstName, callUser.lastName)
 
 					if (newId > 0) {
 						key1 = "VoipOngoingAlert"
@@ -231,7 +223,7 @@ object VoIPHelper {
 				}
 				else {
 					val callChat = voIPService.getChat()!!
-					oldName = callChat.title
+					oldName = callChat.title ?: ""
 
 					if (newId > 0) {
 						key1 = "VoipOngoingChatAlert2"
@@ -244,10 +236,10 @@ object VoIPHelper {
 				}
 
 				val newName = if (user != null) {
-					ContactsController.formatName(user.first_name, user.last_name)
+					ContactsController.formatName(user.firstName, user.lastName)
 				}
 				else {
-					chat!!.title
+					chat?.title
 				}
 
 				AlertDialog.Builder(activity).setTitle(if (callerId < 0) activity.getString(R.string.VoipOngoingChatAlertTitle) else activity.getString(R.string.VoipOngoingAlertTitle)).setMessage(AndroidUtilities.replaceTags(LocaleController.formatString(key1, key2, oldName, newName))).setPositiveButton(activity.getString(R.string.OK)) { _, _ ->
@@ -280,7 +272,7 @@ object VoIPHelper {
 		}
 	}
 
-	private fun doInitiateCall(user: User?, chat: Chat?, hash: String?, peer: InputPeer?, hasFewPeers: Boolean, videoCall: Boolean, canVideoCall: Boolean, createCall: Boolean, activity: Activity?, fragment: BaseFragment?, accountInstance: AccountInstance, checkJoiner: Boolean, checkAnonymous: Boolean) {
+	private fun doInitiateCall(user: TLRPC.User?, chat: Chat?, hash: String?, peer: InputPeer?, hasFewPeers: Boolean, videoCall: Boolean, canVideoCall: Boolean, createCall: Boolean, activity: Activity?, fragment: BaseFragment?, accountInstance: AccountInstance, checkJoiner: Boolean, checkAnonymous: Boolean) {
 		if (activity == null || (user == null && chat == null)) {
 			return
 		}
@@ -292,8 +284,8 @@ object VoIPHelper {
 		if (checkJoiner && chat != null && !createCall) {
 			val chatFull = accountInstance.messagesController.getChatFull(chat.id)
 
-			if (chatFull?.groupcall_default_join_as != null) {
-				val did = MessageObject.getPeerId(chatFull.groupcall_default_join_as)
+			if (chatFull?.groupcallDefaultJoinAs != null) {
+				val did = MessageObject.getPeerId(chatFull.groupcallDefaultJoinAs)
 				val inputPeer = accountInstance.messagesController.getInputPeer(did)
 
 				JoinCallAlert.checkFewUsers(activity, -chat.id, accountInstance) { param ->
@@ -337,7 +329,7 @@ object VoIPHelper {
 			return
 		}
 
-		if (checkAnonymous && !hasFewPeers && peer is TL_inputPeerUser && ChatObject.shouldSendAnonymously(chat) && (!ChatObject.isChannel(chat) || chat.megagroup)) {
+		if (checkAnonymous && !hasFewPeers && peer is TLRPC.TLInputPeerUser && ChatObject.shouldSendAnonymously(chat) && (!ChatObject.isChannel(chat) || chat.megagroup)) {
 			AlertDialog.Builder(activity).setTitle(if (ChatObject.isChannelOrGiga(chat)) activity.getString(R.string.VoipChannelVoiceChat) else activity.getString(R.string.VoipGroupVoiceChat)).setMessage(if (ChatObject.isChannelOrGiga(chat)) activity.getString(R.string.VoipChannelJoinAnonymouseAlert) else activity.getString(R.string.VoipGroupJoinAnonymouseAlert)).setPositiveButton(activity.getString(R.string.VoipChatJoin)) { _, _ ->
 				doInitiateCall(user, chat, hash, peer, false, videoCall, canVideoCall, createCall, activity, fragment, accountInstance, checkJoiner = false, checkAnonymous = false)
 			}.setNegativeButton(activity.getString(R.string.Cancel), null).show()
@@ -350,23 +342,20 @@ object VoIPHelper {
 
 			if (chatFull != null) {
 				when (peer) {
-					is TL_inputPeerUser -> {
-						chatFull.groupcall_default_join_as = TL_peerUser()
-						chatFull.groupcall_default_join_as.user_id = peer.user_id
+					is TLRPC.TLInputPeerUser -> {
+						chatFull.groupcallDefaultJoinAs = TLRPC.TLPeerUser().also { it.userId = peer.userId }
 					}
 
-					is TL_inputPeerChat -> {
-						chatFull.groupcall_default_join_as = TL_peerChat()
-						chatFull.groupcall_default_join_as.chat_id = peer.chat_id
+					is TLRPC.TLInputPeerChat -> {
+						chatFull.groupcallDefaultJoinAs = TLRPC.TLPeerChat().also { it.chatId = peer.chatId }
 					}
 
-					is TL_inputPeerChannel -> {
-						chatFull.groupcall_default_join_as = TL_peerChannel()
-						chatFull.groupcall_default_join_as.channel_id = peer.channel_id
+					is TLRPC.TLInputPeerChannel -> {
+						chatFull.groupcallDefaultJoinAs = TLRPC.TLPeerChannel().also { it.channelId = peer.channelId }
 					}
 				}
 
-				if (chatFull is TL_chatFull) {
+				if (chatFull is TLRPC.TLChatFull) {
 					chatFull.flags = chatFull.flags or 32768
 				}
 				else {
@@ -398,10 +387,10 @@ object VoIPHelper {
 			intent.putExtra("hash", hash)
 
 			if (peer != null) {
-				intent.putExtra("peerChannelId", peer.channel_id)
-				intent.putExtra("peerChatId", peer.chat_id)
-				intent.putExtra("peerUserId", peer.user_id)
-				intent.putExtra("peerAccessHash", peer.access_hash)
+				intent.putExtra("peerChannelId", peer.channelId)
+				intent.putExtra("peerChatId", peer.chatId)
+				intent.putExtra("peerUserId", peer.userId)
+				intent.putExtra("peerAccessHash", peer.accessHash)
 			}
 		}
 
@@ -425,7 +414,11 @@ object VoIPHelper {
 			return
 		}
 
-		val mergedRequest = code == 102
+		if ((activity as? LaunchActivity)?.visibleDialog != null) {
+			return
+		}
+
+		val mergedRequest = (code == REQUEST_CODE_CAMERA)
 
 		if (!activity.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) || mergedRequest && !activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
 			val dlg = AlertDialog.Builder(activity).setMessage(AndroidUtilities.replaceTags(if (mergedRequest) activity.getString(R.string.VoipNeedMicCameraPermissionWithHint) else activity.getString(R.string.VoipNeedMicPermissionWithHint))).setPositiveButton(activity.getString(R.string.Settings)) { _, _ ->
@@ -453,7 +446,7 @@ object VoIPHelper {
 			return logsDir
 		}
 
-	fun canRateCall(call: TL_messageActionPhoneCall?): Boolean {
+	fun canRateCall(call: TLRPC.TLMessageActionPhoneCall?): Boolean {
 		contract {
 			returns(true) implies (call != null)
 		}
@@ -462,7 +455,7 @@ object VoIPHelper {
 			return false
 		}
 
-		if (call.reason !is TL_phoneCallDiscardReasonBusy && call.reason !is TL_phoneCallDiscardReasonMissed) {
+		if (call.reason !is TLRPC.TLPhoneCallDiscardReasonBusy && call.reason !is TLRPC.TLPhoneCallDiscardReasonMissed) {
 			val prefs = MessagesController.getNotificationsSettings(UserConfig.selectedAccount) // always called from chat UI
 			val hashes = prefs.getStringSet("calls_access_hashes", setOf()) ?: setOf()
 
@@ -473,7 +466,7 @@ object VoIPHelper {
 					continue
 				}
 
-				if (d[0] == call.call_id.toString() + "") {
+				if (d[0] == call.callId.toString() + "") {
 					return true
 				}
 			}
@@ -482,7 +475,7 @@ object VoIPHelper {
 		return false
 	}
 
-	fun showRateAlert(context: Context, call: TL_messageActionPhoneCall?) {
+	fun showRateAlert(context: Context, call: TLRPC.TLMessageActionPhoneCall?) {
 		if (call == null) {
 			return
 		}
@@ -497,10 +490,10 @@ object VoIPHelper {
 				continue
 			}
 
-			if (d[0] == call.call_id.toString() + "") {
+			if (d[0] == call.callId.toString() + "") {
 				try {
 					val accessHash = d[1].toLong()
-					showRateAlert(context, null, call.video, call.call_id, accessHash, UserConfig.selectedAccount, true)
+					showRateAlert(context, null, call.video, call.callId, accessHash, UserConfig.selectedAccount, true)
 				}
 				catch (e: Exception) {
 					// ignored
@@ -660,7 +653,7 @@ object VoIPHelper {
 			if (rating >= 4 || page[0] == 1) {
 				val currentAccount = UserConfig.selectedAccount
 
-				val req = TL_phone_setCallRating()
+				val req = TLRPC.TLPhoneSetCallRating()
 				req.rating = bar.rating
 
 				val problemTags = ArrayList<String?>()
@@ -684,19 +677,19 @@ object VoIPHelper {
 					req.comment += " " + TextUtils.join(" ", problemTags)
 				}
 
-				req.peer = TL_inputPhoneCall()
-				req.peer.access_hash = accessHash
-				req.peer.id = callID
-				req.user_initiative = userInitiative
+				req.peer = TLRPC.TLInputPhoneCall()
+				req.peer?.accessHash = accessHash
+				req.peer?.id = callID
+				req.userInitiative = userInitiative
 
 				ConnectionsManager.getInstance(account).sendRequest(req) { response, _ ->
-					if (response is TL_updates) {
+					if (response is TLRPC.TLUpdates) {
 						MessagesController.getInstance(currentAccount).processUpdates(response, false)
 					}
 
 					if (includeLogs[0] && log.exists() && req.rating < 4) {
 						val accountInstance = AccountInstance.getInstance(UserConfig.selectedAccount)
-						SendMessagesHelper.prepareSendingDocument(accountInstance, log.absolutePath, log.absolutePath, null, TextUtils.join(" ", problemTags), "text/plain", VOIP_SUPPORT_ID.toLong(), null, null, null, null, true, 0, false, null)
+						SendMessagesHelper.prepareSendingDocument(accountInstance, log.absolutePath, log.absolutePath, null, TextUtils.join(" ", problemTags), "text/plain", VOIP_SUPPORT_ID.toLong(), null, null, null, null, true, 0)
 						Toast.makeText(context, R.string.CallReportSent, Toast.LENGTH_LONG).show()
 					}
 				}
@@ -759,9 +752,7 @@ object VoIPHelper {
 
 		tcpCell.setOnClickListener {
 			val force = preferences.getBoolean("dbg_force_tcp_in_calls", false)
-			val editor = preferences.edit()
-			editor.putBoolean("dbg_force_tcp_in_calls", !force)
-			editor.apply()
+			preferences.edit { putBoolean("dbg_force_tcp_in_calls", !force) }
 			tcpCell.isChecked = !force
 		}
 
@@ -773,9 +764,7 @@ object VoIPHelper {
 
 			dumpCell.setOnClickListener {
 				val force = preferences.getBoolean("dbg_dump_call_stats", false)
-				val editor = preferences.edit()
-				editor.putBoolean("dbg_dump_call_stats", !force)
-				editor.apply()
+				preferences.edit { putBoolean("dbg_dump_call_stats", !force) }
 				dumpCell.isChecked = !force
 			}
 
@@ -788,9 +777,7 @@ object VoIPHelper {
 
 			connectionServiceCell.setOnClickListener {
 				val force = preferences.getBoolean("dbg_force_connection_service", false)
-				val editor = preferences.edit()
-				editor.putBoolean("dbg_force_connection_service", !force)
-				editor.apply()
+				preferences.edit { putBoolean("dbg_force_connection_service", !force) }
 				connectionServiceCell.isChecked = !force
 			}
 

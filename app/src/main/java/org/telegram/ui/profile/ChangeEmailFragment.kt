@@ -1,3 +1,12 @@
+/*
+ * This is the source code of Ello for Android.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Mykhailo Mykytyn, Ello 2023.
+ * Copyright Shamil Afandiyev, Ello 2025.
+ * Copyright Nikita Denin, Ello 2023-2025.
+ */
 package org.telegram.ui.profile
 
 import android.annotation.SuppressLint
@@ -10,16 +19,21 @@ import androidx.core.widget.doOnTextChanged
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.FragmentChangeEmailBinding
-import org.telegram.messenger.utils.*
+import org.telegram.messenger.utils.gone
+import org.telegram.messenger.utils.invisible
+import org.telegram.messenger.utils.setError
+import org.telegram.messenger.utils.validateEmail
+import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.ActionBar
+import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
-import org.telegram.ui.LoginActivity
 
 class ChangeEmailFragment : BaseFragment() {
+
 	private var binding: FragmentChangeEmailBinding? = null
 
 	override fun createView(context: Context): View? {
@@ -39,16 +53,10 @@ class ChangeEmailFragment : BaseFragment() {
 
 		binding?.changeEmailButton?.setOnClickListener {
 			val email = binding?.emailChangeField?.text?.toString() ?: return@setOnClickListener
-			val password = binding?.passwordField?.text?.toString() ?: return@setOnClickListener
-			requestNewEmail(newEmail = email, password = password)
+			requestNewEmail(newEmail = email)
 		}
 
 		binding?.emailChangeField?.doOnTextChanged { _, _, _, _ ->
-			checkButtonStatus()
-			binding?.emailChangeFieldLayout?.resetError()
-		}
-
-		binding?.passwordField?.doOnTextChanged { _, _, _, _ ->
 			checkButtonStatus()
 		}
 
@@ -58,38 +66,45 @@ class ChangeEmailFragment : BaseFragment() {
 	}
 
 	private fun checkButtonStatus() {
-		var valid = binding?.emailChangeField?.text?.toString()?.validateEmail() ?: false
+		val email = binding?.emailChangeField?.text?.toString().orEmpty()
+		val isValid = email.validateEmail()
 
-		if (valid) {
-			valid = !binding?.passwordField?.text?.toString().isNullOrEmpty()
+		when {
+			email.isEmpty() -> {
+				binding?.emailChangeFieldLayout?.isErrorEnabled = false
+				binding?.emailChangeFieldLayout?.error = null
+				binding?.changeEmailButton?.isEnabled = false
+			}
+			!isValid -> {
+				binding?.emailChangeFieldLayout?.setError(context, R.string.wrong_email_format)
+				binding?.changeEmailButton?.isEnabled = false
+			}
+			else -> {
+				binding?.emailChangeFieldLayout?.isErrorEnabled = false
+				binding?.emailChangeFieldLayout?.error = null
+				binding?.changeEmailButton?.isEnabled = true
+			}
 		}
-
-		binding?.changeEmailButton?.isEnabled = valid
 	}
 
-	private fun requestNewEmail(newEmail: String, password: String) {
+	private fun requestNewEmail(newEmail: String) {
 		binding?.progressBar?.visible()
 
 		if (newEmail.validateEmail()) {
-			val req = ElloRpc.verificationCodeRequest(email = newEmail, password = password)
+			val req = ElloRpc.sendMagicLinkRequest(usernameOrEmail = newEmail, action = 2)
 
 			connectionsManager.sendRequest(req, { response, error ->
 				AndroidUtilities.runOnUIThread {
 					binding?.progressBar?.gone()
 
-					if (error == null && response is TLRPC.TL_biz_dataRaw) {
-						val data = response.readData<ElloRpc.ForgotPasswordVerifyResponse>()
+					if (error == null && response is TLRPC.TLBizDataRaw) {
+						val data = response.readData<ElloRpc.ChangeEmailResponse>()
+						@Suppress("NAME_SHADOWING") val email = data?.email
 
-						if (data?.status == true) {
+						if (email != null) {
 							val args = Bundle()
-
-							args.putString(CodeVerificationFragment.ARG_VERIFICATION_MODE, LoginActivity.VerificationMode.CHANGE_EMAIL.name)
-							args.putString(CodeVerificationFragment.ARG_EMAIL, data.email)
-							args.putString(CodeVerificationFragment.ARG_NEW_PASSWORD, password)
-							args.putLong(CodeVerificationFragment.ARG_EXPIRATION, data.expirationDate)
-
-							presentFragment(CodeVerificationFragment(args), true)
-
+							args.putBoolean("is_change_email", true)
+							presentFragment(EmailSentFragment(args))
 						}
 						else {
 							binding?.errorLayout?.visible()
@@ -98,7 +113,47 @@ class ChangeEmailFragment : BaseFragment() {
 						}
 					}
 					else {
-						binding?.emailChangeFieldLayout?.setError(context, R.string.msg_invalid_email)
+						when (error?.text) {
+							"EMAIL_ALREADY_SEND" -> {
+								context?.let {
+									val dialog = AlertDialog.Builder(it).setMessage(it.getString(R.string.email_already_sent)).setPositiveButton(it.getString(R.string.ok)) { dialog, _ -> dialog.dismiss() }.create()
+
+									dialog.setCancelable(false)
+									dialog.setCanceledOnTouchOutside(false)
+									dialog.show()
+								}
+							}
+							"EMAIL_ALREADY_TAKEN" -> {
+								context?.let {
+									val dialog = AlertDialog.Builder(it).setMessage(it.getString(R.string.email_already_use)).setPositiveButton(it.getString(R.string.ok)) { dialog, _ -> dialog.dismiss() }.create()
+
+									dialog.setCancelable(false)
+									dialog.setCanceledOnTouchOutside(false)
+									dialog.show()
+								}
+							}
+							"EMAIL_IS_ALREADY_USE_BY_ACCOUNT" -> {
+								context?.let {
+									val dialog = AlertDialog.Builder(it).setMessage(it.getString(R.string.email_in_use_by_another_account)).setPositiveButton(it.getString(R.string.ok)) { dialog, _ -> dialog.dismiss() }.create()
+
+									dialog.setCancelable(false)
+									dialog.setCanceledOnTouchOutside(false)
+									dialog.show()
+								}
+							}
+							"INPUT_USER_DEACTIVATED" -> {
+								context?.let {
+									val dialog = AlertDialog.Builder(it).setMessage(it.getString(R.string.input_user_deactivated)).setPositiveButton(it.getString(R.string.ok)) { dialog, _ -> dialog.dismiss() }.create()
+
+									dialog.setCancelable(false)
+									dialog.setCanceledOnTouchOutside(false)
+									dialog.show()
+								}
+							}
+							else -> {
+								binding?.emailChangeFieldLayout?.setError(context, R.string.error_you_entered_an_invalid_email_please_try_again)
+							}
+						}
 					}
 				}
 			}, ConnectionsManager.RequestFlagFailOnServerErrors)

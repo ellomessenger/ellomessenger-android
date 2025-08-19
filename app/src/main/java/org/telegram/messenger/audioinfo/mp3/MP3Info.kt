@@ -323,6 +323,6 @@ class MP3Info @JvmOverloads constructor(input: InputStream?, fileLength: Long, d
 	}
 
 	companion object {
-		val LOGGER = Logger.getLogger(MP3Info::class.java.name)
+		val LOGGER: Logger = Logger.getLogger(MP3Info::class.java.name)
 	}
 }

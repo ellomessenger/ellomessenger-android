@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -35,7 +35,9 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.support.LongSparseIntArray;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.InputPeer;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -56,6 +58,7 @@ import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -398,7 +401,7 @@ public class FilterCreateActivity extends BaseFragment {
 						progressDialog.show();
 					}
 					final AlertDialog progressDialogFinal = progressDialog;
-					TLRPC.TL_messages_updateDialogFilter req = new TLRPC.TL_messages_updateDialogFilter();
+					TLRPC.TLMessagesUpdateDialogFilter req = new TLRPC.TLMessagesUpdateDialogFilter();
 					req.id = filter.id;
 					getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 						try {
@@ -426,14 +429,12 @@ public class FilterCreateActivity extends BaseFragment {
 				cell.getTextView().requestFocus();
 				AndroidUtilities.showKeyboard(cell.getTextView());
 			}
-			else if (view instanceof UserCell) {
-				UserCell cell = (UserCell)view;
+			else if (view instanceof UserCell cell) {
 				showRemoveAlert(position, cell.getName(), cell.getCurrentObject(), position < includeSectionRow);
 			}
 		});
 		listView.setOnItemLongClickListener((view, position) -> {
-			if (view instanceof UserCell) {
-				UserCell cell = (UserCell)view;
+			if (view instanceof UserCell cell) {
 				showRemoveAlert(position, cell.getName(), cell.getCurrentObject(), position < includeSectionRow);
 				return true;
 			}
@@ -646,20 +647,25 @@ public class FilterCreateActivity extends BaseFragment {
 		else {
 			progressDialog = null;
 		}
-		TLRPC.TL_messages_updateDialogFilter req = new TLRPC.TL_messages_updateDialogFilter();
+		TLRPC.TLMessagesUpdateDialogFilter req = new TLRPC.TLMessagesUpdateDialogFilter();
 		req.id = filter.id;
 		req.flags |= 1;
-		req.filter = new TLRPC.TL_dialogFilter();
-		req.filter.contacts = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_CONTACTS) != 0;
-		req.filter.non_contacts = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_NON_CONTACTS) != 0;
-		req.filter.groups = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_GROUPS) != 0;
-		req.filter.broadcasts = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_CHANNELS) != 0;
-		req.filter.bots = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_BOTS) != 0;
-		req.filter.exclude_muted = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED) != 0;
-		req.filter.exclude_read = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_READ) != 0;
-		req.filter.exclude_archived = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED) != 0;
-		req.filter.id = filter.id;
-		req.filter.title = newFilterName;
+
+		var dialogFilter = new TLRPC.TLDialogFilter();
+
+		req.filter = dialogFilter;
+
+		dialogFilter.contacts = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_CONTACTS) != 0;
+		dialogFilter.nonContacts = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_NON_CONTACTS) != 0;
+		dialogFilter.groups = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_GROUPS) != 0;
+		dialogFilter.broadcasts = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_CHANNELS) != 0;
+		dialogFilter.bots = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_BOTS) != 0;
+		dialogFilter.excludeMuted = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED) != 0;
+		dialogFilter.excludeRead = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_READ) != 0;
+		dialogFilter.excludeArchived = (newFilterFlags & MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED) != 0;
+		dialogFilter.id = filter.id;
+		dialogFilter.title = newFilterName;
+
 		MessagesController messagesController = fragment.getMessagesController();
 		ArrayList<Long> pinArray = new ArrayList<>();
 		if (newPinned.size() != 0) {
@@ -683,19 +689,19 @@ public class FilterCreateActivity extends BaseFragment {
 			});
 		}
 		for (int b = 0; b < 3; b++) {
-			ArrayList<Long> fromArray;
-			ArrayList<TLRPC.InputPeer> toArray;
+			List<Long> fromArray;
+			List<InputPeer> toArray;
 			if (b == 0) {
 				fromArray = newAlwaysShow;
-				toArray = req.filter.include_peers;
+				toArray = dialogFilter.includePeers;
 			}
 			else if (b == 1) {
 				fromArray = newNeverShow;
-				toArray = req.filter.exclude_peers;
+				toArray = dialogFilter.excludePeers;
 			}
 			else {
 				fromArray = pinArray;
-				toArray = req.filter.pinned_peers;
+				toArray = dialogFilter.pinnedPeers;
 			}
 			for (int a = 0, N = fromArray.size(); a < N; a++) {
 				long did = fromArray.get(a);
@@ -706,9 +712,9 @@ public class FilterCreateActivity extends BaseFragment {
 					if (did > 0) {
 						User user = messagesController.getUser(did);
 						if (user != null) {
-							TLRPC.InputPeer inputPeer = new TLRPC.TL_inputPeerUser();
-							inputPeer.user_id = did;
-							inputPeer.access_hash = user.access_hash;
+							var inputPeer = new TLRPC.TLInputPeerUser();
+							inputPeer.userId = did;
+							inputPeer.accessHash = TLRPCExtensions.getAccessHash(user);
 							toArray.add(inputPeer);
 						}
 					}
@@ -716,14 +722,14 @@ public class FilterCreateActivity extends BaseFragment {
 						TLRPC.Chat chat = messagesController.getChat(-did);
 						if (chat != null) {
 							if (ChatObject.isChannel(chat)) {
-								TLRPC.InputPeer inputPeer = new TLRPC.TL_inputPeerChannel();
-								inputPeer.channel_id = -did;
-								inputPeer.access_hash = chat.access_hash;
+								var inputPeer = new TLRPC.TLInputPeerChannel();
+								inputPeer.channelId = -did;
+								inputPeer.accessHash = chat.accessHash;
 								toArray.add(inputPeer);
 							}
 							else {
-								TLRPC.InputPeer inputPeer = new TLRPC.TL_inputPeerChat();
-								inputPeer.chat_id = -did;
+								var inputPeer = new TLRPC.TLInputPeerChat();
+								inputPeer.chatId = -did;
 								toArray.add(inputPeer);
 							}
 						}
@@ -755,10 +761,7 @@ public class FilterCreateActivity extends BaseFragment {
 	}
 
 	private boolean hasChanges() {
-		hasUserChanged = false;
-		if (filter.alwaysShow.size() != newAlwaysShow.size()) {
-			hasUserChanged = true;
-		}
+		hasUserChanged = filter.alwaysShow.size() != newAlwaysShow.size();
 		if (filter.neverShow.size() != newNeverShow.size()) {
 			hasUserChanged = true;
 		}
@@ -806,8 +809,7 @@ public class FilterCreateActivity extends BaseFragment {
 	}
 
 	private void setTextLeft(View cell) {
-		if (cell instanceof PollEditTextCell) {
-			PollEditTextCell textCell = (PollEditTextCell)cell;
+		if (cell instanceof PollEditTextCell textCell) {
 			int left = MAX_NAME_LENGTH - (newFilterName != null ? newFilterName.length() : 0);
 			if (left <= MAX_NAME_LENGTH - MAX_NAME_LENGTH * 0.7f) {
 				textCell.setText2(String.format("%d", left));
@@ -1015,10 +1017,10 @@ public class FilterCreateActivity extends BaseFragment {
 						User user = getMessagesController().getUser(id);
 						if (user != null) {
 							String status;
-							if (user.bot) {
+							if (TLRPCExtensions.getBot(user)) {
 								status = LocaleController.getString("Bot", R.string.Bot);
 							}
-							else if (user.contact) {
+							else if (TLRPCExtensions.getContact(user)) {
 								status = LocaleController.getString("FilterContact", R.string.FilterContact);
 							}
 							else {
@@ -1031,8 +1033,8 @@ public class FilterCreateActivity extends BaseFragment {
 						TLRPC.Chat chat = getMessagesController().getChat(-id);
 						if (chat != null) {
 							String status;
-							if (chat.participants_count != 0) {
-								status = LocaleController.formatPluralString("Members", chat.participants_count);
+							if (chat.participantsCount != 0) {
+								status = LocaleController.formatPluralString("Members", chat.participantsCount);
 							}
 							else if (TextUtils.isEmpty(chat.username)) {
 								if (ChatObject.isChannel(chat) && !chat.megagroup) {

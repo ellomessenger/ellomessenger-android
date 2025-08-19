@@ -4,14 +4,14 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
 import android.content.Context
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.view.View
+import androidx.core.graphics.drawable.toDrawable
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.R
 import org.telegram.ui.ActionBar.Theme
@@ -24,7 +24,7 @@ class ShadowSectionCell @JvmOverloads constructor(context: Context, private var 
 		}
 		else {
 			val shadowDrawable = Theme.getThemedDrawable(context, R.drawable.greydivider, context.getColor(R.color.shadow))
-			val background: Drawable = ColorDrawable(backgroundColor)
+			val background: Drawable = backgroundColor.toDrawable()
 			val combinedDrawable = CombinedDrawable(background, shadowDrawable, 0, 0)
 			combinedDrawable.setFullSize(true)
 			setBackground(combinedDrawable)

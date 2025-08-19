@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -34,11 +34,13 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.messageobject.SendAnimationData;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.ListView.RecyclerListViewWithOverlayDraw;
 import org.telegram.ui.Components.Premium.PremiumLockIconView;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
 public class StickerEmojiCell extends FrameLayout implements NotificationCenter.NotificationCenterDelegate, RecyclerListViewWithOverlayDraw.OverlayView {
@@ -163,7 +165,7 @@ public class StickerEmojiCell extends FrameLayout implements NotificationCenter.
 			sticker = document;
 			parentObject = parent;
 			//boolean isVideoSticker = MessageObject.isVideoSticker(document);
-			TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90);
+			TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(document), 90);
 			SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(document, ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), fromEmojiPanel ? 0.2f : 1.0f);
 			String imageFilter = fromEmojiPanel ? "66_66_pcache_compress" : "66_66";
 			if (MessageObject.canAutoplayAnimatedSticker(document)) {
@@ -204,16 +206,20 @@ public class StickerEmojiCell extends FrameLayout implements NotificationCenter.
 			}
 			else if (showEmoji) {
 				boolean set = false;
-				for (int a = 0; a < document.attributes.size(); a++) {
-					TLRPC.DocumentAttribute attribute = document.attributes.get(a);
-					if (attribute instanceof TLRPC.TL_documentAttributeSticker) {
-						if (attribute.alt != null && attribute.alt.length() > 0) {
-							emojiTextView.setText(Emoji.replaceEmoji(attribute.alt, emojiTextView.getPaint().getFontMetricsInt(), false));
-							set = true;
+
+				if (document instanceof TLRPC.TLDocument doc) {
+					for (int a = 0; a < doc.attributes.size(); a++) {
+						TLRPC.DocumentAttribute attribute = doc.attributes.get(a);
+						if (attribute instanceof TLRPC.TLDocumentAttributeSticker) {
+							if (attribute.alt != null && attribute.alt.length() > 0) {
+								emojiTextView.setText(Emoji.replaceEmoji(attribute.alt, emojiTextView.getPaint().getFontMetricsInt(), false));
+								set = true;
+							}
+							break;
 						}
-						break;
 					}
 				}
+
 				if (!set) {
 					emojiTextView.setText(Emoji.replaceEmoji(MediaDataController.getInstance(currentAccount).getEmojiForSticker(sticker.id), emojiTextView.getPaint().getFontMetricsInt(), false));
 				}
@@ -296,10 +302,10 @@ public class StickerEmojiCell extends FrameLayout implements NotificationCenter.
 	public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
 		super.onInitializeAccessibilityNodeInfo(info);
 		String descr = getContext().getString(R.string.AttachSticker);
-		if (sticker != null) {
-			for (int a = 0; a < sticker.attributes.size(); a++) {
-				TLRPC.DocumentAttribute attribute = sticker.attributes.get(a);
-				if (attribute instanceof TLRPC.TL_documentAttributeSticker) {
+		if (sticker instanceof TLRPC.TLDocument doc) {
+			for (int a = 0; a < doc.attributes.size(); a++) {
+				TLRPC.DocumentAttribute attribute = doc.attributes.get(a);
+				if (attribute instanceof TLRPC.TLDocumentAttributeSticker) {
 					if (attribute.alt != null && attribute.alt.length() > 0) {
 						emojiTextView.setText(Emoji.replaceEmoji(attribute.alt, emojiTextView.getPaint().getFontMetricsInt(), false));
 						descr = attribute.alt + " " + descr;
@@ -340,7 +346,7 @@ public class StickerEmojiCell extends FrameLayout implements NotificationCenter.
 	}
 
 	@Override
-	protected void dispatchDraw(Canvas canvas) {
+	protected void dispatchDraw(@NonNull Canvas canvas) {
 		if (!drawInParentView) {
 			drawInternal(this, canvas);
 		}

@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -51,7 +51,7 @@ class RecommendedChannelViewHolder(private val binding: RecommendedChannelViewHo
 		}
 
 		binding.nameLabel.text = chat.title?.trim()
-		binding.introLabel.text = LocaleController.formatPluralString("Subscribers", chat.participants_count)
+		binding.introLabel.text = LocaleController.formatPluralString("Subscribers", chat.participantsCount)
 
 		if (chat.adult) {
 			binding.adultChannelIcon.visible()
@@ -68,26 +68,30 @@ class RecommendedChannelViewHolder(private val binding: RecommendedChannelViewHo
 		}
 
 		when {
-			ChatObject.isOnlineCourse(chat) -> {
-				when (chat.pay_type) {
-					TLRPC.Chat.PAY_TYPE_SUBSCRIBE, TLRPC.Chat.PAY_TYPE_NONE, TLRPC.Chat.PAY_TYPE_BASE -> {
+			ChatObject.isMasterclass(chat) -> {
+				when (chat.payType) {
+					TLRPC.PAY_TYPE_SUBSCRIBE, TLRPC.PAY_TYPE_NONE, TLRPC.PAY_TYPE_BASE -> {
 						binding.onlineCourseIcon.visible()
 						binding.paidFeedIcon.gone()
 					}
+
 					else -> {
 						binding.onlineCourseIcon.gone()
 					}
 				}
 			}
+
 			else -> {
-				when (chat.pay_type) {
-					TLRPC.Chat.PAY_TYPE_NONE, TLRPC.Chat.PAY_TYPE_BASE -> {
+				when (chat.payType) {
+					TLRPC.PAY_TYPE_NONE, TLRPC.PAY_TYPE_BASE -> {
 						binding.paidFeedIcon.gone()
 					}
-					TLRPC.Chat.PAY_TYPE_SUBSCRIBE -> {
+
+					TLRPC.PAY_TYPE_SUBSCRIBE -> {
 						binding.paidFeedIcon.visible()
 						binding.onlineCourseIcon.gone()
 					}
+
 					else -> {
 						binding.paidFeedIcon.gone()
 					}

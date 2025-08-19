@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components;
 
@@ -58,6 +58,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 
 import java.io.FileNotFoundException;
@@ -118,7 +119,6 @@ public class WebPlayerView extends ViewGroup implements VideoPlayer.VideoPlayerD
 	private int waitingForFirstTextureUpload;
 	private boolean isAutoplay;
 	private final WebPlayerViewDelegate delegate;
-	private boolean initFailed;
 	private boolean initied;
 	private String playVideoUrl;
 	private String playVideoType;
@@ -134,7 +134,6 @@ public class WebPlayerView extends ViewGroup implements VideoPlayer.VideoPlayerD
 	private static final int AUDIO_NO_FOCUS_CAN_DUCK = 1;
 	private static final int AUDIO_FOCUSED = 2;
 	private boolean hasAudioFocus;
-	private int audioFocus;
 	private boolean resumeAudioOnFocusGain;
 
 	private long lastUpdateTime;
@@ -1956,7 +1955,6 @@ public class WebPlayerView extends ViewGroup implements VideoPlayer.VideoPlayerD
 			AudioManager audioManager = (AudioManager)ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
 			hasAudioFocus = true;
 			if (audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-				audioFocus = 2;
 			}
 		}
 	}
@@ -1970,20 +1968,16 @@ public class WebPlayerView extends ViewGroup implements VideoPlayer.VideoPlayerD
 					updatePlayButton();
 				}
 				hasAudioFocus = false;
-				audioFocus = AUDIO_NO_FOCUS_NO_DUCK;
 			}
 			else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
-				audioFocus = AUDIO_FOCUSED;
 				if (resumeAudioOnFocusGain) {
 					resumeAudioOnFocusGain = false;
 					videoPlayer.play();
 				}
 			}
 			else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
-				audioFocus = AUDIO_NO_FOCUS_CAN_DUCK;
 			}
 			else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-				audioFocus = AUDIO_NO_FOCUS_NO_DUCK;
 				if (videoPlayer.isPlaying()) {
 					resumeAudioOnFocusGain = true;
 					videoPlayer.pause();
@@ -2418,7 +2412,7 @@ public class WebPlayerView extends ViewGroup implements VideoPlayer.VideoPlayerD
 		updateInlineButton();
 		updatePlayButton();
 		if (thumb != null) {
-			TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(thumb.sizes, 80, true);
+			TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getSizes(thumb), 80, true);
 			if (photoSize != null) {
 				controlsView.imageReceiver.setImage(null, null, ImageLocation.getForPhoto(photoSize, thumb), "80_80_b", 0, null, parentObject, 1);
 				drawImage = true;

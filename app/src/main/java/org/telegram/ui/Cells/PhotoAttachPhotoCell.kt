@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -43,6 +43,7 @@ import org.telegram.messenger.R
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.BackupImageView
 import org.telegram.ui.Components.CheckBox2
@@ -244,11 +245,11 @@ class PhotoAttachPhotoCell(context: Context) : FrameLayout(context) {
 			val videoSize = MessageObject.getDocumentVideoThumb(searchImage.document)
 
 			if (videoSize != null) {
-				val currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(searchImage.document.thumbs, 90)
+				val currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(searchImage.document?.thumbs, 90)
 				imageView.setImage(ImageLocation.getForDocument(videoSize, searchImage.document), null, ImageLocation.getForDocument(currentPhotoObject, searchImage.document), "52_52", null, -1, 1, searchImage)
 			}
 			else {
-				val photoSize = FileLoader.getClosestPhotoSizeWithSize(searchImage.document.thumbs, 320)
+				val photoSize = FileLoader.getClosestPhotoSizeWithSize(searchImage.document?.thumbs, 320)
 				imageView.setImage(ImageLocation.getForDocument(photoSize, searchImage.document), null, thumb, searchImage)
 			}
 		}

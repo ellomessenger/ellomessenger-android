@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Cells
 
@@ -14,7 +14,6 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.text.SpannableStringBuilder
 import android.text.TextUtils
-import android.text.style.URLSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -26,15 +25,12 @@ import android.widget.TextSwitcher
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AndroidUtilities
-import org.telegram.messenger.Emoji
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
-import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.LinkClickListener
 import org.telegram.messenger.utils.LinkTouchMovementMethod
 import org.telegram.messenger.utils.collapsedBioLength
 import org.telegram.messenger.utils.gone
-import org.telegram.messenger.utils.makeLinkClickable
 import org.telegram.messenger.utils.processForLinks
 import org.telegram.messenger.utils.visible
 import org.telegram.ui.ActionBar.Theme
@@ -169,7 +165,8 @@ class AboutLinkCell(context: Context) : LinearLayout(context) {
 		var end = breakIterator.following(length)
 		if (end == BreakIterator.DONE) {
 			end = length
-		} else if (end < length) {
+		}
+		else if (end < length) {
 			end = breakIterator.next()
 		}
 		return end

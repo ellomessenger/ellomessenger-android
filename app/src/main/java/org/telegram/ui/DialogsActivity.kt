@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -25,7 +25,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
@@ -34,10 +33,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -48,6 +44,7 @@ import android.util.StateSet
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -63,9 +60,19 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.Interpolator
 import android.widget.*
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
+import androidx.core.net.toUri
 import androidx.core.view.children
+import androidx.core.view.isGone
+import androidx.core.view.isNotEmpty
+import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -81,8 +88,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -104,20 +109,33 @@ import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.NotificationsController
 import org.telegram.messenger.R
 import org.telegram.messenger.SharedConfig
+import org.telegram.messenger.SubscriptionStatusHelper
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject.getUserName
 import org.telegram.messenger.UserObject.isUserSelf
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.XiaomiUtilities
+import org.telegram.messenger.databinding.DonateMessageLayoutBinding
+import org.telegram.messenger.databinding.ItemAiBannerBinding
+import org.telegram.messenger.databinding.QuickLinksButtonBinding
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
+import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
-import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.ElloRpc.unsubscribeRequest
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.emojiStatus
+import org.telegram.tgnet.folderId
+import org.telegram.tgnet.migratedTo
+import org.telegram.tgnet.mutualContact
+import org.telegram.tgnet.strippedBitmap
+import org.telegram.tgnet.unreadCount
+import org.telegram.tgnet.unreadMark
+import org.telegram.tgnet.TLRPC.TLMessagesExportChatInvite
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -138,8 +156,8 @@ import org.telegram.ui.Adapters.FiltersView
 import org.telegram.ui.Adapters.FiltersView.DateData
 import org.telegram.ui.Adapters.FiltersView.MediaFilterData
 import org.telegram.ui.Cells.AccountSelectCell
+import org.telegram.ui.Cells.AnimatedStatusView
 import org.telegram.ui.Cells.DialogCell
-import org.telegram.ui.Cells.DrawerProfileCell.AnimatedStatusView
 import org.telegram.ui.Cells.HeaderCell
 import org.telegram.ui.Cells.HintDialogCell
 import org.telegram.ui.Cells.ProfileSearchCell
@@ -190,9 +208,13 @@ import org.telegram.ui.Components.UndoView
 import org.telegram.ui.Components.ViewPagerFixed.TabsView
 import org.telegram.ui.SelectAnimatedEmojiDialog.SelectAnimatedEmojiDialogWindow
 import org.telegram.ui.aispace.AiSpaceFragment
+import org.telegram.ui.donate.DonateBannerFragment
 import org.telegram.ui.group.GroupCreateFinalActivity
 import org.telegram.ui.group.GroupCreateFinalActivity.GroupCreateFinalActivityDelegate
+import org.telegram.ui.profile.wallet.WalletFragment
 import org.telegram.ui.quicklinks.QuickLinksFragment
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -215,10 +237,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 	private val floatingInterpolator = AccelerateDecelerateInterpolator()
 	private val selectedDialogs = ArrayList<Long>()
 	private var forYouTab = 0
-
-	@JvmField
 	var notify = true
-
 	var databaseMigrationHint: View? = null
 	var slideFragmentProgress = 1f
 	var isSlideBackTransition = false
@@ -240,12 +259,13 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 	private var proxyItemVisible = false
 	private var searchItem: ActionBarMenuItem? = null
 	private var quickLinks: ActionBarMenuItem? = null
-	private var aiBot: ActionBarMenuItem? = null
+	private var donate: ActionBarMenuItem? = null
 	private var doneItem: ActionBarMenuItem? = null
 	private var proxyDrawable: ProxyDrawable? = null
 	private var floatingButton: ImageView? = null
 	private var floatingProgressView: RadialProgressView? = null
 	private var floatingButtonContainer: FrameLayout? = null
+	private var quickLinksButtonBinding: QuickLinksButtonBinding? = null
 	private var avatarContainer: ChatAvatarContainer? = null
 	private var filterTabsView: FilterTabsView? = null
 	private var askingForPermissions = false
@@ -289,6 +309,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 	private var blockItem: ActionBarMenuSubItem? = null
 	private var additionalFloatingTranslation = 0f
 	private var floatingButtonTranslation = 0f
+	private var quickLinksButtonTranslation = 0f
 	private var floatingButtonHideProgress = 0f
 	private var searchAnimator: AnimatorSet? = null
 	private var tabsAlphaAnimator: Animator? = null
@@ -382,6 +403,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 	private var animatedStatusView: AnimatedStatusView? = null
 	private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 	private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+	private var donateBinding: DonateMessageLayoutBinding? = null
+	private var inviteLink = ""
 
 	private val SCROLL_Y: Property<DialogsActivity, Float> = object : AnimationProperties.FloatProperty<DialogsActivity>("animationValue") {
 		override fun setValue(`object`: DialogsActivity, value: Float) {
@@ -404,6 +427,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 	private var showingSuggestion: String? = null
 	private var sendPopupWindow: ActionBarPopupWindow? = null
 	private var shouldShowBottomNavigationPanel = false
+	private val subsStatusHelper = SubscriptionStatusHelper(currentAccount)
+	private var aiBannerBinding: ItemAiBannerBinding? = null
 
 	init {
 		shouldShowBottomNavigationPanel = args?.getBoolean(shouldShowBottomNavigationPanelKey, true) ?: true
@@ -455,6 +480,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				notificationCenter.addObserver(this, NotificationCenter.filterSettingsUpdated)
 				notificationCenter.addObserver(this, NotificationCenter.dialogFiltersUpdated)
 				notificationCenter.addObserver(this, NotificationCenter.dialogsUnreadCounterChanged)
+
+				notificationCenter.addObserver(this, NotificationCenter.userInfoDidLoad)
 			}
 
 			notificationCenter.addObserver(this, NotificationCenter.updateInterfaces)
@@ -491,9 +518,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		notificationCenter.addObserver(this, NotificationCenter.onDatabaseOpened)
 		notificationCenter.addObserver(this, NotificationCenter.didClearDatabase)
 
-		if (folderId == 0) {
-			loadDialogs(accountInstance, force = true)
-		}
+		loadDialogs(accountInstance)
 
 		messagesController.loadPinnedDialogs(folderId)
 
@@ -515,8 +540,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			return
 		}
 
-		if (user != null && user.emoji_status is TLRPC.TL_emojiStatusUntil && (user.emoji_status as TLRPC.TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
-			statusDrawable?.set((user.emoji_status as TLRPC.TL_emojiStatusUntil).document_id, animated)
+		if (user != null && user.emojiStatus is TLRPC.TLEmojiStatusUntil && (user.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+			statusDrawable?.set((user.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId, animated)
 
 			actionBar?.setRightDrawableOnClick {
 				showSelectStatusDialog()
@@ -524,8 +549,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 			SelectAnimatedEmojiDialog.preload(currentAccount)
 		}
-		else if (user != null && user.emoji_status is TLRPC.TL_emojiStatus) {
-			statusDrawable?.set((user.emoji_status as TLRPC.TL_emojiStatus).document_id, animated)
+		else if (user != null && user.emojiStatus is TLRPC.TLEmojiStatus) {
+			statusDrawable?.set((user.emojiStatus as TLRPC.TLEmojiStatus).documentId, animated)
 
 			actionBar?.setRightDrawableOnClick {
 				showSelectStatusDialog()
@@ -539,16 +564,15 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 				premiumStar = object : WrapSizeDrawable(premiumStar, AndroidUtilities.dp(18f), AndroidUtilities.dp(18f)) {
 					override fun draw(canvas: Canvas) {
-						canvas.save()
-						canvas.translate(AndroidUtilities.dp(-2f).toFloat(), AndroidUtilities.dp(1f).toFloat())
-						super.draw(canvas)
-						canvas.restore()
+						canvas.withTranslation(AndroidUtilities.dp(-2f).toFloat(), AndroidUtilities.dp(1f).toFloat()) {
+							super.draw(this)
+						}
 					}
 				}
 			}
 
-			premiumStar?.colorFilter = PorterDuffColorFilter(context.getColor(R.color.totals_blue_text), PorterDuff.Mode.SRC_IN)
-			statusDrawable?.set(premiumStar, animated)
+//			premiumStar?.colorFilter = PorterDuffColorFilter(context.getColor(R.color.totals_blue_text), PorterDuff.Mode.SRC_IN)
+//			statusDrawable?.set(premiumStar, animated)
 
 			actionBar?.setRightDrawableOnClick {
 				showSelectStatusDialog()
@@ -721,7 +745,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			passcodeItem = menu.addItem(1, passcodeDrawable)
 			passcodeItem?.contentDescription = context.getString(R.string.AccDescrPasscodeLock)
 
-			downloadsItem = menu.addItem(3, ColorDrawable(Color.TRANSPARENT))
+			downloadsItem = menu.addItem(3, Color.TRANSPARENT.toDrawable())
 			downloadsItem?.addView(DownloadProgressIcon(currentAccount, context))
 			downloadsItem?.contentDescription = context.getString(R.string.DownloadsTabs)
 			downloadsItem?.visibility = View.GONE
@@ -745,8 +769,12 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					downloadsItem?.visibility = View.GONE
 				}
 
-				quickLinks?.visibility = View.GONE
-				aiBot?.visibility = View.GONE
+//				quickLinks?.visibility = View.GONE
+				donate?.visibility = View.GONE
+
+				if (shouldShowBanner()) {
+					donateBinding?.root?.gone()
+				}
 
 				viewPages?.firstOrNull()?.let {
 					if (searchString != null) {
@@ -756,6 +784,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 					if (!onlySelect) {
 						floatingButtonContainer?.visibility = View.GONE
+						quickLinksButtonBinding?.root?.gone()
 					}
 				}
 
@@ -782,8 +811,12 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					downloadsItem?.visibility = View.VISIBLE
 				}
 
-				quickLinks?.visibility = View.VISIBLE
-				aiBot?.visibility = View.VISIBLE
+//				quickLinks?.visibility = View.VISIBLE
+				donate?.visibility = View.VISIBLE
+
+				if (shouldShowBanner()) {
+					donateBinding?.root?.visible()
+				}
 
 				if (searchString != null) {
 					finishFragment()
@@ -802,10 +835,13 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 					if (!onlySelect) {
 						floatingButtonContainer?.visibility = View.VISIBLE
+						quickLinksButtonBinding?.root?.visible()
 						floatingHidden = true
 						floatingButtonTranslation = AndroidUtilities.dp(100f).toFloat()
+						quickLinksButtonTranslation = AndroidUtilities.dp(120f).toFloat()
 						floatingButtonHideProgress = 1f
 						updateFloatingButtonOffset()
+						updateOverlayButtonOffset()
 					}
 
 					showSearch(show = false, startFromDownloads = false, animated = true)
@@ -852,16 +888,16 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			}
 		})
 
-		quickLinks = menu.addItem(4, ResourcesCompat.getDrawable(context.resources, R.drawable.ic_quick_links, null))
+//		quickLinks = menu.addItem(4, ResourcesCompat.getDrawable(context.resources, R.drawable.ic_quick_links, null))
+//
+//		quickLinks?.setOnClickListener {
+//			presentFragment(QuickLinksFragment())
+//		}
 
-		quickLinks?.setOnClickListener {
-			presentFragment(QuickLinksFragment())
-		}
+		donate = menu.addItem(5, ResourcesCompat.getDrawable(context.resources, R.drawable.ic_donate_dialogs, null))
 
-		aiBot = menu.addItem(5, ResourcesCompat.getDrawable(context.resources, R.drawable.ic_avatar_ai_bot, null))
-
-		aiBot?.setOnClickListener {
-			presentFragment(AiSpaceFragment())
+		donate?.setOnClickListener {
+			presentFragment(DonateBannerFragment())
 		}
 
 		if (initialDialogsType == 2 || initialDialogsType == DIALOGS_TYPE_START_ATTACH_BOT) {
@@ -976,7 +1012,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					builder.setNegativeButton(context.getString(R.string.Cancel), null)
 
 					builder.setPositiveButton(context.getString(R.string.Delete)) { _, _ ->
-						val req = TLRPC.TL_messages_updateDialogFilter()
+						val req = TLRPC.TLMessagesUpdateDialogFilter()
 						req.id = dialogFilter!!.id
 
 						connectionsManager.sendRequest(req) { _, _ ->
@@ -1390,7 +1426,15 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				}
 			}
 
+			aiBannerBinding = ItemAiBannerBinding.inflate(LayoutInflater.from(context))
+
 			contentView.addView(viewPage, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
+
+			val container = LinearLayout(context).apply {
+				orientation = LinearLayout.VERTICAL
+				layoutParams = FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT)
+			}
+
 			viewPage.dialogsType = initialDialogsType
 
 			viewPages!![a] = viewPage
@@ -1399,7 +1443,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			viewPage.progressView?.setViewType(FlickerLoadingView.DIALOG_CELL_TYPE)
 			viewPage.progressView?.gone()
 
-			viewPage.addView(viewPage.progressView, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER))
+			container.addView(viewPage.progressView, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER))
 
 			viewPage.listView = DialogsRecyclerView(context, viewPage)
 			viewPage.listView?.setAccessibilityEnabled(false)
@@ -1650,7 +1694,23 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			viewPage.listView?.layoutManager = viewPage.layoutManager
 			viewPage.listView?.verticalScrollbarPosition = if (LocaleController.isRTL) RecyclerView.SCROLLBAR_POSITION_LEFT else RecyclerView.SCROLLBAR_POSITION_RIGHT
 
-			viewPage.addView(viewPage.listView, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
+			// MARK: Ai Banner
+			aiBannerBinding?.root?.let { container.addView(it) }
+
+			val containerListView = LinearLayout(context).apply {
+				orientation = LinearLayout.VERTICAL
+				layoutParams = FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT)
+			}
+
+			containerListView.addView(viewPage.listView, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
+
+			container.addView(containerListView)
+
+			viewPage.addView(container)
+
+			aiBannerBinding?.aiBanner?.setOnClickListener {
+				presentFragment(AiSpaceFragment())
+			}
 
 			viewPage.listView?.setOnItemClickListener(RecyclerListView.OnItemClickListener { view, position ->
 				if (initialDialogsType == 10) {
@@ -1783,7 +1843,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 					checkListLoad(viewPage)
 
-					if (initialDialogsType != 10 && wasManualScroll && floatingButtonContainer!!.visibility != View.GONE && recyclerView.childCount > 0) {
+					if (initialDialogsType != 10 && wasManualScroll && floatingButtonContainer!!.visibility != View.GONE && recyclerView.isNotEmpty()) {
 						val firstVisibleItem = viewPage.layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
 
 						if (firstVisibleItem != RecyclerView.NO_POSITION) {
@@ -1878,7 +1938,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				viewPage.pullForegroundDrawable?.setWillDraw(viewPage.archivePullViewState != ARCHIVE_ITEM_STATE_PINNED)
 			}
 
-			viewPage.dialogsAdapter = object : DialogsAdapter(this@DialogsActivity, viewPage.dialogsType, folderId, onlySelect, selectedDialogs, currentAccount) {
+			loadInviteLinks()
+			viewPage.dialogsAdapter = object : DialogsAdapter(this@DialogsActivity, viewPage.dialogsType, folderId, onlySelect, selectedDialogs, currentAccount, inviteLink()) {
 				override fun notifyDataSetChanged() {
 					viewPage.lastItemsCount = itemCount
 
@@ -2020,7 +2081,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 				val builder = AlertDialog.Builder(parentActivity)
 				builder.setTitle(context.getString(R.string.ChatHintsDeleteAlertTitle))
-				builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("ChatHintsDeleteAlert", R.string.ChatHintsDeleteAlert, ContactsController.formatName(user.first_name, user.last_name))))
+				builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("ChatHintsDeleteAlert", R.string.ChatHintsDeleteAlert, ContactsController.formatName(user.firstName, user.lastName))))
 				builder.setPositiveButton(context.getString(R.string.StickersRemove)) { _, _ -> mediaDataController.removePeer(did) }
 				builder.setNegativeButton(context.getString(R.string.Cancel), null)
 
@@ -2121,12 +2182,41 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 		filtersView?.visibility = View.GONE
 
+		//MARK: DONATE SYSTEM
+		donateBinding = DonateMessageLayoutBinding.inflate(LayoutInflater.from(context))
+		contentView.addView(donateBinding?.root, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM))
+
 		floatingButtonContainer = FrameLayout(context)
 		floatingButtonContainer?.visibility = if (onlySelect && initialDialogsType != 10 || folderId != 0) View.GONE else View.VISIBLE
+		quickLinksButtonBinding?.root?.visibility = if (onlySelect && initialDialogsType != 10 || folderId != 0) View.GONE else View.VISIBLE
+
+		donateBinding?.cancel?.setOnClickListener {
+			dismissBanner()
+
+			quickLinksButtonBinding?.root?.visible()
+			floatingButtonContainer?.visible()
+			donateBinding?.root?.gone()
+		}
+
+		donateBinding?.waysToGive?.setOnClickListener {
+			presentFragment(DonateBannerFragment())
+		}
+
+		donateBinding?.root?.setOnClickListener {
+			presentFragment(DonateBannerFragment())
+		}
 
 		val bottomMargin = 14
 
+		quickLinksButtonBinding = QuickLinksButtonBinding.inflate(LayoutInflater.from(context))
+
+		contentView.addView(quickLinksButtonBinding?.root, createFrame(38, 38f, (if (LocaleController.isRTL) Gravity.LEFT else Gravity.RIGHT) or Gravity.BOTTOM, if (LocaleController.isRTL) 22f else 0f, 0f, if (LocaleController.isRTL) 0f else 22f, 80f))
+
 		contentView.addView(floatingButtonContainer, createFrame(56, 56f, (if (LocaleController.isRTL) Gravity.LEFT else Gravity.RIGHT) or Gravity.BOTTOM, if (LocaleController.isRTL) 14f else 0f, 0f, if (LocaleController.isRTL) 0f else 14f, bottomMargin.toFloat()))
+
+		quickLinksButtonBinding?.root?.setOnClickListener {
+			presentFragment(QuickLinksFragment())
+		}
 
 		floatingButtonContainer?.setOnClickListener {
 			if (parentLayout != null && parentLayout?.isInPreviewMode == true) {
@@ -2265,7 +2355,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			contentView.addView(commentView, createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT or Gravity.BOTTOM))
 
 			commentView?.setDelegate(object : ChatActivityEnterViewDelegate {
-				override val sendAsPeers: TLRPC.TL_channels_sendAsPeers?
+				override val sendAsPeers: TLRPC.TLChannelsSendAsPeers?
 					get() = null
 
 				override fun measureKeyboardHeight(): Int {
@@ -2388,13 +2478,13 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					val size = max(AndroidUtilities.dp(16f) + textSize, AndroidUtilities.dp(24f))
 					val cx = measuredWidth / 2
 
-					textPaint.color = getThemedColor(Theme.key_dialogRoundCheckBoxCheck)
-					paint.color = getThemedColor(if (Theme.isCurrentThemeDark()) Theme.key_voipgroup_inviteMembersBackground else Theme.key_dialogBackground)
+					textPaint.color = Color.WHITE
+					paint.color = Color.WHITE
 					rect.set((cx - size / 2).toFloat(), 0f, (cx + size / 2).toFloat(), measuredHeight.toFloat())
 
 					canvas.drawRoundRect(rect, AndroidUtilities.dp(12f).toFloat(), AndroidUtilities.dp(12f).toFloat(), paint)
 
-					paint.color = getThemedColor(Theme.key_dialogRoundCheckBox)
+					paint.color = context.getColor(R.color.brand)
 
 					rect.set((cx - size / 2 + AndroidUtilities.dp(2f)).toFloat(), AndroidUtilities.dp(2f).toFloat(), (cx + size / 2 - AndroidUtilities.dp(2f)).toFloat(), (measuredHeight - AndroidUtilities.dp(2f)).toFloat())
 
@@ -2489,6 +2579,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 						if (!floatingHidden) {
 							updateFloatingButtonOffset()
+							updateOverlayButtonOffset()
 						}
 					}
 				}
@@ -2557,7 +2648,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				}
 			}
 
-			blurredView?.foreground = ColorDrawable(ColorUtils.setAlphaComponent(getThemedColor(Theme.key_windowBackgroundWhite), 100))
+			blurredView?.foreground = ColorUtils.setAlphaComponent(getThemedColor(Theme.key_windowBackgroundWhite), 100).toDrawable()
 			blurredView?.isFocusable = false
 			blurredView?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
 
@@ -2626,6 +2717,42 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		return fragmentView
 	}
 
+	private fun checkSubscriptionStatus(context: Context) {
+		subsStatusHelper.fetchSubscriptionStatus(context) { isRenewSubscription, expirationDate, isInsufficientFunds ->
+			when {
+				isRenewSubscription == true -> {
+					val builder = AlertsCreator.createSimpleAlert(context, context.getString(R.string.subscription_expiration_reminder, expirationDate))
+					builder?.setTitle(context.getString(R.string.renew_subscription))
+
+					builder?.setPositiveButton(context.getString(R.string.confirm)) { _, _ -> }
+					builder?.setPositiveButtonColor(context.getColor(R.color.purple))
+
+					builder?.show()
+				}
+
+				isInsufficientFunds == true -> {
+					val builder = AlertsCreator.createSimpleAlert(context, context.getString(R.string.popup_insufficient_funds_message))
+					builder?.setTitle(null)
+
+					builder?.setTopImage(ResourcesCompat.getDrawable(context.resources, R.drawable.ai_bot_prompts, null)?.mutate()?.apply {
+						this.colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
+					}, context.getColor(R.color.brand))
+
+					builder?.setPositiveButton(context.getString(R.string.top_up)) { _, _ ->
+						presentFragment(WalletFragment())
+					}
+
+					builder?.setPositiveButtonColor(context.getColor(R.color.purple))
+
+					builder?.setNegativeButton(context.getString(R.string.cancel)) { _, _ -> }
+					builder?.setNegativeButtonColor(context.getColor(R.color.brand))
+
+					builder?.show()
+				}
+			}
+		}
+	}
+
 	private fun handleAppUpdate(context: Context) {
 		val appUpdateManager = AppUpdateManagerFactory.create(context)
 		val appUpdateInfoTask = appUpdateManager.appUpdateInfo
@@ -2664,29 +2791,29 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 		val popupLayout = object : SelectAnimatedEmojiDialog(this@DialogsActivity, context!!, true, xoff, TYPE_EMOJI_STATUS) {
 			override fun onEmojiSelected(view: View, documentId: Long?, document: TLRPC.Document?, until: Int?) {
-				val req = TLRPC.TL_account_updateEmojiStatus()
+				val req = TLRPC.TLAccountUpdateEmojiStatus()
 
 				if (documentId == null) {
-					req.emoji_status = TLRPC.TL_emojiStatusEmpty()
+					req.emojiStatus = TLRPC.TLEmojiStatusEmpty()
 				}
 				else if (until != null) {
-					req.emoji_status = TLRPC.TL_emojiStatusUntil()
-					(req.emoji_status as TLRPC.TL_emojiStatusUntil).document_id = documentId
-					(req.emoji_status as TLRPC.TL_emojiStatusUntil).until = until
+					req.emojiStatus = TLRPC.TLEmojiStatusUntil()
+					(req.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId = documentId
+					(req.emojiStatus as TLRPC.TLEmojiStatusUntil).until = until
 				}
 				else {
-					req.emoji_status = TLRPC.TL_emojiStatus()
-					(req.emoji_status as TLRPC.TL_emojiStatus).document_id = documentId
+					req.emojiStatus = TLRPC.TLEmojiStatus()
+					(req.emojiStatus as TLRPC.TLEmojiStatus).documentId = documentId
 				}
 
 				@Suppress("NAME_SHADOWING") val user = messagesController.getUser(userConfig.getClientUserId())
 
 				if (user != null) {
-					user.emoji_status = req.emoji_status
+					user.emojiStatus = req.emojiStatus
 
 					notificationCenter.postNotificationName(NotificationCenter.userEmojiStatusUpdated, user)
 
-					messagesController.updateEmojiStatusUntilUpdate(user.id, user.emoji_status)
+					messagesController.updateEmojiStatusUntilUpdate(user.id, user.emojiStatus)
 				}
 
 				if (documentId != null) {
@@ -2702,8 +2829,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			}
 		}
 
-		if (user != null && user.emoji_status is TLRPC.TL_emojiStatusUntil && (user.emoji_status as TLRPC.TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
-			popupLayout.setExpireDateHint((user.emoji_status as TLRPC.TL_emojiStatusUntil).until)
+		if (user != null && user.emojiStatus is TLRPC.TLEmojiStatusUntil && (user.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+			popupLayout.setExpireDateHint((user.emojiStatus as TLRPC.TLEmojiStatusUntil).until)
 		}
 
 		popupLayout.setSelected((statusDrawable?.drawable as? AnimatedEmojiDrawable)?.documentId)
@@ -2768,7 +2895,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		if (fragmentContextView != null) {
 			var from = 0f
 
-			if (fragmentLocationContextView != null && fragmentLocationContextView!!.visibility == View.VISIBLE) {
+			if (fragmentLocationContextView?.visibility == View.VISIBLE) {
 				from += AndroidUtilities.dp(36f).toFloat()
 			}
 
@@ -2914,7 +3041,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		if (tag == null) {
 			actionBar?.setActionBarMenuOnItemClick(object : ActionBarMenuOnItemClick() {
 				override fun onItemClick(id: Int) {
-					if (id == SearchViewPager.forwardItemId || id == SearchViewPager.gotoItemId || id == SearchViewPager.deleteItemId && searchViewPager != null) {
+					if (id == SearchViewPager.FORWARD_ITEM_ID || id == SearchViewPager.GOTO_ITEM_ID || id == SearchViewPager.DELETE_ITEM_ID && searchViewPager != null) {
 						searchViewPager?.onActionBarItemClick(id)
 						return
 					}
@@ -2925,7 +3052,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 							showDoneItem(false)
 						}
 						else if (actionBar!!.isActionModeShowed) {
-							if (searchViewPager != null && searchViewPager!!.visibility == View.VISIBLE && searchViewPager!!.actionModeShowing()) {
+							if (searchViewPager != null && searchViewPager!!.isVisible && searchViewPager!!.actionModeShowing()) {
 								searchViewPager?.hideActionMode()
 							}
 							else {
@@ -3091,6 +3218,10 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		viewPages!![a]?.layoutManager?.scrollToPositionWithOffset(if (viewPages!![a]?.dialogsType == 0 && hasHiddenArchive()) 1 else 0, actionBar!!.translationY.toInt())
 
 		checkListLoad(viewPages!![a])
+	}
+
+	fun clickToSearchItem() {
+		searchItem?.performClick()
 	}
 
 	private fun showScrollbars(show: Boolean) {
@@ -3298,10 +3429,47 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		scrimPopupWindow?.dismiss()
 	}
 
+	private fun shouldShowBanner(): Boolean {
+		val isFirstLaunch = !MessagesController.getGlobalMainSettings().contains(LAST_SHOWN_KEY)
+
+		val lastShownMillis = MessagesController.getGlobalMainSettings().getLong(LAST_SHOWN_KEY, 0)
+		val lastShownDate = LocalDate.ofEpochDay(lastShownMillis / (24 * 60 * 60 * 1000))
+
+		val currentDate = LocalDate.now()
+
+		if (isFirstLaunch) {
+			return true
+		}
+
+		val daysBetween = ChronoUnit.DAYS.between(lastShownDate, currentDate)
+
+		FileLog.d("isFirstLaunch: $isFirstLaunch, lastShownDate: $lastShownDate, currentDate: $currentDate, daysBetween: $daysBetween")
+
+		return daysBetween >= 10
+	}
+
+	private fun dismissBanner() {
+		val currentDate = LocalDate.now()
+		val currentMillis = currentDate.toEpochDay() * 24 * 60 * 60 * 1000
+		MessagesController.getGlobalMainSettings().edit { putLong(LAST_SHOWN_KEY, currentMillis) }
+		FileLog.d("Banner dismissed, new time saved: $currentMillis")
+	}
+
 	override fun onResume() {
 		super.onResume()
 
-		if (!parentLayout!!.isInPreviewMode && blurredView != null && blurredView!!.visibility == View.VISIBLE) {
+		if (shouldShowBanner()) {
+			donateBinding?.root?.visible()
+			floatingButtonContainer?.gone()
+			quickLinksButtonBinding?.root?.gone()
+		}
+		else {
+			donateBinding?.root?.gone()
+			floatingButtonContainer?.visible()
+			quickLinksButtonBinding?.root?.visible()
+		}
+
+		if (!parentLayout!!.isInPreviewMode && blurredView != null && blurredView!!.isVisible) {
 			blurredView?.visibility = View.GONE
 			blurredView?.background = null
 		}
@@ -3371,7 +3539,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				catch (x: Exception) {
 					try {
 						intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-						intent.data = Uri.parse("package:" + ApplicationLoader.applicationContext.packageName)
+						intent.data = ("package:" + ApplicationLoader.applicationContext.packageName).toUri()
 						parentActivity.startActivity(intent)
 					}
 					catch (xx: Exception) {
@@ -3379,7 +3547,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					}
 				}
 			}.setNegativeButton(parentActivity.getString(R.string.ContactsPermissionAlertNotNow)) { _, _ ->
-				MessagesController.getGlobalNotificationsSettings().edit().putBoolean("askedAboutMiuiLockscreen", true).commit()
+				MessagesController.getGlobalNotificationsSettings().edit { putBoolean("askedAboutMiuiLockscreen", true) }
 			}.create())
 		}
 
@@ -3416,6 +3584,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 				if (!floatingHidden) {
 					updateFloatingButtonOffset()
+					updateOverlayButtonOffset()
 				}
 			}
 
@@ -3433,6 +3602,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		updateVisibleRows(0, false)
 		updateProxyButton(animated = false, force = true)
 		checkSuggestClearDatabase()
+		context?.let { checkSubscriptionStatus(it) }
 	}
 
 	override fun presentFragment(fragment: BaseFragment): Boolean {
@@ -3482,7 +3652,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 			return false
 		}
-		else if (filterTabsView != null && filterTabsView!!.visibility == View.VISIBLE && !tabsAnimationInProgress && !filterTabsView!!.isAnimatingIndicator && !startedTracking && !filterTabsView!!.isFirstTabSelected) {
+		else if (filterTabsView != null && filterTabsView!!.isVisible && !tabsAnimationInProgress && !filterTabsView!!.isAnimatingIndicator && !startedTracking && !filterTabsView!!.isFirstTabSelected) {
 			filterTabsView?.selectFirstTab()
 			return false
 		}
@@ -3714,7 +3884,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				updateProxyButton(animated = false, force = false)
 			}
 
-			if (filterTabsView != null && filterTabsView!!.visibility == View.VISIBLE) {
+			if (filterTabsView != null && filterTabsView!!.isVisible) {
 				tabsAlphaAnimator = ObjectAnimator.ofFloat(filterTabsView!!.tabsContainer, View.ALPHA, if (show) 0f else 1f).setDuration(100)
 
 				tabsAlphaAnimator?.addListener(object : AnimatorListenerAdapter() {
@@ -4095,15 +4265,15 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				dialogId = `object`.id
 			}
 			else if (`object` is TLRPC.Dialog) {
-				folderId = `object`.folder_id
+				folderId = `object`.folderId
 
-				if (`object` is TLRPC.TL_dialogFolder) {
+				if (`object` is TLRPC.TLDialogFolder) {
 					if (actionBar?.isActionModeShowed(null) == true) {
 						return
 					}
 
 					val args = Bundle()
-					args.putInt("folderId", `object`.folder.id)
+					args.putInt("folderId", `object`.folder?.id ?: 0)
 
 					presentFragment(DialogsActivity(args))
 
@@ -4117,45 +4287,52 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					return
 				}
 			}
-			else if (`object` is TLRPC.TL_recentMeUrlChat) {
-				dialogId = -`object`.chat_id
+			else if (`object` is TLRPC.TLRecentMeUrlChat) {
+				dialogId = -`object`.chatId
 			}
-			else if (`object` is TLRPC.TL_recentMeUrlUser) {
-				dialogId = `object`.user_id
+			else if (`object` is TLRPC.TLRecentMeUrlUser) {
+				dialogId = `object`.userId
 			}
-			else if (`object` is TLRPC.TL_recentMeUrlChatInvite) {
-				val invite = `object`.chat_invite
+			else if (`object` is TLRPC.TLRecentMeUrlChatInvite) {
+				val invite = `object`.chatInvite
 
-				if (invite.chat == null && (!invite.channel || invite.megagroup) || invite.chat != null && (!ChatObject.isChannel(invite.chat) || invite.chat?.megagroup == true)) {
-					var hash = `object`.url
-					val index = hash.indexOf('/')
+				if (invite != null) {
+					if (invite.chat == null && (!invite.channel || invite.megagroup) || invite.chat != null && (!ChatObject.isChannel(invite.chat) || invite.chat?.megagroup == true)) {
+						var hash = `object`.url
 
-					if (index > 0) {
-						hash = hash.substring(index + 1)
+						if (hash != null) {
+							val index = hash.indexOf('/')
+
+							if (index > 0) {
+								hash = hash.substring(index + 1)
+							}
+
+							parentActivity?.let {
+								showDialog(JoinGroupAlert(it, invite, hash, this@DialogsActivity))
+							}
+
+							return
+						}
 					}
-
-					parentActivity?.let {
-						showDialog(JoinGroupAlert(it, invite, hash, this@DialogsActivity))
+					else {
+						dialogId = -(invite.chat?.id ?: return)
 					}
+				}
+			}
+			else if (`object` is TLRPC.TLRecentMeUrlStickerSet) {
+				val stickerSet = `object`.set?.set
+
+				if (stickerSet != null) {
+					val set = TLRPC.TLInputStickerSetID()
+					set.id = stickerSet.id
+					set.accessHash = stickerSet.accessHash
+
+					showDialog(StickersAlert(parentActivity, this@DialogsActivity, set, null, null))
 
 					return
 				}
-				else {
-					dialogId = -(invite.chat?.id ?: return)
-				}
 			}
-			else if (`object` is TLRPC.TL_recentMeUrlStickerSet) {
-				val stickerSet = `object`.set.set
-
-				val set = TLRPC.TL_inputStickerSetID()
-				set.id = stickerSet.id
-				set.access_hash = stickerSet.access_hash
-
-				showDialog(StickersAlert(parentActivity, this@DialogsActivity, set, null, null))
-
-				return
-			}
-			else if (`object` is TLRPC.TL_recentMeUrlUnknown) {
+			else if (`object` is TLRPC.TLRecentMeUrlUnknown) {
 				return
 			}
 			else {
@@ -4255,10 +4432,11 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				var did = dialogId
 
 				if (messageId != 0) {
-					val chat = messagesController.getChat(-did)
-					if (chat?.migrated_to != null) {
+					val migratedTo = messagesController.getChat(-did)?.migratedTo
+
+					if (migratedTo != null) {
 						args.putLong("migrated_to", did)
-						did = -chat.migrated_to.channel_id
+						did = -migratedTo.channelId
 					}
 				}
 
@@ -4368,15 +4546,15 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 							builder.setMessage(LocaleController.formatString("ClearSearchSingleChatAlertText", R.string.ClearSearchSingleChatAlertText, parentActivity.getString(R.string.SavedMessages)))
 						}
 						else {
-							builder.setMessage(LocaleController.formatString("ClearSearchSingleUserAlertText", R.string.ClearSearchSingleUserAlertText, ContactsController.formatName(item.first_name, item.last_name)))
+							builder.setMessage(LocaleController.formatString("ClearSearchSingleUserAlertText", R.string.ClearSearchSingleUserAlertText, ContactsController.formatName(item.firstName, item.lastName)))
 						}
 
 						item.id
 					}
 
 					is TLRPC.EncryptedChat -> {
-						val user = messagesController.getUser(item.user_id)
-						builder.setMessage(LocaleController.formatString("ClearSearchSingleUserAlertText", R.string.ClearSearchSingleUserAlertText, ContactsController.formatName(user!!.first_name, user.last_name)))
+						val user = messagesController.getUser(item.userId)
+						builder.setMessage(LocaleController.formatString("ClearSearchSingleUserAlertText", R.string.ClearSearchSingleUserAlertText, ContactsController.formatName(user!!.firstName, user.lastName)))
 						DialogObject.makeEncryptedDialogId(item.id.toLong())
 					}
 
@@ -4455,7 +4633,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			true
 		}
 		else {
-			if (dialog is TLRPC.TL_dialogFolder) {
+			if (dialog is TLRPC.TLDialogFolder) {
 				onArchiveLongPress(view)
 				return false
 			}
@@ -4531,11 +4709,11 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				var did = dialogId
 
 				if (messageId != 0) {
-					val chat = messagesController.getChat(-did)
+					val migratedTo = messagesController.getChat(-did)?.migratedTo
 
-					if (chat?.migrated_to != null) {
+					if (migratedTo != null) {
 						args.putLong("migrated_to", did)
-						did = -chat.migrated_to.channel_id
+						did = -migratedTo.channelId
 					}
 				}
 
@@ -4709,7 +4887,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			while (a < n) {
 				val dialog1 = dialogs[a]
 
-				if (dialog1 is TLRPC.TL_dialogFolder) {
+				if (dialog1 is TLRPC.TLDialogFolder) {
 					a++
 					continue
 				}
@@ -4799,8 +4977,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 						if (filter != null) {
 							if (encryptedChat != null) {
-								if (!filter.alwaysShow.contains(encryptedChat.user_id)) {
-									filter.alwaysShow.add(encryptedChat.user_id)
+								if (!filter.alwaysShow.contains(encryptedChat.userId)) {
+									filter.alwaysShow.add(encryptedChat.userId)
 								}
 							}
 							else {
@@ -4913,6 +5091,10 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		floatingButtonContainer?.translationY = floatingButtonTranslation - max(additionalFloatingTranslation, 0f) * (1f - floatingButtonHideProgress)
 	}
 
+	private fun updateOverlayButtonOffset() {
+		quickLinksButtonBinding?.root?.translationY = quickLinksButtonTranslation - max(additionalFloatingTranslation, 0f) * (1f - floatingButtonHideProgress)
+	}
+
 	private fun hasHiddenArchive(): Boolean {
 		return !onlySelect && initialDialogsType == 0 && folderId == 0 && messagesController.hasHiddenArchive()
 	}
@@ -4968,7 +5150,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 		val w = (fragmentView.measuredWidth / 6.0f).toInt()
 		val h = (fragmentView.measuredHeight / 6.0f).toInt()
-		val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+		val bitmap = createBitmap(w, h)
 		val canvas = Canvas(bitmap)
 
 		canvas.scale(1.0f / 6.0f, 1.0f / 6.0f)
@@ -4977,7 +5159,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 		Utilities.stackBlurBitmap(bitmap, max(7, max(w, h) / 180))
 
-		blurredView.background = BitmapDrawable(context.resources, bitmap)
+		blurredView.background = bitmap.toDrawable(context.resources)
 		blurredView.alpha = 0.0f
 		blurredView.visibility = View.VISIBLE
 	}
@@ -5046,7 +5228,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 			actionBar?.let { actionBar ->
 				for (i in 0 until actionBar.childCount) {
-					if (actionBar.getChildAt(i).visibility == View.VISIBLE && actionBar.getChildAt(i) !== actionBar.actionMode && actionBar.getChildAt(i) !== actionBar.backButton) {
+					if (actionBar.getChildAt(i).isVisible && actionBar.getChildAt(i) !== actionBar.actionMode && actionBar.getChildAt(i) !== actionBar.backButton) {
 						actionBar.getChildAt(i).alpha = 1f - progressToActionMode
 					}
 				}
@@ -5102,7 +5284,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			while (a < n) {
 				val dialog = dialogs[a]
 
-				if (dialog is TLRPC.TL_dialogFolder) {
+				if (dialog is TLRPC.TLDialogFolder) {
 					a++
 					continue
 				}
@@ -5163,7 +5345,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				val hintShowed = preferences.getBoolean("archivehint_l", false) || SharedConfig.archiveHidden
 
 				if (!hintShowed) {
-					preferences.edit().putBoolean("archivehint_l", true).commit()
+					preferences.edit { putBoolean("archivehint_l", true) }
 				}
 
 				val undoAction = if (hintShowed) {
@@ -5207,7 +5389,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			while (a < n) {
 				val dialog = dialogs[a]
 
-				if (dialog is TLRPC.TL_dialogFolder) {
+				if (dialog is TLRPC.TLDialogFolder) {
 					a++
 					continue
 				}
@@ -5262,13 +5444,13 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			if (newPinnedSecretCount + pinnedSecretCount > maxPinnedCount || newPinnedCount + pinnedCount - alreadyAdded > maxPinnedCount) {
 				if (folderId != 0 || filter != null) {
 					AlertsCreator.showSimpleAlert(this@DialogsActivity, LocaleController.formatString("PinFolderLimitReached", R.string.PinFolderLimitReached, LocaleController.formatPluralString("Chats", maxPinnedCount)))
+					return
 				}
-				else {
-					val limitReachedBottomSheet = LimitReachedBottomSheet(this, LimitReachedBottomSheet.TYPE_PIN_DIALOGS, currentAccount)
-					showDialog(limitReachedBottomSheet)
-				}
-
-				return
+//				else {
+//					val limitReachedBottomSheet = LimitReachedBottomSheet(this, LimitReachedBottomSheet.TYPE_PIN_DIALOGS, currentAccount)
+//					showDialog(limitReachedBottomSheet)
+//					return
+//				}
 			}
 		}
 		else if ((action == delete || action == clear) && count > 1 && alert) {
@@ -5394,10 +5576,10 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				chat = null
 
 				user = if (encryptedChat != null) {
-					messagesController.getUser(encryptedChat.user_id)
+					messagesController.getUser(encryptedChat.userId)
 				}
 				else {
-					TLRPC.TL_userEmpty()
+					TLRPC.TLUserEmpty()
 				}
 			}
 			else if (DialogObject.isUserDialog(selectedDialog)) {
@@ -5427,8 +5609,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 						minPinnedNum++
 
 						if (encryptedChat != null) {
-							if (!filter.alwaysShow.contains(encryptedChat.user_id)) {
-								filter.alwaysShow.add(encryptedChat.user_id)
+							if (!filter.alwaysShow.contains(encryptedChat.userId)) {
+								filter.alwaysShow.add(encryptedChat.userId)
 							}
 						}
 						else {
@@ -5633,7 +5815,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		}
 
 		messagesController.markMentionsAsRead(did)
-		messagesController.markDialogAsRead(did, dialog!!.top_message, dialog.top_message, dialog.last_message_date, false, 0, 0, true, 0)
+		messagesController.markDialogAsRead(did, dialog!!.topMessage, dialog.topMessage, dialog.lastMessageDate, false, 0, 0, true, 0)
 
 		if (selectedDialogIndex >= 0) {
 			frozenDialogsList?.removeAt(selectedDialogIndex)
@@ -5729,7 +5911,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			true
 		}
 		else {
-			messagesController.pinDialog(selectedDialog, pin, null, -1)
+			messagesController.pinDialog(selectedDialog, pin, null)
 		}
 
 		if (updated) {
@@ -5836,7 +6018,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			val dialog = messagesController.dialogs_dict[selectedDialogs[a]] ?: continue
 			val selectedDialog = dialog.id
 			val pinned = isDialogPinned(dialog)
-			val hasUnread = dialog.unread_count != 0 || dialog.unread_mark
+			val hasUnread = dialog.unreadCount != 0 || dialog.unreadMark
 
 			if (messagesController.isDialogMuted(selectedDialog)) {
 				canUnmuteCount++
@@ -5849,7 +6031,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				canReadCount++
 			}
 
-			if (folderId == 1 || dialog.folder_id == 1) {
+			if (folderId == 1 || dialog.folderId == 1) {
 				canUnarchiveCount++
 			}
 			else if (selectedDialog != selfUserId && selectedDialog != BuildConfig.NOTIFICATIONS_BOT_ID && !messagesController.isPromoDialog(selectedDialog, false)) {
@@ -6089,7 +6271,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 		val chat = messagesController.getChat(-dialogId)
 
-		if (chat != null && !ChatObject.hasAdminRights(chat) && chat.slowmode_enabled) {
+		if (chat != null && !ChatObject.hasAdminRights(chat) && chat.slowmodeEnabled) {
 			context?.let {
 				AlertsCreator.showSimpleAlert(this@DialogsActivity, it.getString(R.string.Slowmode), it.getString(R.string.SlowmodeSendError))
 			}
@@ -6160,7 +6342,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 				actionBar?.let { actionBar ->
 					for (i in 0 until actionBar.childCount) {
-						if (actionBar.getChildAt(i).visibility == View.VISIBLE && actionBar.getChildAt(i) !== actionBar.actionMode && actionBar.getChildAt(i) !== actionBar.backButton) {
+						if (actionBar.getChildAt(i).isVisible && actionBar.getChildAt(i) !== actionBar.actionMode && actionBar.getChildAt(i) !== actionBar.backButton) {
 							actionBar.getChildAt(i).alpha = 1f - progressToActionMode
 						}
 					}
@@ -6406,6 +6588,8 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					commentViewAnimator?.start()
 
 					commentView?.tag = 1
+
+					hideFloatingButton(true)
 				}
 
 				actionBar?.setTitle(LocaleController.formatPluralString("Recipient", selectedDialogs.size))
@@ -6479,8 +6663,10 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			floatingButtonContainer?.viewTreeObserver?.addOnGlobalLayoutListener(object : OnGlobalLayoutListener {
 				override fun onGlobalLayout() {
 					floatingButtonTranslation = if (floatingHidden) AndroidUtilities.dp(100f).toFloat() else 0f
+					quickLinksButtonTranslation = if (floatingHidden) AndroidUtilities.dp(120f).toFloat() else 0f
 
 					updateFloatingButtonOffset()
+					updateOverlayButtonOffset()
 
 					floatingButtonContainer?.isClickable = !floatingHidden
 					floatingButtonContainer?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
@@ -6576,6 +6762,21 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {
 		when (id) {
+			NotificationCenter.userInfoDidLoad -> {
+				val innerUserId = args[0] as Long
+
+				if (innerUserId > 0 && innerUserId == userConfig.clientUserId) {
+					val link = inviteLink()
+
+					viewPages?.forEach {
+						it?.dialogsAdapter?.let {
+							it.inviteLink = link
+							it.notifyDataSetChanged()
+						}
+					}
+				}
+			}
+
 			NotificationCenter.dialogsNeedReload -> {
 				if (viewPages == null || dialogsListFrozen) {
 					return
@@ -6976,7 +7177,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			return
 		}
 
-		preferences.edit().putBoolean("filterhint", true).commit()
+		preferences.edit { putBoolean("filterhint", true) }
 
 		AndroidUtilities.runOnUIThread({
 			getUndoView()?.showWithAction(0, UndoView.ACTION_FILTERS_AVAILABLE, null) {
@@ -7219,7 +7420,9 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		valueAnimator.addUpdateListener {
 			floatingButtonHideProgress = it.animatedValue as Float
 			floatingButtonTranslation = AndroidUtilities.dp(100f) * floatingButtonHideProgress
+			quickLinksButtonTranslation = AndroidUtilities.dp(120f) * floatingButtonHideProgress
 			updateFloatingButtonOffset()
+			updateOverlayButtonOffset()
 		}
 
 		animatorSet.playTogether(valueAnimator)
@@ -7474,7 +7677,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				user = messagesController.getUser(dialogId)
 				chat = null
 
-				if (user?.mutual_contact != true) {
+				if (user?.mutualContact != true) {
 					getUndoView()?.showWithAction(dialogId, UndoView.ACTION_IMPORT_NOT_MUTUAL, null)
 					return
 				}
@@ -7491,7 +7694,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 			val progressDialog = AlertDialog(parentActivity, 3)
 
-			val req = TLRPC.TL_messages_checkHistoryImportPeer()
+			val req = TLRPC.TLMessagesCheckHistoryImportPeer()
 			req.peer = messagesController.getInputPeer(dialogId)
 
 			connectionsManager.sendRequest(req) { response, error ->
@@ -7505,16 +7708,12 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 					checkingImportDialog = false
 
-					if (response != null) {
-						val res = response as TLRPC.TL_messages_checkedHistoryImportPeer
-
-						AlertsCreator.createImportDialogAlert(this, res.confirm_text, user, chat) {
-							setDialogsListFrozen(true)
-
-							val dids = ArrayList<Long>()
-							dids.add(dialogId)
-
-							delegate?.didSelectDialogs(this@DialogsActivity, dids, null, param)
+					if (response is TLRPC.TLMessagesCheckedHistoryImportPeer) {
+						response.confirmText?.let {
+							AlertsCreator.createImportDialogAlert(this, it, user, chat) {
+								setDialogsListFrozen(true)
+								delegate?.didSelectDialogs(this@DialogsActivity, listOf(dialogId), null, param)
+							}
 						}
 					}
 					else {
@@ -7542,7 +7741,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 			if (DialogObject.isEncryptedDialog(dialogId)) {
 				val chat = messagesController.getEncryptedChat(DialogObject.getEncryptedChatId(dialogId))
-				val user = messagesController.getUser(chat?.user_id) ?: return
+				val user = messagesController.getUser(chat?.userId) ?: return
 				title = parentActivity.getString(R.string.SendMessageTitle)
 				message = LocaleController.formatStringSimple(selectAlertString, getUserName(user))
 				buttonText = parentActivity.getString(R.string.Send)
@@ -7858,27 +8057,50 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		return shouldShowBottomNavigationPanel
 	}
 
-	var invite: TLRPC.TL_chatInviteExported? = null
+	var invite: TLRPC.TLChatInviteExported? = null
 
 	private fun loadInviteLinks() {
-		val req = TLRPC.TL_messages_getExportedChatInvites()
 		val userId = userConfig.clientUserId
+
+		val req = TLRPC.TLMessagesGetExportedChatInvites()
 		req.peer = messagesController.getInputPeer(userId)
-		req.admin_id = messagesController.getInputUser(userConfig.clientUserId)
+		req.adminId = messagesController.getInputUser(userId)
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (error == null) {
-				val invites: TLRPC.TL_messages_exportedChatInvites = response as TLRPC.TL_messages_exportedChatInvites
+				val invites: TLRPC.TLMessagesExportedChatInvites = response as TLRPC.TLMessagesExportedChatInvites
 
 				if (invites.count > 0) {
-					val chatInvite: TLRPC.ExportedChatInvite? = invites.invites?.get(0)
+					val chatInvite = invites.invites.first()
 
-					if (chatInvite != null) {
-						invite = (chatInvite as TLRPC.TL_chatInviteExported)
+					invite = (chatInvite as? TLRPC.TLChatInviteExported)
+					inviteLink = invite?.link ?: ""
+				}
+				else {
+					@Suppress("NAME_SHADOWING") val req = TLMessagesExportChatInvite()
+					req.legacyRevokePermanent = true
+					req.peer = MessagesController.getInstance(currentAccount).getInputPeer(userId)
+
+					connectionsManager.sendRequest(req) { response, error ->
+						if (error == null && response != null) {
+							invite = response as? TLRPC.TLChatInviteExported
+							inviteLink = invite?.link ?: ""
+						}
 					}
 				}
 			}
 		}
+	}
+
+	fun inviteLink(): String {
+		val user = messagesController.getUser(userConfig.clientUserId) as? TLRPC.TLUser
+		val username = user?.username ?: ""
+
+		if (user?.isPublic == false && inviteLink.isNotBlank()) {
+			return inviteLink
+		}
+
+		return "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + username
 	}
 
 	private var loadingInviteUser = false
@@ -7888,7 +8110,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		val userFull = messagesController.getUserFull(userId)
 
 		if (userFull != null) {
-			val fragment = ManageLinksActivity(userId, invite?.admin_id ?: 0L)
+			val fragment = ManageLinksActivity(userId, invite?.adminId ?: 0L)
 			fragment.setInfo(userFull, invite)
 			presentFragment(fragment)
 		}
@@ -7911,7 +8133,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 						val user = messagesController.getUserFull(userId)
 
 						if (user != null) {
-							val fragment = ManageLinksActivity(innerUserId, invite?.admin_id ?: 0L)
+							val fragment = ManageLinksActivity(innerUserId, invite?.adminId ?: 0L)
 							fragment.setInfo(user, invite)
 							presentFragment(fragment)
 						}
@@ -8088,34 +8310,29 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 				return true
 			}
 
-			val result: Boolean
+			var result = false
 
 			if (child === viewPages!![0] || viewPages!!.size > 1 && child === viewPages!![1] || child === fragmentContextView || child === fragmentLocationContextView || child === searchViewPager) {
-				canvas.save()
-				canvas.clipRect(0f, -y + actionBar!!.y + actionBarFullHeight, measuredWidth.toFloat(), measuredHeight.toFloat())
+				canvas.withClip(0f, -y + actionBar!!.y + actionBarFullHeight, measuredWidth.toFloat(), measuredHeight.toFloat()) {
+					if (slideFragmentProgress != 1f) {
+						val s = 1f - 0.05f * (1f - slideFragmentProgress)
+						translate((if (isDrawerTransition) AndroidUtilities.dp(4f)
+						else -AndroidUtilities.dp(4f)) * (1f - slideFragmentProgress), 0f)
+						scale(s, s, if (isDrawerTransition) measuredWidth.toFloat() else 0f, -y + actionBar!!.y + actionBarFullHeight)
+					}
 
-				if (slideFragmentProgress != 1f) {
-					val s = 1f - 0.05f * (1f - slideFragmentProgress)
-					canvas.translate((if (isDrawerTransition) AndroidUtilities.dp(4f)
-					else -AndroidUtilities.dp(4f)) * (1f - slideFragmentProgress), 0f)
-					canvas.scale(s, s, if (isDrawerTransition) measuredWidth.toFloat() else 0f, -y + actionBar!!.y + actionBarFullHeight)
+					result = super.drawChild(this, child, drawingTime)
 				}
-
-				result = super.drawChild(canvas, child, drawingTime)
-
-				canvas.restore()
 			}
 			else if (child === actionBar && slideFragmentProgress != 1f) {
-				canvas.save()
+				canvas.withSave {
+					val s = 1f - 0.05f * (1f - slideFragmentProgress)
 
-				val s = 1f - 0.05f * (1f - slideFragmentProgress)
+					translate((if (isDrawerTransition) AndroidUtilities.dp(4f) else -AndroidUtilities.dp(4f)) * (1f - slideFragmentProgress), 0f)
+					scale(s, s, if (isDrawerTransition) measuredWidth.toFloat() else 0f, (if (actionBar?.occupyStatusBar == true) AndroidUtilities.statusBarHeight else 0) + ActionBar.getCurrentActionBarHeight() / 2f)
 
-				canvas.translate((if (isDrawerTransition) AndroidUtilities.dp(4f) else -AndroidUtilities.dp(4f)) * (1f - slideFragmentProgress), 0f)
-				canvas.scale(s, s, if (isDrawerTransition) measuredWidth.toFloat() else 0f, (if (actionBar?.occupyStatusBar == true) AndroidUtilities.statusBarHeight else 0) + ActionBar.getCurrentActionBarHeight() / 2f)
-
-				result = super.drawChild(canvas, child, drawingTime)
-
-				canvas.restore()
+					result = super.drawChild(this, child, drawingTime)
+				}
 			}
 			else {
 				result = super.drawChild(canvas, child, drawingTime)
@@ -8185,16 +8402,13 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 					actionBarSearchPaint.color = ColorUtils.blendARGB(if (folderId == 0) context.getColor(R.color.background) else context.getColor(R.color.dark_gray), context.getColor(R.color.background), searchAnimationProgress)
 
 					if (searchIsShowed || !searchWasFullyShowed) {
-						canvas.save()
-						canvas.clipRect(0, top, measuredWidth, top + actionBarHeight)
+						canvas.withClip(0, top, measuredWidth, top + actionBarHeight) {
+							val cX = (measuredWidth - AndroidUtilities.dp(24f)).toFloat()
+							val statusBarH = if (actionBar!!.occupyStatusBar) AndroidUtilities.statusBarHeight else 0
+							val cY = statusBarH + (actionBar!!.measuredHeight - statusBarH) / 2f
 
-						val cX = (measuredWidth - AndroidUtilities.dp(24f)).toFloat()
-						val statusBarH = if (actionBar!!.occupyStatusBar) AndroidUtilities.statusBarHeight else 0
-						val cY = statusBarH + (actionBar!!.measuredHeight - statusBarH) / 2f
-
-						drawBlurCircle(canvas, 0f, cX, cY, measuredWidth * 1.3f * searchAnimationProgress, actionBarSearchPaint, true)
-
-						canvas.restore()
+							drawBlurCircle(this, 0f, cX, cY, measuredWidth * 1.3f * searchAnimationProgress, actionBarSearchPaint, true)
+						}
 					}
 					else {
 						AndroidUtilities.rectTmp2[0, top, measuredWidth] = top + actionBarHeight
@@ -8260,22 +8474,19 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			}
 
 			if (fragmentContextView?.isCallStyle == true) {
-				canvas.save()
-				canvas.translate(fragmentContextView!!.x, fragmentContextView!!.y)
+				canvas.withTranslation(fragmentContextView!!.x, fragmentContextView!!.y) {
+					if (slideFragmentProgress != 1f) {
+						val s = 1f - 0.05f * (1f - slideFragmentProgress)
 
-				if (slideFragmentProgress != 1f) {
-					val s = 1f - 0.05f * (1f - slideFragmentProgress)
+						translate((if (isDrawerTransition) AndroidUtilities.dp(4f) else -AndroidUtilities.dp(4f)) * (1f - slideFragmentProgress), 0f)
 
-					canvas.translate((if (isDrawerTransition) AndroidUtilities.dp(4f) else -AndroidUtilities.dp(4f)) * (1f - slideFragmentProgress), 0f)
+						scale(s, 1f, if (isDrawerTransition) measuredWidth.toFloat() else 0f, fragmentContextView!!.y)
+					}
 
-					canvas.scale(s, 1f, if (isDrawerTransition) measuredWidth.toFloat() else 0f, fragmentContextView!!.y)
+					fragmentContextView?.setDrawOverlay(true)
+					fragmentContextView?.draw(this)
+					fragmentContextView?.setDrawOverlay(false)
 				}
-
-				fragmentContextView?.setDrawOverlay(true)
-				fragmentContextView?.draw(canvas)
-				fragmentContextView?.setDrawOverlay(false)
-
-				canvas.restore()
 			}
 			if (blurredView?.visibility == VISIBLE) {
 				if (blurredView?.alpha != 1f) {
@@ -8295,38 +8506,38 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 
 			if (scrimView != null) {
 				canvas.drawRect(0f, 0f, measuredWidth.toFloat(), measuredHeight.toFloat(), scrimPaint!!)
-				canvas.save()
 
-				getLocationInWindow(pos)
+				canvas.withSave {
+					getLocationInWindow(pos)
 
-				canvas.translate((scrimViewLocation[0] - pos[0]).toFloat(), scrimViewLocation[1].toFloat())
+					translate((scrimViewLocation[0] - pos[0]).toFloat(), scrimViewLocation[1].toFloat())
 
-				scrimViewBackground?.let {
-					it.alpha = if (scrimViewAppearing) 255 else (scrimPaint!!.alpha / 50f * 255f).toInt()
-					it.setBounds(0, 0, scrimView!!.width, scrimView!!.height)
-					it.draw(canvas)
-				}
-
-				val selectorDrawable = filterTabsView?.listView?.selectorDrawable
-
-				if (scrimViewAppearing && selectorDrawable != null) {
-					canvas.save()
-					val selectorBounds = selectorDrawable.bounds
-					canvas.translate(-selectorBounds.left.toFloat(), -selectorBounds.top.toFloat())
-					selectorDrawable.draw(canvas)
-					canvas.restore()
-				}
-
-				scrimView?.draw(canvas)
-
-				if (scrimViewSelected) {
-					filterTabsView?.selectorDrawable?.let {
-						canvas.translate(-scrimViewLocation[0].toFloat(), (-it.intrinsicHeight - 1).toFloat())
-						it.draw(canvas)
+					scrimViewBackground?.let {
+						it.alpha = if (scrimViewAppearing) 255 else (scrimPaint!!.alpha / 50f * 255f).toInt()
+						it.setBounds(0, 0, scrimView!!.width, scrimView!!.height)
+						it.draw(this)
 					}
-				}
 
-				canvas.restore()
+					val selectorDrawable = filterTabsView?.listView?.selectorDrawable
+
+					if (scrimViewAppearing && selectorDrawable != null) {
+						withSave {
+							val selectorBounds = selectorDrawable.bounds
+							translate(-selectorBounds.left.toFloat(), -selectorBounds.top.toFloat())
+							selectorDrawable.draw(this)
+						}
+					}
+
+					scrimView?.draw(this)
+
+					if (scrimViewSelected) {
+						filterTabsView?.selectorDrawable?.let {
+							translate(-scrimViewLocation[0].toFloat(), (-it.intrinsicHeight - 1).toFloat())
+							it.draw(this)
+						}
+					}
+
+				}
 			}
 		}
 
@@ -8382,7 +8593,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			for (i in 0 until childCount) {
 				val child = getChildAt(i)
 
-				if (child == null || child.visibility == GONE || child === commentView || child === actionBar) {
+				if (child == null || child.isGone || child === commentView || child === actionBar) {
 					continue
 				}
 
@@ -8475,7 +8686,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			for (i in -1 until count) {
 				val child = if (i == -1) commentView else getChildAt(i)
 
-				if (child == null || child.visibility == GONE) {
+				if (child == null || child.isGone) {
 					continue
 				}
 
@@ -8850,25 +9061,21 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			}
 			else {
 				viewPages?.forEach { viewPage ->
-					if (viewPage != null && viewPage.visibility == VISIBLE) {
+					if (viewPage != null && viewPage.isVisible) {
 						for (j in 0 until viewPage.listView!!.childCount) {
 							val child = viewPage.listView?.getChildAt(j)
 
 							if (child != null && child.y < viewPage.listView!!.blurTopPadding + AndroidUtilities.dp(100f)) {
-								val restore = blurCanvas.save()
-
-								blurCanvas.translate(viewPage.x, viewPage.y + viewPage.listView!!.y + child.y)
-
-								if (child is DialogCell) {
-									child.drawingForBlur = true
-									child.draw(blurCanvas)
-									child.drawingForBlur = false
+								blurCanvas.withTranslation(viewPage.x, viewPage.y + viewPage.listView!!.y + child.y) {
+									if (child is DialogCell) {
+										child.drawingForBlur = true
+										child.draw(blurCanvas)
+										child.drawingForBlur = false
+									}
+									else {
+										child.draw(blurCanvas)
+									}
 								}
-								else {
-									child.draw(blurCanvas)
-								}
-
-								blurCanvas.restoreToCount(restore)
 							}
 						}
 					}
@@ -9168,7 +9375,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 									if (SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_READ) {
 										val selectedDialogs = ArrayList<Long>()
 										selectedDialogs.add(dialogId)
-										canReadCount = if (dialog.unread_count > 0 || dialog.unread_mark) 1 else 0
+										canReadCount = if (dialog.unreadCount > 0 || dialog.unreadMark) 1 else 0
 										performSelectedDialogsAction(selectedDialogs, read, true)
 									}
 									else if (SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_MUTE) {
@@ -9345,7 +9552,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 						if (filter != null && filter.flags and MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_READ != 0) {
 							val dialog = messagesController.dialogs_dict[dialogId]
 
-							if (dialog != null && !filter.alwaysShow(currentAccount, dialog) && (dialog.unread_count > 0 || dialog.unread_mark)) {
+							if (dialog != null && !filter.alwaysShow(currentAccount, dialog) && (dialog.unreadCount > 0 || dialog.unreadMark)) {
 								canSwipeBack = false
 							}
 						}
@@ -9421,7 +9628,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 			if (!messagesController.isPromoDialog(dialogId, false) && folderId == 0 && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_READ) {
 				val selectedDialogs = ArrayList<Long>()
 				selectedDialogs.add(dialogId)
-				canReadCount = if (dialog.unread_count > 0 || dialog.unread_mark) 1 else 0
+				canReadCount = if (dialog.unreadCount > 0 || dialog.unreadMark) 1 else 0
 				performSelectedDialogsAction(selectedDialogs, read, true)
 				return
 			}
@@ -9503,7 +9710,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 						val hintShowed = preferences.getBoolean("archivehint_l", false) || SharedConfig.archiveHidden
 
 						if (!hintShowed) {
-							preferences.edit().putBoolean("archivehint_l", true).commit()
+							preferences.edit { putBoolean("archivehint_l", true) }
 						}
 
 						getUndoView()?.showWithAction(dialog.id, if (hintShowed) UndoView.ACTION_ARCHIVE else UndoView.ACTION_ARCHIVE_HINT, null) {
@@ -9629,6 +9836,7 @@ open class DialogsActivity(args: Bundle?) : BaseFragment(args), NotificationCent
 		private const val ARCHIVE_ITEM_STATE_PINNED = 0
 		private const val ARCHIVE_ITEM_STATE_SHOWED = 1
 		private const val ARCHIVE_ITEM_STATE_HIDDEN = 2
+		const val LAST_SHOWN_KEY = "last_banner_shown"
 
 		private val interpolator = Interpolator { t: Float ->
 			(t - 1f).pow(5) + 1f

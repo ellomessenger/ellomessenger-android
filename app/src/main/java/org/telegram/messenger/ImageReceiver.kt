@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.messenger
 
@@ -28,14 +28,18 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.view.View
 import androidx.annotation.Keep
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.Emoji.EmojiDrawable
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.SvgHelper.SvgDrawable
 import org.telegram.messenger.messageobject.MessageObject
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.strippedBitmap
 import org.telegram.ui.Components.AnimatedFileDrawable
 import org.telegram.ui.Components.LoadingStickerDrawable
 import org.telegram.ui.Components.RLottieDrawable
@@ -261,19 +265,21 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 		var hasStripped = false
 		var videoLocation: ImageLocation? = null
 
-		if (`object` is User) {
-			if (`object`.photo != null) {
-				strippedBitmap = `object`.photo?.strippedBitmap
-				hasStripped = `object`.photo?.stripped_thumb != null
+		if (`object` is TLRPC.TLUser) {
+			val photo = `object`.photo
 
-				if (animationEnabled && MessagesController.getInstance(currentAccount).isPremiumUser(`object`) && `object`.photo?.has_video == true) {
+			if (photo != null) {
+				strippedBitmap = photo.strippedBitmap
+				hasStripped = photo.strippedThumb != null
+
+				if (animationEnabled && MessagesController.getInstance(currentAccount).isPremiumUser(`object`) && photo.hasVideo) {
 					val userFull = MessagesController.getInstance(currentAccount).getUserFull(`object`.id)
 
 					if (userFull == null) {
 						MessagesController.getInstance(currentAccount).loadFullUser(`object`, currentGuid, false)
 					}
 					else {
-						val videoSizes = userFull.profile_photo?.video_sizes
+						val videoSizes = (userFull.profilePhoto as? TLRPC.TLPhoto)?.videoSizes
 
 						if (!videoSizes.isNullOrEmpty()) {
 							var videoSize = videoSizes[0]
@@ -285,16 +291,18 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 								}
 							}
 
-							videoLocation = ImageLocation.getForPhoto(videoSize, userFull.profile_photo)
+							videoLocation = ImageLocation.getForPhoto(videoSize, userFull.profilePhoto)
 						}
 					}
 				}
 			}
 		}
 		else if (`object` is Chat) {
-			if (`object`.photo != null) {
-				strippedBitmap = `object`.photo.strippedBitmap
-				hasStripped = `object`.photo.stripped_thumb != null
+			val photo = `object`.photo
+
+			if (photo != null) {
+				strippedBitmap = photo.strippedBitmap
+				hasStripped = photo.strippedThumb != null
 			}
 		}
 
@@ -419,8 +427,8 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 		if (imageKey == null && isNeedsQualityThumb && (parentObject is MessageObject || qualityThumbDocument != null)) {
 			val document = qualityThumbDocument ?: (parentObject as? MessageObject)?.document
 
-			if (document != null && document.dc_id != 0 && document.id != 0L) {
-				imageKey = "q_" + document.dc_id + "_" + document.id
+			if (document is TLRPC.TLDocument && document.dcId != 0 && document.id != 0L) {
+				imageKey = "q_" + document.dcId + "_" + document.id
 				isCurrentKeyQuality = true
 			}
 		}
@@ -634,7 +642,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 	}
 
 	fun setImageBitmap(bitmap: Bitmap?) {
-		setImageBitmap(if (bitmap != null) BitmapDrawable(null, bitmap) else null)
+		setImageBitmap(bitmap?.toDrawable(ApplicationLoader.applicationContext.resources))
 	}
 
 	fun setImageBitmap(bitmap: Drawable?) {
@@ -792,7 +800,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 					if (legacyBitmap == null || legacyBitmap!!.width != w || legacyBitmap!!.height != h) {
 						legacyBitmap?.recycle()
 
-						legacyBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
+						legacyBitmap = createBitmap(w, h).also {
 							legacyCanvas = Canvas(it)
 							legacyShader = BitmapShader(it, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
 						}
@@ -1344,127 +1352,125 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 				}
 				else {
 					if (abs(scaleW - scaleH) > 0.00001f) {
-						canvas.save()
+						canvas.withSave {
+							if (clip) {
+								clipRect(imageX, imageY, imageX + imageW, imageY + imageH)
+							}
 
-						if (clip) {
-							canvas.clipRect(imageX, imageY, imageX + imageW, imageY + imageH)
-						}
+							if (orientation % 360 != 0) {
+								if (centerRotation) {
+									rotate(orientation.toFloat(), imageW / 2, imageH / 2)
+								}
+								else {
+									rotate(orientation.toFloat(), 0f, 0f)
+								}
+							}
 
-						if (orientation % 360 != 0) {
-							if (centerRotation) {
-								canvas.rotate(orientation.toFloat(), imageW / 2, imageH / 2)
+							if (bitmapW / scaleH > imageW) {
+								bitmapW = (bitmapW / scaleH).toInt()
+								drawRegion.set(imageX - (bitmapW - imageW) / 2.0f, imageY, imageX + (bitmapW + imageW) / 2.0f, imageY + imageH)
 							}
 							else {
-								canvas.rotate(orientation.toFloat(), 0f, 0f)
+								bitmapH = (bitmapH / scaleW).toInt()
+								drawRegion.set(imageX, imageY - (bitmapH - imageH) / 2.0f, imageX + imageW, imageY + (bitmapH + imageH) / 2.0f)
 							}
-						}
 
-						if (bitmapW / scaleH > imageW) {
-							bitmapW = (bitmapW / scaleH).toInt()
-							drawRegion.set(imageX - (bitmapW - imageW) / 2.0f, imageY, imageX + (bitmapW + imageW) / 2.0f, imageY + imageH)
-						}
-						else {
-							bitmapH = (bitmapH / scaleW).toInt()
-							drawRegion.set(imageX, imageY - (bitmapH - imageH) / 2.0f, imageX + imageW, imageY + (bitmapH + imageH) / 2.0f)
-						}
-
-						if (bitmapDrawable is AnimatedFileDrawable) {
-							bitmapDrawable.setActualDrawRect(imageX, imageY, imageW, imageH)
-						}
-
-						if (backgroundThreadDrawHolder == null) {
-							if (orientation % 360 == 90 || orientation % 360 == 270) {
-								val width = drawRegion.width() / 2
-								val height = drawRegion.height() / 2
-								val centerX = drawRegion.centerX()
-								val centerY = drawRegion.centerY()
-								bitmapDrawable.setBounds((centerX - height).toInt(), (centerY - width).toInt(), (centerX + height).toInt(), (centerY + width).toInt())
+							if (bitmapDrawable is AnimatedFileDrawable) {
+								bitmapDrawable.setActualDrawRect(imageX, imageY, imageW, imageH)
 							}
-							else {
-								bitmapDrawable.setBounds(drawRegion.left.toInt(), drawRegion.top.toInt(), drawRegion.right.toInt(), drawRegion.bottom.toInt())
-							}
-						}
 
-						if (visible) {
-							try {
-								if (Build.VERSION.SDK_INT >= 29) {
-									if (blendMode != null) {
-										bitmapDrawable.paint.blendMode = blendMode as BlendMode?
-									}
-									else {
-										bitmapDrawable.paint.blendMode = null
-									}
+							if (backgroundThreadDrawHolder == null) {
+								if (orientation % 360 == 90 || orientation % 360 == 270) {
+									val width = drawRegion.width() / 2
+									val height = drawRegion.height() / 2
+									val centerX = drawRegion.centerX()
+									val centerY = drawRegion.centerY()
+									bitmapDrawable.setBounds((centerX - height).toInt(), (centerY - width).toInt(), (centerX + height).toInt(), (centerY + width).toInt())
 								}
-
-								drawBitmapDrawable(canvas, bitmapDrawable, backgroundThreadDrawHolder, alpha)
-							}
-							catch (e: Exception) {
-								if (backgroundThreadDrawHolder == null) {
-									onBitmapException(bitmapDrawable)
+								else {
+									bitmapDrawable.setBounds(drawRegion.left.toInt(), drawRegion.top.toInt(), drawRegion.right.toInt(), drawRegion.bottom.toInt())
 								}
-
-								FileLog.e(e)
 							}
-						}
 
-						canvas.restore()
+							if (visible) {
+								try {
+									if (Build.VERSION.SDK_INT >= 29) {
+										if (blendMode != null) {
+											bitmapDrawable.paint.blendMode = blendMode as BlendMode?
+										}
+										else {
+											bitmapDrawable.paint.blendMode = null
+										}
+									}
+
+									drawBitmapDrawable(this, bitmapDrawable, backgroundThreadDrawHolder, alpha)
+								}
+								catch (e: Exception) {
+									if (backgroundThreadDrawHolder == null) {
+										onBitmapException(bitmapDrawable)
+									}
+
+									FileLog.e(e)
+								}
+							}
+
+						}
 					}
 					else {
-						canvas.save()
-
-						if (orientation % 360 != 0) {
-							if (centerRotation) {
-								canvas.rotate(orientation.toFloat(), imageW / 2, imageH / 2)
-							}
-							else {
-								canvas.rotate(orientation.toFloat(), 0f, 0f)
-							}
-						}
-
-						drawRegion.set(imageX, imageY, imageX + imageW, imageY + imageH)
-
-						if (isRoundVideo) {
-							drawRegion.inset(-AndroidUtilities.roundMessageInset.toFloat(), -AndroidUtilities.roundMessageInset.toFloat())
-						}
-
-						if (bitmapDrawable is AnimatedFileDrawable) {
-							bitmapDrawable.setActualDrawRect(imageX, imageY, imageW, imageH)
-						}
-
-						if (backgroundThreadDrawHolder == null) {
-							if (orientation % 360 == 90 || orientation % 360 == 270) {
-								val width = drawRegion.width() / 2
-								val height = drawRegion.height() / 2
-								val centerX = drawRegion.centerX()
-								val centerY = drawRegion.centerY()
-
-								bitmapDrawable.setBounds((centerX - height).toInt(), (centerY - width).toInt(), (centerX + height).toInt(), (centerY + width).toInt())
-							}
-							else {
-								bitmapDrawable.setBounds(drawRegion.left.toInt(), drawRegion.top.toInt(), drawRegion.right.toInt(), drawRegion.bottom.toInt())
-							}
-						}
-
-						if (visible) {
-							try {
-								if (Build.VERSION.SDK_INT >= 29) {
-									if (blendMode != null) {
-										bitmapDrawable.paint.blendMode = blendMode as BlendMode?
-									}
-									else {
-										bitmapDrawable.paint.blendMode = null
-									}
+						canvas.withSave {
+							if (orientation % 360 != 0) {
+								if (centerRotation) {
+									rotate(orientation.toFloat(), imageW / 2, imageH / 2)
 								}
+								else {
+									rotate(orientation.toFloat(), 0f, 0f)
+								}
+							}
 
-								drawBitmapDrawable(canvas, bitmapDrawable, backgroundThreadDrawHolder, alpha)
+							drawRegion.set(imageX, imageY, imageX + imageW, imageY + imageH)
+
+							if (isRoundVideo) {
+								drawRegion.inset(-AndroidUtilities.roundMessageInset.toFloat(), -AndroidUtilities.roundMessageInset.toFloat())
 							}
-							catch (e: Exception) {
-								onBitmapException(bitmapDrawable)
-								FileLog.e(e)
+
+							if (bitmapDrawable is AnimatedFileDrawable) {
+								bitmapDrawable.setActualDrawRect(imageX, imageY, imageW, imageH)
 							}
+
+							if (backgroundThreadDrawHolder == null) {
+								if (orientation % 360 == 90 || orientation % 360 == 270) {
+									val width = drawRegion.width() / 2
+									val height = drawRegion.height() / 2
+									val centerX = drawRegion.centerX()
+									val centerY = drawRegion.centerY()
+
+									bitmapDrawable.setBounds((centerX - height).toInt(), (centerY - width).toInt(), (centerX + height).toInt(), (centerY + width).toInt())
+								}
+								else {
+									bitmapDrawable.setBounds(drawRegion.left.toInt(), drawRegion.top.toInt(), drawRegion.right.toInt(), drawRegion.bottom.toInt())
+								}
+							}
+
+							if (visible) {
+								try {
+									if (Build.VERSION.SDK_INT >= 29) {
+										if (blendMode != null) {
+											bitmapDrawable.paint.blendMode = blendMode as BlendMode?
+										}
+										else {
+											bitmapDrawable.paint.blendMode = null
+										}
+									}
+
+									drawBitmapDrawable(this, bitmapDrawable, backgroundThreadDrawHolder, alpha)
+								}
+								catch (e: Exception) {
+									onBitmapException(bitmapDrawable)
+									FileLog.e(e)
+								}
+							}
+
 						}
-
-						canvas.restore()
 					}
 				}
 			}
@@ -1547,11 +1553,10 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 					backgroundThreadDrawHolder.paint?.alpha = alpha
 					backgroundThreadDrawHolder.paint?.colorFilter = backgroundThreadDrawHolder.colorFilter
 
-					canvas.save()
-					canvas.translate(backgroundThreadDrawHolder.imageX, backgroundThreadDrawHolder.imageY)
-					canvas.scale(backgroundThreadDrawHolder.imageW / bitmap.width, backgroundThreadDrawHolder.imageH / bitmap.height)
-					canvas.drawBitmap(bitmap, 0f, 0f, backgroundThreadDrawHolder.paint)
-					canvas.restore()
+					canvas.withTranslation(backgroundThreadDrawHolder.imageX, backgroundThreadDrawHolder.imageY) {
+						scale(backgroundThreadDrawHolder.imageW / bitmap.width, backgroundThreadDrawHolder.imageH / bitmap.height)
+						drawBitmap(bitmap, 0f, 0f, backgroundThreadDrawHolder.paint)
+					}
 				}
 			}
 		}
@@ -2766,7 +2771,7 @@ open class ImageReceiver @JvmOverloads constructor(private var parentView: View?
 	}
 
 	fun startCrossfadeFromStaticThumb(thumb: Bitmap?) {
-		startCrossfadeFromStaticThumb(BitmapDrawable(null, thumb))
+		startCrossfadeFromStaticThumb(thumb?.toDrawable(ApplicationLoader.applicationContext.resources))
 	}
 
 	fun startCrossfadeFromStaticThumb(thumb: Drawable?) {

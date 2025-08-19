@@ -3,7 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
+ * Copyright Shamil Afadniyev, Ello 2025.
  */
 package org.telegram.ui.profile.subscriptions
 
@@ -16,6 +17,7 @@ import android.widget.Toast
 import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.BuildConfig
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.FragmentCurrentSubscriptionsBinding
 import org.telegram.messenger.utils.gone
@@ -23,9 +25,10 @@ import org.telegram.messenger.utils.showMenu
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
@@ -70,6 +73,12 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 
 		binding = FragmentCurrentSubscriptionsBinding.inflate(LayoutInflater.from(context))
 
+		val botInfo = messagesController.getUser(BuildConfig.AI_BOT_ID)
+
+		if (botInfo == null) {
+			messagesController.loadFullUser(TLRPC.TLUser().apply { id = BuildConfig.AI_BOT_ID }, classGuid, true)
+		}
+
 		binding?.menuField?.setOnClickListener {
 			showSubscriptionTypeMenu(it)
 		}
@@ -81,11 +90,17 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 		adapter = CurrentSubscriptionsAdapter {
 			when (it) {
 				is CurrentSubscriptionsAdapter.SubscriptionItemAction.Cancel -> {
-					showCancelSubscriptionMenu(v = it.view, peer = it.peer)
+					when (it.subscriptionItem.type) {
+						PEER_TYPE_APPLE, PEER_TYPE_GOOGLE -> showCancelMembershipSubscriptionMenu(it.view, it.subscriptionItem.type)
+						else -> showCancelSubscriptionMenu(v = it.view, peer = it.peer, botType = it.botType, expireAt = it.expireAt)
+					}
 				}
 
 				is CurrentSubscriptionsAdapter.SubscriptionItemAction.Subscribe -> {
-					showSubscribeMenu(it.view, peer = it.peer)
+					when (it.subscriptionItem.type) {
+						PEER_TYPE_APPLE, PEER_TYPE_GOOGLE -> showMembershipSubscribeMenu(it.view, it.subscriptionItem.type)
+						else -> showSubscribeMenu(it.view, peer = it.peer, botType = it.botType)
+					}
 				}
 			}
 		}
@@ -113,7 +128,7 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 		val request = ElloRpc.getSubscriptionsRequest(subscriptionType)
 
 		connectionsManager.sendRequest(request) { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val subscriptions = response.readData<ElloRpc.Subscriptions>()
 
 				this.subscriptions = subscriptions?.items
@@ -176,8 +191,40 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 		val req = ElloRpc.subscribeRequest(peerId = id, type = peerType)
 
 		connectionsManager.sendRequest(req) { response, error ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val subscriptionItem = response.readData<ElloRpc.SubscriptionItem>()
+
+				AndroidUtilities.runOnUIThread {
+					val context = context ?: return@runOnUIThread
+
+					if (subscriptionItem != null) {
+						loadData()
+						Toast.makeText(context, R.string.successfully_subscribed, Toast.LENGTH_SHORT).show()
+					}
+					else {
+						val message = error?.text ?: context.getString(R.string.unknown_error)
+						Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+					}
+
+					binding?.progressBar?.gone()
+				}
+			}
+			else {
+				AndroidUtilities.runOnUIThread {
+					binding?.progressBar?.gone()
+				}
+			}
+		}
+	}
+
+	private fun subscribe(subType: Int) {
+		binding?.progressBar?.visible()
+
+		val req = ElloRpc.subscribeChatBotRequest(subType)
+
+		connectionsManager.sendRequest(req) { response, error ->
+			if (response is TLRPC.TLBizDataRaw) {
+				val subscriptionItem = response.readData<ElloRpc.SubscriptionInfoAiBot>()
 
 				AndroidUtilities.runOnUIThread {
 					val context = context ?: return@runOnUIThread
@@ -224,7 +271,7 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 		val req = ElloRpc.unsubscribeRequest(peerId = id, type = peerType)
 
 		connectionsManager.sendRequest(req) { response, error ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val subscriptionItem = response.readData<ElloRpc.SubscriptionItem>()
 
 				AndroidUtilities.runOnUIThread {
@@ -250,7 +297,39 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 		}
 	}
 
-	private fun showCancelSubscriptionMenu(v: View, peer: TLObject) {
+	private fun unsubscribe(subType: Int) {
+		binding?.progressBar?.visible()
+
+		val req = ElloRpc.unsubscribePurchaseRequest(subType = subType)
+
+		connectionsManager.sendRequest(req) { response, error ->
+			if (response is TLRPC.TLBizDataRaw) {
+				val subscriptionItem = response.readData<ElloRpc.SubInfoResponse>()
+
+				AndroidUtilities.runOnUIThread {
+					val context = context ?: return@runOnUIThread
+
+					if (subscriptionItem != null) {
+						loadData()
+						Toast.makeText(context, R.string.subscription_cancelled, Toast.LENGTH_SHORT).show()
+					}
+					else {
+						val message = error?.text ?: context.getString(R.string.unknown_error)
+						Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+					}
+
+					binding?.progressBar?.gone()
+				}
+			}
+			else {
+				AndroidUtilities.runOnUIThread {
+					binding?.progressBar?.gone()
+				}
+			}
+		}
+	}
+
+	private fun showCancelSubscriptionMenu(v: View, peer: TLObject?, botType: Int, expireAt: Long) {
 		val popUp = context?.showMenu(v, R.menu.cancel_subscription_menu)
 
 		popUp?.setOnMenuItemClickListener {
@@ -258,8 +337,17 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 				val channel = peer as? TLRPC.Chat
 				val user = peer as? User
 
-				AlertsCreator.createClearOrDeleteDialogAlert(fragment = this, clear = false, chat = channel, user = user, secret = false, canDeleteHistory = false) {
-					unsubscribe(peer)
+				if (user?.bot == true) {
+					AlertsCreator.createClearOrDeleteDialogAlert(this, user, expireAt) {
+						unsubscribe(botType)
+					}
+				}
+				else {
+					AlertsCreator.createClearOrDeleteDialogAlert(fragment = this, clear = false, chat = channel, user = user, secret = false, canDeleteHistory = false) {
+						if (peer != null) {
+							unsubscribe(peer)
+						}
+					}
 				}
 			}
 
@@ -267,18 +355,87 @@ class CurrentSubscriptionsFragment : BaseFragment() {
 		}
 	}
 
-	private fun showSubscribeMenu(v: View, peer: TLObject) {
+	companion object {
+		private const val PEER_TYPE_APPLE = 0
+		private const val PEER_TYPE_GOOGLE = 1
+	}
+
+	private fun showCancelMembershipSubscriptionMenu(v: View, peerType: Int) {
+		val popUp = context?.showMenu(v, R.menu.cancel_subscription_menu)
+
+		popUp?.setOnMenuItemClickListener {
+			if (peerType == PEER_TYPE_APPLE) {
+				showConfirmationDialog(title = R.string.cancel_membership_subscription_title, message = R.string.cancel_subscription_ios_description, buttonText = R.string.OK)
+			}
+			else {
+				showConfirmationDialog(title = R.string.cancel_membership_subscription_title, message = R.string.cancel_google_subscription_description, buttonText = R.string.OK)
+			}
+
+			true
+		}
+	}
+
+	private fun showMembershipSubscribeMenu(v: View, peerType: Int) {
+		val popUp = context?.showMenu(v, R.menu.subscribe_menu)
+
+		popUp?.setOnMenuItemClickListener {
+			if (peerType == PEER_TYPE_APPLE) {
+				showConfirmationDialog(title = R.string.renew_subscription_apple_title, message = R.string.renew_subscription_apple_message, buttonText = R.string.OK)
+			}
+			else {
+				showConfirmationDialog(title = R.string.renew_subscription_google_title, message = R.string.renew_subscription_google_message, buttonText = R.string.OK)
+			}
+
+			true
+		}
+	}
+
+	private fun showConfirmationDialog(context: Context? = this.context, title: Int, message: Int, buttonText: Int) {
+		if (context == null) {
+			return
+		}
+
+		val builder = AlertDialog.Builder(context)
+		builder.setTitle(context.getString(title))
+		builder.setMessage(context.getString(message))
+
+		builder.setPositiveButton(context.getString(buttonText)) { dialog, _ ->
+			dialog.dismiss()
+		}
+
+		val dialog = builder.create()
+		dialog.show()
+
+		val button = dialog.getButton(DialogInterface.BUTTON_POSITIVE) as? TextView
+
+		button?.setTextColor(context.getColor(R.color.brand))
+	}
+
+	private fun showSubscribeMenu(v: View, peer: TLObject?, botType: Int) {
 		val popUp = context?.showMenu(v, R.menu.subscribe_menu)
 
 		popUp?.setOnMenuItemClickListener {
 			if (it.itemId == R.id.subscribe) {
 				val context = context ?: return@setOnMenuItemClickListener true
+				val user = peer as? User
 
 				val builder = AlertDialog.Builder(context)
-				builder.setMessage(context.getString(R.string.subscribe_confirm))
+				if (user?.bot == true) {
+					builder.setMessage(context.getString(R.string.continue_subs_confirm))
+				}
+				else {
+					builder.setMessage(context.getString(R.string.subscribe_confirm))
+				}
 
 				builder.setPositiveButton(context.getString(R.string.confirm)) { _, _ ->
-					subscribe(peer)
+					if (user?.bot == true) {
+						subscribe(botType)
+					}
+					else {
+						if (peer != null) {
+							subscribe(peer)
+						}
+					}
 				}
 
 				builder.setNegativeButton(context.getString(R.string.cancel), null)

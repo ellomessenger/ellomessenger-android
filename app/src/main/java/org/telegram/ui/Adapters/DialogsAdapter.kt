@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
  */
 package org.telegram.ui.Adapters
 
@@ -13,8 +13,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.os.Bundle
 import android.os.SystemClock
 import android.util.TypedValue
 import android.view.Gravity
@@ -23,10 +23,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
 import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.RecyclerView.AdapterDataObserver
-import androidx.viewpager.widget.ViewPager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject.isChannel
@@ -39,12 +39,14 @@ import org.telegram.messenger.MessagesController.MessagesLoadedCallback
 import org.telegram.messenger.R
 import org.telegram.messenger.SharedConfig
 import org.telegram.messenger.UserConfig
+import org.telegram.messenger.databinding.InviteFriendsPopupBinding
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.RecentMeUrl
-import org.telegram.tgnet.TLRPC.TL_contact
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.migratedTo
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.ArchiveHintCell
@@ -59,17 +61,21 @@ import org.telegram.ui.Cells.TextInfoPrivacyCell
 import org.telegram.ui.Cells.UserCell
 import org.telegram.ui.Components.BlurredRecyclerView
 import org.telegram.ui.Components.CombinedDrawable
+import org.telegram.ui.Components.DialogsEmptyView
 import org.telegram.ui.Components.FlickerLoadingView
+import org.telegram.ui.Components.InviteDialogsEmptyView
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.PullForegroundDrawable
+import org.telegram.ui.Components.RLottieImageView
 import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import org.telegram.ui.DialogsActivity
 import org.telegram.ui.DialogsActivity.DialogsHeader
+import org.telegram.ui.QrFragment
 import java.util.Collections
 
 @SuppressLint("NotifyDataSetChanged")
-open class DialogsAdapter(private val parentFragment: DialogsActivity, private var dialogsType: Int, private val folderId: Int, private val isOnlySelect: Boolean, private val selectedDialogs: ArrayList<Long>, private val currentAccount: Int) : SelectionAdapter() {
+open class DialogsAdapter(private val parentFragment: DialogsActivity, private var dialogsType: Int, private val folderId: Int, private val isOnlySelect: Boolean, private val selectedDialogs: ArrayList<Long>, private val currentAccount: Int, var inviteLink: String) : SelectionAdapter() {
 	private var archiveHintCell: ArchiveHintCell? = null
 	private var arrowDrawable: Drawable? = null
 	private var dialogsListFrozen = false
@@ -78,14 +84,18 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 	private var hasHints: Boolean
 	private var isReordering = false
 	private var lastSortTime: Long = 0
-	private var onlineContacts: ArrayList<TL_contact>? = null
+	private var onlineContacts: ArrayList<TLRPC.TLContact>? = null
 	private var openedDialogId: Long = 0
 	private var preloader: DialogsPreloader? = null
-	private var prevContactsCount = 0
-	private var prevDialogsCount = 0
+	private var inviteAnimationView: RLottieImageView? = null
+
+	// private var prevContactsCount = 0
+	// private var prevDialogsCount = 0
 	private var pullForegroundDrawable: PullForegroundDrawable? = null
 	private var showArchiveHint = false
 	var lastDialogsEmptyType = -1
+
+	private var inviteDialogsEmptyView: InviteDialogsEmptyView? = null
 
 	var currentCount = 0
 		private set
@@ -99,7 +109,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 		if (folderId == 1) {
 			val preferences = MessagesController.getGlobalMainSettings()
 			showArchiveHint = preferences.getBoolean("archivehint", true)
-			preferences.edit().putBoolean("archivehint", false).commit()
+			preferences.edit { putBoolean("archivehint", false) }
 		}
 		if (folderId == 0) {
 			preloader = DialogsPreloader()
@@ -188,7 +198,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 			}
 		}
 
-		var hasContacts = false
+		val hasContacts = false
 
 		if (hasHints) {
 			count += 2 + messagesController.hintDialogs.size
@@ -215,7 +225,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 //					var n = onlineContacts?.size ?: 0
 //
 //					while (a < n) {
-//						val userId = onlineContacts?.getOrNull(a)?.user_id ?: 0L
+//						val userId = onlineContacts?.getOrNull(a)?.userId ?: 0L
 //
 //						if (userId == selfId || messagesController.dialogs_dict[userId] != null) {
 //							onlineContacts?.removeAt(a)
@@ -299,7 +309,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 				null
 			}
 			else {
-				MessagesController.getInstance(currentAccount).getUser(onlineContacts?.getOrNull(i)?.user_id)
+				MessagesController.getInstance(currentAccount).getUser(onlineContacts?.getOrNull(i)?.userId)
 			}
 		}
 
@@ -346,14 +356,14 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 			val messagesController = MessagesController.getInstance(currentAccount)
 
 			onlineContacts?.sortWith { o1, o2 ->
-				val user1 = messagesController.getUser(o2.user_id)
-				val user2 = messagesController.getUser(o1.user_id)
+				val user1 = messagesController.getUser(o2.userId) as? TLRPC.TLUser
+				val user2 = messagesController.getUser(o1.userId) as? TLRPC.TLUser
 
 				var status1 = 0
 				var status2 = 0
 
 				if (user1 != null) {
-					if (user1.self) {
+					if (user1.isSelf) {
 						status1 = currentTime + 50000
 					}
 					else if (user1.status != null) {
@@ -362,7 +372,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 				}
 
 				if (user2 != null) {
-					if (user2.self) {
+					if (user2.isSelf) {
 						status2 = currentTime + 50000
 					}
 					else if (user2.status != null) {
@@ -412,8 +422,8 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 		dialogsListFrozen = frozen
 	}
 
-	val archiveHintCellPager: ViewPager?
-		get() = archiveHintCell?.viewPager
+//	val archiveHintCellPager: ViewPager?
+//		get() = archiveHintCell?.viewPager
 
 	fun updateHasHints() {
 		hasHints = folderId == 0 && dialogsType == 0 && !isOnlySelect && MessagesController.getInstance(currentAccount).hintDialogs.isNotEmpty()
@@ -452,6 +462,35 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 				ProfileSearchCell(context)
 			}
 			else {
+				val prefs = context.getSharedPreferences("popup_prefs", Context.MODE_PRIVATE)
+				val hasShownPopup = prefs.getBoolean("has_shown_invite_popup", false)
+
+				if (!hasShownPopup) {
+					val binding = InviteFriendsPopupBinding.inflate(LayoutInflater.from(context))
+
+					val aiSpaceBubblePopup = MaterialAlertDialogBuilder(context, R.style.TransparentDialog2).setView(binding.root).show()
+
+					inviteAnimationView = RLottieImageView(context)
+
+					inviteAnimationView?.setAutoRepeat(true)
+					inviteAnimationView?.setAnimation(R.raw.invite_empty_view, 60, 60)
+
+					binding.invite.addView(inviteAnimationView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT))
+
+					inviteAnimationView?.playAnimation()
+
+					aiSpaceBubblePopup.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+					val windowParams = aiSpaceBubblePopup.window?.attributes
+					windowParams?.apply {
+						gravity = Gravity.BOTTOM
+						y = context.resources.getDimensionPixelSize(R.dimen.common_size_36dp)
+					}
+					aiSpaceBubblePopup.window?.attributes = windowParams
+
+					prefs.edit { putBoolean("has_shown_invite_popup", true) }
+				}
+
 				val dialogCell = DialogCell(parentFragment, context, needCheck = true, forceThreeLines = false, currentAccount = currentAccount)
 				dialogCell.setArchivedPullAnimation(pullForegroundDrawable)
 				dialogCell.setPreloader(preloader)
@@ -492,8 +531,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 
 				textView.setOnClickListener {
 					MessagesController.getInstance(currentAccount).hintDialogs.clear()
-					val preferences = MessagesController.getGlobalMainSettings()
-					preferences.edit().remove("installReferer").commit()
+					MessagesController.getGlobalMainSettings().edit { remove("installReferer") }
 					notifyDataSetChanged()
 				}
 
@@ -522,30 +560,14 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 			}
 
 			VIEW_TYPE_EMPTY -> {
-				if (MessagesController.getGlobalMainSettings().getBoolean("newlyRegistered", false)) {
-					val aiSpaceBubblePopup = MaterialAlertDialogBuilder(context, R.style.TransparentDialog2).setView(LayoutInflater.from(context).inflate(R.layout.ai_space_bubble_popup, null)).show()
+				val userId = parentFragment.userConfig.clientUserId
+				val userInfo = parentFragment.messagesController.getUserFull(userId)
 
-					aiSpaceBubblePopup.window?.setBackgroundDrawableResource(android.R.color.transparent)
+				inviteDialogsEmptyView?.removeAllViews()
 
-					val windowParams = aiSpaceBubblePopup.window?.attributes
-					windowParams?.apply {
-						gravity = Gravity.TOP
-						y = context.resources.getDimensionPixelSize(R.dimen.common_size_58dp)
-					}
+				inviteDialogsEmptyView = InviteDialogsEmptyView(context, inviteLink, userInfo)
 
-					aiSpaceBubblePopup.window?.attributes = windowParams
-
-					MessagesController.getGlobalMainSettings().edit().remove("newlyRegistered").commit()
-				}
-
-				//MARK: Currently onInviteClick and onTipsClick are not working because the corresponding buttons have been hidden
-				view = DialogsEmptyCell(context, onInviteClick = {
-					parentFragment.openInviteFragment()
-				}, onTipsClick = {
-					parentFragment.openTipsFragment()
-				}, onRecommendedClick = {
-					parentFragment.switchToFeedFragment()
-				})
+				view = inviteDialogsEmptyView as InviteDialogsEmptyView
 			}
 
 			VIEW_TYPE_USER -> {
@@ -567,7 +589,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 			VIEW_TYPE_SHADOW -> {
 				view = ShadowSectionCell(context)
 				val drawable = Theme.getThemedDrawable(context, R.drawable.greydivider, context.getColor(R.color.shadow))
-				val combinedDrawable = CombinedDrawable(ColorDrawable(context.getColor(R.color.light_background)), drawable)
+				val combinedDrawable = CombinedDrawable(context.getColor(R.color.light_background).toDrawable(), drawable)
 				combinedDrawable.setFullSize(true)
 				view.setBackground(combinedDrawable)
 			}
@@ -640,7 +662,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 				}
 
 				val drawable = Theme.getThemedDrawable(context, R.drawable.greydivider, context.getColor(R.color.shadow))
-				val combinedDrawable = CombinedDrawable(ColorDrawable(context.getColor(R.color.light_background)), drawable)
+				val combinedDrawable = CombinedDrawable(context.getColor(R.color.light_background).toDrawable(), drawable)
 				combinedDrawable.setFullSize(true)
 				view.setBackground(combinedDrawable)
 			}
@@ -690,8 +712,8 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 					if (dialog != null && dialog.id != 0L) {
 						chat = MessagesController.getInstance(currentAccount).getChat(-dialog.id)
 
-						if (chat?.migrated_to != null) {
-							val chat2 = MessagesController.getInstance(currentAccount).getChat(chat.migrated_to.channel_id)
+						if (chat?.migratedTo != null) {
+							val chat2 = MessagesController.getInstance(currentAccount).getChat(chat.migratedTo?.channelId)
 
 							if (chat2 != null) {
 								chat = chat2
@@ -703,8 +725,8 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 						title = chat.title
 
 						subtitle = if (isChannel(chat) && !chat.megagroup) {
-							if (chat.participants_count != 0) {
-								LocaleController.formatPluralStringComma("Subscribers", chat.participants_count)
+							if (chat.participantsCount != 0) {
+								LocaleController.formatPluralStringComma("Subscribers", chat.participantsCount)
 							}
 							else {
 								if (chat.username.isNullOrEmpty()) {
@@ -716,11 +738,11 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 							}
 						}
 						else {
-							if (chat.participants_count != 0) {
-								LocaleController.formatPluralStringComma("Members", chat.participants_count)
+							if (chat.participantsCount != 0) {
+								LocaleController.formatPluralStringComma("Members", chat.participantsCount)
 							}
 							else {
-								if (chat.has_geo) {
+								if (chat.hasGeo) {
 									cell.context.getString(R.string.MegaLocation)
 								}
 								else if (chat.username.isNullOrEmpty()) {
@@ -758,11 +780,24 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 						preloader?.add(dialog.id)
 					}
 				}
+
+				inviteDialogsEmptyView?.removeAllViews()
 			}
 
 			VIEW_TYPE_EMPTY -> {
-				val cell = holder.itemView as DialogsEmptyCell
-				cell.setType(dialogsEmptyType().also { lastDialogsEmptyType = it })
+				val cell = holder.itemView as InviteDialogsEmptyView
+
+				cell.onQrCodeClick = {
+					openQrFragment()
+				}
+
+				cell.onDiscoverChannelsClick = {
+					parentFragment.switchToFeedFragment()
+				}
+
+				cell.onInviteClick = {
+					parentFragment.openInviteFragment()
+				}
 			}
 
 			VIEW_TYPE_ME_URL -> {
@@ -780,7 +815,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 					i - dialogsCount - 2
 				}
 
-				val user = MessagesController.getInstance(currentAccount).getUser(onlineContacts?.getOrNull(position)?.user_id)
+				val user = MessagesController.getInstance(currentAccount).getUser(onlineContacts?.getOrNull(position)?.userId)
 
 				cell.setData(user, null, null, 0)
 			}
@@ -841,6 +876,26 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 		if (i >= dialogsCount + 1) {
 			holder.itemView.alpha = 1f
 		}
+	}
+
+	private fun openQrFragment() {
+		val args = Bundle()
+		val userId = parentFragment.userConfig.clientUserId
+		val userInfo = parentFragment.messagesController.getUserFull(userId)
+
+		args.putLong(QrFragment.USER_ID, userId)
+
+		inviteLink.takeIf { link ->
+			link.isNotEmpty()
+		}?.let { link ->
+			args.putString(QrFragment.LINK, link)
+		}
+
+		if (userId != 0L) {
+			args.putBoolean(QrFragment.IS_PUBLIC, userInfo?.isPublic == true)
+		}
+
+		parentFragment.presentFragment(QrFragment(args))
 	}
 
 	fun setForceUpdatingContacts(forceUpdatingContacts: Boolean) {
@@ -1017,7 +1072,7 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 		}
 
 		private fun start() {
-			if (!preloadIsAvailable() || !resumed || preloadDialogsPool.isEmpty() || currentRequestCount >= maxRequestCount || networkRequestCount > maxNetworkRequestCount) {
+			if (!preloadIsAvailable() || !resumed || preloadDialogsPool.isEmpty() || currentRequestCount >= MAX_REQUEST_COUNT || networkRequestCount > MAX_NETWORK_REQUEST_COUNT) {
 				return
 			}
 
@@ -1033,9 +1088,9 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 						if (!fromCache) {
 							networkRequestCount++
 
-							if (networkRequestCount >= maxNetworkRequestCount) {
+							if (networkRequestCount >= MAX_NETWORK_REQUEST_COUNT) {
 								AndroidUtilities.cancelRunOnUIThread(clearNetworkRequestCount)
-								AndroidUtilities.runOnUIThread(clearNetworkRequestCount, networkRequestsResetTime.toLong())
+								AndroidUtilities.runOnUIThread(clearNetworkRequestCount, NETWORK_REQUESTS_RESET_TIME.toLong())
 							}
 						}
 
@@ -1078,9 +1133,9 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 			return dialogsReadyMap.contains(currentDialogId)
 		}
 
-		fun preloadedError(currentDialogId: Long): Boolean {
-			return preloadedErrorMap.contains(currentDialogId)
-		}
+//		fun preloadedError(currentDialogId: Long): Boolean {
+//			return preloadedErrorMap.contains(currentDialogId)
+//		}
 
 		fun remove(currentDialogId: Long) {
 			preloadDialogsPool.remove(currentDialogId)
@@ -1107,9 +1162,9 @@ open class DialogsAdapter(private val parentFragment: DialogsActivity, private v
 		}
 
 		companion object {
-			private const val maxRequestCount = 4
-			private const val maxNetworkRequestCount = 10 - maxRequestCount
-			private const val networkRequestsResetTime = 60000
+			private const val MAX_REQUEST_COUNT = 4
+			private const val MAX_NETWORK_REQUEST_COUNT = 10 - MAX_REQUEST_COUNT
+			private const val NETWORK_REQUESTS_RESET_TIME = 60000
 		}
 	}
 

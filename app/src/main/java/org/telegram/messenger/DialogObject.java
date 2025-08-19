@@ -4,11 +4,12 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger;
 
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 
 import androidx.annotation.Nullable;
 
@@ -30,24 +31,25 @@ public class DialogObject {
 			return;
 		}
 
-		if (dialog instanceof TLRPC.TL_dialog) {
+		if (dialog instanceof TLRPC.TLDialog) {
 			if (dialog.peer == null) {
 				return;
 			}
 
-			if (dialog.peer.user_id != 0) {
-				dialog.id = dialog.peer.user_id;
+			if (TLRPCExtensions.getUserId(dialog.peer) != 0) {
+				dialog.id = TLRPCExtensions.getUserId(dialog.peer);
 			}
-			else if (dialog.peer.chat_id != 0) {
-				dialog.id = -dialog.peer.chat_id;
+			else if (TLRPCExtensions.getChatId(dialog.peer) != 0) {
+				dialog.id = -TLRPCExtensions.getChatId(dialog.peer);
 			}
 			else {
-				dialog.id = -dialog.peer.channel_id;
+				dialog.id = -TLRPCExtensions.getChannelId(dialog.peer);
 			}
 		}
-		else if (dialog instanceof TLRPC.TL_dialogFolder) {
-			TLRPC.TL_dialogFolder dialogFolder = (TLRPC.TL_dialogFolder)dialog;
-			dialog.id = makeFolderDialogId(dialogFolder.folder.id);
+		else if (dialog instanceof TLRPC.TLDialogFolder dialogFolder) {
+			if (dialogFolder.folder != null) {
+				dialog.id = makeFolderDialogId(dialogFolder.folder.id);
+			}
 		}
 	}
 
@@ -55,14 +57,15 @@ public class DialogObject {
 		if (peer == null) {
 			return 0;
 		}
-		if (peer.user_id != 0) {
-			return peer.user_id;
+
+		if (TLRPCExtensions.getUserId(peer) != 0) {
+			return TLRPCExtensions.getUserId(peer);
 		}
-		else if (peer.chat_id != 0) {
-			return -peer.chat_id;
+		else if (TLRPCExtensions.getChatId(peer) != 0) {
+			return -TLRPCExtensions.getChatId(peer);
 		}
 		else {
-			return -peer.channel_id;
+			return -TLRPCExtensions.getChannelId(peer);
 		}
 	}
 
@@ -71,19 +74,19 @@ public class DialogObject {
 			return 0;
 		}
 
-		if (peer.user_id != 0) {
-			return peer.user_id;
+		if (peer.userId != 0) {
+			return peer.userId;
 		}
-		else if (peer.chat_id != 0) {
-			return -peer.chat_id;
+		else if (TLRPCExtensions.getChatId(peer) != 0) {
+			return -TLRPCExtensions.getChatId(peer);
 		}
 		else {
-			return -peer.channel_id;
+			return -peer.channelId;
 		}
 	}
 
 	public static long getLastMessageOrDraftDate(TLRPC.Dialog dialog, @Nullable TLRPC.DraftMessage draftMessage) {
-		return draftMessage != null && draftMessage.date >= dialog.last_message_date ? draftMessage.date : dialog.last_message_date;
+		return draftMessage != null && draftMessage.date >= dialog.lastMessageDate ? draftMessage.date : dialog.lastMessageDate;
 	}
 
 	public static boolean isChatDialog(@Nullable Long dialogId) {

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -45,7 +45,7 @@ class TransactionsHistoryStatsDataSource(private val walletId: Long) {
 		val req = ElloRpc.getTransferStatisticGraphic(walletId = walletId, period = period.name.lowercase(), type = type.name.lowercase(), limit = limit, offset = p * limit)
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, error ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val data = response.readData<ElloRpc.TransferStatsResponse>()
 
 				page += 1
@@ -63,7 +63,7 @@ class TransactionsHistoryStatsDataSource(private val walletId: Long) {
 
 				if (dataStats.isNullOrEmpty()) {
 					lastPage = true
-					stats.add(ElloRpc.TransferStats(0f,period.currentFormatted(), emptyList()))
+					stats.add(ElloRpc.TransferStats(0f, period.currentFormatted(), emptyList()))
 				}
 				else {
 					stats.addAll(dataStats)
@@ -89,9 +89,8 @@ class TransactionsHistoryStatsDataSource(private val walletId: Long) {
 	}
 }
 
-fun TransactionsHistoryStatsDataSource.Period.currentFormatted() =
-	when(this){
-		TransactionsHistoryStatsDataSource.Period.WEEK -> DateUtils().currentWeek()
-		TransactionsHistoryStatsDataSource.Period.MONTH -> DateUtils().currentMonth()
-		TransactionsHistoryStatsDataSource.Period.YEAR -> DateUtils().currentYear()
-	}
+fun TransactionsHistoryStatsDataSource.Period.currentFormatted() = when (this) {
+	TransactionsHistoryStatsDataSource.Period.WEEK -> DateUtils().currentWeek()
+	TransactionsHistoryStatsDataSource.Period.MONTH -> DateUtils().currentMonth()
+	TransactionsHistoryStatsDataSource.Period.YEAR -> DateUtils().currentYear()
+}

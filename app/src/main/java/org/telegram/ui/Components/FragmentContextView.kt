@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
@@ -47,6 +47,8 @@ import android.widget.TextView
 import androidx.annotation.IntDef
 import androidx.annotation.Keep
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withTranslation
+import androidx.core.view.isVisible
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject
@@ -68,8 +70,14 @@ import org.telegram.messenger.voip.StateListener
 import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_groupCallDiscarded
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.TLGroupCallDiscarded
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.media
+import org.telegram.tgnet.participantsCount
+import org.telegram.tgnet.period
+import org.telegram.tgnet.rtmpStream
+import org.telegram.tgnet.scheduleDate
+import org.telegram.tgnet.title
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem
 import org.telegram.ui.ActionBar.AlertDialog
@@ -172,7 +180,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 			override fun invalidate() {
 				super.invalidate()
 
-				if (avatars.visibility == VISIBLE) {
+				if (avatars.isVisible) {
 					avatars.invalidate()
 				}
 			}
@@ -193,7 +201,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 					var moveProgress = 0.0f
 
 					if (call != null && call.isScheduled) {
-						val diff = (call.call!!.schedule_date.toLong()) * 1000 - fragment.connectionsManager.currentTimeMillis
+						val diff = call.call!!.scheduleDate.toLong() * 1000 - fragment.connectionsManager.currentTimeMillis
 
 						if (diff < 0) {
 							moveProgress = 1.0f
@@ -217,14 +225,11 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 
 					rect.set(0f, 0f, width.toFloat(), AndroidUtilities.dp(28f).toFloat())
 
-					canvas.save()
-					canvas.translate(x.toFloat(), y.toFloat())
-					canvas.drawRoundRect(rect, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat(), gradientPaint!!)
-					canvas.translate(AndroidUtilities.dp(12f).toFloat(), AndroidUtilities.dp(6f).toFloat())
-
-					timeLayout?.draw(canvas)
-
-					canvas.restore()
+					canvas.withTranslation(x.toFloat(), y.toFloat()) {
+						drawRoundRect(rect, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat(), gradientPaint!!)
+						translate(AndroidUtilities.dp(12f).toFloat(), AndroidUtilities.dp(6f).toFloat())
+						timeLayout?.draw(this)
+					}
 				}
 			}
 		}
@@ -247,13 +252,13 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 				}
 
 				val currentTime = fragment.getConnectionsManager().currentTime
-				val diff = call.call!!.schedule_date - currentTime
+				val diff = call.call!!.scheduleDate - currentTime
 
 				val str = if (diff >= 24 * 60 * 60) {
 					LocaleController.formatPluralString("Days", Math.round(diff / (24 * 60 * 60.0f)))
 				}
 				else {
-					AndroidUtilities.formatFullDuration(call.call!!.schedule_date - currentTime)
+					AndroidUtilities.formatFullDuration(call.call!!.scheduleDate - currentTime)
 				}
 
 				val width = ceil(gradientTextPaint!!.measureText(str).toDouble()).toInt()
@@ -585,7 +590,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 				val chat = voIPService.getChat()
 				val participant = call?.participants?.get(voIPService.getSelfId())
 
-				if (participant != null && !participant.can_self_unmute && participant.muted && !ChatObject.canManageCalls(chat)) {
+				if (participant != null && !participant.canSelfUnmute && participant.muted && !ChatObject.canManageCalls(chat)) {
 					return@setOnClickListener
 				}
 			}
@@ -754,10 +759,10 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 				val chatActivity = fragment as? ChatActivity
 				val call = chatActivity?.getGroupCall() ?: return@setOnClickListener
 
-				VoIPHelper.startCall(chatActivity.messagesController.getChat(call.chatId), null, false, call.call != null && !call.call!!.rtmp_stream, fragment.getParentActivity(), fragment, fragment.accountInstance)
+				VoIPHelper.startCall(chatActivity.messagesController.getChat(call.chatId), null, false, call.call != null && !call.call!!.rtmpStream, fragment.getParentActivity(), fragment, fragment.accountInstance)
 			}
 			else if (currentStyle == STYLE_IMPORTING_MESSAGES) {
-				val importingHistory = fragment.sendMessagesHelper.getImportingHistory((fragment as ChatActivity).dialogId) ?: return@setOnClickListener
+				// val importingHistory = fragment.sendMessagesHelper.getImportingHistory((fragment as ChatActivity).dialogId) ?: return@setOnClickListener
 
 				val importingAlert = ImportingAlert(getContext(), null, fragment as? ChatActivity)
 				importingAlert.setOnHideListener { checkImport(false) }
@@ -856,7 +861,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 		locationActivity.setMessageObject(info.messageObject)
 
 		locationActivity.setDelegate { location, _, notify, scheduleDate ->
-			SendMessagesHelper.getInstance(info.messageObject!!.currentAccount).sendMessage(location, info.messageObject!!.dialogId, null, null, null, null, notify, scheduleDate, false, null)
+			SendMessagesHelper.getInstance(info.messageObject!!.currentAccount).sendMessage(location, info.messageObject!!.dialogId, null, null, null, null, notify, scheduleDate)
 		}
 
 		launchActivity.presentFragment(locationActivity)
@@ -880,7 +885,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 			}
 
 			if (view != null && parent != null) {
-				view.setPadding(0, (if (visibility == VISIBLE) topPadding else 0f).toInt() + additionalPadding, 0, 0)
+				view.setPadding(0, (if (isVisible) topPadding else 0f).toInt() + additionalPadding, 0, 0)
 			}
 		}
 	}
@@ -897,7 +902,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 			}
 		}
 		else {
-			if (VoIPService.sharedInstance != null && !VoIPService.sharedInstance!!.isHangingUp() && VoIPService.sharedInstance!!.getCallState() != VoIPService.STATE_WAITING_INCOMING) {
+			if (VoIPService.sharedInstance != null && !VoIPService.sharedInstance!!.isHangingUp() && VoIPService.sharedInstance!!.callState != VoIPService.STATE_WAITING_INCOMING) {
 				show = true
 				startJoinFlickerAnimation()
 			}
@@ -1060,7 +1065,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 			var isRtmpStream = false
 
 			if (fragment is ChatActivity) {
-				isRtmpStream = fragment.getGroupCall()?.call?.rtmp_stream == true
+				isRtmpStream = fragment.getGroupCall()?.call?.rtmpStream == true
 			}
 
 			avatars.visibility = if (!isRtmpStream) VISIBLE else GONE
@@ -1231,7 +1236,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 
 			additionalContextView?.checkVisibility()
 
-			if (VoIPService.sharedInstance != null && !VoIPService.sharedInstance!!.isHangingUp() && VoIPService.sharedInstance!!.getCallState() != VoIPService.STATE_WAITING_INCOMING && !GroupCallPip.isShowing()) {
+			if (VoIPService.sharedInstance != null && !VoIPService.sharedInstance!!.isHangingUp() && VoIPService.sharedInstance!!.callState != VoIPService.STATE_WAITING_INCOMING && !GroupCallPip.isShowing()) {
 				checkCall(true)
 			}
 			else if (fragment is ChatActivity && fragment.getSendMessagesHelper().getImportingHistory(fragment.dialogId) != null && !isPlayingVoice) {
@@ -1318,7 +1323,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 							sharedInstance.registerStateListener(this)
 						}
 
-						val currentCallState = sharedInstance.getCallState()
+						val currentCallState = sharedInstance.callState
 
 						if (currentCallState == VoIPService.STATE_WAIT_INIT || currentCallState == VoIPService.STATE_WAIT_INIT_ACK || currentCallState == VoIPService.STATE_CREATING || currentCallState == VoIPService.STATE_RECONNECTING) {
 							// unused
@@ -1326,7 +1331,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 						else {
 							val participant = sharedInstance.groupCall?.participants?.get(sharedInstance.getSelfId())
 
-							if (participant != null && !participant.can_self_unmute && participant.muted && !ChatObject.canManageCalls(sharedInstance.getChat())) {
+							if (participant != null && !participant.canSelfUnmute && participant.muted && !ChatObject.canManageCalls(sharedInstance.getChat())) {
 								sharedInstance.setMicMute(mute = true, hold = false, send = false)
 
 								val now = SystemClock.uptimeMillis()
@@ -1345,13 +1350,13 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 
 					if (call != null) {
 						if (call.isScheduled) {
-							subtitleTextView.setText(LocaleController.formatStartsTime(call.call!!.schedule_date.toLong(), 4), false)
+							subtitleTextView.setText(LocaleController.formatStartsTime(call.call!!.scheduleDate.toLong(), 4), false)
 						}
-						else if (call.call?.participants_count == 0) {
-							subtitleTextView.setText(context.getString(if (call.call!!.rtmp_stream) R.string.ViewersWatchingNobody else R.string.MembersTalkingNobody), false)
+						else if (call.call?.participantsCount == 0) {
+							subtitleTextView.setText(context.getString(if (call.call!!.rtmpStream) R.string.ViewersWatchingNobody else R.string.MembersTalkingNobody), false)
 						}
 						else {
-							subtitleTextView.setText(LocaleController.formatPluralString(if (call.call!!.rtmp_stream) "ViewersWatching" else "Participants", call.call!!.participants_count), false)
+							subtitleTextView.setText(LocaleController.formatPluralString(if (call.call!!.rtmpStream) "ViewersWatching" else "Participants", call.call!!.participantsCount), false)
 						}
 					}
 
@@ -1677,7 +1682,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 		if (messageObject == null || messageObject.id == 0 || messageObject.isVideo) {
 			lastMessageObject = null
 
-			var callAvailable = supportsCalls && VoIPService.sharedInstance != null && !VoIPService.sharedInstance!!.isHangingUp() && VoIPService.sharedInstance!!.getCallState() != VoIPService.STATE_WAITING_INCOMING && !GroupCallPip.isShowing()
+			var callAvailable = supportsCalls && VoIPService.sharedInstance != null && !VoIPService.sharedInstance!!.isHangingUp() && VoIPService.sharedInstance!!.callState != VoIPService.STATE_WAITING_INCOMING && !GroupCallPip.isShowing()
 
 			if (!isPlayingVoice && !callAvailable && fragment is ChatActivity && !GroupCallPip.isShowing()) {
 				val call = fragment.getGroupCall()
@@ -1778,7 +1783,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 
 					animatorSet = AnimatorSet()
 
-					if (additionalContextView != null && additionalContextView!!.visibility == VISIBLE) {
+					if (additionalContextView?.isVisible == true) {
 						(layoutParams as LayoutParams).topMargin = -AndroidUtilities.dp((styleHeight + additionalContextView!!.styleHeight).toFloat())
 					}
 					else {
@@ -1894,7 +1899,8 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 
 				val span = TypefaceSpan(Theme.TYPEFACE_BOLD, 0, ResourcesCompat.getColor(context.resources, R.color.undead_dark, null))
 
-				stringBuilder.setSpan(span, 0, messageObject.musicAuthor!!.length, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+				val author = messageObject.musicAuthor ?: context.getString(R.string.AudioUnknownArtist)
+				stringBuilder.setSpan(span, 0, author.length, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
 
 				titleTextView.setText(stringBuilder, !create && wasVisible && isMusic)
 			}
@@ -2086,7 +2092,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 		else {
 			callAvailable = !GroupCallActivity.groupCallUiVisible && supportsCalls && voIPService != null && !voIPService.isHangingUp()
 
-			if (voIPService?.groupCall?.call is TL_groupCallDiscarded) {
+			if (voIPService?.groupCall?.call is TLGroupCallDiscarded) {
 				callAvailable = false
 			}
 
@@ -2242,7 +2248,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 						}
 					}
 
-					subtitleTextView.setText(LocaleController.formatStartsTime(call.call!!.schedule_date.toLong(), 4), false)
+					subtitleTextView.setText(LocaleController.formatStartsTime(call.call!!.scheduleDate.toLong(), 4), false)
 
 					if (!scheduleRunnableScheduled) {
 						scheduleRunnableScheduled = true
@@ -2253,7 +2259,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 					timeLayout = null
 					joinButton.visibility = VISIBLE
 
-					if (call?.call?.rtmp_stream == true) {
+					if (call?.call?.rtmpStream == true) {
 						titleTextView.setText(context.getString(R.string.VoipChannelVoiceChat), false)
 					}
 					else if (ChatObject.isChannelOrGiga(chat)) {
@@ -2263,11 +2269,11 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 						titleTextView.setText(context.getString(R.string.VoipGroupVoiceChat), false)
 					}
 
-					if (call?.call?.participants_count == 0) {
-						subtitleTextView.setText(context.getString(if (call.call?.rtmp_stream == true) R.string.ViewersWatchingNobody else R.string.MembersTalkingNobody), false)
+					if (call?.call?.participantsCount == 0) {
+						subtitleTextView.setText(context.getString(if (call.call?.rtmpStream == true) R.string.ViewersWatchingNobody else R.string.MembersTalkingNobody), false)
 					}
 					else {
-						subtitleTextView.setText(LocaleController.formatPluralString(if (call?.call?.rtmp_stream == true) "ViewersWatching" else "Participants", call?.call?.participants_count ?: 0), false)
+						subtitleTextView.setText(LocaleController.formatPluralString(if (call?.call?.rtmpStream == true) "ViewersWatching" else "Participants", call?.call?.participantsCount ?: 0), false)
 					}
 
 					frameLayout.invalidate()
@@ -2293,7 +2299,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 
 					animatorSet = AnimatorSet()
 
-					if (additionalContextView != null && additionalContextView!!.visibility == VISIBLE) {
+					if (additionalContextView?.isVisible == true) {
 						(layoutParams as LayoutParams).topMargin = -AndroidUtilities.dp((styleHeight + additionalContextView!!.styleHeight).toFloat())
 					}
 					else {
@@ -2385,7 +2391,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 			else {
 				if (VoIPService.sharedInstance != null) {
 					call = VoIPService.sharedInstance?.groupCall
-					userCall = if (fragment is ChatActivity) null else VoIPService.sharedInstance?.getUser()
+					userCall = if (fragment is ChatActivity) null else VoIPService.sharedInstance?.user
 					currentAccount = VoIPService.sharedInstance?.getAccount() ?: 0
 				}
 				else {
@@ -2426,7 +2432,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 			avatars.commitTransition(animated)
 
 			if (currentStyle == STYLE_INACTIVE_GROUP_CALL && call != null) {
-				val n = if (call.call!!.rtmp_stream) 0 else min(3.0, call.sortedParticipants.size.toDouble()).toInt()
+				val n = if (call.call!!.rtmpStream) 0 else min(3.0, call.sortedParticipants.size.toDouble()).toInt()
 				val x = if (n == 0) 10 else (10 + 24 * (n - 1) + 32 + 10)
 
 				if (animated) {
@@ -2538,11 +2544,11 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 	private fun updatePaddings() {
 		var margin = 0
 
-		if (visibility == VISIBLE) {
+		if (isVisible) {
 			margin -= AndroidUtilities.dp(styleHeight.toFloat())
 		}
 
-		if (additionalContextView != null && additionalContextView!!.visibility == VISIBLE) {
+		if (additionalContextView?.isVisible == true) {
 			margin -= AndroidUtilities.dp(additionalContextView!!.styleHeight.toFloat())
 			(layoutParams as LayoutParams).topMargin = margin
 			(additionalContextView!!.layoutParams as LayoutParams).topMargin = margin
@@ -2560,7 +2566,7 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 		val service = VoIPService.sharedInstance
 
 		if (service != null && (currentStyle == STYLE_CONNECTING_GROUP_CALL || currentStyle == STYLE_ACTIVE_GROUP_CALL)) {
-			val currentCallState = service.getCallState()
+			val currentCallState = service.callState
 
 			if (!service.isSwitchingStream() && (currentCallState == VoIPService.STATE_WAIT_INIT || currentCallState == VoIPService.STATE_WAIT_INIT_ACK || currentCallState == VoIPService.STATE_CREATING || currentCallState == VoIPService.STATE_RECONNECTING)) {
 				titleTextView.setText(context.getString(R.string.VoipGroupConnecting), false)
@@ -2590,14 +2596,14 @@ open class FragmentContextView(context: Context, private val fragment: BaseFragm
 					}
 				}
 			}
-			else if (service.getUser() != null) {
-				val user = service.getUser()
+			else if (service.user != null) {
+				val user = service.user
 
 				if ((fragment is ChatActivity && fragment.currentUser != null) && fragment.currentUser!!.id == user!!.id) {
 					titleTextView.setText(context.getString(R.string.ReturnToCall))
 				}
 				else {
-					titleTextView.setText(ContactsController.formatName(user!!.first_name, user.last_name))
+					titleTextView.setText(ContactsController.formatName(user?.firstName, user?.lastName))
 				}
 			}
 		}

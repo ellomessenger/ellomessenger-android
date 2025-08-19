@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
@@ -56,6 +56,8 @@ import org.telegram.messenger.R
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.messageobject.MessageObject
+import org.telegram.tgnet.media
+import org.telegram.tgnet.webpage
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.BottomSheet
 import org.telegram.ui.ActionBar.Theme
@@ -1076,12 +1078,16 @@ class EmbedBottomSheet @SuppressLint("SetJavaScriptEnabled") private constructor
 			private set
 
 		@JvmStatic
-		fun show(fragment: BaseFragment, message: MessageObject?, photoViewerProvider: PhotoViewerProvider?, title: String?, description: String?, originalUrl: String?, url: String, w: Int, h: Int, keyboardVisible: Boolean) {
+		fun show(fragment: BaseFragment, message: MessageObject?, photoViewerProvider: PhotoViewerProvider?, title: String?, description: String?, originalUrl: String?, url: String?, w: Int, h: Int, keyboardVisible: Boolean) {
 			show(fragment, message, photoViewerProvider, title, description, originalUrl, url, w, h, -1, keyboardVisible)
 		}
 
-		fun show(fragment: BaseFragment, message: MessageObject?, photoViewerProvider: PhotoViewerProvider?, title: String?, description: String?, originalUrl: String?, url: String, w: Int, h: Int, seekTime: Int, keyboardVisible: Boolean) {
+		fun show(fragment: BaseFragment, message: MessageObject?, photoViewerProvider: PhotoViewerProvider?, title: String?, description: String?, originalUrl: String?, url: String?, w: Int, h: Int, seekTime: Int, keyboardVisible: Boolean) {
 			instance?.destroy()
+
+			if (url == null) {
+				return
+			}
 
 			val youtubeId = if (message?.messageOwner?.media?.webpage != null) WebPlayerView.getYouTubeVideoId(url) else null
 

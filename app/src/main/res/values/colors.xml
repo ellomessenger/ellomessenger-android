@@ -42,6 +42,7 @@
 	<color name="avatar_background">#FFFFFF</color>
 	<color name="white_day_night">#ffffff</color>
 	<color name="light_background">#f4f4f4</color>
+	<color name="light_background_fixed">#f4f4f4</color>
 	<color name="light_background_transparent">#99EFEFF0</color>
 	<color name="color_toggle_active">#D8E7FD</color>
 	<color name="header">#f0eff0</color>
@@ -92,4 +93,6 @@
 	<color name="olive_transparent">#8BD19EA3</color>
 	<color name="bright_cyan_transparent">#8C11BBD5</color>
 	<color name="white_semi_transparent">#2AFFFFFF</color>
+	<color name="orange_bright">#FFB53F</color>
+	<color name="orange_dark">#FF9D00</color>
 </resources>

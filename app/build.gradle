@@ -17,51 +17,51 @@ configurations.configureEach {
 }
 
 dependencies {
-	implementation 'androidx.core:core-ktx:1.13.1'
+	implementation 'androidx.core:core-ktx:1.16.0'
 	implementation "androidx.core:core-splashscreen:1.0.1"
 	implementation 'androidx.palette:palette-ktx:1.0.0'
-	implementation 'androidx.exifinterface:exifinterface:1.3.7'
-	implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
+	implementation 'androidx.exifinterface:exifinterface:1.4.1'
+	implementation 'androidx.dynamicanimation:dynamicanimation-ktx:1.1.0'
 	implementation 'androidx.multidex:multidex:2.0.1'
 	implementation "androidx.sharetarget:sharetarget:1.2.0"
-	implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+	implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
 	implementation 'androidx.interpolator:interpolator:1.0.0'
-	implementation 'androidx.appcompat:appcompat:1.7.0'
+	implementation 'androidx.appcompat:appcompat:1.7.1'
 	implementation 'androidx.viewpager2:viewpager2:1.1.0'
 	implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+	implementation 'androidx.activity:activity-ktx:1.10.1'
 	implementation 'com.google.android.material:material:1.12.0'
 
-	def kotlin_coroutines_version = '1.9.0'
+	def kotlin_coroutines_version = '1.10.2'
 
 	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlin_coroutines_version"
 	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlin_coroutines_version"
 
-	implementation 'net.danlew:android.joda:2.13.0'
-	implementation 'com.google.code.gson:gson:2.11.0'
+	implementation 'net.danlew:android.joda:2.13.1'
+	implementation 'com.google.code.gson:gson:2.13.1'
 
 	compileOnly 'org.checkerframework:checker-compat-qual:2.5.6'
-	implementation 'com.google.firebase:firebase-messaging:24.1.0'
-	implementation 'com.google.firebase:firebase-config:22.0.1'
+	implementation 'com.google.firebase:firebase-messaging:25.0.0'
 	implementation 'com.google.firebase:firebase-appindexing:20.0.0'
-	implementation 'com.google.android.gms:play-services-maps:19.0.0'
-	implementation 'com.google.android.gms:play-services-auth:21.2.0'
+	implementation 'com.google.android.gms:play-services-maps:19.2.0'
+	implementation 'com.google.android.gms:play-services-auth:21.4.0'
 	implementation 'com.google.android.gms:play-services-vision:20.1.3'
-	implementation 'com.google.android.gms:play-services-wearable:18.2.0'
+	implementation 'com.google.android.gms:play-services-wearable:19.0.0'
 	implementation 'com.google.android.gms:play-services-location:21.3.0'
 	implementation 'com.google.android.gms:play-services-wallet:19.4.0'
-	implementation 'com.google.android.gms:play-services-measurement:22.1.2'
-	implementation 'com.google.android.recaptcha:recaptcha:18.6.1'
+	implementation 'com.google.android.gms:play-services-measurement:23.0.0'
+	implementation 'com.google.android.recaptcha:recaptcha:18.7.1'
 	implementation 'com.google.android.play:app-update:2.1.0'
 	implementation 'com.google.android.play:app-update-ktx:2.1.0'
-	implementation 'com.stripe:stripe-android:2.0.2'
 	implementation 'com.google.mlkit:language-id:17.0.6'
-	implementation 'com.android.billingclient:billing:7.1.1'
-	implementation 'com.android.billingclient:billing-ktx:7.1.1'
+	implementation 'com.android.billingclient:billing:8.0.0'
+	implementation 'com.android.billingclient:billing-ktx:8.0.0'
+	implementation 'com.google.android.flexbox:flexbox:3.0.0'
 
-	//noinspection GradleDependency
+	//noinspection NewerVersionAvailable,GradleDependency
 	implementation 'com.googlecode.mp4parser:isoparser:1.0.6' // do not update as it breaks uploaded video playback
 
-	coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.3'
+	coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 
 	implementation files('libs/libgsaverification-client.aar')
 }
@@ -73,7 +73,7 @@ java {
 }
 
 android {
-	compileSdk 34
+	compileSdk = 35
 
 	def ndk_version = "21.4.7075529"
 
@@ -105,11 +105,11 @@ android {
 		applicationId "com.beint.elloapp"
 
 		minSdkVersion 23
-		targetSdkVersion 34
+		targetSdkVersion 35
 		ndkVersion "$ndk_version"
 
-		versionName "2.6.73"
-		versionCode 20671
+		versionName "2.8.19"
+		versionCode 20733
 
 		multiDexEnabled true
 

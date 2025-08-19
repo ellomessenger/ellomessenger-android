@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -50,162 +50,164 @@ import org.telegram.messenger.support.SparseLongArray
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.NativeByteBuffer
 import org.telegram.tgnet.SerializedData
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.BotInfo
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.DraftMessage
 import org.telegram.tgnet.TLRPC.EmojiStatus
 import org.telegram.tgnet.TLRPC.FileLocation
 import org.telegram.tgnet.TLRPC.InputStickerSet
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.MessageEntity
+import org.telegram.tgnet.TLRPC.MessagesMessages
 import org.telegram.tgnet.TLRPC.PhotoSize
-import org.telegram.tgnet.TLRPC.StickerSet
+import org.telegram.tgnet.TLRPC.Reaction
 import org.telegram.tgnet.TLRPC.StickerSetCovered
-import org.telegram.tgnet.TLRPC.TL_account_emojiStatuses
-import org.telegram.tgnet.TLRPC.TL_account_emojiStatusesNotModified
-import org.telegram.tgnet.TLRPC.TL_account_getDefaultEmojiStatuses
-import org.telegram.tgnet.TLRPC.TL_account_getRecentEmojiStatuses
-import org.telegram.tgnet.TLRPC.TL_account_saveRingtone
-import org.telegram.tgnet.TLRPC.TL_account_savedRingtoneConverted
-import org.telegram.tgnet.TLRPC.TL_attachMenuBot
-import org.telegram.tgnet.TLRPC.TL_attachMenuBotIcon
-import org.telegram.tgnet.TLRPC.TL_attachMenuBots
-import org.telegram.tgnet.TLRPC.TL_attachMenuBotsNotModified
-import org.telegram.tgnet.TLRPC.TL_attachMenuPeerTypeBotPM
-import org.telegram.tgnet.TLRPC.TL_attachMenuPeerTypeBroadcast
-import org.telegram.tgnet.TLRPC.TL_attachMenuPeerTypeChat
-import org.telegram.tgnet.TLRPC.TL_attachMenuPeerTypePM
-import org.telegram.tgnet.TLRPC.TL_attachMenuPeerTypeSameBotPM
-import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.TLRPC.TL_channels_getMessages
-import org.telegram.tgnet.TLRPC.TL_contacts_getTopPeers
-import org.telegram.tgnet.TLRPC.TL_contacts_resetTopPeerRating
-import org.telegram.tgnet.TLRPC.TL_contacts_topPeers
-import org.telegram.tgnet.TLRPC.TL_contacts_topPeersDisabled
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAnimated
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAudio
-import org.telegram.tgnet.TLRPC.TL_documentAttributeCustomEmoji
-import org.telegram.tgnet.TLRPC.TL_documentAttributeSticker
-import org.telegram.tgnet.TLRPC.TL_documentAttributeVideo
-import org.telegram.tgnet.TLRPC.TL_documentEmpty
-import org.telegram.tgnet.TLRPC.TL_draftMessage
-import org.telegram.tgnet.TLRPC.TL_draftMessageEmpty
-import org.telegram.tgnet.TLRPC.TL_emojiKeyword
-import org.telegram.tgnet.TLRPC.TL_emojiKeywordDeleted
-import org.telegram.tgnet.TLRPC.TL_emojiKeywordsDifference
-import org.telegram.tgnet.TLRPC.TL_emojiStatus
-import org.telegram.tgnet.TLRPC.TL_help_getPremiumPromo
-import org.telegram.tgnet.TLRPC.TL_help_premiumPromo
-import org.telegram.tgnet.TLRPC.TL_inputDocument
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterDocument
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterEmpty
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterGif
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterMusic
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterPhotoVideo
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterPhotos
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterPinned
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterRoundVoice
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterUrl
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterVideo
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetAnimatedEmoji
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetDice
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetEmojiDefaultStatuses
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetEmojiGenericAnimations
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetEmpty
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetID
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetPremiumGifts
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetShortName
-import org.telegram.tgnet.TLRPC.TL_messageActionGameScore
-import org.telegram.tgnet.TLRPC.TL_messageActionHistoryClear
-import org.telegram.tgnet.TLRPC.TL_messageActionPaymentSent
-import org.telegram.tgnet.TLRPC.TL_messageActionPinMessage
-import org.telegram.tgnet.TLRPC.TL_messageEmpty
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messageReplyHeader
-import org.telegram.tgnet.TLRPC.TL_messageService
-import org.telegram.tgnet.TLRPC.TL_message_secret
-import org.telegram.tgnet.TLRPC.TL_messages_allStickers
-import org.telegram.tgnet.TLRPC.TL_messages_archivedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_availableReactions
-import org.telegram.tgnet.TLRPC.TL_messages_availableReactionsNotModified
-import org.telegram.tgnet.TLRPC.TL_messages_clearRecentReactions
-import org.telegram.tgnet.TLRPC.TL_messages_clearRecentStickers
-import org.telegram.tgnet.TLRPC.TL_messages_faveSticker
-import org.telegram.tgnet.TLRPC.TL_messages_favedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_featuredStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getAllDrafts
-import org.telegram.tgnet.TLRPC.TL_messages_getAllStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getArchivedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getAttachMenuBots
-import org.telegram.tgnet.TLRPC.TL_messages_getAvailableReactions
-import org.telegram.tgnet.TLRPC.TL_messages_getEmojiKeywords
-import org.telegram.tgnet.TLRPC.TL_messages_getEmojiKeywordsDifference
-import org.telegram.tgnet.TLRPC.TL_messages_getEmojiStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getFavedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getFeaturedEmojiStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getFeaturedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getMaskStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getMessages
-import org.telegram.tgnet.TLRPC.TL_messages_getRecentReactions
-import org.telegram.tgnet.TLRPC.TL_messages_getRecentStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getSavedGifs
-import org.telegram.tgnet.TLRPC.TL_messages_getScheduledMessages
-import org.telegram.tgnet.TLRPC.TL_messages_getSearchCounters
-import org.telegram.tgnet.TLRPC.TL_messages_getStickerSet
-import org.telegram.tgnet.TLRPC.TL_messages_getStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getTopReactions
-import org.telegram.tgnet.TLRPC.TL_messages_installStickerSet
-import org.telegram.tgnet.TLRPC.TL_messages_reactions
-import org.telegram.tgnet.TLRPC.TL_messages_readFeaturedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_recentStickers
-import org.telegram.tgnet.TLRPC.TL_messages_saveDraft
-import org.telegram.tgnet.TLRPC.TL_messages_saveGif
-import org.telegram.tgnet.TLRPC.TL_messages_saveRecentSticker
-import org.telegram.tgnet.TLRPC.TL_messages_savedGifs
-import org.telegram.tgnet.TLRPC.TL_messages_search
-import org.telegram.tgnet.TLRPC.TL_messages_searchCounter
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSetInstallResultArchive
-import org.telegram.tgnet.TLRPC.TL_messages_stickers
-import org.telegram.tgnet.TLRPC.TL_messages_toggleStickerSets
-import org.telegram.tgnet.TLRPC.TL_messages_uninstallStickerSet
-import org.telegram.tgnet.TLRPC.TL_peerChat
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.TLRPC.TL_stickerSetFullCovered
-import org.telegram.tgnet.TLRPC.TL_theme
-import org.telegram.tgnet.TLRPC.TL_topPeer
-import org.telegram.tgnet.TLRPC.TL_topPeerCategoryBotsInline
-import org.telegram.tgnet.TLRPC.TL_topPeerCategoryCorrespondents
-import org.telegram.tgnet.TLRPC.TL_updateBotCommands
+import org.telegram.tgnet.TLRPC.TLAccountEmojiStatuses
+import org.telegram.tgnet.TLRPC.TLAccountEmojiStatusesNotModified
+import org.telegram.tgnet.TLRPC.TLAccountGetDefaultEmojiStatuses
+import org.telegram.tgnet.TLRPC.TLAccountGetRecentEmojiStatuses
+import org.telegram.tgnet.TLRPC.TLAccountSaveRingtone
+import org.telegram.tgnet.TLRPC.TLAccountSavedRingtoneConverted
+import org.telegram.tgnet.TLRPC.TLAttachMenuBot
+import org.telegram.tgnet.TLRPC.TLAttachMenuBotIcon
+import org.telegram.tgnet.TLRPC.TLAttachMenuBots
+import org.telegram.tgnet.TLRPC.TLAttachMenuBotsNotModified
+import org.telegram.tgnet.TLRPC.TLAttachMenuPeerTypeBotPM
+import org.telegram.tgnet.TLRPC.TLAttachMenuPeerTypeBroadcast
+import org.telegram.tgnet.TLRPC.TLAttachMenuPeerTypeChat
+import org.telegram.tgnet.TLRPC.TLAttachMenuPeerTypePM
+import org.telegram.tgnet.TLRPC.TLAttachMenuPeerTypeSameBotPM
+import org.telegram.tgnet.TLRPC.TLAvailableReaction
+import org.telegram.tgnet.TLRPC.TLBoolTrue
+import org.telegram.tgnet.TLRPC.TLChannelsGetMessages
+import org.telegram.tgnet.TLRPC.TLContactsGetTopPeers
+import org.telegram.tgnet.TLRPC.TLContactsResetTopPeerRating
+import org.telegram.tgnet.TLRPC.TLContactsTopPeers
+import org.telegram.tgnet.TLRPC.TLContactsTopPeersDisabled
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeAnimated
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeAudio
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeCustomEmoji
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeSticker
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeVideo
+import org.telegram.tgnet.TLRPC.TLDocumentEmpty
+import org.telegram.tgnet.TLRPC.TLDraftMessage
+import org.telegram.tgnet.TLRPC.TLDraftMessageEmpty
+import org.telegram.tgnet.TLRPC.TLEmojiKeyword
+import org.telegram.tgnet.TLRPC.TLEmojiKeywordDeleted
+import org.telegram.tgnet.TLRPC.TLEmojiKeywordsDifference
+import org.telegram.tgnet.TLRPC.TLEmojiStatus
+import org.telegram.tgnet.TLRPC.TLHelpGetPremiumPromo
+import org.telegram.tgnet.TLRPC.TLHelpPremiumPromo
+import org.telegram.tgnet.TLRPC.TLInputDocument
+import org.telegram.tgnet.TLRPC.TLInputMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterDocument
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterEmpty
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterGif
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterMusic
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterPhotoVideo
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterPhotos
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterPinned
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterRoundVoice
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterUrl
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterVideo
+import org.telegram.tgnet.TLRPC.TLInputStickerSetAnimatedEmoji
+import org.telegram.tgnet.TLRPC.TLInputStickerSetDice
+import org.telegram.tgnet.TLRPC.TLInputStickerSetEmojiDefaultStatuses
+import org.telegram.tgnet.TLRPC.TLInputStickerSetEmojiGenericAnimations
+import org.telegram.tgnet.TLRPC.TLInputStickerSetEmpty
+import org.telegram.tgnet.TLRPC.TLInputStickerSetID
+import org.telegram.tgnet.TLRPC.TLInputStickerSetPremiumGifts
+import org.telegram.tgnet.TLRPC.TLInputStickerSetShortName
+import org.telegram.tgnet.TLRPC.TLMessage
+import org.telegram.tgnet.TLRPC.TLMessageActionGameScore
+import org.telegram.tgnet.TLRPC.TLMessageActionHistoryClear
+import org.telegram.tgnet.TLRPC.TLMessageActionPaymentSent
+import org.telegram.tgnet.TLRPC.TLMessageActionPinMessage
+import org.telegram.tgnet.TLRPC.TLMessageEmpty
+import org.telegram.tgnet.TLRPC.TLMessageEntityBlockquote
+import org.telegram.tgnet.TLRPC.TLMessageEntityBold
+import org.telegram.tgnet.TLRPC.TLMessageEntityCode
+import org.telegram.tgnet.TLRPC.TLMessageEntityCustomEmoji
+import org.telegram.tgnet.TLRPC.TLMessageEntityEmail
+import org.telegram.tgnet.TLRPC.TLMessageEntityHashtag
+import org.telegram.tgnet.TLRPC.TLMessageEntityItalic
+import org.telegram.tgnet.TLRPC.TLMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLMessageEntityPre
+import org.telegram.tgnet.TLRPC.TLMessageEntitySpoiler
+import org.telegram.tgnet.TLRPC.TLMessageEntityStrike
+import org.telegram.tgnet.TLRPC.TLMessageEntityTextUrl
+import org.telegram.tgnet.TLRPC.TLMessageEntityUnderline
+import org.telegram.tgnet.TLRPC.TLMessageEntityUrl
+import org.telegram.tgnet.TLRPC.TLMessageMediaDocument
+import org.telegram.tgnet.TLRPC.TLMessageMediaPhoto
+import org.telegram.tgnet.TLRPC.TLMessageReplyHeader
+import org.telegram.tgnet.TLRPC.TLMessageService
+import org.telegram.tgnet.TLRPC.TLMessagesAllStickers
+import org.telegram.tgnet.TLRPC.TLMessagesArchivedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesAvailableReactions
+import org.telegram.tgnet.TLRPC.TLMessagesAvailableReactionsNotModified
+import org.telegram.tgnet.TLRPC.TLMessagesChannelMessages
+import org.telegram.tgnet.TLRPC.TLMessagesClearRecentReactions
+import org.telegram.tgnet.TLRPC.TLMessagesClearRecentStickers
+import org.telegram.tgnet.TLRPC.TLMessagesFaveSticker
+import org.telegram.tgnet.TLRPC.TLMessagesFavedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesFeaturedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetAllDrafts
+import org.telegram.tgnet.TLRPC.TLMessagesGetAllStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetArchivedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetAttachMenuBots
+import org.telegram.tgnet.TLRPC.TLMessagesGetAvailableReactions
+import org.telegram.tgnet.TLRPC.TLMessagesGetEmojiKeywords
+import org.telegram.tgnet.TLRPC.TLMessagesGetEmojiKeywordsDifference
+import org.telegram.tgnet.TLRPC.TLMessagesGetEmojiStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetFavedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetFeaturedEmojiStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetFeaturedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetMaskStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetMessages
+import org.telegram.tgnet.TLRPC.TLMessagesGetRecentReactions
+import org.telegram.tgnet.TLRPC.TLMessagesGetRecentStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetSavedGifs
+import org.telegram.tgnet.TLRPC.TLMessagesGetScheduledMessages
+import org.telegram.tgnet.TLRPC.TLMessagesGetSearchCounters
+import org.telegram.tgnet.TLRPC.TLMessagesGetStickerSet
+import org.telegram.tgnet.TLRPC.TLMessagesGetStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetTopReactions
+import org.telegram.tgnet.TLRPC.TLMessagesInstallStickerSet
+import org.telegram.tgnet.TLRPC.TLMessagesMessages
+import org.telegram.tgnet.TLRPC.TLMessagesMessagesSlice
+import org.telegram.tgnet.TLRPC.TLMessagesReactions
+import org.telegram.tgnet.TLRPC.TLMessagesReadFeaturedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesRecentStickers
+import org.telegram.tgnet.TLRPC.TLMessagesSaveDraft
+import org.telegram.tgnet.TLRPC.TLMessagesSaveGif
+import org.telegram.tgnet.TLRPC.TLMessagesSaveRecentSticker
+import org.telegram.tgnet.TLRPC.TLMessagesSavedGifs
+import org.telegram.tgnet.TLRPC.TLMessagesSearch
+import org.telegram.tgnet.TLRPC.TLMessagesSearchCounter
+import org.telegram.tgnet.TLRPC.TLMessagesStickerSet
+import org.telegram.tgnet.TLRPC.TLMessagesStickerSetInstallResultArchive
+import org.telegram.tgnet.TLRPC.TLMessagesStickers
+import org.telegram.tgnet.TLRPC.TLMessagesToggleStickerSets
+import org.telegram.tgnet.TLRPC.TLMessagesUninstallStickerSet
+import org.telegram.tgnet.TLRPC.TLPeerChat
+import org.telegram.tgnet.TLRPC.TLPeerUser
+import org.telegram.tgnet.TLRPC.TLStickerSet
+import org.telegram.tgnet.TLRPC.TLStickerSetCovered
+import org.telegram.tgnet.TLRPC.TLStickerSetFullCovered
+import org.telegram.tgnet.TLRPC.TLTheme
+import org.telegram.tgnet.TLRPC.TLTopPeer
+import org.telegram.tgnet.TLRPC.TLTopPeerCategoryBotsInline
+import org.telegram.tgnet.TLRPC.TLTopPeerCategoryCorrespondents
+import org.telegram.tgnet.TLRPC.TLUpdateBotCommands
 import org.telegram.tgnet.TLRPC.Updates
-import org.telegram.tgnet.TLRPC.account_EmojiStatuses
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.MessageEntity
-import org.telegram.tgnet.tlrpc.Reaction
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_availableReaction
-import org.telegram.tgnet.tlrpc.TL_inputMessageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_message
-import org.telegram.tgnet.tlrpc.TL_messageEntityBlockquote
-import org.telegram.tgnet.tlrpc.TL_messageEntityBold
-import org.telegram.tgnet.tlrpc.TL_messageEntityCode
-import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_messageEntityEmail
-import org.telegram.tgnet.tlrpc.TL_messageEntityHashtag
-import org.telegram.tgnet.tlrpc.TL_messageEntityItalic
-import org.telegram.tgnet.tlrpc.TL_messageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_messageEntityPre
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.TL_messageEntityStrike
-import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
-import org.telegram.tgnet.tlrpc.TL_messageEntityUnderline
-import org.telegram.tgnet.tlrpc.TL_messageEntityUrl
-import org.telegram.tgnet.tlrpc.TL_messages_channelMessages
-import org.telegram.tgnet.tlrpc.TL_messages_messages
-import org.telegram.tgnet.tlrpc.TL_messages_messagesSlice
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.Vector
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.Vector
+import org.telegram.tgnet.action
+import org.telegram.tgnet.dcId
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.readAttachPath
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.EmojiThemes
 import org.telegram.ui.Components.AnimatedEmojiDrawable
@@ -232,21 +234,29 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
+import androidx.core.graphics.createBitmap
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.userId
+import androidx.core.util.isEmpty
+import org.telegram.tgnet.document
+import org.telegram.tgnet.entities
+import androidx.core.content.edit
+import androidx.core.graphics.withScale
 
 class MediaDataController(num: Int) : BaseController(num) {
 	private var menuBotsUpdateHash = 0L
 
-	var attachMenuBots: TL_attachMenuBots = TL_attachMenuBots()
+	var attachMenuBots: TLAttachMenuBots = TLAttachMenuBots()
 		private set
 
 	private var isLoadingMenuBots = false
 	private var menuBotsUpdateDate = 0
 	private var reactionsUpdateHash = 0
-	private val reactionsList = mutableListOf<TL_availableReaction>()
-	val enabledReactionsList = mutableListOf<TL_availableReaction>()
+	private val reactionsList = mutableListOf<TLAvailableReaction>()
+	val enabledReactionsList = mutableListOf<TLAvailableReaction>()
 
 	@JvmField
-	val reactionsMap = mutableMapOf<String, TL_availableReaction>()
+	val reactionsMap = mutableMapOf<String, TLAvailableReaction>()
 
 	var doubleTapReaction: String? = null
 		get() {
@@ -268,7 +278,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return null
 		}
 		set(reaction) {
-			MessagesController.getEmojiSettings(currentAccount).edit().putString("reaction_on_double_tap", reaction).commit()
+			MessagesController.getEmojiSettings(currentAccount).edit(commit = true) { putString("reaction_on_double_tap", reaction) }
 			field = reaction
 		}
 
@@ -276,22 +286,22 @@ class MediaDataController(num: Int) : BaseController(num) {
 	private var reactionsUpdateDate = 0
 	private var reactionsCacheGenerated = false
 
-	var premiumPromo: TL_help_premiumPromo? = null
+	var premiumPromo: TLHelpPremiumPromo? = null
 		private set
 
 	private var isLoadingPremiumPromo = false
 	private var premiumPromoUpdateDate = 0
 
-	private val stickerSets = arrayOf(mutableListOf<TL_messages_stickerSet>(), mutableListOf(), mutableListOf(), mutableListOf(), mutableListOf(), mutableListOf())
-	private val stickersByIds = arrayOf(LongSparseArray<TLRPC.Document>(), LongSparseArray<TLRPC.Document>(), LongSparseArray<TLRPC.Document>(), LongSparseArray<TLRPC.Document>(), LongSparseArray<TLRPC.Document>(), LongSparseArray<TLRPC.Document>())
-	private val stickerSetsById = LongSparseArray<TL_messages_stickerSet>()
-	private val installedStickerSetsById = LongSparseArray<TL_messages_stickerSet>()
+	private val stickerSets = arrayOf(mutableListOf<TLMessagesStickerSet>(), mutableListOf(), mutableListOf(), mutableListOf(), mutableListOf(), mutableListOf())
+	private val stickersByIds = arrayOf(LongSparseArray<TLRPC.Document>(), LongSparseArray(), LongSparseArray(), LongSparseArray(), LongSparseArray(), LongSparseArray())
+	private val stickerSetsById = LongSparseArray<TLMessagesStickerSet>()
+	private val installedStickerSetsById = LongSparseArray<TLMessagesStickerSet>()
 	private val installedForceStickerSetsById = mutableListOf<Long>()
 	private val uninstalledForceStickerSetsById = mutableListOf<Long>()
-	private val groupStickerSets = LongSparseArray<TL_messages_stickerSet>()
-	private val stickerSetsByName = ConcurrentHashMap<String, TL_messages_stickerSet>(100, 1.0f, 1)
-	private var stickerSetDefaultStatuses: TL_messages_stickerSet? = null
-	private val diceStickerSetsByEmoji = mutableMapOf<String, TL_messages_stickerSet>()
+	private val groupStickerSets = LongSparseArray<TLMessagesStickerSet>()
+	private val stickerSetsByName = ConcurrentHashMap<String, TLMessagesStickerSet>(100, 1.0f, 1)
+	private var stickerSetDefaultStatuses: TLMessagesStickerSet? = null
+	private val diceStickerSetsByEmoji = mutableMapOf<String, TLMessagesStickerSet>()
 	private val diceEmojiStickerSetsById = LongSparseArray<String>()
 	private val loadingDiceStickerSets = mutableSetOf<String>()
 	private val removingStickerSetsUndos = LongSparseArray<Runnable>()
@@ -332,7 +342,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 	var loadFeaturedPremium: Boolean = false
 
 	private val featuredStickerSets = arrayOf(mutableListOf<StickerSetCovered>(), mutableListOf())
-	private val featuredStickerSetsById = arrayOf(LongSparseArray<StickerSetCovered>(), LongSparseArray<StickerSetCovered>())
+	private val featuredStickerSetsById = arrayOf(LongSparseArray<StickerSetCovered>(), LongSparseArray())
 	private val unreadStickerSets = arrayOf(mutableListOf<Long>(), mutableListOf())
 	private val readingStickerSets = arrayOf(mutableListOf<Long>(), mutableListOf())
 	private val loadingFeaturedStickers = BooleanArray(2)
@@ -351,7 +361,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 	private var previewStickersLoading: Boolean = false
 
 	private val emojiStatusesHash = LongArray(2)
-	private val emojiStatuses = arrayOfNulls<ArrayList<EmojiStatus>?>(2)
+	private val emojiStatuses = arrayOfNulls<MutableList<EmojiStatus>?>(2)
 	private val emojiStatusesFetchDate = arrayOfNulls<Long>(2)
 	private val emojiStatusesFromCacheFetched = BooleanArray(2)
 	private val emojiStatusesFetching = BooleanArray(2)
@@ -429,7 +439,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		drafts.clear()
 		draftMessages.clear()
-		draftPreferences?.edit()?.clear()?.commit()
+		draftPreferences?.edit { clear() }
 
 		botInfos.clear()
 		botKeyboards.clear()
@@ -472,7 +482,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				var c: SQLiteCursor? = null
 				var hash: Long = 0
 				var date = 0
-				var bots: TL_attachMenuBots? = null
+				var bots: TLAttachMenuBots? = null
 
 				try {
 					c = messagesStorage.database.queryFinalized("SELECT data, hash, date FROM attach_menu_bots")
@@ -481,9 +491,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 						val data = c.byteBufferValue(0)
 
 						if (data != null) {
-							val attachMenuBots = TL_attachMenuBots.TLdeserialize(data, data.readInt32(false), true)
+							val attachMenuBots = TLRPC.AttachMenuBots.deserialize(data, data.readInt32(false), true)
 
-							if (attachMenuBots is TL_attachMenuBots) {
+							if (attachMenuBots is TLAttachMenuBots) {
 								bots = attachMenuBots
 							}
 
@@ -505,23 +515,23 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 		else {
-			val req = TL_messages_getAttachMenuBots()
+			val req = TLMessagesGetAttachMenuBots()
 			req.hash = if (force) 0 else menuBotsUpdateHash
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				val date = (System.currentTimeMillis() / 1000).toInt()
 
-				if (response is TL_attachMenuBotsNotModified) {
+				if (response is TLAttachMenuBotsNotModified) {
 					processLoadedMenuBots(null, 0, date, false)
 				}
-				else if (response is TL_attachMenuBots) {
+				else if (response is TLAttachMenuBots) {
 					processLoadedMenuBots(response, response.hash, date, false)
 				}
 			}
 		}
 	}
 
-	fun processLoadedMenuBots(bots: TL_attachMenuBots?, hash: Long, date: Int, cache: Boolean) {
+	fun processLoadedMenuBots(bots: TLAttachMenuBots?, hash: Long, date: Int, cache: Boolean) {
 		if (bots != null && date != 0) {
 			attachMenuBots = bots
 			menuBotsUpdateHash = hash
@@ -545,7 +555,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun putMenuBotsToCache(bots: TL_attachMenuBots?, hash: Long, date: Int) {
+	private fun putMenuBotsToCache(bots: TLAttachMenuBots?, hash: Long, date: Int) {
 		messagesStorage.storageQueue.postRunnable {
 			try {
 				if (bots != null) {
@@ -588,7 +598,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			messagesStorage.storageQueue.postRunnable {
 				var c: SQLiteCursor? = null
 				var date = 0
-				var premiumPromo: TL_help_premiumPromo? = null
+				var premiumPromo: TLHelpPremiumPromo? = null
 
 				try {
 					c = messagesStorage.database.queryFinalized("SELECT data, date FROM premium_promo")
@@ -597,7 +607,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						val data = c.byteBufferValue(0)
 
 						if (data != null) {
-							premiumPromo = TL_help_premiumPromo.TLdeserialize(data, data.readInt32(false), true)
+							premiumPromo = TLHelpPremiumPromo.deserialize(data, data.readInt32(false), true)
 							data.reuse()
 						}
 
@@ -617,19 +627,19 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 		else {
-			val req = TL_help_getPremiumPromo()
+			val req = TLHelpGetPremiumPromo()
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				val date = (System.currentTimeMillis() / 1000).toInt()
 
-				if (response is TL_help_premiumPromo) {
+				if (response is TLHelpPremiumPromo) {
 					processLoadedPremiumPromo(response, date, false)
 				}
 			}
 		}
 	}
 
-	private fun processLoadedPremiumPromo(premiumPromo: TL_help_premiumPromo, date: Int, cache: Boolean) {
+	private fun processLoadedPremiumPromo(premiumPromo: TLHelpPremiumPromo, date: Int, cache: Boolean) {
 		this.premiumPromo = premiumPromo
 		premiumPromoUpdateDate = date
 		messagesController.putUsers(premiumPromo.users, cache)
@@ -646,7 +656,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun putPremiumPromoToCache(premiumPromo: TL_help_premiumPromo?, date: Int) {
+	private fun putPremiumPromoToCache(premiumPromo: TLHelpPremiumPromo?, date: Int) {
 		messagesStorage.storageQueue.postRunnable {
 			try {
 				if (premiumPromo != null) {
@@ -681,7 +691,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun getReactionsList(): List<TL_availableReaction> {
+	fun getReactionsList(): List<TLAvailableReaction> {
 		return reactionsList
 	}
 
@@ -693,7 +703,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				var c: SQLiteCursor? = null
 				var hash = 0
 				var date = 0
-				var reactions: MutableList<TL_availableReaction>? = null
+				var reactions: MutableList<TLAvailableReaction>? = null
 
 				try {
 					c = messagesStorage.database.queryFinalized("SELECT data, hash, date FROM reactions")
@@ -707,7 +717,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 							reactions = mutableListOf()
 
 							for (i in 0 until count) {
-								val react = TL_availableReaction.TLdeserialize(data, data.readInt32(false), true)
+								val react = TLAvailableReaction.deserialize(data, data.readInt32(false), true)
 
 								if (react != null) {
 									reactions.add(react)
@@ -732,23 +742,23 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 		else {
-			val req = TL_messages_getAvailableReactions()
+			val req = TLMessagesGetAvailableReactions()
 			req.hash = if (force) 0 else reactionsUpdateHash
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				val date = (System.currentTimeMillis() / 1000).toInt()
 
-				if (response is TL_messages_availableReactionsNotModified) {
+				if (response is TLMessagesAvailableReactionsNotModified) {
 					processLoadedReactions(null, 0, date, false)
 				}
-				else if (response is TL_messages_availableReactions) {
+				else if (response is TLMessagesAvailableReactions) {
 					processLoadedReactions(response.reactions, response.hash, date, false)
 				}
 			}
 		}
 	}
 
-	fun processLoadedReactions(reactions: List<TL_availableReaction>?, hash: Int, date: Int, cache: Boolean) {
+	fun processLoadedReactions(reactions: List<TLAvailableReaction>?, hash: Int, date: Int, cache: Boolean) {
 		if (reactions != null && date != 0) {
 			reactionsList.clear()
 			reactionsMap.clear()
@@ -797,11 +807,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		for (reaction in arrayList) {
 			val size = ReactionsEffectOverlay.sizeForBigReaction()
-			preloadImage(ImageLocation.getForDocument(reaction.around_animation), ReactionsEffectOverlay.filterForAroundAnimation)
-			preloadImage(ImageLocation.getForDocument(reaction.effect_animation), size.toString() + "_" + size)
-			preloadImage(ImageLocation.getForDocument(reaction.activate_animation), null)
-			preloadImage(ImageLocation.getForDocument(reaction.appear_animation), ReactionsUtils.APPEAR_ANIMATION_FILTER)
-			preloadImage(ImageLocation.getForDocument(reaction.center_icon), null)
+			preloadImage(ImageLocation.getForDocument(reaction.aroundAnimation), ReactionsEffectOverlay.filterForAroundAnimation)
+			preloadImage(ImageLocation.getForDocument(reaction.effectAnimation), size.toString() + "_" + size)
+			preloadImage(ImageLocation.getForDocument(reaction.activateAnimation), null)
+			preloadImage(ImageLocation.getForDocument(reaction.appearAnimation), ReactionsUtils.APPEAR_ANIMATION_FILTER)
+			preloadImage(ImageLocation.getForDocument(reaction.centerIcon), null)
 		}
 	}
 
@@ -836,7 +846,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		imageReceiver.setImage(location, filter, null, null, 0, FileLoader.PRELOAD_CACHE_TYPE)
 	}
 
-	private fun putReactionsToCache(reactions: List<TL_availableReaction>?, hash: Int, date: Int) {
+	private fun putReactionsToCache(reactions: List<TLAvailableReaction>?, hash: Int, date: Int) {
 		val reactionsFinal = reactions?.toList()
 
 		messagesStorage.storageQueue.postRunnable {
@@ -910,13 +920,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	fun isStickerInFavorites(document: TLRPC.Document?): Boolean {
-		if (document == null) {
+		if (document !is TLRPC.TLDocument) {
 			return false
 		}
 
 		for (d in recentStickers[TYPE_FAVE]) {
-			if (d.id == document.id && d.dc_id == document.dc_id) {
-				return true
+			if (d is TLRPC.TLDocument) {
+				if (d.id == document.id && d.dcId == document.dcId) {
+					return true
+				}
 			}
 		}
 
@@ -924,11 +936,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	fun clearRecentStickers() {
-		val req = TL_messages_clearRecentStickers()
+		val req = TLMessagesClearRecentStickers()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TL_boolTrue) {
+				if (response is TLBoolTrue) {
 					messagesStorage.storageQueue.postRunnable {
 						try {
 							messagesStorage.database.executeFast("DELETE FROM web_recent_v3 WHERE type = " + 3).stepThis().dispose()
@@ -948,6 +960,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 	fun addRecentSticker(type: Int, parentObject: Any?, document: TLRPC.Document, date: Int, remove: Boolean) {
 		if (type == TYPE_GREETINGS || !MessageObject.isStickerDocument(document) && !MessageObject.isAnimatedStickerDocument(document, true)) {
+			return
+		}
+
+		if (document !is TLRPC.TLDocument) {
 			return
 		}
 
@@ -984,14 +1000,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 				NotificationCenter.globalInstance.postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_STICKER, document, if (replace) StickerSetBulletinLayout.TYPE_REPLACED_TO_FAVORITES else StickerSetBulletinLayout.TYPE_ADDED_TO_FAVORITES)
 			}
 
-			val req = TL_messages_faveSticker()
-			req.id = TL_inputDocument()
-			req.id.id = document.id
-			req.id.access_hash = document.access_hash
-			req.id.file_reference = document.file_reference
+			val req = TLMessagesFaveSticker()
 
-			if (req.id.file_reference == null) {
-				req.id.file_reference = ByteArray(0)
+			req.id = TLInputDocument().also {
+				it.id = document.id
+				it.accessHash = document.accessHash
+				it.fileReference = document.fileReference
+
+				if (it.fileReference == null) {
+					it.fileReference = ByteArray(0)
+				}
 			}
 
 			req.unfave = remove
@@ -1013,14 +1031,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 			if (type == TYPE_IMAGE && remove) {
 				NotificationCenter.globalInstance.postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_STICKER, document, StickerSetBulletinLayout.TYPE_REMOVED_FROM_RECENT)
 
-				val req = TL_messages_saveRecentSticker()
-				req.id = TL_inputDocument()
-				req.id.id = document.id
-				req.id.access_hash = document.access_hash
-				req.id.file_reference = document.file_reference
+				val req = TLMessagesSaveRecentSticker()
 
-				if (req.id.file_reference == null) {
-					req.id.file_reference = ByteArray(0)
+				req.id = TLInputDocument().also {
+					it.id = document.id
+					it.accessHash = document.accessHash
+					it.fileReference = document.fileReference
+
+					if (it.fileReference == null) {
+						it.fileReference = ByteArray(0)
+					}
 				}
 
 				req.unsave = true
@@ -1069,6 +1089,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	fun removeRecentGif(document: TLRPC.Document) {
+		if (document !is TLRPC.TLDocument) {
+			return
+		}
+
 		var i = 0
 		val n = recentGifs.size
 
@@ -1081,14 +1105,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 			i++
 		}
 
-		val req = TL_messages_saveGif()
-		req.id = TL_inputDocument()
-		req.id.id = document.id
-		req.id.access_hash = document.access_hash
-		req.id.file_reference = document.file_reference
+		val req = TLMessagesSaveGif()
 
-		if (req.id.file_reference == null) {
-			req.id.file_reference = ByteArray(0)
+		req.id = TLInputDocument().also {
+			it.id = document.id
+			it.accessHash = document.accessHash
+			it.fileReference = document.fileReference
+
+			if (it.fileReference == null) {
+				it.fileReference = ByteArray(0)
+			}
 		}
 
 		req.unsave = true
@@ -1171,9 +1197,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 		return loadingStickers[type]
 	}
 
-	fun replaceStickerSet(set: TL_messages_stickerSet) {
-		var existingSet = stickerSetsById[set.set.id]
-		val emoji = diceEmojiStickerSetsById[set.set.id]
+	fun replaceStickerSet(set: TLMessagesStickerSet) {
+		val setId = set.set?.id ?: return
+
+		var existingSet = stickerSetsById[setId]
+		val emoji = diceEmojiStickerSetsById[setId]
 
 		if (emoji != null) {
 			diceStickerSetsByEmoji[emoji] = set
@@ -1183,11 +1211,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 		var isGroupSet = false
 
 		if (existingSet == null) {
-			existingSet = stickerSetsByName[set.set.short_name]
+			existingSet = stickerSetsByName[set.set?.shortName]
 		}
 
 		if (existingSet == null) {
-			existingSet = groupStickerSets[set.set.id]
+			existingSet = groupStickerSets[setId]
 
 			if (existingSet != null) {
 				isGroupSet = true
@@ -1200,11 +1228,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		var changed = false
 
-		if ("AnimatedEmojies" == set.set.short_name) {
+		if ("AnimatedEmojies" == set.set?.shortName) {
 			changed = true
 
-			existingSet.documents = set.documents
-			existingSet.packs = set.packs
+			existingSet.documents.clear()
+			existingSet.documents.addAll(set.documents)
+
+			existingSet.packs.clear()
+			existingSet.packs.addAll(set.packs)
+
 			existingSet.set = set.set
 
 			AndroidUtilities.runOnUIThread {
@@ -1246,16 +1278,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 			else {
 				var type = TYPE_IMAGE
 
-				if (set.set.masks) {
+				if (set.set?.masks == true) {
 					type = TYPE_MASK
 				}
-				else if (set.set.emojis) {
+				else if (set.set?.emojis == true) {
 					type = TYPE_EMOJIPACKS
 				}
 
 				putStickersToCache(type, stickerSets[type], loadDate[type], loadHash[type])
 
-				if ("AnimatedEmojies" == set.set.short_name) {
+				if ("AnimatedEmojies" == set.set?.shortName) {
 					type = TYPE_EMOJI
 					putStickersToCache(type, stickerSets[type], loadDate[type], loadHash[type])
 				}
@@ -1263,19 +1295,19 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun getStickerSetByName(name: String?): TL_messages_stickerSet? {
+	fun getStickerSetByName(name: String?): TLMessagesStickerSet? {
 		return stickerSetsByName[name]
 	}
 
-	fun getStickerSetByEmojiOrName(emoji: String?): TL_messages_stickerSet? {
+	fun getStickerSetByEmojiOrName(emoji: String?): TLMessagesStickerSet? {
 		return diceStickerSetsByEmoji[emoji]
 	}
 
-	fun getStickerSetById(id: Long): TL_messages_stickerSet? {
+	fun getStickerSetById(id: Long): TLMessagesStickerSet? {
 		return stickerSetsById[id]
 	}
 
-	fun getGroupStickerSetById(stickerSet: StickerSet?): TL_messages_stickerSet? {
+	fun getGroupStickerSetById(stickerSet: TLStickerSet?): TLMessagesStickerSet? {
 		if (stickerSet == null) {
 			return null
 		}
@@ -1288,7 +1320,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			if (set?.set == null) {
 				loadGroupStickerSet(stickerSet, true)
 			}
-			else if (set.set.hash != stickerSet.hash) {
+			else if (set.set?.hash != stickerSet.hash) {
 				loadGroupStickerSet(stickerSet, false)
 			}
 		}
@@ -1296,26 +1328,26 @@ class MediaDataController(num: Int) : BaseController(num) {
 		return set
 	}
 
-	fun putGroupStickerSet(stickerSet: TL_messages_stickerSet) {
-		groupStickerSets.put(stickerSet.set.id, stickerSet)
+	fun putGroupStickerSet(stickerSet: TLMessagesStickerSet) {
+		groupStickerSets.put(stickerSet.set?.id ?: return, stickerSet)
 	}
 
-	fun getStickerSet(inputStickerSet: InputStickerSet?, cacheOnly: Boolean): TL_messages_stickerSet? {
+	fun getStickerSet(inputStickerSet: InputStickerSet?, cacheOnly: Boolean): TLMessagesStickerSet? {
 		return getStickerSet(inputStickerSet, cacheOnly, null)
 	}
 
-	fun getStickerSet(inputStickerSet: InputStickerSet?, cacheOnly: Boolean, onNotFound: Runnable?): TL_messages_stickerSet? {
+	fun getStickerSet(inputStickerSet: InputStickerSet?, cacheOnly: Boolean, onNotFound: Runnable?): TLMessagesStickerSet? {
 		if (inputStickerSet == null) {
 			return null
 		}
 
-		if (inputStickerSet is TL_inputStickerSetID && stickerSetsById.containsKey(inputStickerSet.id)) {
+		if (inputStickerSet is TLInputStickerSetID && stickerSetsById.containsKey(inputStickerSet.id)) {
 			return stickerSetsById[inputStickerSet.id]
 		}
-		else if (inputStickerSet is TL_inputStickerSetShortName && inputStickerSet.short_name != null && stickerSetsByName.containsKey(inputStickerSet.short_name.lowercase())) {
-			return stickerSetsByName[inputStickerSet.short_name.lowercase()]
+		else if (inputStickerSet is TLInputStickerSetShortName && inputStickerSet.shortName != null && stickerSetsByName.containsKey(inputStickerSet.shortName?.lowercase())) {
+			return stickerSetsByName[inputStickerSet.shortName?.lowercase()]
 		}
-		else if (inputStickerSet is TL_inputStickerSetEmojiDefaultStatuses && stickerSetDefaultStatuses != null) {
+		else if (inputStickerSet is TLInputStickerSetEmojiDefaultStatuses && stickerSetDefaultStatuses != null) {
 			return stickerSetDefaultStatuses
 		}
 
@@ -1323,24 +1355,22 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return null
 		}
 
-		val req = TL_messages_getStickerSet()
+		val req = TLMessagesGetStickerSet()
 		req.stickerset = inputStickerSet
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_stickerSet) {
+			if (response is TLMessagesStickerSet) {
 				AndroidUtilities.runOnUIThread {
-					if (response.set == null) {
-						return@runOnUIThread
-					}
+					val responseSet = response.set ?: return@runOnUIThread
 
-					stickerSetsById.put(response.set.id, response)
-					stickerSetsByName[response.set.short_name.lowercase()] = response
+					stickerSetsById.put(responseSet.id, response)
+					stickerSetsByName[responseSet.shortName!!.lowercase()] = response
 
-					if (inputStickerSet is TL_inputStickerSetEmojiDefaultStatuses) {
+					if (inputStickerSet is TLInputStickerSetEmojiDefaultStatuses) {
 						stickerSetDefaultStatuses = response
 					}
 
-					notificationCenter.postNotificationName(NotificationCenter.groupStickersDidLoad, response.set.id, response)
+					notificationCenter.postNotificationName(NotificationCenter.groupStickersDidLoad, responseSet.id, response)
 				}
 			}
 			else {
@@ -1351,18 +1381,18 @@ class MediaDataController(num: Int) : BaseController(num) {
 		return null
 	}
 
-	private fun loadGroupStickerSet(stickerSet: StickerSet, cache: Boolean) {
+	private fun loadGroupStickerSet(stickerSet: TLStickerSet, cache: Boolean) {
 		if (cache) {
 			messagesStorage.storageQueue.postRunnable {
 				try {
-					val set: TL_messages_stickerSet?
+					val set: TLMessagesStickerSet?
 					val cursor = messagesStorage.database.queryFinalized("SELECT document FROM web_recent_v3 WHERE id = 's_" + stickerSet.id + "'")
 
 					if (cursor.next() && !cursor.isNull(0)) {
 						val data = cursor.byteBufferValue(0)
 
 						if (data != null) {
-							set = TL_messages_stickerSet.TLdeserialize(data, data.readInt32(false), false)
+							set = TLRPC.MessagesStickerSet.deserialize(data, data.readInt32(false), false) as? TLMessagesStickerSet
 							data.reuse()
 						}
 						else {
@@ -1375,14 +1405,14 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 					cursor.dispose()
 
-					if (set?.set == null || set.set.hash != stickerSet.hash) {
+					if (set?.set == null || set.set?.hash != stickerSet.hash) {
 						loadGroupStickerSet(stickerSet, false)
 					}
 
 					if (set?.set != null) {
 						AndroidUtilities.runOnUIThread {
-							groupStickerSets.put(set.set.id, set)
-							notificationCenter.postNotificationName(NotificationCenter.groupStickersDidLoad, set.set.id, set)
+							groupStickerSets.put(set.set!!.id, set)
+							notificationCenter.postNotificationName(NotificationCenter.groupStickersDidLoad, set.set!!.id, set)
 						}
 					}
 				}
@@ -1392,30 +1422,36 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 		else {
-			val req = TL_messages_getStickerSet()
-			req.stickerset = TL_inputStickerSetID()
-			req.stickerset.id = stickerSet.id
-			req.stickerset.access_hash = stickerSet.access_hash
+			val req = TLMessagesGetStickerSet()
+
+			req.stickerset = TLInputStickerSetID().also {
+				it.id = stickerSet.id
+				it.accessHash = stickerSet.accessHash
+			}
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_messages_stickerSet) {
-					AndroidUtilities.runOnUIThread {
-						groupStickerSets.put(response.set.id, response)
-						notificationCenter.postNotificationName(NotificationCenter.groupStickersDidLoad, response.set.id, response)
+				if (response is TLMessagesStickerSet) {
+					val responseSet = response.set
+
+					if (responseSet != null) {
+						AndroidUtilities.runOnUIThread {
+							groupStickerSets.put(responseSet.id, response)
+							notificationCenter.postNotificationName(NotificationCenter.groupStickersDidLoad, responseSet.id, response)
+						}
 					}
 				}
 			}
 		}
 	}
 
-	private fun putSetToCache(set: TL_messages_stickerSet) {
+	private fun putSetToCache(set: TLMessagesStickerSet) {
 		messagesStorage.storageQueue.postRunnable {
 			try {
 				val database = messagesStorage.database
 
 				val state = database.executeFast("REPLACE INTO web_recent_v3 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 				state.requery()
-				state.bindString(1, "s_" + set.set.id)
+				state.bindString(1, "s_" + set.set?.id)
 				state.bindInteger(2, 6)
 				state.bindString(3, "")
 				state.bindString(4, "")
@@ -1466,7 +1502,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		return !stickersLoaded[0] || stickerSets[0].size >= 5 || recentStickers[TYPE_FAVE].isNotEmpty()
 	}
 
-	fun getStickerSets(type: Int): MutableList<TL_messages_stickerSet> {
+	fun getStickerSets(type: Int): MutableList<TLMessagesStickerSet> {
 		return if (type == TYPE_FEATURED) {
 			stickerSets[2]
 		}
@@ -1499,13 +1535,22 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		while (a < n) {
 			val pack = featuredStickerSets[if (emoji) 1 else 0][a]
+			val set = pack.set
 
-			if (isStickerPackInstalled(pack.set.id) || pack.covers.isEmpty() && pack.cover == null) {
+			if (set == null) {
 				a++
 				continue
 			}
 
-			if (!unreadStickerSets[if (emoji) 1 else 0].contains(pack.set.id)) {
+			val cover = (pack as? TLStickerSetCovered)?.cover
+			val covers = (pack as? TLRPC.TLStickerSetMultiCovered)?.covers
+
+			if (isStickerPackInstalled(set.id) || covers.isNullOrEmpty() && cover == null) {
+				a++
+				continue
+			}
+
+			if (!unreadStickerSets[if (emoji) 1 else 0].contains(set.id)) {
 				return false
 			}
 
@@ -1594,7 +1639,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 							val data = cursor.byteBufferValue(0)
 
 							if (data != null) {
-								val document = TLRPC.Document.TLdeserialize(data, data.readInt32(false), false)
+								val document = TLRPC.Document.deserialize(data, data.readInt32(false), false)
 
 								if (document != null) {
 									arrayList.add(document)
@@ -1670,13 +1715,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 
 			if (gif) {
-				val req = TL_messages_getSavedGifs()
+				val req = TLMessagesGetSavedGifs()
 				req.hash = calcDocumentsHash(recentGifs)
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					var arrayList: List<TLRPC.Document>? = null
 
-					if (response is TL_messages_savedGifs) {
+					if (response is TLMessagesSavedGifs) {
 						arrayList = response.gifs
 					}
 
@@ -1688,27 +1733,27 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				when (type) {
 					TYPE_FAVE -> {
-						val req = TL_messages_getFavedStickers()
+						val req = TLMessagesGetFavedStickers()
 						req.hash = calcDocumentsHash(recentStickers[type])
 						request = req
 					}
 
 					TYPE_GREETINGS -> {
-						val req = TL_messages_getStickers()
+						val req = TLMessagesGetStickers()
 						req.emoticon = "\uD83D\uDC4B" + Emoji.fixEmoji("⭐")
 						req.hash = calcDocumentsHash(recentStickers[type])
 						request = req
 					}
 
 					TYPE_PREMIUM_STICKERS -> {
-						val req = TL_messages_getStickers()
+						val req = TLMessagesGetStickers()
 						req.emoticon = "\uD83D\uDCC2" + Emoji.fixEmoji("⭐")
 						req.hash = calcDocumentsHash(recentStickers[type])
 						request = req
 					}
 
 					else -> {
-						val req = TL_messages_getRecentStickers()
+						val req = TLMessagesGetRecentStickers()
 						req.hash = calcDocumentsHash(recentStickers[type])
 						req.attached = type == TYPE_MASK
 						request = req
@@ -1719,17 +1764,17 @@ class MediaDataController(num: Int) : BaseController(num) {
 					var arrayList: List<TLRPC.Document>? = null
 
 					if (type == TYPE_GREETINGS || type == TYPE_PREMIUM_STICKERS) {
-						if (response is TL_messages_stickers) {
+						if (response is TLMessagesStickers) {
 							arrayList = response.stickers
 						}
 					}
 					else if (type == TYPE_FAVE) {
-						if (response is TL_messages_favedStickers) {
+						if (response is TLMessagesFavedStickers) {
 							arrayList = response.stickers
 						}
 					}
 					else {
-						if (response is TL_messages_recentStickers) {
+						if (response is TLMessagesRecentStickers) {
 							arrayList = response.stickers
 						}
 					}
@@ -1860,19 +1905,19 @@ class MediaDataController(num: Int) : BaseController(num) {
 					loadingRecentGifs = false
 					recentGifsLoaded = true
 
-					editor.putLong("lastGifLoadTime", System.currentTimeMillis()).commit()
+					editor.putLong("lastGifLoadTime", System.currentTimeMillis()).apply()
 				}
 				else {
 					loadingRecentStickers[type] = false
 					recentStickersLoaded[type] = true
 
 					when (type) {
-						TYPE_IMAGE -> editor.putLong("lastStickersLoadTime", System.currentTimeMillis()).commit()
-						TYPE_MASK -> editor.putLong("lastStickersLoadTimeMask", System.currentTimeMillis()).commit()
-						TYPE_GREETINGS -> editor.putLong("lastStickersLoadTimeGreet", System.currentTimeMillis()).commit()
-						TYPE_EMOJIPACKS -> editor.putLong("lastStickersLoadTimeEmojiPacks", System.currentTimeMillis()).commit()
-						TYPE_PREMIUM_STICKERS -> editor.putLong("lastStickersLoadTimePremiumStickers", System.currentTimeMillis()).commit()
-						else -> editor.putLong("lastStickersLoadTimeFavs", System.currentTimeMillis()).commit()
+						TYPE_IMAGE -> editor.putLong("lastStickersLoadTime", System.currentTimeMillis()).apply()
+						TYPE_MASK -> editor.putLong("lastStickersLoadTimeMask", System.currentTimeMillis()).apply()
+						TYPE_GREETINGS -> editor.putLong("lastStickersLoadTimeGreet", System.currentTimeMillis()).apply()
+						TYPE_EMOJIPACKS -> editor.putLong("lastStickersLoadTimeEmojiPacks", System.currentTimeMillis()).apply()
+						TYPE_PREMIUM_STICKERS -> editor.putLong("lastStickersLoadTimePremiumStickers", System.currentTimeMillis()).apply()
+						else -> editor.putLong("lastStickersLoadTimeFavs", System.currentTimeMillis()).apply()
 					}
 				}
 
@@ -1896,8 +1941,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 	fun reorderStickers(type: Int, order: List<Long>, forceUpdateUi: Boolean) {
 		stickerSets[type].sortWith { lhs, rhs ->
-			val index1 = order.indexOf(lhs.set.id)
-			val index2 = order.indexOf(rhs.set.id)
+			val index1 = order.indexOf(lhs.set?.id)
+			val index2 = order.indexOf(rhs.set?.id)
 
 			return@sortWith if (index1 > index2) {
 				1
@@ -1919,29 +1964,39 @@ class MediaDataController(num: Int) : BaseController(num) {
 		loadHash[type] = calcStickersHash(stickerSets[type])
 	}
 
-	fun storeTempStickerSet(set: TL_messages_stickerSet) {
-		stickerSetsById.put(set.set.id, set)
-		stickerSetsByName[set.set.short_name] = set
+	fun storeTempStickerSet(set: TLMessagesStickerSet?) {
+		val setSet = set?.set ?: return
+
+		stickerSetsById.put(setSet.id, set)
+
+		setSet.shortName?.let {
+			stickerSetsByName[it] = set
+		}
 	}
 
-	fun addNewStickerSet(set: TL_messages_stickerSet) {
-		if (stickerSetsById.indexOfKey(set.set.id) >= 0 || stickerSetsByName.containsKey(set.set.short_name)) {
+	fun addNewStickerSet(set: TLMessagesStickerSet) {
+		val setSet = set.set ?: return
+
+		if (stickerSetsById.indexOfKey(setSet.id) >= 0 || stickerSetsByName.containsKey(setSet.shortName)) {
 			return
 		}
 
 		var type = TYPE_IMAGE
 
-		if (set.set.masks) {
+		if (setSet.masks) {
 			type = TYPE_MASK
 		}
-		else if (set.set.emojis) {
+		else if (setSet.emojis) {
 			type = TYPE_EMOJIPACKS
 		}
 
 		stickerSets[type].add(0, set)
-		stickerSetsById.put(set.set.id, set)
-		installedStickerSetsById.put(set.set.id, set)
-		stickerSetsByName[set.set.short_name] = set
+		stickerSetsById.put(setSet.id, set)
+		installedStickerSetsById.put(setSet.id, set)
+
+		setSet.shortName?.let {
+			stickerSetsByName[it] = set
+		}
 
 		val stickersById = LongSparseArray<TLRPC.Document>()
 
@@ -1952,20 +2007,25 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		for (a in set.packs.indices) {
 			val stickerPack = set.packs[a]
-			stickerPack.emoticon = stickerPack.emoticon.replace("\uFE0F", "")
+			stickerPack.emoticon = stickerPack.emoticon?.replace("\uFE0F", "")
 
 			var arrayList = allStickers[stickerPack.emoticon]
 
 			if (arrayList == null) {
 				arrayList = mutableListOf()
-				allStickers[stickerPack.emoticon] = arrayList
+
+				stickerPack.emoticon?.let {
+					allStickers[it] = arrayList
+				}
 			}
 
 			for (c in stickerPack.documents.indices) {
 				val id = stickerPack.documents[c]
 
 				if (stickersByEmoji.indexOfKey(id) < 0) {
-					stickersByEmoji.put(id, stickerPack.emoticon)
+					stickerPack.emoticon?.let {
+						stickersByEmoji.put(id, it)
+					}
 				}
 
 				val sticker = stickersById[id]
@@ -2011,8 +2071,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 							val count = data.readInt32(false)
 
 							for (a in 0 until count) {
-								val stickerSet = StickerSetCovered.TLdeserialize(data, data.readInt32(false), false)
-								newStickerArray.add(stickerSet)
+								val stickerSet = StickerSetCovered.deserialize(data, data.readInt32(false), false)
+
+								if (stickerSet != null) {
+									newStickerArray.add(stickerSet)
+								}
 							}
 
 							data.reuse()
@@ -2050,13 +2113,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val req: TLObject
 
 			if (emoji) {
-				val request = TL_messages_getFeaturedEmojiStickers()
+				val request = TLMessagesGetFeaturedEmojiStickers()
 				hash = if (force) 0 else loadFeaturedHash[1]
 				request.hash = hash
 				req = request
 			}
 			else {
-				val request = TL_messages_getFeaturedStickers()
+				val request = TLMessagesGetFeaturedStickers()
 				hash = if (force) 0 else loadFeaturedHash[0]
 				request.hash = hash
 				req = request
@@ -2064,7 +2127,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
-					if (response is TL_messages_featuredStickers) {
+					if (response is TLMessagesFeaturedStickers) {
 						processLoadedFeaturedStickers(emoji, response.sets, response.unread, response.premium, false, (System.currentTimeMillis() / 1000).toInt(), response.hash, retry)
 					}
 					else {
@@ -2104,7 +2167,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 					for (a in res.indices) {
 						val stickerSet = res[a]
 						stickerSetsNew.add(stickerSet)
-						stickerSetsByIdNew.put(stickerSet.set.id, stickerSet)
+
+						stickerSet.set?.let {
+							stickerSetsByIdNew.put(it.id, stickerSet)
+						}
 					}
 
 					if (!cache) {
@@ -2205,7 +2271,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		var acc: Long = 0
 
 		for (a in sets.indices) {
-			val set = sets[a].set
+			val set = sets[a].set ?: continue
 
 			if (set.archived) {
 				continue
@@ -2233,7 +2299,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		putFeaturedStickersToCache(emoji, featuredStickerSets[if (emoji) 1 else 0], unreadStickerSets[if (emoji) 1 else 0], loadFeaturedDate[if (emoji) 1 else 0], loadFeaturedHash[if (emoji) 1 else 0], loadFeaturedPremium)
 
 		if (query) {
-			connectionsManager.sendRequest(TL_messages_readFeaturedStickers())
+			connectionsManager.sendRequest(TLMessagesReadFeaturedStickers())
 		}
 	}
 
@@ -2241,7 +2307,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		var acc: Long = 0
 
 		for (a in featuredStickerSets[if (emoji) 1 else 0].indices) {
-			val set = featuredStickerSets[if (emoji) 1 else 0][a].set
+			val set = featuredStickerSets[if (emoji) 1 else 0][a].set ?: continue
 
 			if (set.archived) {
 				continue
@@ -2260,7 +2326,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		readingStickerSets[if (emoji) 1 else 0].add(id)
 
-		val req = TL_messages_readFeaturedStickers()
+		val req = TLMessagesReadFeaturedStickers()
 		req.id.add(id)
 
 		connectionsManager.sendRequest(req)
@@ -2296,7 +2362,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		if (stickerSet != null) {
 			for (sticker in stickerSet.documents) {
-				if (sticker.id == document?.id && sticker.dc_id == document.dc_id) {
+				if (sticker.id == document?.id && sticker.dcId == document.dcId) {
 					message.stickerVerified = 1
 					break
 				}
@@ -2325,14 +2391,14 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		messages.add(message)
 
-		val req = TL_messages_getStickerSet()
+		val req = TLMessagesGetStickerSet()
 		req.stickerset = MessageObject.getInputStickerSet(message)
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
 				val arrayList = verifyingMessages[name] ?: listOf()
 
-				if (response is TL_messages_stickerSet) {
+				if (response is TLMessagesStickerSet) {
 					storeTempStickerSet(response)
 
 					var b = 0
@@ -2347,7 +2413,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						while (a < n) {
 							val sticker = response.documents[a]
 
-							if (sticker.id == d?.id && sticker.dc_id == d.dc_id) {
+							if (sticker.id == d?.id && sticker.dcId == d.dcId) {
 								m.stickerVerified = 1
 								break
 							}
@@ -2393,17 +2459,17 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 		else {
-			val req = TL_messages_getArchivedStickers()
+			val req = TLMessagesGetArchivedStickers()
 			req.limit = 0
 			req.masks = type == TYPE_MASK
 			req.emojis = type == TYPE_EMOJIPACKS
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
-					if (response is TL_messages_archivedStickers) {
+					if (response is TLMessagesArchivedStickers) {
 						archivedStickersCount[type] = response.count
 						val preferences = MessagesController.getNotificationsSettings(currentAccount)
-						preferences.edit().putInt("archivedStickersCount$type", response.count).commit()
+						preferences.edit { putInt("archivedStickersCount$type", response.count) }
 						notificationCenter.postNotificationName(NotificationCenter.archivedStickersCountDidLoad, type)
 					}
 				}
@@ -2411,25 +2477,24 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun processLoadStickersResponse(type: Int, res: TL_messages_allStickers, onDone: Runnable? = null, retry: Boolean = true) {
-		val newStickerArray = mutableListOf<TL_messages_stickerSet?>()
+	private fun processLoadStickersResponse(type: Int, res: TLMessagesAllStickers, onDone: Runnable? = null, retry: Boolean = true) {
+		val newStickerArray = mutableListOf<TLMessagesStickerSet?>()
 
 		if (res.sets.isEmpty()) {
 			processLoadedStickers(type, newStickerArray, false, (System.currentTimeMillis() / 1000).toInt(), res.hash, onDone, retry)
 		}
 		else {
-			val newStickerSets = LongSparseArray<TL_messages_stickerSet?>()
+			val newStickerSets = LongSparseArray<TLMessagesStickerSet?>()
 
 			for (a in res.sets.indices) {
 				val stickerSet = res.sets[a]
 				val oldSet = stickerSetsById[stickerSet.id]
 
-				if (oldSet != null && oldSet.set.hash == stickerSet.hash) {
-					oldSet.set.archived = stickerSet.archived
-					oldSet.set.installed = stickerSet.installed
-					oldSet.set.official = stickerSet.official
+				if (oldSet != null && oldSet.set?.hash == stickerSet.hash) {
+					oldSet.set?.archived = stickerSet.archived
+					oldSet.set?.official = stickerSet.official
 
-					newStickerSets.put(oldSet.set.id, oldSet)
+					newStickerSets.put(oldSet.set!!.id, oldSet)
 
 					newStickerArray.add(oldSet)
 
@@ -2442,14 +2507,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				newStickerArray.add(null)
 
-				val req = TL_messages_getStickerSet()
-				req.stickerset = TL_inputStickerSetID()
-				req.stickerset.id = stickerSet.id
-				req.stickerset.access_hash = stickerSet.access_hash
+				val req = TLMessagesGetStickerSet()
+
+				req.stickerset = TLInputStickerSetID().also {
+					it.id = stickerSet.id
+					it.accessHash = stickerSet.accessHash
+				}
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					AndroidUtilities.runOnUIThread {
-						val res1 = response as? TL_messages_stickerSet
+						val res1 = response as? TLMessagesStickerSet
 						newStickerArray[a] = res1
 						newStickerSets.put(stickerSet.id, res1)
 
@@ -2495,13 +2562,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		loadingPremiumGiftStickers = true
 
-		val req = TL_messages_getStickerSet()
-		req.stickerset = TL_inputStickerSetPremiumGifts()
+		val req = TLMessagesGetStickerSet()
+		req.stickerset = TLInputStickerSetPremiumGifts()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TL_messages_stickerSet) {
-					userConfig.premiumGiftsStickerPack = response.set.short_name
+				if (response is TLMessagesStickerSet) {
+					userConfig.premiumGiftsStickerPack = response.set?.shortName
 					userConfig.lastUpdatedPremiumGiftsStickerPack = System.currentTimeMillis()
 					userConfig.saveConfig(false)
 
@@ -2533,13 +2600,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		loadingGenericAnimations = true
 
-		val req = TL_messages_getStickerSet()
-		req.stickerset = TL_inputStickerSetEmojiGenericAnimations()
+		val req = TLMessagesGetStickerSet()
+		req.stickerset = TLInputStickerSetEmojiGenericAnimations()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TL_messages_stickerSet) {
-					userConfig.genericAnimationsStickerPack = response.set.short_name
+				if (response is TLMessagesStickerSet) {
+					userConfig.genericAnimationsStickerPack = response.set?.shortName
 					userConfig.lastUpdatedGenericAnimations = System.currentTimeMillis()
 					userConfig.saveConfig(false)
 
@@ -2562,7 +2629,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		if (cache) {
 			messagesStorage.storageQueue.postRunnable {
-				var stickerSet: TL_messages_stickerSet? = null
+				var stickerSet: TLMessagesStickerSet? = null
 				var date = 0
 				var cursor: SQLiteCursor? = null
 
@@ -2573,7 +2640,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						val data = cursor.byteBufferValue(0)
 
 						if (data != null) {
-							stickerSet = TL_messages_stickerSet.TLdeserialize(data, data.readInt32(false), false)
+							stickerSet = TLRPC.MessagesStickerSet.deserialize(data, data.readInt32(false), false) as? TLMessagesStickerSet
 							data.reuse()
 						}
 
@@ -2591,37 +2658,43 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 		else {
-			val req = TL_messages_getStickerSet()
+			val req = TLMessagesGetStickerSet()
 
 			if (userConfig.premiumGiftsStickerPack == name) {
-				req.stickerset = TL_inputStickerSetPremiumGifts()
+				req.stickerset = TLInputStickerSetPremiumGifts()
 			}
 			else if (isEmoji) {
-				val inputStickerSetDice = TL_inputStickerSetDice()
+				val inputStickerSetDice = TLInputStickerSetDice()
 				inputStickerSetDice.emoticon = name
 
 				req.stickerset = inputStickerSetDice
 			}
 			else {
-				val inputStickerSetShortName = TL_inputStickerSetShortName()
-				inputStickerSetShortName.short_name = name
+				val inputStickerSetShortName = TLInputStickerSetShortName()
+				inputStickerSetShortName.shortName = name
 
 				req.stickerset = inputStickerSetShortName
 			}
 
 			connectionsManager.sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
-					if (BuildConfig.DEBUG && error != null) { // suppress test backend warning
+					if (error != null) {
 						return@runOnUIThread
 					}
 
-					processLoadedDiceStickers(name, isEmoji, response as? TL_messages_stickerSet, false, (System.currentTimeMillis() / 1000).toInt())
+					@Suppress("NAME_SHADOWING") val response = (response as? TLMessagesStickerSet) ?: return@runOnUIThread
+
+					if (response.set == null || response.set?.id == 0L) {
+						return@runOnUIThread
+					}
+
+					processLoadedDiceStickers(name, isEmoji, response as? TLMessagesStickerSet, false, (System.currentTimeMillis() / 1000).toInt())
 				}
 			}
 		}
 	}
 
-	private fun processLoadedDiceStickers(name: String, isEmoji: Boolean, res: TL_messages_stickerSet?, cache: Boolean, date: Int) {
+	private fun processLoadedDiceStickers(name: String, isEmoji: Boolean, res: TLMessagesStickerSet?, cache: Boolean, date: Int) {
 		AndroidUtilities.runOnUIThread {
 			loadingDiceStickerSets.remove(name)
 		}
@@ -2642,7 +2715,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				AndroidUtilities.runOnUIThread {
 					diceStickerSetsByEmoji[name] = res
-					diceEmojiStickerSetsById.put(res.set.id, name)
+
+					res.set?.let {
+						diceEmojiStickerSetsById.put(it.id, name)
+					}
+
 					notificationCenter.postNotificationName(NotificationCenter.diceStickersDidLoad, name)
 				}
 			}
@@ -2652,7 +2729,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun putDiceStickersToCache(emoji: String?, stickers: TL_messages_stickerSet?, date: Int) {
+	private fun putDiceStickersToCache(emoji: String?, stickers: TLMessagesStickerSet?, date: Int) {
 		if (emoji.isNullOrEmpty()) {
 			return
 		}
@@ -2722,7 +2799,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		loadStickers(type, cache, force, scheduleIfLoading, null, retry)
 	}
 
-	fun loadStickers(type: Int, cache: Boolean, force: Boolean, scheduleIfLoading: Boolean, onFinish: Utilities.Callback<List<TL_messages_stickerSet>?>?, retry: Boolean) {
+	fun loadStickers(type: Int, cache: Boolean, force: Boolean, scheduleIfLoading: Boolean, onFinish: Utilities.Callback<List<TLMessagesStickerSet>?>?, retry: Boolean) {
 		if (loadingStickers[type]) {
 			if (scheduleIfLoading) {
 				scheduledLoadStickers[type] = Runnable { loadStickers(type, false, force, false, onFinish, retry) }
@@ -2754,7 +2831,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		if (cache) {
 			messagesStorage.storageQueue.postRunnable {
-				val newStickerArray = ArrayList<TL_messages_stickerSet>()
+				val newStickerArray = ArrayList<TLMessagesStickerSet>()
 				var date = 0
 				var hash: Long = 0
 				var cursor: SQLiteCursor? = null
@@ -2769,8 +2846,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 							val count = data.readInt32(false)
 
 							for (a in 0 until count) {
-								val stickerSet = TL_messages_stickerSet.TLdeserialize(data, data.readInt32(false), false)
-								newStickerArray.add(stickerSet)
+								val stickerSet = TLRPC.MessagesStickerSet.deserialize(data, data.readInt32(false), false) as? TLMessagesStickerSet
+
+								if (stickerSet != null) {
+									newStickerArray.add(stickerSet)
+								}
 							}
 
 							data.reuse()
@@ -2797,14 +2877,17 @@ class MediaDataController(num: Int) : BaseController(num) {
 				TYPE_FEATURED, TYPE_FEATURED_EMOJIPACKS -> {
 					val emoji = type == TYPE_FEATURED_EMOJIPACKS
 
-					val response = TL_messages_allStickers()
+					val response = TLMessagesAllStickers()
 					response.hash = loadFeaturedHash[if (emoji) 1 else 0]
 
 					var a = 0
 					val size = featuredStickerSets[if (emoji) 1 else 0].size
 
 					while (a < size) {
-						response.sets.add(featuredStickerSets[if (emoji) 1 else 0][a].set)
+						featuredStickerSets[if (emoji) 1 else 0][a].set?.let {
+							response.sets.add(it)
+						}
+
 						a++
 					}
 
@@ -2814,8 +2897,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 				}
 
 				TYPE_EMOJI -> {
-					val req = TL_messages_getStickerSet()
-					req.stickerset = TL_inputStickerSetAnimatedEmoji()
+					val req = TLMessagesGetStickerSet()
+					req.stickerset = TLInputStickerSetAnimatedEmoji()
 
 					connectionsManager.sendRequest(req) { response, error ->
 						var innerRetry = retry
@@ -2824,8 +2907,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 							innerRetry = false
 						}
 
-						if (response is TL_messages_stickerSet) {
-							val newStickerArray = ArrayList<TL_messages_stickerSet>()
+						if (response is TLMessagesStickerSet) {
+							val newStickerArray = ArrayList<TLMessagesStickerSet>()
 							newStickerArray.add(response)
 
 							processLoadedStickers(type, newStickerArray, false, (System.currentTimeMillis() / 1000).toInt(), calcStickersHash(newStickerArray), {
@@ -2846,21 +2929,21 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 					when (type) {
 						TYPE_IMAGE -> {
-							req = TL_messages_getAllStickers()
+							req = TLMessagesGetAllStickers()
 							req.hash = if (force) 0 else loadHash[type]
 
 							hash = req.hash
 						}
 
 						TYPE_EMOJIPACKS -> {
-							req = TL_messages_getEmojiStickers()
+							req = TLMessagesGetEmojiStickers()
 							req.hash = if (force) 0 else loadHash[type]
 
 							hash = req.hash
 						}
 
 						else -> {
-							req = TL_messages_getMaskStickers()
+							req = TLMessagesGetMaskStickers()
 							req.hash = if (force) 0 else loadHash[type]
 
 							hash = req.hash
@@ -2875,7 +2958,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 								innerRetry = false
 							}
 
-							if (response is TL_messages_allStickers) {
+							if (response is TLMessagesAllStickers) {
 								processLoadStickersResponse(type, response, {
 									onFinish?.run(null)
 								}, innerRetry)
@@ -2892,7 +2975,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun putStickersToCache(type: Int, stickers: List<TL_messages_stickerSet>?, date: Int, hash: Long) {
+	private fun putStickersToCache(type: Int, stickers: List<TLMessagesStickerSet>?, date: Int, hash: Long) {
 		val stickersFinal = stickers?.toList()
 
 		messagesStorage.storageQueue.postRunnable {
@@ -2938,33 +3021,37 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun getStickerSetName(setId: Long): String? {
+	fun getStickerSetName(setId: Long?): String? {
+		if (setId == null) {
+			return null
+		}
+
 		val stickerSet = stickerSetsById[setId]
 
 		if (stickerSet != null) {
-			return stickerSet.set.short_name
+			return stickerSet.set?.shortName
 		}
 
 		var stickerSetCovered = featuredStickerSetsById[0][setId]
 
 		if (stickerSetCovered != null) {
-			return stickerSetCovered.set.short_name
+			return stickerSetCovered.set?.shortName
 		}
 
 		stickerSetCovered = featuredStickerSetsById[1][setId]
 
 		if (stickerSetCovered != null) {
-			return stickerSetCovered.set.short_name
+			return stickerSetCovered.set?.shortName
 		}
 
 		return null
 	}
 
-	private fun processLoadedStickers(type: Int, res: List<TL_messages_stickerSet?>, cache: Boolean, date: Int, hash: Long, retry: Boolean) {
+	private fun processLoadedStickers(type: Int, res: List<TLMessagesStickerSet?>, cache: Boolean, date: Int, hash: Long, retry: Boolean) {
 		processLoadedStickers(type, res, cache, date, hash, null, retry)
 	}
 
-	private fun processLoadedStickers(type: Int, res: List<TL_messages_stickerSet?>?, cache: Boolean, date: Int, hash: Long, onFinish: Runnable?, retry: Boolean) {
+	private fun processLoadedStickers(type: Int, res: List<TLMessagesStickerSet?>?, cache: Boolean, date: Int, hash: Long, onFinish: Runnable?, retry: Boolean) {
 		AndroidUtilities.runOnUIThread {
 			loadingStickers[type] = false
 			stickersLoaded[type] = true
@@ -2993,49 +3080,58 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 			if (res != null) {
 				try {
-					val stickerSetsNew = mutableListOf<TL_messages_stickerSet>()
-					val stickerSetsByIdNew = LongSparseArray<TL_messages_stickerSet>()
-					val stickerSetsByNameNew = mutableMapOf<String, TL_messages_stickerSet>()
+					val stickerSetsNew = mutableListOf<TLMessagesStickerSet>()
+					val stickerSetsByIdNew = LongSparseArray<TLMessagesStickerSet>()
+					val stickerSetsByNameNew = mutableMapOf<String, TLMessagesStickerSet>()
 					val stickersByEmojiNew = LongSparseArray<String>()
 					val stickersByIdNew = LongSparseArray<TLRPC.Document>()
 					val allStickersNew = HashMap<String, MutableList<TLRPC.Document>>()
 
 					for (stickerSet in res) {
-						if (stickerSet == null || removingStickerSetsUndos.indexOfKey(stickerSet.set.id) >= 0) {
+						val setId = stickerSet?.set?.id ?: continue
+
+						if (removingStickerSetsUndos.indexOfKey(setId) >= 0) {
 							continue
 						}
 
 						stickerSetsNew.add(stickerSet)
-						stickerSetsByIdNew.put(stickerSet.set.id, stickerSet)
-						stickerSetsByNameNew[stickerSet.set.short_name] = stickerSet
+						stickerSetsByIdNew.put(setId, stickerSet)
+
+						stickerSet.set?.shortName?.let {
+							stickerSetsByNameNew[it] = stickerSet
+						}
 
 						for (document in stickerSet.documents) {
-							if (document == null || document is TL_documentEmpty) {
+							if (document is TLDocumentEmpty) {
 								continue
 							}
 
 							stickersByIdNew.put(document.id, document)
 						}
 
-						if (!stickerSet.set.archived) {
+						if (stickerSet.set?.archived == false) {
 							for (stickerPack in stickerSet.packs) {
-								if (stickerPack?.emoticon == null) {
+								if (stickerPack.emoticon == null) {
 									continue
 								}
 
-								stickerPack.emoticon = stickerPack.emoticon.replace("\uFE0F", "")
+								stickerPack.emoticon = stickerPack.emoticon?.replace("\uFE0F", "")
 
 								var arrayList = allStickersNew[stickerPack.emoticon]
 
 								if (arrayList == null) {
 									arrayList = mutableListOf()
 
-									allStickersNew[stickerPack.emoticon] = arrayList
+									stickerPack.emoticon?.let {
+										allStickersNew[it] = arrayList
+									}
 								}
 
 								for (id in stickerPack.documents) {
 									if (stickersByEmojiNew.indexOfKey(id) < 0) {
-										stickersByEmojiNew.put(id, stickerPack.emoticon)
+										stickerPack.emoticon?.let {
+											stickersByEmojiNew.put(id, it)
+										}
 									}
 
 									val sticker = stickersByIdNew[id]
@@ -3056,11 +3152,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 						for (set in stickerSets[type]) {
 							val stickerSet = set.set
 
-							stickerSetsById.remove(stickerSet.id)
-							stickerSetsByName.remove(stickerSet.short_name)
+							stickerSet?.id?.let {
+								stickerSetsById.remove(it)
+							}
+
+							stickerSetsByName.remove(stickerSet?.shortName)
 
 							if (type != TYPE_FEATURED && type != TYPE_FEATURED_EMOJIPACKS && type != TYPE_EMOJI) {
-								installedStickerSetsById.remove(stickerSet.id)
+								stickerSet?.id?.let {
+									installedStickerSetsById.remove(it)
+								}
 							}
 						}
 
@@ -3123,33 +3224,27 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun preloadStickerSetThumb(stickerSet: TL_messages_stickerSet) {
-		val thumb = FileLoader.getClosestPhotoSizeWithSize(stickerSet.set.thumbs, 90)
+	fun preloadStickerSetThumb(stickerSet: TLMessagesStickerSet) {
+		val thumb = FileLoader.getClosestPhotoSizeWithSize(stickerSet.set?.thumbs, 90)
 
 		if (thumb != null) {
 			val documents = stickerSet.documents
 
-			if (documents != null && documents.isNotEmpty()) {
-				loadStickerSetThumbInternal(thumb, stickerSet, documents[0], stickerSet.set.thumb_version)
+			if (documents.isNotEmpty()) {
+				loadStickerSetThumbInternal(thumb, stickerSet, documents[0], stickerSet.set?.thumbVersion ?: 0)
 			}
 		}
 	}
 
 	fun preloadStickerSetThumb(stickerSet: StickerSetCovered) {
-		val thumb = FileLoader.getClosestPhotoSizeWithSize(stickerSet.set.thumbs, 90)
+		val thumb = FileLoader.getClosestPhotoSizeWithSize(stickerSet.set?.thumbs, 90)
 
 		if (thumb != null) {
-			val sticker = if (stickerSet.cover != null) {
-				stickerSet.cover
-			}
-			else if (stickerSet.covers.isNotEmpty()) {
-				stickerSet.covers[0]
-			}
-			else {
-				return
-			}
+			val cover = (stickerSet as? TLStickerSetCovered)?.cover
+			val covers = (stickerSet as? TLRPC.TLStickerSetMultiCovered)?.covers
+			val sticker = cover ?: covers?.firstOrNull() ?: return
 
-			loadStickerSetThumbInternal(thumb, stickerSet, sticker, stickerSet.set.thumb_version)
+			loadStickerSetThumbInternal(thumb, stickerSet, sticker, stickerSet.set?.thumbVersion ?: 0)
 		}
 	}
 
@@ -3164,10 +3259,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 	 */
 	@JvmOverloads
 	fun toggleStickerSet(context: Context, stickerSetObject: TLObject, toggle: Int, baseFragment: BaseFragment?, showSettings: Boolean, showTooltip: Boolean, onUndo: Runnable? = null) {
-		val stickerSet: StickerSet
-		val messagesStickerSet: TL_messages_stickerSet?
+		val stickerSet: TLStickerSet?
+		var messagesStickerSet: TLMessagesStickerSet? = null
 
-		if (stickerSetObject is TL_messages_stickerSet) {
+		if (stickerSetObject is TLMessagesStickerSet) {
 			messagesStickerSet = stickerSetObject
 			stickerSet = messagesStickerSet.set
 		}
@@ -3175,7 +3270,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 			stickerSet = stickerSetObject.set
 
 			if (toggle != 2) {
-				messagesStickerSet = stickerSetsById[stickerSet.id]
+				val id = stickerSet?.id
+
+				if (id != null) {
+					messagesStickerSet = stickerSetsById[id]
+				}
 
 				if (messagesStickerSet == null) {
 					return
@@ -3188,6 +3287,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 		else {
 			throw IllegalArgumentException("Invalid type of the given stickerSetObject: " + stickerSetObject.javaClass)
+		}
+
+		if (stickerSet == null) {
+			return
 		}
 
 		var type1 = TYPE_IMAGE
@@ -3208,7 +3311,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		for (a in stickerSets[type].indices) {
 			val set = stickerSets[type][a]
 
-			if (set.set.id == stickerSet.id) {
+			if (set.set?.id == stickerSet.id) {
 				currentIndex = a
 
 				stickerSets[type].removeAt(a)
@@ -3217,9 +3320,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 					stickerSets[type].add(0, set)
 				}
 				else {
-					stickerSetsById.remove(set.set.id)
-					installedStickerSetsById.remove(set.set.id)
-					stickerSetsByName.remove(set.set.short_name)
+					stickerSetsById.remove(set.set!!.id)
+					installedStickerSetsById.remove(set.set!!.id)
+					stickerSetsByName.remove(set.set!!.shortName)
 				}
 
 				break
@@ -3257,7 +3360,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				stickerSets[type].add(finalCurrentIndex, messagesStickerSet)
 				stickerSetsById.put(stickerSet.id, messagesStickerSet)
 				installedStickerSetsById.put(stickerSet.id, messagesStickerSet)
-				stickerSetsByName[stickerSet.short_name] = messagesStickerSet
+				stickerSet.shortName?.let { stickerSetsByName[it] = messagesStickerSet }
 				removingStickerSetsUndos.remove(stickerSet.id)
 
 				loadHash[type] = calcStickersHash(stickerSets[type])
@@ -3288,7 +3391,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		notificationCenter.postNotificationName(NotificationCenter.stickersDidLoad, type, true)
 	}
 
-	fun removeMultipleStickerSets(context: Context, fragment: BaseFragment, sets: List<TL_messages_stickerSet>?) {
+	fun removeMultipleStickerSets(context: Context, fragment: BaseFragment, sets: List<TLMessagesStickerSet>?) {
 		if (sets.isNullOrEmpty()) {
 			return
 		}
@@ -3296,17 +3399,17 @@ class MediaDataController(num: Int) : BaseController(num) {
 		val messagesStickerSet = sets.lastOrNull() ?: return
 		var type1 = TYPE_IMAGE
 
-		if (messagesStickerSet.set.masks) {
+		if (messagesStickerSet.set?.masks == true) {
 			type1 = TYPE_MASK
 		}
-		else if (messagesStickerSet.set.emojis) {
+		else if (messagesStickerSet.set?.emojis == true) {
 			type1 = TYPE_EMOJIPACKS
 		}
 
 		val type = type1
 
 		for (i in sets.indices) {
-			sets[i].set.archived = false
+			sets[i].set?.archived = false
 		}
 
 		val currentIndexes = IntArray(sets.size)
@@ -3315,12 +3418,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val set = stickerSets[type][a]
 
 			for (b in sets.indices) {
-				if (set.set.id == sets[b].set.id) {
+				if (set.set?.id == sets[b].set?.id) {
 					currentIndexes[b] = a
 					stickerSets[type].removeAt(a)
-					stickerSetsById.remove(set.set.id)
-					installedStickerSetsById.remove(set.set.id)
-					stickerSetsByName.remove(set.set.short_name)
+					stickerSetsById.remove(set.set!!.id)
+					installedStickerSetsById.remove(set.set!!.id)
+					stickerSetsByName.remove(set.set!!.shortName)
 					break
 				}
 			}
@@ -3331,7 +3434,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 		notificationCenter.postNotificationName(NotificationCenter.stickersDidLoad, type, true)
 
 		for (i in sets.indices) {
-			markSetUninstalling(sets[i].set.id, true)
+			sets[i].set?.id?.let {
+				markSetUninstalling(it, true)
+			}
 		}
 
 		val bulletinLayout = StickerSetBulletinLayout(context, messagesStickerSet, sets.size, StickerSetBulletinLayout.TYPE_REMOVED, null)
@@ -3345,17 +3450,21 @@ class MediaDataController(num: Int) : BaseController(num) {
 			undoDone[0] = true
 
 			for (i in sets.indices) {
-				markSetUninstalling(sets[i].set.id, false)
-				sets[i].set.archived = false
+				sets[i].set?.let {
+					markSetUninstalling(it.id, false)
+					it.archived = false
+
+					stickerSetsById.put(it.id, sets[i])
+					installedStickerSetsById.put(it.id, sets[i])
+					it.shortName?.let { shortName -> stickerSetsByName[shortName] = sets[i] }
+					removingStickerSetsUndos.remove(it.id)
+				}
 
 				stickerSets[type].add(currentIndexes[i], sets[i])
-				stickerSetsById.put(sets[i].set.id, sets[i])
-				installedStickerSetsById.put(sets[i].set.id, sets[i])
-				stickerSetsByName[sets[i].set.short_name] = sets[i]
-				removingStickerSetsUndos.remove(sets[i].set.id)
 			}
 
 			putStickersToCache(type, stickerSets[type], loadDate[type], calcStickersHash(stickerSets[type]).also { loadHash[type] = it })
+
 			notificationCenter.postNotificationName(NotificationCenter.stickersDidLoad, type, true)
 		}.setDelayedAction {
 			if (undoDone[0]) {
@@ -3364,27 +3473,31 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 			undoDone[0] = true
 
-			for (i in sets.indices) {
-				toggleStickerSetInternal(context, 0, fragment, true, sets[i], sets[i].set, type, false)
+			for (set in sets) {
+				set.set?.let {
+					toggleStickerSetInternal(context, 0, fragment, true, set, it, type, false)
+				}
 			}
 		}
 
 		bulletinLayout.setButton(undoButton)
 
-		for (i in sets.indices) {
-			removingStickerSetsUndos.put(sets[i].set.id, Runnable { undoButton.undo() })
+		for (set in sets) {
+			set.set?.id?.let {
+				removingStickerSetsUndos.put(it, Runnable { undoButton.undo() })
+			}
 		}
 
 		Bulletin.make(fragment, bulletinLayout, Bulletin.DURATION_LONG).show()
 	}
 
-	private fun toggleStickerSetInternal(context: Context, toggle: Int, baseFragment: BaseFragment?, showSettings: Boolean, stickerSetObject: TLObject, stickerSet: StickerSet, type: Int, showTooltip: Boolean) {
-		val stickerSetID = TL_inputStickerSetID()
-		stickerSetID.access_hash = stickerSet.access_hash
+	private fun toggleStickerSetInternal(context: Context, toggle: Int, baseFragment: BaseFragment?, showSettings: Boolean, stickerSetObject: TLObject, stickerSet: TLStickerSet, type: Int, showTooltip: Boolean) {
+		val stickerSetID = TLInputStickerSetID()
+		stickerSetID.accessHash = stickerSet.accessHash
 		stickerSetID.id = stickerSet.id
 
 		if (toggle != 0) {
-			val req = TL_messages_installStickerSet()
+			val req = TLMessagesInstallStickerSet()
 			req.stickerset = stickerSetID
 			req.archived = toggle == 1
 
@@ -3394,7 +3507,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				AndroidUtilities.runOnUIThread {
 					removingStickerSetsUndos.remove(stickerSet.id)
 
-					if (response is TL_messages_stickerSetInstallResultArchive) {
+					if (response is TLMessagesStickerSetInstallResultArchive) {
 						processStickerSetInstallResultArchive(baseFragment, showSettings, type, response)
 					}
 
@@ -3409,7 +3522,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		else {
 			markSetUninstalling(stickerSet.id, true)
 
-			val req = TL_messages_uninstallStickerSet()
+			val req = TLMessagesUninstallStickerSet()
 			req.stickerset = stickerSetID
 
 			connectionsManager.sendRequest(req) { _, _ ->
@@ -3424,15 +3537,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 	/**
 	 * @param toggle 0 - uninstall, 1 - archive, 2 - unarchive
 	 */
-	fun toggleStickerSets(stickerSetList: List<StickerSet>, type: Int, toggle: Int, baseFragment: BaseFragment?, showSettings: Boolean) {
+	fun toggleStickerSets(stickerSetList: List<TLStickerSet>, type: Int, toggle: Int, baseFragment: BaseFragment?, showSettings: Boolean) {
 		val stickerSetListSize = stickerSetList.size
 		val inputStickerSets = ArrayList<InputStickerSet>(stickerSetListSize)
 
 		for (i in 0 until stickerSetListSize) {
 			val stickerSet = stickerSetList[i]
 
-			val inputStickerSet: InputStickerSet = TL_inputStickerSetID()
-			inputStickerSet.access_hash = stickerSet.access_hash
+			val inputStickerSet = TLInputStickerSetID()
+			inputStickerSet.accessHash = stickerSet.accessHash
 			inputStickerSet.id = stickerSet.id
 			inputStickerSets.add(inputStickerSet)
 
@@ -3446,16 +3559,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 			while (a < size) {
 				val set = stickerSets[type][a]
 
-				if (set.set.id == inputStickerSet.id) {
+				if (set.set?.id == inputStickerSet.id) {
 					stickerSets[type].removeAt(a)
 
 					if (toggle == 2) {
 						stickerSets[type].add(0, set)
 					}
 					else {
-						stickerSetsById.remove(set.set.id)
-						installedStickerSetsById.remove(set.set.id)
-						stickerSetsByName.remove(set.set.short_name)
+						stickerSetsById.remove(set.set!!.id)
+						installedStickerSetsById.remove(set.set!!.id)
+						stickerSetsByName.remove(set.set!!.shortName)
 					}
 
 					break
@@ -3471,8 +3584,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		notificationCenter.postNotificationName(NotificationCenter.stickersDidLoad, type, true)
 
-		val req = TL_messages_toggleStickerSets()
-		req.stickersets = inputStickerSets
+		val req = TLMessagesToggleStickerSets()
+		req.stickersets.addAll(inputStickerSets)
 
 		when (toggle) {
 			0 -> req.uninstall = true
@@ -3483,7 +3596,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
 				if (toggle != 0) {
-					if (response is TL_messages_stickerSetInstallResultArchive) {
+					if (response is TLMessagesStickerSetInstallResultArchive) {
 						processStickerSetInstallResultArchive(baseFragment, showSettings, type, response)
 					}
 
@@ -3496,12 +3609,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun processStickerSetInstallResultArchive(baseFragment: BaseFragment?, showSettings: Boolean, type: Int, response: TL_messages_stickerSetInstallResultArchive) {
+	fun processStickerSetInstallResultArchive(baseFragment: BaseFragment?, showSettings: Boolean, type: Int, response: TLMessagesStickerSetInstallResultArchive) {
 		var i = 0
 		val size = response.sets.size
 
 		while (i < size) {
-			installedStickerSetsById.remove(response.sets[i].set.id)
+			response.sets[i].set?.id?.let {
+				installedStickerSetsById.remove(it)
+			}
+
 			i++
 		}
 
@@ -3509,8 +3625,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		notificationCenter.postNotificationName(NotificationCenter.needAddArchivedStickers, response.sets)
 
-		if (baseFragment != null && baseFragment.parentActivity != null) {
-			val alert = StickersArchiveAlert(baseFragment.parentActivity, if (showSettings) baseFragment else null, response.sets)
+		baseFragment?.parentActivity?.let {
+			val alert = StickersArchiveAlert(it, if (showSettings) baseFragment else null, response.sets)
 			baseFragment.showDialog(alert.create())
 		}
 	}
@@ -3686,7 +3802,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			if (mergeDialogId != 0L) {
 				val inputPeer = messagesController.getInputPeer(mergeDialogId)
 
-				val req = TL_messages_search()
+				val req = TLMessagesSearch()
 				req.peer = inputPeer
 
 				lastMergeDialogId = mergeDialogId
@@ -3695,24 +3811,24 @@ class MediaDataController(num: Int) : BaseController(num) {
 				req.q = query
 
 				if (user != null) {
-					req.from_id = MessagesController.getInputPeer(user)
+					req.fromId = MessagesController.getInputPeer(user)
 					req.flags = req.flags or 1
 				}
 				else if (chat != null) {
-					req.from_id = MessagesController.getInputPeer(chat)
+					req.fromId = MessagesController.getInputPeer(chat)
 					req.flags = req.flags or 1
 				}
 
-				req.filter = TL_inputMessagesFilterEmpty()
+				req.filter = TLInputMessagesFilterEmpty()
 
 				mergeReqId = connectionsManager.sendRequest(req, { response, _ ->
 					AndroidUtilities.runOnUIThread {
 						if (lastMergeDialogId == mergeDialogId) {
 							mergeReqId = 0
 
-							if (response is messages_Messages) {
+							if (response is MessagesMessages) {
 								messagesSearchEndReached[1] = response.messages.isEmpty()
-								messagesSearchCount[1] = if (response is TL_messages_messagesSlice) response.count else response.messages.size
+								messagesSearchCount[1] = if (response is TLMessagesMessagesSlice) response.count else response.messages.size
 
 								searchMessagesInChat(req.q, dialogId, mergeDialogId, guid, direction, replyMessageId, true, user, chat, jumpToMessage)
 							}
@@ -3735,7 +3851,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 
-		val req = TL_messages_search()
+		val req = TLMessagesSearch()
 		req.peer = messagesController.getInputPeer(queryWithDialog)
 
 		if (req.peer == null) {
@@ -3750,23 +3866,23 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		req.limit = 21
 		req.q = query ?: ""
-		req.offset_id = maxId
+		req.offsetId = maxId
 
 		if (user != null) {
-			req.from_id = MessagesController.getInputPeer(user)
+			req.fromId = MessagesController.getInputPeer(user)
 			req.flags = req.flags or 1
 		}
 		else if (chat != null) {
-			req.from_id = MessagesController.getInputPeer(chat)
+			req.fromId = MessagesController.getInputPeer(chat)
 			req.flags = req.flags or 1
 		}
 
 		if (lastReplyMessageId != 0) {
-			req.top_msg_id = lastReplyMessageId
+			req.topMsgId = lastReplyMessageId
 			req.flags = req.flags or 2
 		}
 
-		req.filter = TL_inputMessagesFilterEmpty()
+		req.filter = TLInputMessagesFilterEmpty()
 
 		val currentReqId = ++lastReqId
 
@@ -3778,7 +3894,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		reqId = connectionsManager.sendRequest(req, { response, _ ->
 			val messageObjects = ArrayList<MessageObject>()
 
-			if (response is messages_Messages) {
+			if (response is MessagesMessages) {
 				val n = min(response.messages.size.toDouble(), 20.0).toInt()
 
 				for (a in 0 until n) {
@@ -3797,14 +3913,14 @@ class MediaDataController(num: Int) : BaseController(num) {
 						loadingMoreSearchMessages = false
 					}
 
-					if (response is messages_Messages) {
+					if (response is MessagesMessages) {
 						run {
 							var a = 0
 
 							while (a < response.messages.size) {
 								val message = response.messages[a]
 
-								if (message is TL_messageEmpty || message.action is TL_messageActionHistoryClear) {
+								if (message is TLMessageEmpty || message.action is TLMessageActionHistoryClear) {
 									response.messages.removeAt(a)
 									a--
 								}
@@ -3817,7 +3933,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						messagesController.putUsers(response.users, false)
 						messagesController.putChats(response.chats, false)
 
-						if (req.offset_id == 0 && queryWithDialogFinal == dialogId) {
+						if (req.offsetId == 0 && queryWithDialogFinal == dialogId) {
 							lastReturnedNum = 0
 							foundMessageObjects.clear()
 							searchResultMessagesMap[0].clear()
@@ -3837,7 +3953,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						}
 
 						messagesSearchEndReached[if (queryWithDialogFinal == dialogId) 0 else 1] = response.messages.size < 21
-						messagesSearchCount[if (queryWithDialogFinal == dialogId) 0 else 1] = if (response is TL_messages_messagesSlice || response is TL_messages_channelMessages) response.count else response.messages.size
+						messagesSearchCount[if (queryWithDialogFinal == dialogId) 0 else 1] = if (response is TLMessagesMessagesSlice || response is TLMessagesChannelMessages) response.count else response.messages.size
 
 						if (foundMessageObjects.isEmpty()) {
 							notificationCenter.postNotificationName(NotificationCenter.chatSearchResultsAvailable, guid, 0, mask, 0L, 0, 0, jumpToMessage)
@@ -3864,7 +3980,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	fun loadMedia(dialogId: Long, count: Int, maxId: Int, minId: Int, type: Int, fromCache: Int, classGuid: Int, requestIndex: Int) {
-		val isChannel = DialogObject.isChatDialog(dialogId) && ChatObject.isChannel(-dialogId, currentAccount)
+		// val isChannel = DialogObject.isChatDialog(dialogId) && ChatObject.isChannel(-dialogId, currentAccount)
 
 		if (BuildConfig.DEBUG) {
 			FileLog.d("load media did $dialogId count = $count max_id $maxId type = $type cache = $fromCache classGuid = $classGuid")
@@ -3874,26 +3990,26 @@ class MediaDataController(num: Int) : BaseController(num) {
 			loadMediaDatabase(dialogId, count, maxId, minId, type, classGuid, fromCache, requestIndex)
 		}
 		else {
-			val req = TL_messages_search()
+			val req = TLMessagesSearch()
 			req.limit = count
 
 			if (minId != 0) {
-				req.offset_id = minId
-				req.add_offset = -count
+				req.offsetId = minId
+				req.addOffset = -count
 			}
 			else {
-				req.offset_id = maxId
+				req.offsetId = maxId
 			}
 
 			when (type) {
-				MEDIA_PHOTOVIDEO -> req.filter = TL_inputMessagesFilterPhotoVideo()
-				MEDIA_PHOTOS_ONLY -> req.filter = TL_inputMessagesFilterPhotos()
-				MEDIA_VIDEOS_ONLY -> req.filter = TL_inputMessagesFilterVideo()
-				MEDIA_FILE -> req.filter = TL_inputMessagesFilterDocument()
-				MEDIA_AUDIO -> req.filter = TL_inputMessagesFilterRoundVoice()
-				MEDIA_URL -> req.filter = TL_inputMessagesFilterUrl()
-				MEDIA_MUSIC -> req.filter = TL_inputMessagesFilterMusic()
-				MEDIA_GIF -> req.filter = TL_inputMessagesFilterGif()
+				MEDIA_PHOTOVIDEO -> req.filter = TLInputMessagesFilterPhotoVideo()
+				MEDIA_PHOTOS_ONLY -> req.filter = TLInputMessagesFilterPhotos()
+				MEDIA_VIDEOS_ONLY -> req.filter = TLInputMessagesFilterVideo()
+				MEDIA_FILE -> req.filter = TLInputMessagesFilterDocument()
+				MEDIA_AUDIO -> req.filter = TLInputMessagesFilterRoundVoice()
+				MEDIA_URL -> req.filter = TLInputMessagesFilterUrl()
+				MEDIA_MUSIC -> req.filter = TLInputMessagesFilterMusic()
+				MEDIA_GIF -> req.filter = TLInputMessagesFilterGif()
 			}
 
 			req.q = ""
@@ -3904,7 +4020,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 
 			val reqId = connectionsManager.sendRequest(req) { response, _ ->
-				if (response is messages_Messages) {
+				if (response is MessagesMessages) {
 					messagesController.removeDeletedMessagesFromArray(dialogId, response.messages)
 
 					val topReached = if (minId != 0) {
@@ -3967,7 +4083,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				else {
 					var missing = false
 
-					val req = TL_messages_getSearchCounters()
+					val req = TLMessagesGetSearchCounters()
 					req.peer = messagesController.getInputPeer(dialogId)
 
 					for (a in counts.indices) {
@@ -3978,14 +4094,14 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 						if (counts[a] == -1 || old[a] == 1) {
 							when (a) {
-								MEDIA_PHOTOVIDEO -> req.filters.add(TL_inputMessagesFilterPhotoVideo())
-								MEDIA_FILE -> req.filters.add(TL_inputMessagesFilterDocument())
-								MEDIA_AUDIO -> req.filters.add(TL_inputMessagesFilterRoundVoice())
-								MEDIA_URL -> req.filters.add(TL_inputMessagesFilterUrl())
-								MEDIA_MUSIC -> req.filters.add(TL_inputMessagesFilterMusic())
-								MEDIA_PHOTOS_ONLY -> req.filters.add(TL_inputMessagesFilterPhotos())
-								MEDIA_VIDEOS_ONLY -> req.filters.add(TL_inputMessagesFilterVideo())
-								else -> req.filters.add(TL_inputMessagesFilterGif())
+								MEDIA_PHOTOVIDEO -> req.filters.add(TLInputMessagesFilterPhotoVideo())
+								MEDIA_FILE -> req.filters.add(TLInputMessagesFilterDocument())
+								MEDIA_AUDIO -> req.filters.add(TLInputMessagesFilterRoundVoice())
+								MEDIA_URL -> req.filters.add(TLInputMessagesFilterUrl())
+								MEDIA_MUSIC -> req.filters.add(TLInputMessagesFilterMusic())
+								MEDIA_PHOTOS_ONLY -> req.filters.add(TLInputMessagesFilterPhotos())
+								MEDIA_VIDEOS_ONLY -> req.filters.add(TLInputMessagesFilterVideo())
+								else -> req.filters.add(TLInputMessagesFilterGif())
 							}
 
 							if (counts[a] == -1) {
@@ -4010,30 +4126,30 @@ class MediaDataController(num: Int) : BaseController(num) {
 								val n = response.objects.size
 
 								while (a < n) {
-									val searchCounter = response.objects[a] as TL_messages_searchCounter
+									val searchCounter = response.objects[a] as TLMessagesSearchCounter
 
-									val type = if (searchCounter.filter is TL_inputMessagesFilterPhotoVideo) {
+									val type = if (searchCounter.filter is TLInputMessagesFilterPhotoVideo) {
 										MEDIA_PHOTOVIDEO
 									}
-									else if (searchCounter.filter is TL_inputMessagesFilterDocument) {
+									else if (searchCounter.filter is TLInputMessagesFilterDocument) {
 										MEDIA_FILE
 									}
-									else if (searchCounter.filter is TL_inputMessagesFilterRoundVoice) {
+									else if (searchCounter.filter is TLInputMessagesFilterRoundVoice) {
 										MEDIA_AUDIO
 									}
-									else if (searchCounter.filter is TL_inputMessagesFilterUrl) {
+									else if (searchCounter.filter is TLInputMessagesFilterUrl) {
 										MEDIA_URL
 									}
-									else if (searchCounter.filter is TL_inputMessagesFilterMusic) {
+									else if (searchCounter.filter is TLInputMessagesFilterMusic) {
 										MEDIA_MUSIC
 									}
-									else if (searchCounter.filter is TL_inputMessagesFilterGif) {
+									else if (searchCounter.filter is TLInputMessagesFilterGif) {
 										MEDIA_GIF
 									}
-									else if (searchCounter.filter is TL_inputMessagesFilterPhotos) {
+									else if (searchCounter.filter is TLInputMessagesFilterPhotos) {
 										MEDIA_PHOTOS_ONLY
 									}
-									else if (searchCounter.filter is TL_inputMessagesFilterVideo) {
+									else if (searchCounter.filter is TLInputMessagesFilterVideo) {
 										MEDIA_VIDEOS_ONLY
 									}
 									else {
@@ -4072,15 +4188,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 			getMediaCountDatabase(dialogId, type, classGuid)
 		}
 		else {
-			val req = TL_messages_getSearchCounters()
+			val req = TLMessagesGetSearchCounters()
 
 			when (type) {
-				MEDIA_PHOTOVIDEO -> req.filters.add(TL_inputMessagesFilterPhotoVideo())
-				MEDIA_FILE -> req.filters.add(TL_inputMessagesFilterDocument())
-				MEDIA_AUDIO -> req.filters.add(TL_inputMessagesFilterRoundVoice())
-				MEDIA_URL -> req.filters.add(TL_inputMessagesFilterUrl())
-				MEDIA_MUSIC -> req.filters.add(TL_inputMessagesFilterMusic())
-				MEDIA_GIF -> req.filters.add(TL_inputMessagesFilterGif())
+				MEDIA_PHOTOVIDEO -> req.filters.add(TLInputMessagesFilterPhotoVideo())
+				MEDIA_FILE -> req.filters.add(TLInputMessagesFilterDocument())
+				MEDIA_AUDIO -> req.filters.add(TLInputMessagesFilterRoundVoice())
+				MEDIA_URL -> req.filters.add(TLInputMessagesFilterUrl())
+				MEDIA_MUSIC -> req.filters.add(TLInputMessagesFilterMusic())
+				MEDIA_GIF -> req.filters.add(TLInputMessagesFilterGif())
 			}
 
 			req.peer = messagesController.getInputPeer(dialogId)
@@ -4092,7 +4208,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val reqId = connectionsManager.sendRequest(req) { response, _ ->
 				if (response is Vector) {
 					if (response.objects.isNotEmpty()) {
-						val counter = response.objects[0] as TL_messages_searchCounter
+						val counter = response.objects[0] as TLMessagesSearchCounter
 						processLoadedMediaCount(counter.count, dialogId, type, classGuid, false, 0)
 					}
 				}
@@ -4102,7 +4218,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun processLoadedMedia(res: messages_Messages, dialogId: Long, count: Int, maxId: Int, minId: Int, type: Int, fromCache: Int, classGuid: Int, topReached: Boolean, requestIndex: Int) {
+	private fun processLoadedMedia(res: MessagesMessages, dialogId: Long, count: Int, maxId: Int, minId: Int, type: Int, fromCache: Int, classGuid: Int, topReached: Boolean, requestIndex: Int) {
 		if (BuildConfig.DEBUG) {
 			FileLog.d("process load media did $dialogId count = $count max_id=$maxId min_id=$minId type = $type cache = $fromCache classGuid = $classGuid")
 		}
@@ -4226,7 +4342,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		@Suppress("UNUSED_VALUE") val runnable: Runnable = object : Runnable {
 			override fun run() {
 				var topReached = false
-				val res = TL_messages_messages()
+				val res = TLMessagesMessages()
 
 				try {
 					val usersToLoad = mutableListOf<Long>()
@@ -4331,13 +4447,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 						isEnd = true
 
 						cursor = if (maxId != 0) {
-							database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, r.random_id FROM media_v4 as m LEFT JOIN randoms_v2 as r ON r.mid = m.mid WHERE m.uid = %d AND m.mid > %d AND type = %d ORDER BY m.mid ASC LIMIT %d", uid, maxId, type, countToLoad))
+							database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, r.randomId FROM media_v4 as m LEFT JOIN randoms_v2 as r ON r.mid = m.mid WHERE m.uid = %d AND m.mid > %d AND type = %d ORDER BY m.mid ASC LIMIT %d", uid, maxId, type, countToLoad))
 						}
 						else if (minId != 0) {
-							database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, r.random_id FROM media_v4 as m LEFT JOIN randoms_v2 as r ON r.mid = m.mid WHERE m.uid = %d AND m.mid < %d AND type = %d ORDER BY m.mid DESC LIMIT %d", uid, minId, type, countToLoad))
+							database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, r.randomId FROM media_v4 as m LEFT JOIN randoms_v2 as r ON r.mid = m.mid WHERE m.uid = %d AND m.mid < %d AND type = %d ORDER BY m.mid DESC LIMIT %d", uid, minId, type, countToLoad))
 						}
 						else {
-							database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, r.random_id FROM media_v4 as m LEFT JOIN randoms_v2 as r ON r.mid = m.mid WHERE m.uid = %d AND type = %d ORDER BY m.mid ASC LIMIT %d", uid, type, countToLoad))
+							database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, r.randomId FROM media_v4 as m LEFT JOIN randoms_v2 as r ON r.mid = m.mid WHERE m.uid = %d AND type = %d ORDER BY m.mid ASC LIMIT %d", uid, type, countToLoad))
 						}
 					}
 
@@ -4345,7 +4461,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						val data = cursor.byteBufferValue(0)
 
 						if (data != null) {
-							val message = Message.TLdeserialize(data, data.readInt32(false), false)
+							val message = Message.deserialize(data, data.readInt32(false), false)
 
 							if (message != null) {
 								message.readAttachPath(data, userConfig.clientUserId)
@@ -4353,10 +4469,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 								data.reuse()
 
 								message.id = cursor.intValue(1)
-								message.dialog_id = uid
+								message.dialogId = uid
 
 								if (DialogObject.isEncryptedDialog(uid)) {
-									message.random_id = cursor.longValue(2)
+									message.randomId = cursor.longValue(2)
 								}
 
 								if (reverseMessages) {
@@ -4508,7 +4624,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						val data = cursor.byteBufferValue(0)
 
 						if (data != null) {
-							val message = Message.TLdeserialize(data, data.readInt32(false), false)
+							val message = Message.deserialize(data, data.readInt32(false), false)
 
 							if (message != null) {
 								message.readAttachPath(data, userConfig.clientUserId)
@@ -4517,7 +4633,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 								if (MessageObject.isMusicMessage(message)) {
 									message.id = cursor.intValue(1)
-									message.dialog_id = dialogId
+									message.dialogId = dialogId
 
 									arrayList.add(0, MessageObject(currentAccount, message, generateLayout = false, checkMediaExists = true))
 								}
@@ -4543,9 +4659,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 	//---------------- MEDIA END ----------------
 	@JvmField
-	var hints = mutableListOf<TL_topPeer>()
+	var hints = mutableListOf<TLTopPeer>()
 
-	var inlineBots = mutableListOf<TL_topPeer>()
+	var inlineBots = mutableListOf<TLTopPeer>()
 	var loaded: Boolean = false
 	var loading: Boolean = false
 
@@ -4556,7 +4672,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			maxShortcuts = 5
 		}
 
-		val hintsFinal = ArrayList<TL_topPeer>()
+		val hintsFinal = ArrayList<TLTopPeer>()
 
 		if (SharedConfig.passcodeHash.isEmpty()) {
 			for (a in hints.indices) {
@@ -4572,7 +4688,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			runCatching {
 				if (SharedConfig.directShareHash == null) {
 					SharedConfig.directShareHash = UUID.randomUUID().toString()
-					ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).edit().putString("directShareHash2", SharedConfig.directShareHash).commit()
+					ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).edit { putString("directShareHash2", SharedConfig.directShareHash) }
 				}
 
 				val currentShortcuts = ShortcutManagerCompat.getDynamicShortcuts(ApplicationLoader.applicationContext)
@@ -4646,22 +4762,18 @@ class MediaDataController(num: Int) : BaseController(num) {
 						continue
 					}
 
-					var name: String?
+					var name: String? = null
 					var photo: FileLocation? = null
 
 					if (user != null) {
-						name = ContactsController.formatName(user.first_name, user.last_name)
-
-						if (user.photo != null) {
-							photo = user.photo?.photo_small
+						if (user is TLRPC.TLUser) {
+							name = ContactsController.formatName(user.firstName, user.lastName)
+							photo = user.photo?.photoSmall
 						}
 					}
 					else {
 						name = chat?.title
-
-						if (chat?.photo != null) {
-							photo = chat.photo?.photo_small
-						}
+						photo = chat?.photo?.photoSmall
 					}
 
 					shortcutIntent.putExtra("currentAccount", currentAccount)
@@ -4680,7 +4792,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 							if (bitmap != null) {
 								val size = AndroidUtilities.dp(48f)
-								val result = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+								val result = createBitmap(size, size)
 								val canvas = Canvas(result)
 
 								if (roundPaint == null) {
@@ -4759,8 +4871,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 			loading = true
 
 			messagesStorage.storageQueue.postRunnable {
-				val hintsNew = mutableListOf<TL_topPeer>()
-				val inlineBotsNew = mutableListOf<TL_topPeer>()
+				val hintsNew = mutableListOf<TLTopPeer>()
+				val inlineBotsNew = mutableListOf<TLTopPeer>()
 				val users = mutableListOf<User>()
 				val chats = mutableListOf<Chat>()
 				val selfUserId = userConfig.getClientUserId()
@@ -4779,17 +4891,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 						val type = cursor.intValue(1)
 
-						val peer = TL_topPeer()
+						val peer = TLTopPeer()
 						peer.rating = cursor.doubleValue(2)
 
 						if (did > 0) {
-							peer.peer = TL_peerUser()
-							peer.peer.user_id = did
+							peer.peer = TLPeerUser().also { it.userId = did }
 							usersToLoad.add(did)
 						}
 						else {
-							peer.peer = TL_peerChat()
-							peer.peer.chat_id = -did
+							peer.peer = TLPeerChat().also { it.chatId = -did }
 							chatsToLoad.add(-did)
 						}
 
@@ -4840,24 +4950,24 @@ class MediaDataController(num: Int) : BaseController(num) {
 		else {
 			loading = true
 
-			val req = TL_contacts_getTopPeers()
+			val req = TLContactsGetTopPeers()
 			req.hash = 0
-			req.bots_pm = false
+			req.botsPm = false
 			req.correspondents = true
 			req.groups = false
 			req.channels = false
-			req.bots_inline = true
+			req.botsInline = true
 			req.offset = 0
 			req.limit = 20
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_contacts_topPeers) {
+				if (response is TLContactsTopPeers) {
 					AndroidUtilities.runOnUIThread {
 						messagesController.putUsers(response.users, false)
 						messagesController.putChats(response.chats, false)
 
 						for (category in response.categories) {
-							if (category.category is TL_topPeerCategoryBotsInline) {
+							if (category.category is TLTopPeerCategoryBotsInline) {
 								inlineBots = category.peers
 								userConfig.botRatingLoadTime = (System.currentTimeMillis() / 1000).toInt()
 							}
@@ -4869,7 +4979,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 								for (b in hints.indices) {
 									val topPeer = hints[b]
 
-									if (topPeer.peer.user_id == selfUserId) {
+									if (topPeer.peer.userId == selfUserId) {
 										hints.removeAt(b)
 										break
 									}
@@ -4898,7 +5008,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 								for (a in response.categories.indices) {
 									val category = response.categories[a]
 
-									val type = if (category.category is TL_topPeerCategoryBotsInline) {
+									val type = if (category.category is TLTopPeerCategoryBotsInline) {
 										1
 									}
 									else {
@@ -4932,7 +5042,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						}
 					}
 				}
-				else if (response is TL_contacts_topPeersDisabled) {
+				else if (response is TLContactsTopPeersDisabled) {
 					AndroidUtilities.runOnUIThread {
 						userConfig.suggestContacts = false
 						userConfig.lastHintsSyncTime = (System.currentTimeMillis() / 1000).toInt()
@@ -4971,21 +5081,20 @@ class MediaDataController(num: Int) : BaseController(num) {
 			60
 		}
 
-		var peer: TL_topPeer? = null
+		var peer: TLTopPeer? = null
 
 		for (a in inlineBots.indices) {
 			val p = inlineBots[a]
 
-			if (p.peer.user_id == uid) {
+			if (p.peer.userId == uid) {
 				peer = p
 				break
 			}
 		}
 
 		if (peer == null) {
-			peer = TL_topPeer()
-			peer.peer = TL_peerUser()
-			peer.peer.user_id = uid
+			peer = TLTopPeer()
+			peer.peer = TLPeerUser().also { it.userId = uid }
 
 			inlineBots.add(peer)
 		}
@@ -5013,11 +5122,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 	fun removeInline(dialogId: Long) {
 		for (a in inlineBots.indices) {
-			if (inlineBots[a].peer.user_id == dialogId) {
+			if (inlineBots[a].peer.userId == dialogId) {
 				inlineBots.removeAt(a)
 
-				val req = TL_contacts_resetTopPeerRating()
-				req.category = TL_topPeerCategoryBotsInline()
+				val req = TLContactsResetTopPeerRating()
+				req.category = TLTopPeerCategoryBotsInline()
 				req.peer = messagesController.getInputPeer(dialogId)
 
 				connectionsManager.sendRequest(req)
@@ -5033,13 +5142,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 	fun removePeer(uid: Long) {
 		for (a in hints.indices) {
-			if (hints[a].peer.user_id == uid) {
+			if (hints[a].peer.userId == uid) {
 				hints.removeAt(a)
 
 				notificationCenter.postNotificationName(NotificationCenter.reloadHints)
 
-				val req = TL_contacts_resetTopPeerRating()
-				req.category = TL_topPeerCategoryCorrespondents()
+				val req = TLContactsResetTopPeerRating()
+				req.category = TLTopPeerCategoryCorrespondents()
 				req.peer = messagesController.getInputPeer(uid)
 
 				deletePeer(uid, 0)
@@ -5060,9 +5169,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return
 		}
 
-		val user = messagesController.getUser(dialogId)
+		val user = messagesController.getUser(dialogId) as? TLRPC.TLUser
 
-		if (user == null || user.bot || user.self) {
+		if (user == null || user.bot || user.isSelf) {
 			return
 		}
 
@@ -5092,21 +5201,20 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val dtFinal = dt
 
 			AndroidUtilities.runOnUIThread {
-				var peer: TL_topPeer? = null
+				var peer: TLTopPeer? = null
 
 				for (a in hints.indices) {
 					val p = hints[a]
 
-					if (p.peer.user_id == dialogId) {
+					if (p.peer.userId == dialogId) {
 						peer = p
 						break
 					}
 				}
 
 				if (peer == null) {
-					peer = TL_topPeer()
-					peer.peer = TL_peerUser()
-					peer.peer.user_id = dialogId
+					peer = TLTopPeer()
+					peer.peer = TLPeerUser().also { it.userId = dialogId }
 
 					hints.add(peer)
 				}
@@ -5193,7 +5301,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				val encryptedChatId = DialogObject.getEncryptedChatId(dialogId)
 				val encryptedChat = messagesController.getEncryptedChat(encryptedChatId) ?: return
 
-				user = messagesController.getUser(encryptedChat.user_id)
+				user = messagesController.getUser(encryptedChat.userId)
 			}
 			else if (DialogObject.isUserDialog(dialogId)) {
 				user = messagesController.getUser(dialogId)
@@ -5223,18 +5331,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 					overrideAvatar = true
 				}
 				else {
-					name = ContactsController.formatName(user.first_name, user.last_name)
-					if (user.photo != null) {
-						photo = user.photo?.photo_small
+					name = ContactsController.formatName(user.firstName, user.lastName)
+
+					if (user is TLRPC.TLUser) {
+						photo = user.photo?.photoSmall
 					}
 				}
 			}
 			else {
 				name = chat?.title
-
-				if (chat?.photo != null) {
-					photo = chat.photo?.photo_small
-				}
+				photo = chat?.photo?.photoSmall
 			}
 
 			var bitmap: Bitmap? = null
@@ -5249,7 +5355,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					if (overrideAvatar || bitmap != null) {
 						val size = AndroidUtilities.dp(58f)
 
-						val result = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+						val result = createBitmap(size, size)
 						result.eraseColor(Color.TRANSPARENT)
 
 						val canvas = Canvas(result)
@@ -5277,14 +5383,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 							val scale = size / bitmap.width.toFloat()
 
-							canvas.save()
-							canvas.scale(scale, scale)
+							canvas.withScale(scale, scale) {
+								roundPaint?.setShader(shader)
+								bitmapRect?.set(0f, 0f, bitmap!!.width.toFloat(), bitmap!!.height.toFloat())
 
-							roundPaint?.setShader(shader)
-							bitmapRect?.set(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
-
-							canvas.drawRoundRect(bitmapRect!!, bitmap.width.toFloat(), bitmap.height.toFloat(), roundPaint!!)
-							canvas.restore()
+								drawRoundRect(bitmapRect!!, bitmap!!.width.toFloat(), bitmap!!.height.toFloat(), roundPaint!!)
+							}
 						}
 
 						val drawable = ResourcesCompat.getDrawable(ApplicationLoader.applicationContext.resources, R.drawable.book_logo, null)
@@ -5319,7 +5423,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					}
 					else {
 						if (user != null) {
-							if (user.bot) {
+							if ((user as? TLRPC.TLUser)?.bot == true) {
 								pinShortcutInfo.setIcon(IconCompat.createWithResource(ApplicationLoader.applicationContext, R.drawable.book_bot))
 							}
 							else {
@@ -5347,7 +5451,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				}
 				else {
 					if (user != null) {
-						if (user.bot) {
+						if ((user as? TLRPC.TLUser)?.bot == true) {
 							addIntent.putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE, Intent.ShortcutIconResource.fromContext(ApplicationLoader.applicationContext, R.drawable.book_bot))
 						}
 						else {
@@ -5397,7 +5501,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					val encryptedChatId = DialogObject.getEncryptedChatId(dialogId)
 					val encryptedChat = messagesController.getEncryptedChat(encryptedChatId) ?: return
 
-					user = messagesController.getUser(encryptedChat.user_id)
+					user = messagesController.getUser(encryptedChat.userId)
 				}
 				else if (DialogObject.isUserDialog(dialogId)) {
 					user = messagesController.getUser(dialogId)
@@ -5414,7 +5518,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				}
 
 				val name = if (user != null) {
-					ContactsController.formatName(user.first_name, user.last_name)
+					ContactsController.formatName(user.firstName, user.lastName)
 				}
 				else {
 					chat?.title ?: ""
@@ -5443,12 +5547,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		loadingPinnedMessages.put(dialogId, true)
 
-		val req = TL_messages_search()
+		val req = TLMessagesSearch()
 		req.peer = messagesController.getInputPeer(dialogId)
 		req.limit = 40
-		req.offset_id = maxId
+		req.offsetId = maxId
 		req.q = ""
-		req.filter = TL_inputMessagesFilterPinned()
+		req.filter = TLInputMessagesFilterPinned()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			val ids = mutableListOf<Int>()
@@ -5456,7 +5560,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			var totalCount = 0
 			val endReached: Boolean
 
-			if (response is messages_Messages) {
+			if (response is MessagesMessages) {
 				val usersDict = LongSparseArray<User>()
 
 				for (user in response.users) {
@@ -5480,7 +5584,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				while (a < n) {
 					val message = response.messages[a]
 
-					if (message is TL_messageService || message is TL_messageEmpty) {
+					if (message is TLMessageService || message is TLMessageEmpty) {
 						a++
 						continue
 					}
@@ -5567,13 +5671,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 				val data = cursor.byteBufferValue(0)
 
 				if (data != null) {
-					val result = Message.TLdeserialize(data, data.readInt32(false), false)
+					val result = Message.deserialize(data, data.readInt32(false), false)
 
-					if (result != null && result.action !is TL_messageActionHistoryClear) {
+					if (result != null && result.action !is TLMessageActionHistoryClear) {
 						result.readAttachPath(data, selfUserId)
 						result.id = cursor.intValue(1)
 						result.date = cursor.intValue(2)
-						result.dialog_id = dialogId
+						result.dialogId = dialogId
 
 						MessagesStorage.addUsersAndChatsFromMessage(result, ArrayList(usersToLoad), ArrayList(chatsToLoad), null)
 
@@ -5595,11 +5699,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 					val data = cursor.byteBufferValue(0)
 
 					if (data != null) {
-						val result = Message.TLdeserialize(data, data.readInt32(false), false)
+						val result = Message.deserialize(data, data.readInt32(false), false)
 
-						if (result != null && result.action !is TL_messageActionHistoryClear) {
+						if (result != null && result.action !is TLMessageActionHistoryClear) {
 							result.readAttachPath(data, selfUserId)
-							result.dialog_id = dialogId
+							result.dialogId = dialogId
 
 							MessagesStorage.addUsersAndChatsFromMessage(result, ArrayList(usersToLoad), ArrayList(chatsToLoad), null)
 
@@ -5617,14 +5721,14 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 			if (midsCopy.isNotEmpty()) {
 				if (channelId != 0L) {
-					val req = TL_channels_getMessages()
+					val req = TLChannelsGetMessages()
 					req.channel = messagesController.getInputChannel(channelId)
-					req.id = ArrayList(midsCopy)
+					req.id.addAll(midsCopy.map { msgId -> TLRPC.TLInputMessageID().also { it.id = msgId } })
 
 					connectionsManager.sendRequest(req) { response, _ ->
 						var ok = false
 
-						if (response is messages_Messages) {
+						if (response is MessagesMessages) {
 							removeEmptyMessages(response.messages)
 
 							if (response.messages.isNotEmpty()) {
@@ -5637,18 +5741,18 @@ class MediaDataController(num: Int) : BaseController(num) {
 						}
 
 						if (!ok) {
-							messagesStorage.updatePinnedMessages(dialogId, req.id, false, -1, 0, false, null)
+							messagesStorage.updatePinnedMessages(dialogId, req.id.map { it.id }, false, -1, 0, false, null)
 						}
 					}
 				}
 				else {
-					val req = TL_messages_getMessages()
-					req.id = ArrayList(midsCopy)
+					val req = TLMessagesGetMessages()
+					req.id.addAll(midsCopy.map { msgId -> TLRPC.TLInputMessageID().also { it.id = msgId } })
 
 					connectionsManager.sendRequest(req) { response, _ ->
 						var ok = false
 
-						if (response is messages_Messages) {
+						if (response is MessagesMessages) {
 							removeEmptyMessages(response.messages)
 
 							if (response.messages.isNotEmpty()) {
@@ -5661,7 +5765,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						}
 
 						if (!ok) {
-							messagesStorage.updatePinnedMessages(dialogId, req.id, false, -1, 0, false, null)
+							messagesStorage.updatePinnedMessages(dialogId, req.id.map { it.id }, false, -1, 0, false, null)
 						}
 					}
 				}
@@ -5753,7 +5857,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			var checkedCount = 0
 
 			for (message in results) {
-				if (MessageObject.getMedia(message) is TL_messageMediaDocument || MessageObject.getMedia(message) is TL_messageMediaPhoto) {
+				if (MessageObject.getMedia(message) is TLMessageMediaDocument || MessageObject.getMedia(message) is TLMessageMediaPhoto) {
 					checkedCount++
 				}
 				messageObjects.add(MessageObject(currentAccount, message, usersDict, chatsDict, false, checkedCount < 30))
@@ -5769,7 +5873,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				var checkedCount = 0
 
 				for (message in results) {
-					if (MessageObject.getMedia(message) is TL_messageMediaDocument || MessageObject.getMedia(message) is TL_messageMediaPhoto) {
+					if (MessageObject.getMedia(message) is TLMessageMediaDocument || MessageObject.getMedia(message) is TLMessageMediaPhoto) {
 						checkedCount++
 					}
 
@@ -5793,7 +5897,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			if (!messages.isNullOrEmpty()) {
 				for (messageObject in messages) {
 					if (messageObject.isReply && messageObject.replyMessageObject == null) {
-						val id = messageObject.messageOwner?.reply_to?.reply_to_random_id ?: 0L
+						val id = messageObject.messageOwner?.replyTo?.replyToRandomId ?: 0L
 						var messageObjects = replyMessageRandomOwners[id]
 
 						if (messageObjects == null) {
@@ -5818,13 +5922,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 			messagesStorage.storageQueue.postRunnable {
 				try {
 					val loadedMessages = mutableListOf<MessageObject>()
-					val cursor = messagesStorage.database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, m.date, r.random_id FROM randoms_v2 as r INNER JOIN messages_v2 as m ON r.mid = m.mid AND r.uid = m.uid WHERE r.random_id IN(%s)", TextUtils.join(",", replyMessages)))
+					val cursor = messagesStorage.database.queryFinalized(String.format(Locale.US, "SELECT m.data, m.mid, m.date, r.randomId FROM randoms_v2 as r INNER JOIN messages_v2 as m ON r.mid = m.mid AND r.uid = m.uid WHERE r.randomId IN(%s)", TextUtils.join(",", replyMessages)))
 
 					while (cursor.next()) {
 						val data = cursor.byteBufferValue(0)
 
 						if (data != null) {
-							val message = Message.TLdeserialize(data, data.readInt32(false), false)
+							val message = Message.deserialize(data, data.readInt32(false), false)
 
 							if (message != null) {
 								message.readAttachPath(data, userConfig.clientUserId)
@@ -5833,7 +5937,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 								message.id = cursor.intValue(1)
 								message.date = cursor.intValue(2)
-								message.dialog_id = dialogId
+								message.dialogId = dialogId
 
 								val value = cursor.longValue(3)
 								val arrayList = replyMessageRandomOwners[value]
@@ -5847,8 +5951,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 									for (b in arrayList.indices) {
 										val `object` = arrayList[b]
 										`object`.replyMessageObject = messageObject
-										`object`.messageOwner?.reply_to = TL_messageReplyHeader()
-										`object`.messageOwner?.reply_to?.reply_to_msg_id = messageObject.id
+										`object`.messageOwner?.replyTo = TLMessageReplyHeader()
+										`object`.messageOwner?.replyTo?.replyToMsgId = messageObject.id
 									}
 								}
 							}
@@ -5866,7 +5970,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 							for (a in arrayList.indices) {
 								val message = arrayList[a].messageOwner
-								message?.reply_to?.reply_to_random_id = 0
+								message?.replyTo?.replyToRandomId = 0
 							}
 						}
 					}
@@ -5889,24 +5993,24 @@ class MediaDataController(num: Int) : BaseController(num) {
 			if (messages != null) {
 				for (messageObject in messages) {
 					if (messageObject.id > 0 && messageObject.isReply) {
-						val messageId = messageObject.messageOwner?.reply_to?.reply_to_msg_id ?: 0
+						val messageId = messageObject.messageOwner?.replyTo?.replyToMsgId ?: 0
 						var channelId: Long = 0
 
-						if (messageObject.messageOwner?.reply_to?.reply_to_peer_id != null) {
-							if (messageObject.messageOwner!!.reply_to!!.reply_to_peer_id.channel_id != 0L) {
-								channelId = messageObject.messageOwner!!.reply_to!!.reply_to_peer_id.channel_id
+						if (messageObject.messageOwner?.replyTo?.replyToPeerId != null) {
+							if (messageObject.messageOwner!!.replyTo!!.replyToPeerId.channelId != 0L) {
+								channelId = messageObject.messageOwner!!.replyTo!!.replyToPeerId.channelId
 							}
 						}
-						else if (messageObject.messageOwner!!.peer_id!!.channel_id != 0L) {
-							channelId = messageObject.messageOwner!!.peer_id!!.channel_id
+						else if (messageObject.messageOwner!!.peerId!!.channelId != 0L) {
+							channelId = messageObject.messageOwner!!.peerId!!.channelId
 						}
 
 						if (messageObject.replyMessageObject != null) {
-							if (messageObject.replyMessageObject!!.messageOwner == null || messageObject.replyMessageObject!!.messageOwner!!.peer_id == null || messageObject.messageOwner is TL_messageEmpty) {
+							if (messageObject.replyMessageObject!!.messageOwner == null || messageObject.replyMessageObject!!.messageOwner!!.peerId == null || messageObject.messageOwner is TLMessageEmpty) {
 								continue
 							}
 
-							if (messageObject.replyMessageObject!!.messageOwner!!.peer_id!!.channel_id == channelId) {
+							if (messageObject.replyMessageObject!!.messageOwner!!.peerId!!.channelId == channelId) {
 								continue
 							}
 						}
@@ -5941,7 +6045,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				}
 			}
 
-			if (replyMessageOwners.isEmpty) {
+			if (replyMessageOwners.isEmpty()) {
 				callback?.run()
 				return
 			}
@@ -5977,7 +6081,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 							val data = cursor.byteBufferValue(0)
 
 							if (data != null) {
-								val message = Message.TLdeserialize(data, data.readInt32(false), false)
+								val message = Message.deserialize(data, data.readInt32(false), false)
 
 								if (message != null) {
 									message.readAttachPath(data, userConfig.clientUserId)
@@ -5986,13 +6090,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 									message.id = cursor.intValue(1)
 									message.date = cursor.intValue(2)
-									message.dialog_id = dialogId
+									message.dialogId = dialogId
 
 									MessagesStorage.addUsersAndChatsFromMessage(message, ArrayList(usersToLoad), ArrayList(chatsToLoad), null)
 
 									result.add(message)
 
-									val channelId = message.peer_id?.channel_id ?: 0L
+									val channelId = message.peerId?.channelId ?: 0L
 									val mids = dialogReplyMessagesIds[channelId]
 
 									if (mids != null) {
@@ -6024,26 +6128,27 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 					broadcastReplyMessages(result, replyMessageOwners, users, chats, dialogId, true)
 
-					if (!dialogReplyMessagesIds.isEmpty) {
+					if (!dialogReplyMessagesIds.isEmpty()) {
 						var a = 0
 						val n = dialogReplyMessagesIds.size()
+
 						while (a < n) {
 							val channelId = dialogReplyMessagesIds.keyAt(a)
 
 							if (scheduled) {
-								val req = TL_messages_getScheduledMessages()
+								val req = TLMessagesGetScheduledMessages()
 								req.peer = messagesController.getInputPeer(dialogId)
-								req.id = dialogReplyMessagesIds.valueAt(a)?.let { ArrayList(it) }
+								req.id.addAll(dialogReplyMessagesIds.valueAt(a))
 
 								connectionsManager.sendRequest(req) { response, error ->
 									if (error == null) {
-										val messagesRes = response as messages_Messages?
+										val messagesRes = response as MessagesMessages?
 
 										for (i in messagesRes!!.messages.indices) {
 											val message = messagesRes.messages[i]
 
-											if (message.dialog_id == 0L) {
-												message.dialog_id = dialogId
+											if (message.dialogId == 0L) {
+												message.dialogId = dialogId
 											}
 										}
 
@@ -6063,17 +6168,17 @@ class MediaDataController(num: Int) : BaseController(num) {
 								}
 							}
 							else if (channelId != 0L) {
-								val req = TL_channels_getMessages()
+								val req = TLChannelsGetMessages()
 								req.channel = messagesController.getInputChannel(channelId)
-								req.id = dialogReplyMessagesIds.valueAt(a)?.let { ArrayList(it) }
+								req.id.addAll(dialogReplyMessagesIds.valueAt(a).map { msgId -> TLRPC.TLInputMessageID().also { it.id = msgId } })
 
 								connectionsManager.sendRequest(req) { response, _ ->
-									if (response is messages_Messages) {
+									if (response is MessagesMessages) {
 										for (i in response.messages.indices) {
 											val message = response.messages[i]
 
-											if (message.dialog_id == 0L) {
-												message.dialog_id = dialogId
+											if (message.dialogId == 0L) {
+												message.dialogId = dialogId
 											}
 										}
 
@@ -6093,16 +6198,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 								}
 							}
 							else {
-								val req = TL_messages_getMessages()
-								req.id = dialogReplyMessagesIds.valueAt(a)?.let { ArrayList(it) }
+								val req = TLMessagesGetMessages()
+								req.id.addAll(dialogReplyMessagesIds.valueAt(a).map { msgId -> TLRPC.TLInputMessageID().also { it.id = msgId } })
 
 								connectionsManager.sendRequest(req) { response, _ ->
-									if (response is messages_Messages) {
+									if (response is MessagesMessages) {
 										for (i in response.messages.indices) {
 											val message = response.messages[i]
 
-											if (message.dialog_id == 0L) {
-												message.dialog_id = dialogId
+											if (message.dialogId == 0L) {
+												message.dialogId = dialogId
 											}
 										}
 
@@ -6142,10 +6247,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 				messagesStorage.database.beginTransaction()
 
 				val state = if (scheduled) {
-					messagesStorage.database.executeFast("UPDATE scheduled_messages_v2 SET replydata = ?, reply_to_message_id = ? WHERE mid = ? AND uid = ?")
+					messagesStorage.database.executeFast("UPDATE scheduled_messages_v2 SET replydata = ?, replyTo_message_id = ? WHERE mid = ? AND uid = ?")
 				}
 				else {
-					messagesStorage.database.executeFast("UPDATE messages_v2 SET replydata = ?, reply_to_message_id = ? WHERE mid = ? AND uid = ?")
+					messagesStorage.database.executeFast("UPDATE messages_v2 SET replydata = ?, replyTo_message_id = ? WHERE mid = ? AND uid = ?")
 				}
 
 				for (a in result.indices) {
@@ -6220,9 +6325,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 						m.replyMessageObject = messageObject
 
 						when (m.messageOwner?.action) {
-							is TL_messageActionPinMessage -> m.generatePinMessageText(null, null)
-							is TL_messageActionGameScore -> m.generateGameMessageText(null)
-							is TL_messageActionPaymentSent -> m.generatePaymentSentMessageText(null)
+							is TLMessageActionPinMessage -> m.generatePinMessageText(null, null)
+							is TLMessageActionGameScore -> m.generateGameMessageText(null)
+							is TLMessageActionPaymentSent -> m.generatePaymentSentMessageText(null)
 						}
 					}
 
@@ -6246,31 +6351,31 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 	private fun addStyle(flags: Int, spanStart: Int, spanEnd: Int, entities: MutableList<MessageEntity>) {
 		if ((flags and TextStyleSpan.FLAG_STYLE_SPOILER) != 0) {
-			entities.add(setEntityStartEnd(TL_messageEntitySpoiler(), spanStart, spanEnd))
+			entities.add(setEntityStartEnd(TLMessageEntitySpoiler(), spanStart, spanEnd))
 		}
 
 		if ((flags and TextStyleSpan.FLAG_STYLE_BOLD) != 0) {
-			entities.add(setEntityStartEnd(TL_messageEntityBold(), spanStart, spanEnd))
+			entities.add(setEntityStartEnd(TLMessageEntityBold(), spanStart, spanEnd))
 		}
 
 		if ((flags and TextStyleSpan.FLAG_STYLE_ITALIC) != 0) {
-			entities.add(setEntityStartEnd(TL_messageEntityItalic(), spanStart, spanEnd))
+			entities.add(setEntityStartEnd(TLMessageEntityItalic(), spanStart, spanEnd))
 		}
 
 		if ((flags and TextStyleSpan.FLAG_STYLE_MONO) != 0) {
-			entities.add(setEntityStartEnd(TL_messageEntityCode(), spanStart, spanEnd))
+			entities.add(setEntityStartEnd(TLMessageEntityCode(), spanStart, spanEnd))
 		}
 
 		if ((flags and TextStyleSpan.FLAG_STYLE_STRIKE) != 0) {
-			entities.add(setEntityStartEnd(TL_messageEntityStrike(), spanStart, spanEnd))
+			entities.add(setEntityStartEnd(TLMessageEntityStrike(), spanStart, spanEnd))
 		}
 
 		if ((flags and TextStyleSpan.FLAG_STYLE_UNDERLINE) != 0) {
-			entities.add(setEntityStartEnd(TL_messageEntityUnderline(), spanStart, spanEnd))
+			entities.add(setEntityStartEnd(TLMessageEntityUnderline(), spanStart, spanEnd))
 		}
 
 		if ((flags and TextStyleSpan.FLAG_STYLE_QUOTE) != 0) {
-			entities.add(setEntityStartEnd(TL_messageEntityBlockquote(), spanStart, spanEnd))
+			entities.add(setEntityStartEnd(TLMessageEntityBlockquote(), spanStart, spanEnd))
 		}
 	}
 
@@ -6334,7 +6439,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					if (content.isNotEmpty()) {
 						message[0] = AndroidUtilities.concat(startMessage, content, endMessage)
 
-						val entity = TL_messageEntityPre()
+						val entity = TLMessageEntityPre()
 						entity.offset = start + (if (replacedFirst) 0 else 1)
 						entity.length = index - start - 3 + (if (replacedFirst) 0 else 1)
 						entity.language = ""
@@ -6348,7 +6453,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					if (start + 1 != index) {
 						message[0] = AndroidUtilities.concat(substring(message[0], 0, start), substring(message[0], start + 1, index), substring(message[0], index + 1, message[0]!!.length))
 
-						val entity = TL_messageEntityCode()
+						val entity = TLMessageEntityCode()
 						entity.offset = start
 						entity.length = index - start - 1
 
@@ -6366,7 +6471,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		if (start != -1 && isPre) {
 			message[0] = AndroidUtilities.concat(substring(message[0], 0, start), substring(message[0], start + 2, message[0]!!.length))
 
-			val entity = TL_messageEntityCode()
+			val entity = TLMessageEntityCode()
 			entity.offset = start
 			entity.length = 1
 
@@ -6395,7 +6500,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 			if (spansMentions != null && spansMentions.isNotEmpty()) {
 				for (b in spansMentions.indices) {
-					val entity = TL_inputMessageEntityMentionName()
+					val entity = TLInputMessageEntityMentionName()
 					entity.userId = messagesController.getInputUser(Utilities.parseLong(spansMentions[b].url))
 
 					if (entity.userId != null) {
@@ -6415,7 +6520,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 			if (spansUrlReplacement != null && spansUrlReplacement.isNotEmpty()) {
 				for (b in spansUrlReplacement.indices) {
-					val entity = TL_messageEntityTextUrl()
+					val entity = TLMessageEntityTextUrl()
 					entity.offset = spannable.getSpanStart(spansUrlReplacement[b])
 					entity.length = (min(spannable.getSpanEnd(spansUrlReplacement[b]).toDouble(), message[0]!!.length.toDouble()) - entity.offset).toInt()
 					entity.url = spansUrlReplacement[b].url
@@ -6438,11 +6543,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 					if (span != null) {
 						try {
-							val entity = TL_messageEntityCustomEmoji()
+							val entity = TLMessageEntityCustomEmoji()
 							entity.offset = spannable.getSpanStart(span)
 							entity.length = (min(spannable.getSpanEnd(span).toDouble(), message[0]!!.length.toDouble()) - entity.offset).toInt()
 							entity.documentId = span.getDocumentId()
-							entity.document = span.document
 
 							entities.add(entity)
 						}
@@ -6464,7 +6568,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 							continue
 						}
 
-						val entity = TL_messageEntityUrl()
+						val entity = TLMessageEntityTextUrl()
 						entity.offset = spannable.getSpanStart(spansUrl[b])
 						entity.length = (min(spannable.getSpanEnd(spansUrl[b]).toDouble(), message[0]!!.length.toDouble()) - entity.offset).toInt()
 						entity.url = spansUrl[b].url
@@ -6483,12 +6587,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		var cs = message[0]
 
-		cs = parsePattern(cs, BOLD_PATTERN, entities) { TL_messageEntityBold() }
-		cs = parsePattern(cs, ITALIC_PATTERN, entities) { TL_messageEntityItalic() }
-		cs = parsePattern(cs, SPOILER_PATTERN, entities) { TL_messageEntitySpoiler() }
+		cs = parsePattern(cs, BOLD_PATTERN, entities) { TLMessageEntityBold() }
+		cs = parsePattern(cs, ITALIC_PATTERN, entities) { TLMessageEntityItalic() }
+		cs = parsePattern(cs, SPOILER_PATTERN, entities) { TLMessageEntitySpoiler() }
 
 		if (allowStrike) {
-			cs = parsePattern(cs, STRIKE_PATTERN, entities) { TL_messageEntityStrike() }
+			cs = parsePattern(cs, STRIKE_PATTERN, entities) { TLMessageEntityStrike() }
 		}
 
 		message[0] = cs
@@ -6496,12 +6600,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 		return entities
 	}
 
-	private fun findHashtags(cs: CharSequence?): Set<TL_messageEntityHashtag>? {
+	private fun findHashtags(cs: CharSequence?): Set<TLMessageEntityHashtag>? {
 		if (cs == null) {
 			return null
 		}
 
-		val result = mutableSetOf<TL_messageEntityHashtag>()
+		val result = mutableSetOf<TLMessageEntityHashtag>()
 		val pattern = Pattern.compile("(^|\\s)#\\D[\\w@.]+")
 		val matcher = pattern.matcher(cs)
 
@@ -6513,7 +6617,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				start++
 			}
 
-			val entity = TL_messageEntityHashtag()
+			val entity = TLMessageEntityHashtag()
 			entity.offset = start
 			entity.length = end - start
 
@@ -6574,7 +6678,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		loadingDrafts = true
 
-		connectionsManager.sendRequest(TL_messages_getAllDrafts()) { response, error ->
+		connectionsManager.sendRequest(TLMessagesGetAllDrafts()) { response, error ->
 			if (error != null) {
 				AndroidUtilities.runOnUIThread {
 					loadingDrafts = false
@@ -6595,7 +6699,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	fun getDraftFolderId(dialogId: Long): Int {
-		return draftsFolderIds[dialogId, 0]
+		return draftsFolderIds.get(dialogId, 0)
 	}
 
 	fun setDraftFolderId(dialogId: Long, folderId: Int) {
@@ -6619,23 +6723,23 @@ class MediaDataController(num: Int) : BaseController(num) {
 	@JvmOverloads
 	fun saveDraft(dialogId: Long, threadId: Int, message: CharSequence?, entities: List<MessageEntity>?, replyToMessage: Message?, noWebpage: Boolean, clean: Boolean = false) {
 		val draftMessage = if (!message.isNullOrEmpty() || replyToMessage != null) {
-			TL_draftMessage()
+			TLDraftMessage()
 		}
 		else {
-			TL_draftMessageEmpty()
+			TLDraftMessageEmpty()
 		}
 
 		draftMessage.date = (System.currentTimeMillis() / 1000).toInt()
-		draftMessage.message = message?.toString() ?: ""
-		draftMessage.no_webpage = noWebpage
+		(draftMessage as? TLDraftMessage)?.message = message?.toString() ?: ""
+		(draftMessage as? TLDraftMessage)?.noWebpage = noWebpage
 
 		if (replyToMessage != null) {
-			draftMessage.reply_to_msg_id = replyToMessage.id
+			(draftMessage as? TLDraftMessage)?.replyToMsgId = replyToMessage.id
 			draftMessage.flags = draftMessage.flags or 1
 		}
 
 		if (!entities.isNullOrEmpty()) {
-			draftMessage.entities = ArrayList(entities)
+			(draftMessage as? TLDraftMessage)?.entities?.addAll(entities)
 			draftMessage.flags = draftMessage.flags or 8
 		}
 
@@ -6643,7 +6747,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		val currentDraft = threads?.get(threadId)
 
 		if (!clean) {
-			if (currentDraft != null && currentDraft.message == draftMessage.message && currentDraft.reply_to_msg_id == draftMessage.reply_to_msg_id && currentDraft.no_webpage == draftMessage.no_webpage || currentDraft == null && TextUtils.isEmpty(draftMessage.message) && draftMessage.reply_to_msg_id == 0) {
+			if (currentDraft != null && (currentDraft as? TLDraftMessage)?.message == (draftMessage as? TLDraftMessage)?.message && (currentDraft as? TLDraftMessage)?.replyToMsgId == (draftMessage as? TLDraftMessage)?.replyToMsgId && (currentDraft as? TLDraftMessage)?.noWebpage == (draftMessage as? TLDraftMessage)?.noWebpage || currentDraft == null && (draftMessage as? TLDraftMessage)?.message.isNullOrEmpty() && (draftMessage as? TLDraftMessage)?.replyToMsgId == 0) {
 				return
 			}
 		}
@@ -6652,17 +6756,20 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		if (threadId == 0) {
 			if (!DialogObject.isEncryptedDialog(dialogId)) {
-				val req = TL_messages_saveDraft()
+				val req = TLMessagesSaveDraft()
 				req.peer = messagesController.getInputPeer(dialogId)
 
-				if (req.peer == null) {
+				if (req.peer is TLRPC.TLInputPeerEmpty) {
 					return
 				}
 
-				req.message = draftMessage.message
-				req.no_webpage = draftMessage.no_webpage
-				req.reply_to_msg_id = draftMessage.reply_to_msg_id
-				req.entities = draftMessage.entities
+				(draftMessage as? TLDraftMessage)?.let {
+					req.message = it.message
+					req.noWebpage = it.noWebpage
+					req.replyToMsgId = it.replyToMsgId
+					req.entities.addAll(it.entities)
+				}
+
 				req.flags = draftMessage.flags
 
 				connectionsManager.sendRequest(req)
@@ -6678,14 +6785,14 @@ class MediaDataController(num: Int) : BaseController(num) {
 		val editor = draftPreferences!!.edit()
 		val messagesController = messagesController
 
-		if (draft == null || draft is TL_draftMessageEmpty) {
+		if (draft == null || draft is TLDraftMessageEmpty) {
 			run {
 				val threads = drafts[dialogId]
 
 				if (threads != null) {
 					threads.remove(threadId)
 
-					if (threads.size() == 0) {
+					if (threads.isEmpty()) {
 						drafts.remove(dialogId)
 					}
 				}
@@ -6697,17 +6804,17 @@ class MediaDataController(num: Int) : BaseController(num) {
 				if (threads != null) {
 					threads.remove(threadId)
 
-					if (threads.size() == 0) {
+					if (threads.isEmpty()) {
 						draftMessages.remove(dialogId)
 					}
 				}
 			}
 
 			if (threadId == 0) {
-				draftPreferences?.edit()?.remove("" + dialogId)?.remove("r_$dialogId")?.commit()
+				draftPreferences?.edit()?.remove("" + dialogId)?.remove("r_$dialogId")?.apply()
 			}
 			else {
-				draftPreferences?.edit()?.remove("t_" + dialogId + "_" + threadId)?.remove("rt_" + dialogId + "_" + threadId)?.commit()
+				draftPreferences?.edit()?.remove("t_" + dialogId + "_" + threadId)?.remove("rt_" + dialogId + "_" + threadId)?.apply()
 			}
 
 			messagesController.removeDraftDialogIfNeed(dialogId)
@@ -6745,7 +6852,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			if (threads != null) {
 				threads.remove(threadId)
 
-				if (threads.size() == 0) {
+				if (threads.isEmpty()) {
 					draftMessages.remove(dialogId)
 				}
 			}
@@ -6774,10 +6881,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 			serializedData.cleanup()
 		}
 
-		editor.commit()
+		editor.apply()
 
 		if (fromServer && threadId == 0) {
-			if (draft != null && draft.reply_to_msg_id != 0 && replyToMessage == null) {
+			if (draft is TLDraftMessage && draft.replyToMsgId != 0 && replyToMessage == null) {
 				var user: User? = null
 				var chat: Chat? = null
 
@@ -6790,7 +6897,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				if (user != null || chat != null) {
 					val channelId = if (ChatObject.isChannel(chat)) chat.id else 0
-					val messageId = draft.reply_to_msg_id
+					val messageId = draft.replyToMsgId
 
 					messagesStorage.storageQueue.postRunnable {
 						try {
@@ -6801,7 +6908,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 								val data = cursor.byteBufferValue(0)
 
 								if (data != null) {
-									message = Message.TLdeserialize(data, data.readInt32(false), false)
+									message = Message.deserialize(data, data.readInt32(false), false)
 									message?.readAttachPath(data, userConfig.clientUserId)
 									data.reuse()
 								}
@@ -6811,12 +6918,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 							if (message == null) {
 								if (channelId != 0L) {
-									val req = TL_channels_getMessages()
+									val req = TLChannelsGetMessages()
 									req.channel = messagesController.getInputChannel(channelId)
-									req.id.add(messageId)
+									req.id.add(TLRPC.TLInputMessageID().also { it.id = messageId })
 
 									connectionsManager.sendRequest(req) { response, _ ->
-										if (response is messages_Messages) {
+										if (response is MessagesMessages) {
 											if (response.messages.isNotEmpty()) {
 												saveDraftReplyMessage(dialogId, threadId, response.messages[0])
 											}
@@ -6824,11 +6931,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 									}
 								}
 								else {
-									val req = TL_messages_getMessages()
-									req.id.add(messageId)
+									val req = TLMessagesGetMessages()
+									req.id.add(TLRPC.TLInputMessageID().also { it.id = messageId })
 
 									connectionsManager.sendRequest(req) { response, _ ->
-										if (response is messages_Messages) {
+										if (response is MessagesMessages) {
 											if (response.messages.isNotEmpty()) {
 												saveDraftReplyMessage(dialogId, threadId, response.messages[0])
 											}
@@ -6860,7 +6967,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val threads = drafts[dialogId]
 			val draftMessage = threads?.get(threadId)
 
-			if (draftMessage != null && draftMessage.reply_to_msg_id == message.id) {
+			if (draftMessage is TLDraftMessage && draftMessage.replyToMsgId == message.id) {
 				var threads2 = draftMessages[dialogId]
 
 				if (threads2 == null) {
@@ -6874,7 +6981,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				message.serializeToStream(serializedData)
 
-				draftPreferences?.edit()?.putString(if (threadId == 0) ("r_$dialogId") else ("rt_" + dialogId + "_" + threadId), Utilities.bytesToHex(serializedData.toByteArray()))?.commit()
+				draftPreferences?.edit()?.putString(if (threadId == 0) ("r_$dialogId") else ("rt_" + dialogId + "_" + threadId), Utilities.bytesToHex(serializedData.toByteArray()))?.apply()
 
 				notificationCenter.postNotificationName(NotificationCenter.newDraftReceived, dialogId)
 
@@ -6887,7 +6994,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		drafts.clear()
 		draftMessages.clear()
 		draftsFolderIds.clear()
-		draftPreferences?.edit()?.clear()?.commit()
+		draftPreferences?.edit()?.clear()?.apply()
 
 		if (notify) {
 			messagesController.sortDialogs(null)
@@ -6906,7 +7013,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				if (threads != null) {
 					threads.remove(threadId)
 
-					if (threads.size() == 0) {
+					if (threads.isEmpty()) {
 						drafts.remove(dialogId)
 					}
 				}
@@ -6918,26 +7025,26 @@ class MediaDataController(num: Int) : BaseController(num) {
 				if (threads != null) {
 					threads.remove(threadId)
 
-					if (threads.size() == 0) {
+					if (threads.isEmpty()) {
 						draftMessages.remove(dialogId)
 					}
 				}
 			}
 
 			if (threadId == 0) {
-				draftPreferences?.edit()?.remove("" + dialogId)?.remove("r_$dialogId")?.commit()
+				draftPreferences?.edit()?.remove("" + dialogId)?.remove("r_$dialogId")?.apply()
 				messagesController.sortDialogs(null)
 				notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 			}
 			else {
-				draftPreferences?.edit()?.remove("t_" + dialogId + "_" + threadId)?.remove("rt_" + dialogId + "_" + threadId)?.commit()
+				draftPreferences?.edit()?.remove("t_" + dialogId + "_" + threadId)?.remove("rt_" + dialogId + "_" + threadId)?.apply()
 			}
 		}
-		else if (draftMessage.reply_to_msg_id != 0) {
-			draftMessage.reply_to_msg_id = 0
+		else if (draftMessage is TLDraftMessage && draftMessage.replyToMsgId != 0) {
+			draftMessage.replyToMsgId = 0
 			draftMessage.flags = draftMessage.flags and 1.inv()
 
-			saveDraft(dialogId, threadId, draftMessage.message, draftMessage.entities, null, draftMessage.no_webpage, true)
+			saveDraft(dialogId, threadId, draftMessage.message, draftMessage.entities, null, draftMessage.noWebpage, true)
 		}
 	}
 
@@ -6950,7 +7057,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	//---------------- DRAFT END ----------------
-	private val botInfos = mutableMapOf<String, BotInfo>()
+	private val botInfos = mutableMapOf<String, TLRPC.TLBotInfo>()
 	private val botKeyboards = LongSparseArray<Message>()
 	private val botKeyboardsByMids = SparseLongArray()
 
@@ -6994,7 +7101,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 						data = cursor.byteBufferValue(0)
 
 						if (data != null) {
-							botKeyboard = Message.TLdeserialize(data, data.readInt32(false), false)
+							botKeyboard = Message.deserialize(data, data.readInt32(false), false)
 
 							data.reuse()
 						}
@@ -7015,8 +7122,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	@Throws(SQLiteException::class)
-	private fun loadBotInfoInternal(uid: Long, dialogId: Long): BotInfo? {
-		var botInfo: BotInfo? = null
+	private fun loadBotInfoInternal(uid: Long, dialogId: Long): TLRPC.TLBotInfo? {
+		var botInfo: TLRPC.TLBotInfo? = null
 		val cursor = messagesStorage.database.queryFinalized(String.format(Locale.US, "SELECT info FROM bot_info_v2 WHERE uid = %d AND dialogId = %d", uid, dialogId))
 
 		if (cursor.next()) {
@@ -7026,7 +7133,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 				data = cursor.byteBufferValue(0)
 
 				if (data != null) {
-					botInfo = BotInfo.TLdeserialize(data, data.readInt32(false), false)
+					botInfo = TLRPC.TLBotInfo.deserialize(data, data.readInt32(false), false)
 
 					data.reuse()
 				}
@@ -7120,12 +7227,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun putBotInfo(dialogId: Long, botInfo: BotInfo?) {
+	fun putBotInfo(dialogId: Long, botInfo: TLRPC.TLBotInfo?) {
 		if (botInfo == null) {
 			return
 		}
 
-		botInfos[botInfo.user_id.toString() + "_" + dialogId] = botInfo
+		botInfos[botInfo.userId.toString() + "_" + dialogId] = botInfo
 
 		messagesStorage.storageQueue.postRunnable {
 			try {
@@ -7136,7 +7243,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				botInfo.serializeToStream(data)
 
-				state.bindLong(1, botInfo.user_id)
+				state.bindLong(1, botInfo.userId)
 				state.bindLong(2, dialogId)
 				state.bindByteBuffer(3, data)
 				state.step()
@@ -7151,18 +7258,20 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun updateBotInfo(dialogId: Long, update: TL_updateBotCommands) {
-		val botInfo = botInfos[update.bot_id.toString() + "_" + dialogId]
+	fun updateBotInfo(dialogId: Long, update: TLUpdateBotCommands) {
+		val botInfo = botInfos[update.botId.toString() + "_" + dialogId]
 
 		if (botInfo != null) {
-			botInfo.commands = update.commands
+			botInfo.commands.clear()
+			botInfo.commands.addAll(update.commands)
 			notificationCenter.postNotificationName(NotificationCenter.botInfoDidLoad, botInfo, 0)
 		}
 
 		messagesStorage.storageQueue.postRunnable {
 			try {
-				val info = loadBotInfoInternal(update.bot_id, dialogId) ?: return@postRunnable
-				info.commands = update.commands
+				val info = loadBotInfoInternal(update.botId, dialogId) ?: return@postRunnable
+				info.commands.clear()
+				info.commands.addAll(update.commands)
 
 				val state = messagesStorage.database.executeFast("REPLACE INTO bot_info_v2 VALUES(?, ?, ?)")
 				state.requery()
@@ -7171,7 +7280,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				info.serializeToStream(data)
 
-				state.bindLong(1, info.user_id)
+				state.bindLong(1, info.userId)
 				state.bindLong(2, dialogId)
 				state.bindByteBuffer(3, data)
 				state.step()
@@ -7205,7 +7314,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 	}
 
 	fun saveToRingtones(document: TLRPC.Document?): Boolean {
-		if (document == null) {
+		if (document !is TLRPC.TLDocument) {
 			return false
 		}
 
@@ -7219,7 +7328,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 
 		for (attribute in document.attributes) {
-			if (attribute is TL_documentAttributeAudio) {
+			if (attribute is TLDocumentAttributeAudio) {
 				if (attribute.duration > MessagesController.getInstance(currentAccount).ringtoneDurationMax) {
 					NotificationCenter.globalInstance.postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR_SUBTITLE, LocaleController.formatString("TooLongError", R.string.TooLongError), LocaleController.formatString("ErrorRingtoneDurationTooLong", R.string.ErrorRingtoneDurationTooLong, MessagesController.getInstance(UserConfig.selectedAccount).ringtoneDurationMax))
 					return false
@@ -7227,16 +7336,18 @@ class MediaDataController(num: Int) : BaseController(num) {
 			}
 		}
 
-		val saveRingtone = TL_account_saveRingtone()
-		saveRingtone.id = TL_inputDocument()
-		saveRingtone.id.id = document.id
-		saveRingtone.id.file_reference = document.file_reference
-		saveRingtone.id.access_hash = document.access_hash
+		val saveRingtone = TLAccountSaveRingtone()
+
+		saveRingtone.id = TLInputDocument().also {
+			it.id = document.id
+			it.fileReference = document.fileReference
+			it.accessHash = document.accessHash
+		}
 
 		connectionsManager.sendRequest(saveRingtone) { response, _ ->
 			AndroidUtilities.runOnUIThread {
 				if (response != null) {
-					if (response is TL_account_savedRingtoneConverted) {
+					if (response is TLAccountSavedRingtoneConverted) {
 						ringtoneDataStore.addTone(response.document)
 					}
 					else {
@@ -7269,7 +7380,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return
 		}
 
-		val req2 = TL_messages_getStickers()
+		val req2 = TLMessagesGetStickers()
 		req2.emoticon = Emoji.fixEmoji("⭐") + Emoji.fixEmoji("⭐")
 		req2.hash = 0
 
@@ -7283,7 +7394,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				previewStickersLoading = false
 
-				val res = response as? TL_messages_stickers ?: return@runOnUIThread
+				val res = response as? TLMessagesStickers ?: return@runOnUIThread
 
 				premiumPreviewStickers.clear()
 				premiumPreviewStickers.addAll(res.stickers)
@@ -7326,7 +7437,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		val arrayList = getStickerSets(type)
 
 		for (i in arrayList.indices) {
-			if (arrayList[i].set.id == setId) {
+			if (arrayList[i].set?.id == setId) {
 				val set = arrayList[i]
 				arrayList.removeAt(i)
 				arrayList.add(0, set)
@@ -7406,15 +7517,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 				val request: TLObject
 
 				if (version == -1) {
-					val req = TL_messages_getEmojiKeywords()
-					req.lang_code = langCode
+					val req = TLMessagesGetEmojiKeywords()
+					req.langCode = langCode
 
 					request = req
 				}
 				else {
-					val req = TL_messages_getEmojiKeywordsDifference()
-					req.lang_code = langCode
-					req.from_version = version
+					val req = TLMessagesGetEmojiKeywordsDifference()
+					req.langCode = langCode
+					req.fromVersion = version
 
 					request = req
 				}
@@ -7423,8 +7534,8 @@ class MediaDataController(num: Int) : BaseController(num) {
 				val versionFinal = version
 
 				connectionsManager.sendRequest(request) { response, _ ->
-					if (response is TL_emojiKeywordsDifference) {
-						if (versionFinal != -1 && response.lang_code != aliasFinal) {
+					if (response is TLEmojiKeywordsDifference) {
+						if (versionFinal != -1 && response.langCode != aliasFinal) {
 							messagesStorage.storageQueue.postRunnable {
 								try {
 									val deleteState = messagesStorage.database.executeFast("DELETE FROM emoji_keywords_info_v2 WHERE lang = ?")
@@ -7456,7 +7567,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun putEmojiKeywords(lang: String, res: TL_emojiKeywordsDifference?) {
+	private fun putEmojiKeywords(lang: String, res: TLEmojiKeywordsDifference?) {
 		if (res == null) {
 			return
 		}
@@ -7470,23 +7581,23 @@ class MediaDataController(num: Int) : BaseController(num) {
 					messagesStorage.database.beginTransaction()
 
 					for (keyword in res.keywords) {
-						if (keyword is TL_emojiKeyword) {
-							val key = keyword.keyword.lowercase()
+						if (keyword is TLEmojiKeyword) {
+							val key = keyword.keyword?.lowercase() ?: ""
 
 							for (emoticon in keyword.emoticons) {
 								insertState.requery()
-								insertState.bindString(1, res.lang_code)
+								insertState.bindString(1, res.langCode)
 								insertState.bindString(2, key)
 								insertState.bindString(3, emoticon)
 								insertState.step()
 							}
 						}
-						else if (keyword is TL_emojiKeywordDeleted) {
-							val key = keyword.keyword.lowercase()
+						else if (keyword is TLEmojiKeywordDeleted) {
+							val key = keyword.keyword?.lowercase() ?: ""
 
 							for (emoticon in keyword.emoticons) {
 								deleteState.requery()
-								deleteState.bindString(1, res.lang_code)
+								deleteState.bindString(1, res.langCode)
 								deleteState.bindString(2, key)
 								deleteState.bindString(3, emoticon)
 								deleteState.step()
@@ -7502,7 +7613,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				val infoState = messagesStorage.database.executeFast("REPLACE INTO emoji_keywords_info_v2 VALUES(?, ?, ?, ?)")
 				infoState.bindString(1, lang)
-				infoState.bindString(2, res.lang_code)
+				infoState.bindString(2, res.langCode)
 				infoState.bindInteger(3, res.version)
 				infoState.bindLong(4, System.currentTimeMillis())
 				infoState.step()
@@ -7534,37 +7645,35 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val queryLowercased = query.lowercase()
 
 			for (i in stickerSets.indices) {
-				if (stickerSets[i].keywords != null) {
-					val keywords = stickerSets[i].keywords
+				val keywords = stickerSets[i].keywords
 
-					for (j in keywords.indices) {
-						for (k in keywords[j].keyword.indices) {
-							val keyword = keywords[j].keyword[k]
+				for (j in keywords.indices) {
+					for (k in keywords[j].keyword.indices) {
+						val keyword = keywords[j].keyword[k]
 
-							if (queryLowercased == keyword) {
-								fullMatch.add(keywords[j].document_id)
-							}
-							else if (queryLowercased.contains(keyword) || keyword.contains(queryLowercased)) {
-								halfMatch.add(keywords[j].document_id)
-							}
+						if (queryLowercased == keyword) {
+							fullMatch.add(keywords[j].documentId)
+						}
+						else if (queryLowercased.contains(keyword) || keyword.contains(queryLowercased)) {
+							halfMatch.add(keywords[j].documentId)
 						}
 					}
 				}
 			}
 
 			for (i in featuredStickerSets.indices) {
-				if (featuredStickerSets[i] is TL_stickerSetFullCovered && (featuredStickerSets[i] as TL_stickerSetFullCovered).keywords != null) {
-					val keywords = (featuredStickerSets[i] as TL_stickerSetFullCovered).keywords
+				if (featuredStickerSets[i] is TLStickerSetFullCovered) {
+					val keywords = (featuredStickerSets[i] as TLStickerSetFullCovered).keywords
 
 					for (j in keywords.indices) {
 						for (k in keywords[j].keyword.indices) {
 							val keyword = keywords[j].keyword[k]
 
 							if (queryLowercased == keyword) {
-								fullMatch.add(keywords[j].document_id)
+								fullMatch.add(keywords[j].documentId)
 							}
 							else if (queryLowercased.contains(keyword) || keyword.contains(queryLowercased)) {
-								halfMatch.add(keywords[j].document_id)
+								halfMatch.add(keywords[j].documentId)
 							}
 						}
 					}
@@ -7775,7 +7884,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return
 		}
 
-		val emojiPacks: Array<List<TL_messages_stickerSet>?> = arrayOfNulls(2)
+		val emojiPacks: Array<List<TLMessagesStickerSet>?> = arrayOfNulls(2)
 		emojiPacks[0] = getStickerSets(TYPE_EMOJIPACKS)
 
 		val fillRunnable = Runnable {
@@ -7813,38 +7922,36 @@ class MediaDataController(num: Int) : BaseController(num) {
 					for (j in emojiPacks[0]!!.indices) {
 						val set = emojiPacks[0]!![j]
 
-						if (set.documents != null) {
-							for (d in set.documents.indices) {
-								val document = set.documents[d]
+						for (d in set.documents.indices) {
+							val document = set.documents[d] as? TLRPC.TLDocument
 
-								if (document?.attributes != null && !animatedEmoji.contains(document)) {
-									var attribute: TL_documentAttributeCustomEmoji? = null
+							if (document?.attributes != null && !animatedEmoji.contains(document)) {
+								var attribute: TLDocumentAttributeCustomEmoji? = null
 
-									for (k in document.attributes.indices) {
-										val attr = document.attributes[k]
+								for (k in document.attributes.indices) {
+									val attr = document.attributes[k]
 
-										if (attr is TL_documentAttributeCustomEmoji) {
-											attribute = attr
+									if (attr is TLDocumentAttributeCustomEmoji) {
+										attribute = attr
+										break
+									}
+								}
+
+								if (attribute != null && emoji == attribute.alt && (isPremium || attribute.free)) {
+									var duplicate = false
+
+									for (l in animatedEmoji.indices) {
+										if (animatedEmoji[l].id == document.id) {
+											duplicate = true
 											break
 										}
 									}
 
-									if (attribute != null && emoji == attribute.alt && (isPremium || attribute.free)) {
-										var duplicate = false
+									if (!duplicate) {
+										animatedEmoji.add(document)
 
-										for (l in animatedEmoji.indices) {
-											if (animatedEmoji[l].id == document.id) {
-												duplicate = true
-												break
-											}
-										}
-
-										if (!duplicate) {
-											animatedEmoji.add(document)
-
-											if (animatedEmoji.size >= maxAnimatedPerEmoji) {
-												break
-											}
+										if (animatedEmoji.size >= maxAnimatedPerEmoji) {
+											break
 										}
 									}
 								}
@@ -7860,22 +7967,22 @@ class MediaDataController(num: Int) : BaseController(num) {
 				if (animatedEmoji.size < maxAnimatedPerEmoji) {
 					for (j in featuredSets.indices) {
 						val set = featuredSets[j]
-						val documents = if (set is TL_stickerSetFullCovered) set.documents else set.covers
+						val documents = (set as? TLStickerSetFullCovered)?.documents ?: (set as? TLRPC.TLStickerSetMultiCovered)?.covers
 
 						if (documents == null) {
 							continue
 						}
 
 						for (d in documents.indices) {
-							val document = documents[d]
+							val document = documents[d] as? TLRPC.TLDocument
 
 							if (document?.attributes != null && !animatedEmoji.contains(document)) {
-								var attribute: TL_documentAttributeCustomEmoji? = null
+								var attribute: TLDocumentAttributeCustomEmoji? = null
 
 								for (k in document.attributes.indices) {
 									val attr = document.attributes[k]
 
-									if (attr is TL_documentAttributeCustomEmoji) {
+									if (attr is TLDocumentAttributeCustomEmoji) {
 										attribute = attr
 										break
 									}
@@ -7966,7 +8073,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val serializedData = SerializedData(Utilities.hexToBytes(value))
 
 			try {
-				val theme = TLRPC.Theme.TLdeserialize(serializedData, serializedData.readInt32(true), true)
+				val theme = TLTheme.deserialize(serializedData, serializedData.readInt32(true), true)
 				val fullTheme = EmojiThemes.createPreviewFullTheme(theme)
 
 				if (fullTheme.items.size >= 4) {
@@ -7990,20 +8097,20 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	fun generateEmojiPreviewThemes(emojiPreviewThemes: List<TL_theme>, currentAccount: Int) {
+	fun generateEmojiPreviewThemes(emojiPreviewThemes: List<TLTheme>, currentAccount: Int) {
 		val preferences = ApplicationLoader.applicationContext.getSharedPreferences("emojithemes_config_$currentAccount", Context.MODE_PRIVATE)
 
-		val editor = preferences.edit()
-		editor.putInt("count", emojiPreviewThemes.size)
+		preferences.edit {
+			putInt("count", emojiPreviewThemes.size)
 
-		for (i in emojiPreviewThemes.indices) {
-			val tlChatTheme = emojiPreviewThemes[i]
-			val data = SerializedData(tlChatTheme.objectSize)
-			tlChatTheme.serializeToStream(data)
-			editor.putString("theme_$i", Utilities.bytesToHex(data.toByteArray()))
+			for (i in emojiPreviewThemes.indices) {
+				val tlChatTheme = emojiPreviewThemes[i]
+				val data = SerializedData(tlChatTheme.objectSize)
+				tlChatTheme.serializeToStream(data)
+				putString("theme_$i", Utilities.bytesToHex(data.toByteArray()))
+			}
+
 		}
-
-		editor.commit()
 
 		if (emojiPreviewThemes.isNotEmpty()) {
 			val previewItems = mutableListOf<ChatThemeItem>()
@@ -8086,12 +8193,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 		val type = 0 // recent
 
 		if (emojiStatuses[type] != null) {
-			if (status is TL_emojiStatus) {
-				val documentId = status.document_id
+			if (status is TLEmojiStatus) {
+				val documentId = status.documentId
 				var i = 0
 
 				while (i < emojiStatuses[type]!!.size) {
-					if (emojiStatuses[type]!![i] is TL_emojiStatus && (emojiStatuses[type]!![i] as TL_emojiStatus).document_id == documentId) {
+					if (emojiStatuses[type]!![i] is TLEmojiStatus && (emojiStatuses[type]!![i] as TLEmojiStatus).documentId == documentId) {
 						emojiStatuses[type]!!.removeAt(i--)
 					}
 
@@ -8105,10 +8212,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 				emojiStatuses[type]!!.removeAt(emojiStatuses[type]!!.size - 1)
 			}
 
-			val statuses = TL_account_emojiStatuses()
+			val statuses = TLAccountEmojiStatuses()
 			// TODO: calc hash
 			statuses.hash = emojiStatusesHash[type]
-			statuses.statuses = emojiStatuses[type]
+			statuses.statuses.clear()
+			statuses.statuses.addAll(emojiStatuses[type] ?: emptyList())
 			updateEmojiStatuses(type, statuses)
 		}
 	}
@@ -8131,9 +8239,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 						val data = cursor.byteBufferValue(0)
 
 						if (data != null) {
-							val response = account_EmojiStatuses.TLdeserialize(data, data.readInt32(false), false)
+							val response = TLRPC.AccountEmojiStatuses.deserialize(data, data.readInt32(false), false)
 
-							if (response is TL_account_emojiStatuses) {
+							if (response is TLAccountEmojiStatuses) {
 								emojiStatusesHash[type] = response.hash
 								emojiStatuses[type] = response.statuses
 
@@ -8167,13 +8275,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 			val req: TLObject
 
 			if (type == 0) {
-				val recentReq = TL_account_getRecentEmojiStatuses()
+				val recentReq = TLAccountGetRecentEmojiStatuses()
 				recentReq.hash = emojiStatusesHash[type]
 
 				req = recentReq
 			}
 			else {
-				val defaultReq = TL_account_getDefaultEmojiStatuses()
+				val defaultReq = TLAccountGetDefaultEmojiStatuses()
 				defaultReq.hash = emojiStatusesHash[type]
 
 				req = defaultReq
@@ -8182,10 +8290,10 @@ class MediaDataController(num: Int) : BaseController(num) {
 			connectionsManager.sendRequest(req) { response, _ ->
 				emojiStatusesFetchDate[type] = System.currentTimeMillis() / 1000
 
-				if (response is TL_account_emojiStatusesNotModified) {
+				if (response is TLAccountEmojiStatusesNotModified) {
 					emojiStatusesFetching[type] = false
 				}
-				else if (response is TL_account_emojiStatuses) {
+				else if (response is TLAccountEmojiStatuses) {
 					emojiStatusesHash[type] = response.hash
 					emojiStatuses[type] = response.statuses
 
@@ -8199,7 +8307,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 	}
 
-	private fun updateEmojiStatuses(type: Int, response: TL_account_emojiStatuses) {
+	private fun updateEmojiStatuses(type: Int, response: TLAccountEmojiStatuses) {
 		messagesStorage.storageQueue.postRunnable {
 			try {
 				messagesStorage.database.executeFast("DELETE FROM emoji_statuses WHERE type = $type").stepThis().dispose()
@@ -8249,7 +8357,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					var isThread = false
 
 					if (key.startsWith("r_") || (key.startsWith("rt_").also { isThread = it })) {
-						val message = Message.TLdeserialize(serializedData, serializedData.readInt32(true), true)
+						val message = Message.deserialize(serializedData, serializedData.readInt32(true), true)
 
 						if (message != null) {
 							message.readAttachPath(serializedData, userConfig.clientUserId)
@@ -8257,8 +8365,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 							var threads = draftMessages[did]
 
 							if (threads == null) {
-								threads = SparseArray()
-								draftMessages.put(did, threads)
+								threads = SparseArray<Message>().also {
+									draftMessages.put(did, it)
+								}
 							}
 
 							val threadId = if (isThread) Utilities.parseInt(key.substring(key.lastIndexOf('_') + 1)) else 0
@@ -8267,14 +8376,15 @@ class MediaDataController(num: Int) : BaseController(num) {
 						}
 					}
 					else {
-						val draftMessage = DraftMessage.TLdeserialize(serializedData, serializedData.readInt32(true), true)
+						val draftMessage = DraftMessage.deserialize(serializedData, serializedData.readInt32(true), true)
 
 						if (draftMessage != null) {
 							var threads = drafts[did]
 
 							if (threads == null) {
-								threads = SparseArray()
-								drafts.put(did, threads)
+								threads = SparseArray<DraftMessage>().also {
+									drafts.put(did, it)
+								}
 							}
 
 							val threadId = if (key.startsWith("t_")) Utilities.parseInt(key.substring(key.lastIndexOf('_') + 1)) else 0
@@ -8301,9 +8411,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 		recentReactions.clear()
 
 		val recentReactionsPref = ApplicationLoader.applicationContext.getSharedPreferences("recent_reactions_$currentAccount", Context.MODE_PRIVATE)
-		recentReactionsPref.edit().clear().commit()
+		recentReactionsPref.edit { clear() }
 
-		val clearRecentReaction = TL_messages_clearRecentReactions()
+		val clearRecentReaction = TLMessagesClearRecentReactions()
 
 		connectionsManager.sendRequest(clearRecentReaction)
 	}
@@ -8325,13 +8435,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 		val loadFromServer = true
 
 		if (loadFromServer) {
-			val recentReactionsRequest = TL_messages_getRecentReactions()
+			val recentReactionsRequest = TLMessagesGetRecentReactions()
 			recentReactionsRequest.hash = recentReactionsPref.getLong("hash", 0)
 			recentReactionsRequest.limit = 50
 
 			connectionsManager.sendRequest(recentReactionsRequest) { response, error ->
 				if (error == null) {
-					if (response is TL_messages_reactions) {
+					if (response is TLMessagesReactions) {
 						recentReactions.clear()
 						recentReactions.addAll(response.reactions)
 
@@ -8340,13 +8450,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 				}
 			}
 
-			val topReactionsRequest = TL_messages_getTopReactions()
+			val topReactionsRequest = TLMessagesGetTopReactions()
 			topReactionsRequest.hash = topReactionsPref.getLong("hash", 0)
 			topReactionsRequest.limit = 100
 
 			connectionsManager.sendRequest(topReactionsRequest) { response, error ->
 				if (error == null) {
-					if (response is TL_messages_reactions) {
+					if (response is TLMessagesReactions) {
 						topReactions.clear()
 						topReactions.addAll(response.reactions)
 
@@ -8400,9 +8510,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 		const val TYPE_PREMIUM_STICKERS: Int = 7
 		const val TYPE_GREETINGS: Int = 3
 
-		fun canShowAttachMenuBotForTarget(bot: TL_attachMenuBot, target: String): Boolean {
-			for (peerType in bot.peer_types) {
-				if ((peerType is TL_attachMenuPeerTypeSameBotPM || peerType is TL_attachMenuPeerTypeBotPM) && (target == "bots") || (peerType is TL_attachMenuPeerTypeBroadcast && target == "channels") || (peerType is TL_attachMenuPeerTypeChat && target == "groups") || (peerType is TL_attachMenuPeerTypePM && target == "users")) {
+		fun canShowAttachMenuBotForTarget(bot: TLAttachMenuBot?, target: String): Boolean {
+			if (bot == null) {
+				return false
+			}
+
+			for (peerType in bot.peerTypes) {
+				if ((peerType is TLAttachMenuPeerTypeSameBotPM || peerType is TLAttachMenuPeerTypeBotPM) && (target == "bots") || (peerType is TLAttachMenuPeerTypeBroadcast && target == "channels") || (peerType is TLAttachMenuPeerTypeChat && target == "groups") || (peerType is TLAttachMenuPeerTypePM && target == "users")) {
 					return true
 				}
 			}
@@ -8410,12 +8524,16 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return false
 		}
 
-		fun canShowAttachMenuBot(bot: TL_attachMenuBot, peer: TLObject?): Boolean {
-			val user = peer as? User
+		fun canShowAttachMenuBot(bot: TLAttachMenuBot?, peer: TLObject?): Boolean {
+			if (bot == null) {
+				return false
+			}
+
+			val user = peer as? TLRPC.TLUser
 			val chat = peer as? Chat
 
-			for (peerType in bot.peer_types) {
-				if (peerType is TL_attachMenuPeerTypeSameBotPM && user != null && user.bot && user.id == bot.bot_id || peerType is TL_attachMenuPeerTypeBotPM && user != null && user.bot && user.id != bot.bot_id || peerType is TL_attachMenuPeerTypePM && user != null && !user.bot || peerType is TL_attachMenuPeerTypeChat && chat != null && !ChatObject.isChannelAndNotMegaGroup(chat) || peerType is TL_attachMenuPeerTypeBroadcast && chat != null && ChatObject.isChannelAndNotMegaGroup(chat)) {
+			for (peerType in bot.peerTypes) {
+				if (peerType is TLAttachMenuPeerTypeSameBotPM && user != null && user.bot && user.id == bot.botId || peerType is TLAttachMenuPeerTypeBotPM && user != null && user.bot && user.id != bot.botId || peerType is TLAttachMenuPeerTypePM && user != null && !user.bot || peerType is TLAttachMenuPeerTypeChat && chat != null && !ChatObject.isChannelAndNotMegaGroup(chat) || peerType is TLAttachMenuPeerTypeBroadcast && chat != null && ChatObject.isChannelAndNotMegaGroup(chat)) {
 					return true
 				}
 			}
@@ -8423,7 +8541,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return false
 		}
 
-		fun getAnimatedAttachMenuBotIcon(bot: TL_attachMenuBot): TL_attachMenuBotIcon? {
+		fun getAnimatedAttachMenuBotIcon(bot: TLAttachMenuBot): TLAttachMenuBotIcon? {
 			for (icon in bot.icons) {
 				if (icon.name == ATTACH_MENU_BOT_ANIMATED_ICON_KEY) {
 					return icon
@@ -8434,7 +8552,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 
 		@JvmStatic
-		fun getStaticAttachMenuBotIcon(bot: TL_attachMenuBot): TL_attachMenuBotIcon? {
+		fun getStaticAttachMenuBotIcon(bot: TLAttachMenuBot?): TLAttachMenuBotIcon? {
+			if (bot == null) {
+				return null
+			}
+
 			for (icon in bot.icons) {
 				if (icon.name == ATTACH_MENU_BOT_STATIC_ICON_KEY) {
 					return icon
@@ -8445,7 +8567,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 
 		@JvmStatic
-		fun getPlaceholderStaticAttachMenuBotIcon(bot: TL_attachMenuBot): TL_attachMenuBotIcon? {
+		fun getPlaceholderStaticAttachMenuBotIcon(bot: TLAttachMenuBot?): TLAttachMenuBotIcon? {
+			if (bot == null) {
+				return null
+			}
+
 			for (icon in bot.icons) {
 				if (icon.name == ATTACH_MENU_BOT_PLACEHOLDER_STATIC_KEY) {
 					return icon
@@ -8486,13 +8612,17 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		@JvmStatic
 		fun getStickerSetId(document: TLRPC.Document): Long {
-			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeSticker) {
-					if (attribute.stickerset is TL_inputStickerSetID) {
-						return attribute.stickerset.id
-					}
+			if (document is TLRPC.TLDocument) {
+				for (attribute in document.attributes) {
+					if (attribute is TLDocumentAttributeSticker) {
+						val stickerset = attribute.stickerset
 
-					break
+						if (stickerset is TLInputStickerSetID) {
+							return stickerset.id
+						}
+
+						break
+					}
 				}
 			}
 
@@ -8501,9 +8631,13 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		@JvmStatic
 		fun getInputStickerSet(document: TLRPC.Document): InputStickerSet? {
+			if (document !is TLRPC.TLDocument) {
+				return null
+			}
+
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeSticker) {
-					if (attribute.stickerset is TL_inputStickerSetEmpty) {
+				if (attribute is TLDocumentAttributeSticker) {
+					if (attribute.stickerset is TLInputStickerSetEmpty) {
 						return null
 					}
 
@@ -8514,11 +8648,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 			return null
 		}
 
-		private fun calcStickersHash(sets: List<TL_messages_stickerSet>): Long {
+		private fun calcStickersHash(sets: List<TLMessagesStickerSet>): Long {
 			var acc: Long = 0
 
 			for (a in sets.indices) {
-				val set = sets[a].set
+				val set = sets[a].set ?: continue
 
 				if (set.archived) {
 					continue
@@ -8548,11 +8682,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 				return TEXT_ONLY
 			}
 
-			if (MessageObject.getMedia(message) is TL_messageMediaPhoto) {
+			if (MessageObject.getMedia(message) is TLMessageMediaPhoto) {
 				return MEDIA_PHOTOVIDEO
 			}
-			else if (MessageObject.getMedia(message) is TL_messageMediaDocument) {
-				val document = MessageObject.getMedia(message)?.document ?: return -1
+			else if (MessageObject.getMedia(message) is TLMessageMediaDocument) {
+				val document = MessageObject.getMedia(message)?.document as? TLRPC.TLDocument ?: return -1
 				var isAnimated = false
 				var isVideo = false
 				var isVoice = false
@@ -8561,21 +8695,21 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 				for (attribute in document.attributes) {
 					when (attribute) {
-						is TL_documentAttributeVideo -> {
-							isVoice = attribute.round_message
-							isVideo = !attribute.round_message
+						is TLDocumentAttributeVideo -> {
+							isVoice = attribute.roundMessage
+							isVideo = !attribute.roundMessage
 						}
 
-						is TL_documentAttributeAnimated -> {
+						is TLDocumentAttributeAnimated -> {
 							isAnimated = true
 						}
 
-						is TL_documentAttributeAudio -> {
+						is TLDocumentAttributeAudio -> {
 							isVoice = attribute.voice
 							isMusic = !attribute.voice
 						}
 
-						is TL_documentAttributeSticker -> {
+						is TLDocumentAttributeSticker -> {
 							isSticker = true
 						}
 					}
@@ -8600,10 +8734,14 @@ class MediaDataController(num: Int) : BaseController(num) {
 					MEDIA_FILE
 				}
 			}
-			else if (message.entities.isNotEmpty()) {
-				for (entity in message.entities) {
-					if (entity is TL_messageEntityUrl || entity is TL_messageEntityTextUrl || entity is TL_messageEntityEmail) {
-						return MEDIA_URL
+			else {
+				val entities = message.entities
+
+				if (!entities.isNullOrEmpty()) {
+					for (entity in entities) {
+						if (entity is TLMessageEntityUrl || entity is TLMessageEntityTextUrl || entity is TLMessageEntityEmail) {
+							return MEDIA_URL
+						}
 					}
 				}
 			}
@@ -8613,10 +8751,11 @@ class MediaDataController(num: Int) : BaseController(num) {
 
 		@JvmStatic
 		fun canAddMessageToMedia(message: Message?): Boolean {
-			return if (message is TL_message_secret && (MessageObject.getMedia(message) is TL_messageMediaPhoto || MessageObject.isVideoMessage(message) || MessageObject.isGifMessage(message)) && MessageObject.getMedia(message)!!.ttl_seconds != 0 && MessageObject.getMedia(message)!!.ttl_seconds <= 60) {
-				false
-			}
-			else if (message !is TL_message_secret && message is TL_message && (MessageObject.getMedia(message) is TL_messageMediaPhoto || MessageObject.getMedia(message) is TL_messageMediaDocument) && MessageObject.getMedia(message)!!.ttl_seconds != 0) {
+//			return if (message is TLMessageSecret && (MessageObject.getMedia(message) is TLMessageMediaPhoto || MessageObject.isVideoMessage(message) || MessageObject.isGifMessage(message)) && MessageObject.getMedia(message)!!.ttlSeconds != 0 && MessageObject.getMedia(message)!!.ttlSeconds <= 60) {
+//				false
+//			}
+//			else
+			return if (/*message !is TLMessageSecret && */ message is TLMessage && (MessageObject.getMedia(message) is TLMessageMediaPhoto || MessageObject.getMedia(message) is TLMessageMediaDocument) && MessageObject.getMedia(message)!!.ttlSeconds != 0) {
 				false
 			}
 			else {
@@ -8646,7 +8785,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 			while (a < messages.size) {
 				val message = messages[a]
 
-				if (message is TL_messageEmpty || message.action is TL_messageActionHistoryClear) {
+				if (message is TLMessageEmpty || message.action is TLMessageActionHistoryClear) {
 					messages.removeAt(a)
 					a--
 				}
@@ -8810,7 +8949,9 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 
 		fun addTextStyleRuns(msg: DraftMessage?, text: Spannable, allowedFlags: Int) {
-			addTextStyleRuns(msg?.entities, msg?.message, text, allowedFlags)
+			if (msg is TLDraftMessage) {
+				addTextStyleRuns(msg.entities, msg.message, text, allowedFlags)
+			}
 		}
 
 		fun addTextStyleRuns(msg: MessageObject?, text: Spannable, allowedFlags: Int) {
@@ -8848,18 +8989,12 @@ class MediaDataController(num: Int) : BaseController(num) {
 			for (i in entities.indices) {
 				val messageEntity = entities[i]
 
-				if (messageEntity is TL_messageEntityCustomEmoji) {
+				if (messageEntity is TLMessageEntityCustomEmoji) {
 					val start = messageEntity.offset
 					val end = messageEntity.offset + messageEntity.length
 
 					if (start < end && end <= messageText.length) {
-						val span = if (messageEntity.document != null) {
-							AnimatedEmojiSpan(messageEntity.document!!, fontMetricsInt)
-						}
-						else {
-							AnimatedEmojiSpan(messageEntity.documentId, fontMetricsInt)
-						}
-
+						val span = AnimatedEmojiSpan(messageEntity.documentId, fontMetricsInt)
 						messageText.setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 					}
 				}
@@ -8895,7 +9030,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					entity.length = text.length - entity.offset
 				}
 
-				if (entity is TL_messageEntityCustomEmoji) {
+				if (entity is TLMessageEntityCustomEmoji) {
 					a++
 					continue
 				}
@@ -8905,40 +9040,40 @@ class MediaDataController(num: Int) : BaseController(num) {
 				newRun.end = newRun.start + entity.length
 
 				when (entity) {
-					is TL_messageEntitySpoiler -> {
+					is TLMessageEntitySpoiler -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_SPOILER
 					}
 
-					is TL_messageEntityStrike -> {
+					is TLMessageEntityStrike -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_STRIKE
 					}
 
-					is TL_messageEntityUnderline -> {
+					is TLMessageEntityUnderline -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_UNDERLINE
 					}
 
-					is TL_messageEntityBlockquote -> {
+					is TLMessageEntityBlockquote -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_QUOTE
 					}
 
-					is TL_messageEntityBold -> {
+					is TLMessageEntityBold -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_BOLD
 					}
 
-					is TL_messageEntityItalic -> {
+					is TLMessageEntityItalic -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_ITALIC
 					}
 
-					is TL_messageEntityCode, is TL_messageEntityPre -> {
+					is TLMessageEntityCode, is TLMessageEntityPre -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_MONO
 					}
 
-					is TL_messageEntityMentionName -> {
+					is TLMessageEntityMentionName -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_MENTION
 						newRun.urlEntity = entity
 					}
 
-					is TL_inputMessageEntityMentionName -> {
+					is TLInputMessageEntityMentionName -> {
 						newRun.styleFlags = TextStyleSpan.FLAG_STYLE_MENTION
 						newRun.urlEntity = entity
 					}
@@ -9037,18 +9172,18 @@ class MediaDataController(num: Int) : BaseController(num) {
 		}
 
 		fun saveReactionsToPref(preferences: SharedPreferences, hash: Long, `object`: List<TLObject>) {
-			val editor = preferences.edit()
-			editor.putInt("count", `object`.size)
-			editor.putLong("hash", hash)
+			preferences.edit {
+				putInt("count", `object`.size)
+				putLong("hash", hash)
 
-			for (i in `object`.indices) {
-				val tlObject = `object`[i]
-				val data = SerializedData(tlObject.objectSize)
-				tlObject.serializeToStream(data)
-				editor.putString("object_$i", Utilities.bytesToHex(data.toByteArray()))
+				for (i in `object`.indices) {
+					val tlObject = `object`[i]
+					val data = SerializedData(tlObject.objectSize)
+					tlObject.serializeToStream(data)
+					putString("object_$i", Utilities.bytesToHex(data.toByteArray()))
+				}
+
 			}
-
-			editor.commit()
 		}
 
 		fun loadReactionsFromPref(preferences: SharedPreferences): List<Reaction> {
@@ -9061,7 +9196,7 @@ class MediaDataController(num: Int) : BaseController(num) {
 					val serializedData = SerializedData(Utilities.hexToBytes(value))
 
 					try {
-						val reaction = Reaction.TLdeserialize(serializedData, serializedData.readInt32(true), true)
+						val reaction = Reaction.deserialize(serializedData, serializedData.readInt32(true), true)
 
 						if (reaction != null) {
 							objects.add(reaction)

@@ -48,9 +48,17 @@ class TransactionViewHolder(private val binding: WalletTransactionViewBinding) :
 				var shouldFillPeer = true
 				val peerType = PeerType.fromValue(t.peerType)
 
+				println(t.peerType)
+
 				when (t.paymentMethod) {
 					"apple" -> {
 						binding.purchaseNameLabel.text = binding.root.context.getString(R.string.apple_pay)
+						avatarImageView.setImageResource(R.drawable.wallet_transaction_icon_bank_card)
+						shouldFillPeer = false
+					}
+
+					"google" -> {
+						binding.purchaseNameLabel.text = binding.root.context.getString(R.string.google)
 						avatarImageView.setImageResource(R.drawable.wallet_transaction_icon_bank_card)
 						shouldFillPeer = false
 					}
@@ -76,7 +84,8 @@ class TransactionViewHolder(private val binding: WalletTransactionViewBinding) :
 					"ello_card", "ello_earn_card" -> {
 						if (amount > 0) {
 							binding.purchaseNameLabel.text = binding.root.context.getString(R.string.transfer)
-						} else {
+						}
+						else {
 							binding.purchaseNameLabel.text = binding.root.context.getString(R.string.main_wallet)
 						}
 						avatarImageView.setImageResource(R.drawable.ello_card_transaction_image)
@@ -176,9 +185,9 @@ class TransactionViewHolder(private val binding: WalletTransactionViewBinding) :
 					}
 
 					PeerType.AI_TEXT_PACK -> {
-						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.ai_chat_bot)
-						binding.purchaseNameLabel.text = binding.root.context.getString(R.string.ai_text)
-						avatarImageView.setImageResource(R.drawable.ic_ai_text)
+						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.individual_prompts)
+						binding.purchaseNameLabel.text = binding.root.context?.getString(R.string.ai_buy_plans, binding.root.context?.getString(R.string.ai_buy_text))
+						avatarImageView.setImageResource(R.drawable.icon_ai_chat)
 
 						if (amount > 0) {
 							binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -189,8 +198,8 @@ class TransactionViewHolder(private val binding: WalletTransactionViewBinding) :
 					}
 
 					PeerType.AI_IMAGE_PACK -> {
-						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.ai_chat_bot)
-						binding.purchaseNameLabel.text = binding.root.context.getString(R.string.ai_image)
+						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.individual_prompts)
+						binding.purchaseNameLabel.text = binding.root.context?.getString(R.string.ai_buy_plans, binding.root.context?.getString(R.string.ai_buy_image))
 						avatarImageView.setImageResource(R.drawable.ic_ai_image)
 
 						if (amount > 0) {
@@ -202,10 +211,10 @@ class TransactionViewHolder(private val binding: WalletTransactionViewBinding) :
 					}
 
 					PeerType.AI_IMAGE_TEXT_PACK -> {
-						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.ai_chat_bot)
+						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.individual_prompts)
 						binding.purchaseNameLabel.text = binding.root.context.getString(R.string.ai_buy_text_pictures)
 
-						avatarImageView.setImageResource(R.drawable.ic_ai_image_text)
+						avatarImageView.setImageResource(R.drawable.icon_ai_double)
 
 						if (amount > 0) {
 							binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -216,7 +225,9 @@ class TransactionViewHolder(private val binding: WalletTransactionViewBinding) :
 					}
 
 					PeerType.AI_TEXT_SUBSCRIPTION -> {
-						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.ai_text_subscription)
+						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.unlimited_monthly)
+						binding.purchaseNameLabel.text = binding.root.context?.getString(R.string.ai_buy_plans, binding.root.context?.getString(R.string.ai_buy_text))
+						avatarImageView.setImageResource(R.drawable.icon_ai_chat)
 
 						if (amount > 0) {
 							binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
@@ -227,7 +238,22 @@ class TransactionViewHolder(private val binding: WalletTransactionViewBinding) :
 					}
 
 					PeerType.AI_IMAGE_SUBSCRIPTION -> {
-						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.ai_image_subscription)
+						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.unlimited_monthly)
+						binding.purchaseNameLabel.text = binding.root.context?.getString(R.string.ai_buy_plans, binding.root.context?.getString(R.string.ai_buy_image))
+						avatarImageView.setImageResource(R.drawable.ic_ai_image)
+
+						if (amount > 0) {
+							binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)
+						}
+						else {
+							binding.transactionTypeImage.setImageResource(R.drawable.ic_ai_bot_outgoing)
+						}
+					}
+
+					PeerType.AI_IMAGE_TEXT_SUBSCRIPTION -> {
+						binding.purchaseTypeLabel.text = binding.root.context.getString(R.string.unlimited_monthly)
+						binding.purchaseNameLabel.text = binding.root.context.getString(R.string.ai_buy_chat_picture)
+						avatarImageView.setImageResource(R.drawable.icon_ai_double)
 
 						if (amount > 0) {
 							binding.transactionTypeImage.setImageResource(R.drawable.ai_bot_incoming)

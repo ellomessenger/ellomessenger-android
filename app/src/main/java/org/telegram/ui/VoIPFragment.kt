@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -79,6 +79,7 @@ import org.telegram.messenger.voip.Instance
 import org.telegram.messenger.voip.StateListener
 import org.telegram.messenger.voip.VideoCapturerDevice
 import org.telegram.messenger.voip.VoIPService
+import org.telegram.tgnet.photo
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.DarkAlertDialog
 import org.telegram.ui.ActionBar.Theme
@@ -95,6 +96,7 @@ import org.telegram.ui.Components.voip.AcceptDeclineView
 import org.telegram.ui.Components.voip.PrivateVideoPreviewDialog
 import org.telegram.ui.Components.voip.VoIPButtonsLayout
 import org.telegram.ui.Components.voip.VoIPFloatingLayout
+import org.telegram.ui.Components.voip.VoIPHelper
 import org.telegram.ui.Components.voip.VoIPHelper.permissionDenied
 import org.telegram.ui.Components.voip.VoIPNotificationsLayout
 import org.telegram.ui.Components.voip.VoIPOverlayBackground
@@ -113,6 +115,7 @@ import java.io.ByteArrayOutputStream
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import androidx.core.graphics.toColorInt
 
 class VoIPFragment(private val currentAccount: Int) : StateListener, NotificationCenterDelegate {
 	private var acceptDeclineView: AcceptDeclineView? = null
@@ -761,7 +764,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 		callingUserTitle = TextView(context)
 		callingUserTitle?.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24f)
-		callingUserTitle?.text = ContactsController.formatName(callingUser?.first_name, callingUser?.last_name)
+		callingUserTitle?.text = ContactsController.formatName(callingUser?.firstName, callingUser?.lastName)
 		callingUserTitle?.setShadowLayer(AndroidUtilities.dp(3f).toFloat(), 0f, AndroidUtilities.dp(0.6666667f).toFloat(), 0x4C000000)
 		callingUserTitle?.setTextColor(Color.WHITE)
 		callingUserTitle?.gravity = Gravity.CENTER_HORIZONTAL
@@ -825,7 +828,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 				}
 				else {
 					if (activity?.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-						activity?.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 101)
+						activity?.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), VoIPHelper.REQUEST_CODE_RECORD_AUDIO)
 					}
 					else {
 						VoIPService.sharedInstance?.acceptIncomingCall()
@@ -1431,7 +1434,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 				if (!TextUtils.equals(lastError, Instance.ERROR_UNKNOWN)) {
 					if (TextUtils.equals(lastError, Instance.ERROR_INCOMPATIBLE)) {
-						val name = ContactsController.formatName(callingUser?.first_name, callingUser?.last_name)
+						val name = ContactsController.formatName(callingUser?.firstName, callingUser?.lastName)
 						val message = LocaleController.formatString("VoipPeerIncompatible", R.string.VoipPeerIncompatible, name)
 						showErrorDialog(AndroidUtilities.replaceTags(message))
 					}
@@ -1481,7 +1484,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 						}
 					}
 					else if (TextUtils.equals(lastError, Instance.ERROR_PRIVACY)) {
-						val name = ContactsController.formatName(callingUser?.first_name, callingUser?.last_name)
+						val name = ContactsController.formatName(callingUser?.firstName, callingUser?.lastName)
 						val message = LocaleController.formatString("CallNotAvailable", R.string.CallNotAvailable, name)
 						showErrorDialog(AndroidUtilities.replaceTags(message))
 					}
@@ -1697,8 +1700,8 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 
 		val floatingViewsOffset = notificationsLayout?.childrenHeight ?: 0
 
-		callingUserMiniFloatingLayout?.setBottomOffset(floatingViewsOffset, animated)
-		currentUserCameraFloatingLayout?.setBottomOffset(floatingViewsOffset, animated)
+		callingUserMiniFloatingLayout?.setBottomOffset(floatingViewsOffset)
+		currentUserCameraFloatingLayout?.setBottomOffset(floatingViewsOffset)
 		currentUserCameraFloatingLayout?.setUiVisible(uiVisible)
 		callingUserMiniFloatingLayout?.setUiVisible(uiVisible)
 
@@ -2107,7 +2110,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 			setVideoAction(bottomButtons[1], service, animated)
 			setMicrophoneAction(bottomButtons[2], service, animated)
 
-			bottomButtons[3]?.setData(R.drawable.calls_decline, Color.WHITE, Color.parseColor("#EF4062"), service.getString(R.string.VoipEndCall), false, animated)
+			bottomButtons[3]?.setData(R.drawable.calls_decline, Color.WHITE, "#EF4062".toColorInt(), service.getString(R.string.VoipEndCall), false, animated)
 
 			bottomButtons[3]?.setOnClickListener {
 				VoIPService.sharedInstance?.hangUp()
@@ -2175,11 +2178,11 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 				bottomButton?.setData(R.drawable.calls_video, Color.BLACK, Color.WHITE, service.getString(R.string.VoipStartVideo), true, animated)
 			}
 
-			bottomButton?.setCrossOffset(-AndroidUtilities.dpf2(3.5f))
+			bottomButton?.setCrossOffset(-AndroidUtilities.dpf2(6.5f))
 
 			bottomButton?.setOnClickListener {
 				if (activity?.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-					activity?.requestPermissions(arrayOf(Manifest.permission.CAMERA), 102)
+					activity?.requestPermissions(arrayOf(Manifest.permission.CAMERA), VoIPHelper.REQUEST_CODE_CAMERA)
 				}
 				else {
 					toggleCameraInput()
@@ -2355,7 +2358,7 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 	}
 
 	private fun onRequestPermissionsResultInternal(requestCode: Int, grantResults: IntArray) {
-		if (requestCode == 101) {
+		if (requestCode == VoIPHelper.REQUEST_CODE_RECORD_AUDIO) {
 			if (VoIPService.sharedInstance == null) {
 				windowView?.finish()
 				return
@@ -2377,14 +2380,19 @@ class VoIPFragment(private val currentAccount: Int) : StateListener, Notificatio
 			}
 		}
 
-		if (requestCode == 102) {
+		if (requestCode == VoIPHelper.REQUEST_CODE_CAMERA) {
 			if (VoIPService.sharedInstance == null) {
 				windowView?.finish()
 				return
 			}
 
-			if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-				toggleCameraInput()
+			if (grantResults.isNotEmpty()) {
+				if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+					toggleCameraInput()
+				}
+				else if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
+					permissionDenied(activity, null, requestCode)
+				}
 			}
 		}
 	}

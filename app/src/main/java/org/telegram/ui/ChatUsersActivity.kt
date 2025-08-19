@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -34,6 +34,7 @@ import androidx.collection.LongSparseArray
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.children
 import androidx.core.view.doOnPreDraw
+import androidx.core.view.isNotEmpty
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -51,36 +52,46 @@ import org.telegram.messenger.Utilities
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.ChannelParticipant
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.ChatParticipant
-import org.telegram.tgnet.TLRPC.TL_channelFull
-import org.telegram.tgnet.TLRPC.TL_channelParticipant
-import org.telegram.tgnet.TLRPC.TL_channelParticipantAdmin
-import org.telegram.tgnet.TLRPC.TL_channelParticipantBanned
-import org.telegram.tgnet.TLRPC.TL_channelParticipantCreator
-import org.telegram.tgnet.TLRPC.TL_channelParticipantSelf
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsAdmins
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsBanned
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsBots
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsContacts
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsKicked
-import org.telegram.tgnet.TLRPC.TL_channelParticipantsRecent
-import org.telegram.tgnet.TLRPC.TL_channels_getParticipants
-import org.telegram.tgnet.TLRPC.TL_chatAdminRights
-import org.telegram.tgnet.TLRPC.TL_chatParticipant
-import org.telegram.tgnet.TLRPC.TL_chatParticipantAdmin
-import org.telegram.tgnet.TLRPC.TL_chatParticipantCreator
-import org.telegram.tgnet.TLRPC.TL_groupCallParticipant
-import org.telegram.tgnet.TLRPC.TL_peerChannel
-import org.telegram.tgnet.TLRPC.TL_peerUser
+import org.telegram.tgnet.TLRPC.TLChannelParticipant
+import org.telegram.tgnet.TLRPC.TLChannelParticipantAdmin
+import org.telegram.tgnet.TLRPC.TLChannelParticipantBanned
+import org.telegram.tgnet.TLRPC.TLChannelParticipantCreator
+import org.telegram.tgnet.TLRPC.TLChannelParticipantSelf
+import org.telegram.tgnet.TLRPC.TLChannelParticipantsAdmins
+import org.telegram.tgnet.TLRPC.TLChannelParticipantsBanned
+import org.telegram.tgnet.TLRPC.TLChannelParticipantsBots
+import org.telegram.tgnet.TLRPC.TLChannelParticipantsContacts
+import org.telegram.tgnet.TLRPC.TLChannelParticipantsKicked
+import org.telegram.tgnet.TLRPC.TLChannelParticipantsRecent
+import org.telegram.tgnet.TLRPC.TLChannelsChannelParticipants
+import org.telegram.tgnet.TLRPC.TLChannelsEditBanned
+import org.telegram.tgnet.TLRPC.TLChannelsGetParticipants
+import org.telegram.tgnet.TLRPC.TLChatAdminRights
+import org.telegram.tgnet.TLRPC.TLChatBannedRights
+import org.telegram.tgnet.TLRPC.TLChatParticipant
+import org.telegram.tgnet.TLRPC.TLChatParticipantAdmin
+import org.telegram.tgnet.TLRPC.TLChatParticipantCreator
+import org.telegram.tgnet.TLRPC.TLGroupCallParticipant
+import org.telegram.tgnet.TLRPC.TLPeerChannel
+import org.telegram.tgnet.TLRPC.TLPeerUser
 import org.telegram.tgnet.TLRPC.Updates
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
-import org.telegram.tgnet.tlrpc.TL_channels_editBanned
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.USER_STATUS_RECENTLY
+import org.telegram.tgnet.bannedCount
+import org.telegram.tgnet.bannedRights
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.canEdit
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.isSelf
+import org.telegram.tgnet.kickedBy
+import org.telegram.tgnet.participants
+import org.telegram.tgnet.promotedBy
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -127,7 +138,7 @@ import kotlin.math.min
 class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDelegate {
 	private val isChannel: Boolean
 	private val initialBannedRights: String
-	private val defaultBannedRights = TL_chatBannedRights()
+	private val defaultBannedRights = TLChatBannedRights()
 	private val participants = ArrayList<TLObject>()
 	private val bots = ArrayList<TLObject>()
 	private val contacts = ArrayList<TLObject>()
@@ -152,7 +163,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 	private var chatId: Long
 	private var loadingUsers = false
 	private var firstLoaded = false
-	private var ignoredUsers: LongSparseArray<TL_groupCallParticipant>? = null
+	private var ignoredUsers: LongSparseArray<TLGroupCallParticipant>? = null
 	private var permissionsSectionRow = 0
 	private var sendMessagesRow = 0
 	private var sendMediaRow = 0
@@ -208,19 +219,19 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		currentChat = messagesController.getChat(chatId)
 
 		currentChat?.let {
-			if (it.default_banned_rights != null) {
-				defaultBannedRights.view_messages = it.default_banned_rights.view_messages
-				defaultBannedRights.send_stickers = it.default_banned_rights.send_stickers
-				defaultBannedRights.send_media = it.default_banned_rights.send_media
-				defaultBannedRights.embed_links = it.default_banned_rights.embed_links
-				defaultBannedRights.send_messages = it.default_banned_rights.send_messages
-				defaultBannedRights.send_games = it.default_banned_rights.send_games
-				defaultBannedRights.send_inline = it.default_banned_rights.send_inline
-				defaultBannedRights.send_gifs = it.default_banned_rights.send_gifs
-				defaultBannedRights.pin_messages = it.default_banned_rights.pin_messages
-				defaultBannedRights.send_polls = it.default_banned_rights.send_polls
-				defaultBannedRights.invite_users = it.default_banned_rights.invite_users
-				defaultBannedRights.change_info = it.default_banned_rights.change_info
+			if (it.defaultBannedRights != null) {
+				defaultBannedRights.viewMessages = it.defaultBannedRights!!.viewMessages
+				defaultBannedRights.sendStickers = it.defaultBannedRights!!.sendStickers
+				defaultBannedRights.sendMedia = it.defaultBannedRights!!.sendMedia
+				defaultBannedRights.embedLinks = it.defaultBannedRights!!.embedLinks
+				defaultBannedRights.sendMessages = it.defaultBannedRights!!.sendMessages
+				defaultBannedRights.sendGames = it.defaultBannedRights!!.sendGames
+				defaultBannedRights.sendInline = it.defaultBannedRights!!.sendInline
+				defaultBannedRights.sendGifs = it.defaultBannedRights!!.sendGifs
+				defaultBannedRights.pinMessages = it.defaultBannedRights!!.pinMessages
+				defaultBannedRights.sendPolls = it.defaultBannedRights!!.sendPolls
+				defaultBannedRights.inviteUsers = it.defaultBannedRights!!.inviteUsers
+				defaultBannedRights.changeInfo = it.defaultBannedRights!!.changeInfo
 			}
 		}
 
@@ -285,7 +296,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			changeInfoRow = rowCount++
 
 			if (ChatObject.isChannel(currentChat) && currentChat.creator && currentChat.megagroup && !currentChat.gigagroup) {
-				val count = max(currentChat.participants_count, info?.participants_count ?: 0)
+				val count = max(currentChat.participantsCount, info?.participantsCount ?: 0)
 
 				if (count >= messagesController.maxMegagroupCount - 1000) {
 					participantsDivider2Row = rowCount++
@@ -322,7 +333,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			}
 
 			if (loadingUsers && !firstLoaded) {
-				if ((info?.banned_count ?: 0) > 0) {
+				if ((info?.bannedCount ?: 0) > 0) {
 					loadingUserCellRow = rowCount++
 				}
 			}
@@ -343,7 +354,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 				addNewRow = rowCount++
 
-				if (participants.isNotEmpty() || loadingUsers && !firstLoaded && (info?.kicked_count ?: 0) > 0) {
+				if (participants.isNotEmpty() || loadingUsers && !firstLoaded && (info?.kickedCount ?: 0) > 0) {
 					participantsInfoRow = rowCount++
 				}
 			}
@@ -374,7 +385,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			}
 		}
 		else if (type == TYPE_ADMIN) {
-			if (ChatObject.isChannel(currentChat) && currentChat.megagroup && !currentChat.gigagroup && (info == null || (info?.participants_count ?: 0) <= 200 || !isChannel && info?.can_set_stickers == true)) {
+			if (ChatObject.isChannel(currentChat) && currentChat.megagroup && !currentChat.gigagroup && (info == null || (info?.participantsCount ?: 0) <= 200 || !isChannel && info?.canSetStickers == true)) {
 				// MARK: uncomment to enable admin log screen
 				// recentActionsRow = rowCount++
 				// addNewSectionRow = rowCount++
@@ -404,7 +415,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 			if (selectType == SELECT_TYPE_MEMBERS && ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_INVITE)) {
 				// MARK: remove this check to enable invite links for paid channels and courses
-				if (!ChatObject.isPaidChannel(currentChat) && !ChatObject.isOnlineCourse(currentChat) && !ChatObject.isSubscriptionChannel(currentChat)) {
+				if (!ChatObject.isPaidChannel(currentChat) && !ChatObject.isMasterclass(currentChat) && !ChatObject.isSubscriptionChannel(currentChat)) {
 					addNew2Row = rowCount++
 				}
 			}
@@ -730,22 +741,24 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 									override fun didKickParticipant(userId: Long) {
 										if (participantsMap[userId] == null) {
 											val diffCallback = saveState()
-											val chatParticipant = TL_channelParticipantBanned()
+											val chatParticipant = TLChannelParticipantBanned()
 
 											if (userId > 0) {
-												chatParticipant.peer = TL_peerUser()
-												chatParticipant.peer.user_id = userId
+												chatParticipant.peer = TLPeerUser().also {
+													it.userId = userId
+												}
 											}
 											else {
-												chatParticipant.peer = TL_peerChannel()
-												chatParticipant.peer.channel_id = -userId
+												chatParticipant.peer = TLPeerChannel().also {
+													it.channelId = -userId
+												}
 											}
 
 											chatParticipant.date = connectionsManager.currentTime
-											chatParticipant.kicked_by = accountInstance.userConfig.clientUserId
+											chatParticipant.kickedBy = accountInstance.userConfig.clientUserId
 
 											info?.let {
-												it.kicked_count++
+												it.kickedCount++
 											}
 
 											participants.add(chatParticipant)
@@ -791,7 +804,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 										if (user != null) {
 											AndroidUtilities.runOnUIThread({
 												if (BulletinFactory.canShowBulletin(this@ChatUsersActivity)) {
-													BulletinFactory.createPromoteToAdminBulletin(this@ChatUsersActivity, user.first_name).show()
+													BulletinFactory.createPromoteToAdminBulletin(this@ChatUsersActivity, user.firstName).show()
 												}
 											}, 200)
 										}
@@ -802,11 +815,10 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 										if (participantsMap[uid] == null) {
 											val diffCallback = saveState()
 
-											val chatParticipant = TL_channelParticipantAdmin()
-											chatParticipant.peer = TL_peerUser()
-											chatParticipant.peer.user_id = user.id
+											val chatParticipant = TLChannelParticipantAdmin()
+											chatParticipant.userId = user.id
 											chatParticipant.date = connectionsManager.currentTime
-											chatParticipant.promoted_by = accountInstance.userConfig.clientUserId
+											chatParticipant.promotedBy = accountInstance.userConfig.clientUserId
 
 											participants.add(chatParticipant)
 											participantsMap.put(user.id, chatParticipant)
@@ -890,10 +902,9 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 												if (map[user.id] == null) {
 													if (ChatObject.isChannel(currentChat)) {
-														val channelParticipant1 = TL_channelParticipant()
-														channelParticipant1.inviter_id = userConfig.getClientUserId()
-														channelParticipant1.peer = TL_peerUser()
-														channelParticipant1.peer.user_id = user.id
+														val channelParticipant1 = TLChannelParticipant()
+														channelParticipant1.inviterId = userConfig.getClientUserId()
+														channelParticipant1.userId = user.id
 														channelParticipant1.date = connectionsManager.currentTime
 
 														array.add(0, channelParticipant1)
@@ -901,9 +912,9 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 														map.put(user.id, channelParticipant1)
 													}
 													else {
-														val participant: ChatParticipant = TL_chatParticipant()
-														participant.user_id = user.id
-														participant.inviter_id = userConfig.getClientUserId()
+														val participant = TLChatParticipant()
+														participant.userId = user.id
+														participant.inviterId = userConfig.getClientUserId()
 
 														array.add(0, participant)
 
@@ -1007,7 +1018,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					addNew2Row -> {
 						if (info != null) {
 							val fragment = ManageLinksActivity(chatId, 0, 0)
-							fragment.setInfo(info, info?.exported_invite)
+							fragment.setInfo(info, info?.exportedInvite)
 							presentFragment(fragment)
 						}
 
@@ -1035,45 +1046,45 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						checkCell.isChecked = !checkCell.isChecked
 
 						if (position == changeInfoRow) {
-							defaultBannedRights.change_info = !defaultBannedRights.change_info
+							defaultBannedRights.changeInfo = !defaultBannedRights.changeInfo
 						}
 						else if (position == addUsersRow) {
-							defaultBannedRights.invite_users = !defaultBannedRights.invite_users
+							defaultBannedRights.inviteUsers = !defaultBannedRights.inviteUsers
 						}
 						else if (position == pinMessagesRow) {
-							defaultBannedRights.pin_messages = !defaultBannedRights.pin_messages
+							defaultBannedRights.pinMessages = !defaultBannedRights.pinMessages
 						}
 						else {
 							val disabled = !checkCell.isChecked
 
 							when (position) {
 								sendMessagesRow -> {
-									defaultBannedRights.send_messages = !defaultBannedRights.send_messages
+									defaultBannedRights.sendMessages = !defaultBannedRights.sendMessages
 								}
 
 								sendMediaRow -> {
-									defaultBannedRights.send_media = !defaultBannedRights.send_media
+									defaultBannedRights.sendMedia = !defaultBannedRights.sendMedia
 								}
 
 								sendStickersRow -> {
-									defaultBannedRights.send_inline = !defaultBannedRights.send_stickers
-									defaultBannedRights.send_gifs = defaultBannedRights.send_inline
-									defaultBannedRights.send_games = defaultBannedRights.send_gifs
-									defaultBannedRights.send_stickers = defaultBannedRights.send_games
+									defaultBannedRights.sendInline = !defaultBannedRights.sendStickers
+									defaultBannedRights.sendGifs = defaultBannedRights.sendInline
+									defaultBannedRights.sendGames = defaultBannedRights.sendGifs
+									defaultBannedRights.sendStickers = defaultBannedRights.sendGames
 								}
 
 								embedLinksRow -> {
-									defaultBannedRights.embed_links = !defaultBannedRights.embed_links
+									defaultBannedRights.embedLinks = !defaultBannedRights.embedLinks
 								}
 
 								sendPollsRow -> {
-									defaultBannedRights.send_polls = !defaultBannedRights.send_polls
+									defaultBannedRights.sendPolls = !defaultBannedRights.sendPolls
 								}
 							}
 
 							if (disabled) {
-								if (defaultBannedRights.view_messages && !defaultBannedRights.send_messages) {
-									defaultBannedRights.send_messages = true
+								if (defaultBannedRights.viewMessages && !defaultBannedRights.sendMessages) {
+									defaultBannedRights.sendMessages = true
 
 									val holder = listView?.findViewHolderForAdapterPosition(sendMessagesRow)
 
@@ -1082,8 +1093,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 									}
 								}
 
-								if ((defaultBannedRights.view_messages || defaultBannedRights.send_messages) && !defaultBannedRights.send_media) {
-									defaultBannedRights.send_media = true
+								if ((defaultBannedRights.viewMessages || defaultBannedRights.sendMessages) && !defaultBannedRights.sendMedia) {
+									defaultBannedRights.sendMedia = true
 
 									val holder = listView?.findViewHolderForAdapterPosition(sendMediaRow)
 
@@ -1092,8 +1103,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 									}
 								}
 
-								if ((defaultBannedRights.view_messages || defaultBannedRights.send_messages) && !defaultBannedRights.send_polls) {
-									defaultBannedRights.send_polls = true
+								if ((defaultBannedRights.viewMessages || defaultBannedRights.sendMessages) && !defaultBannedRights.sendPolls) {
+									defaultBannedRights.sendPolls = true
 
 									val holder = listView?.findViewHolderForAdapterPosition(sendPollsRow)
 
@@ -1102,11 +1113,11 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 									}
 								}
 
-								if ((defaultBannedRights.view_messages || defaultBannedRights.send_messages) && !defaultBannedRights.send_stickers) {
-									defaultBannedRights.send_inline = true
-									defaultBannedRights.send_gifs = defaultBannedRights.send_inline
-									defaultBannedRights.send_games = defaultBannedRights.send_gifs
-									defaultBannedRights.send_stickers = defaultBannedRights.send_games
+								if ((defaultBannedRights.viewMessages || defaultBannedRights.sendMessages) && !defaultBannedRights.sendStickers) {
+									defaultBannedRights.sendInline = true
+									defaultBannedRights.sendGifs = defaultBannedRights.sendInline
+									defaultBannedRights.sendGames = defaultBannedRights.sendGifs
+									defaultBannedRights.sendStickers = defaultBannedRights.sendGames
 
 									val holder = listView?.findViewHolderForAdapterPosition(sendStickersRow)
 
@@ -1115,8 +1126,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 									}
 								}
 
-								if ((defaultBannedRights.view_messages || defaultBannedRights.send_messages) && !defaultBannedRights.embed_links) {
-									defaultBannedRights.embed_links = true
+								if ((defaultBannedRights.viewMessages || defaultBannedRights.sendMessages) && !defaultBannedRights.embedLinks) {
+									defaultBannedRights.embedLinks = true
 
 									val holder = listView?.findViewHolderForAdapterPosition(embedLinksRow)
 
@@ -1126,8 +1137,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 								}
 							}
 							else {
-								if ((!defaultBannedRights.embed_links || !defaultBannedRights.send_inline || !defaultBannedRights.send_media || !defaultBannedRights.send_polls) && defaultBannedRights.send_messages) {
-									defaultBannedRights.send_messages = false
+								if ((!defaultBannedRights.embedLinks || !defaultBannedRights.sendInline || !defaultBannedRights.sendMedia || !defaultBannedRights.sendPolls) && defaultBannedRights.sendMessages) {
+									defaultBannedRights.sendMessages = false
 
 									val holder = listView?.findViewHolderForAdapterPosition(sendMessagesRow)
 
@@ -1143,8 +1154,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				}
 			}
 
-			var bannedRights: TL_chatBannedRights? = null
-			var adminRights: TL_chatAdminRights? = null
+			var bannedRights: TLChatBannedRights? = null
+			var adminRights: TLChatAdminRights? = null
 			var rank: String? = ""
 			val participant: TLObject?
 			var peerId: Long = 0
@@ -1155,48 +1166,53 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 				if (participant is ChannelParticipant) {
 					peerId = MessageObject.getPeerId(participant.peer)
-					bannedRights = participant.banned_rights
-					adminRights = participant.admin_rights
-					rank = participant.rank
-					canEditAdmin = !(participant is TL_channelParticipantAdmin || participant is TL_channelParticipantCreator) || participant.can_edit
 
-					if (participant is TL_channelParticipantCreator) {
-						adminRights = participant.admin_rights
+					if (peerId == 0L) {
+						peerId = participant.userId
+					}
+
+					bannedRights = participant.bannedRights
+					adminRights = participant.adminRights
+					rank = participant.rank
+					canEditAdmin = !(participant is TLChannelParticipantAdmin || participant is TLChannelParticipantCreator) || participant.canEdit
+
+					if (participant is TLChannelParticipantCreator) {
+						adminRights = participant.adminRights
 
 						if (adminRights == null) {
-							adminRights = TL_chatAdminRights()
-							adminRights.add_admins = true
-							adminRights.pin_messages = adminRights.add_admins
-							adminRights.invite_users = adminRights.pin_messages
-							adminRights.ban_users = adminRights.invite_users
-							adminRights.delete_messages = adminRights.ban_users
-							adminRights.edit_messages = adminRights.delete_messages
-							adminRights.post_messages = adminRights.edit_messages
-							adminRights.change_info = adminRights.post_messages
+							adminRights = TLChatAdminRights()
+							adminRights.addAdmins = true
+							adminRights.pinMessages = true
+							adminRights.inviteUsers = true
+							adminRights.banUsers = true
+							adminRights.deleteMessages = true
+							adminRights.editMessages = true
+							adminRights.postMessages = true
+							adminRights.changeInfo = true
 
 							if (!isChannel) {
-								adminRights.manage_call = true
+								adminRights.manageCall = true
 							}
 						}
 					}
 				}
 				else if (participant is ChatParticipant) {
-					peerId = participant.user_id
+					peerId = participant.userId
 					canEditAdmin = currentChat?.creator ?: false
 
-					if (participant is TL_chatParticipantCreator) {
-						adminRights = TL_chatAdminRights()
-						adminRights.add_admins = true
-						adminRights.pin_messages = adminRights.add_admins
-						adminRights.invite_users = adminRights.pin_messages
-						adminRights.ban_users = adminRights.invite_users
-						adminRights.delete_messages = adminRights.ban_users
-						adminRights.edit_messages = adminRights.delete_messages
-						adminRights.post_messages = adminRights.edit_messages
-						adminRights.change_info = adminRights.post_messages
+					if (participant is TLChatParticipantCreator) {
+						adminRights = TLChatAdminRights()
+						adminRights.addAdmins = true
+						adminRights.pinMessages = true
+						adminRights.inviteUsers = true
+						adminRights.banUsers = true
+						adminRights.deleteMessages = true
+						adminRights.editMessages = true
+						adminRights.postMessages = true
+						adminRights.changeInfo = true
 
 						if (!isChannel) {
-							adminRights.manage_call = true
+							adminRights.manageCall = true
 						}
 					}
 				}
@@ -1220,14 +1236,19 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				when (participant) {
 					is ChannelParticipant -> {
 						peerId = MessageObject.getPeerId(participant.peer)
-						canEditAdmin = !(participant is TL_channelParticipantAdmin || participant is TL_channelParticipantCreator) || participant.can_edit
-						bannedRights = participant.banned_rights
-						adminRights = participant.admin_rights
+
+						if (peerId == 0L) {
+							peerId = participant.userId
+						}
+
+						canEditAdmin = !(participant is TLChannelParticipantAdmin || participant is TLChannelParticipantCreator) || participant.canEdit
+						bannedRights = participant.bannedRights
+						adminRights = participant.adminRights
 						rank = participant.rank
 					}
 
 					is ChatParticipant -> {
-						peerId = participant.user_id
+						peerId = participant.userId
 						canEditAdmin = currentChat!!.creator
 						bannedRights = null
 						adminRights = null
@@ -1242,7 +1263,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			if (peerId != 0L) {
 				if (selectType != SELECT_TYPE_MEMBERS) {
 					if (selectType == SELECT_TYPE_EXCEPTION || selectType == SELECT_TYPE_ADMIN) {
-						if (selectType != SELECT_TYPE_ADMIN && canEditAdmin && (participant is TL_channelParticipantAdmin || participant is TL_chatParticipantAdmin)) {
+						if (selectType != SELECT_TYPE_ADMIN && canEditAdmin && (participant is TLChannelParticipantAdmin || participant is TLChatParticipantAdmin)) {
 							val user = messagesController.getUser(peerId) ?: return@setOnItemClickListener
 							val br = bannedRights
 							val ar = adminRights
@@ -1272,7 +1293,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					var canEdit = false
 
 					if (type == TYPE_ADMIN) {
-						canEdit = peerId != userConfig.getClientUserId() && (currentChat?.admin_rights != null && currentChat?.admin_rights?.add_admins == true || currentChat?.creator == true || canEditAdmin) && participant !is TL_channelParticipantCreator
+						canEdit = peerId != userConfig.getClientUserId() && (currentChat?.adminRights != null && currentChat?.adminRights?.addAdmins == true || currentChat?.creator == true || canEditAdmin) && participant !is TLChannelParticipantCreator
 					}
 					else if (type == TYPE_BANNED || type == TYPE_KICKED) {
 						canEdit = ChatObject.canBlockUsers(currentChat)
@@ -1296,28 +1317,28 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					}
 					else {
 						if (bannedRights == null) {
-							bannedRights = TL_chatBannedRights()
-							bannedRights.view_messages = true
-							bannedRights.send_stickers = true
-							bannedRights.send_media = true
-							bannedRights.embed_links = true
-							bannedRights.send_messages = true
-							bannedRights.send_games = true
-							bannedRights.send_inline = true
-							bannedRights.send_gifs = true
-							bannedRights.pin_messages = true
-							bannedRights.send_polls = true
-							bannedRights.invite_users = true
-							bannedRights.change_info = true
+							bannedRights = TLChatBannedRights()
+							bannedRights.viewMessages = true
+							bannedRights.sendStickers = true
+							bannedRights.sendMedia = true
+							bannedRights.embedLinks = true
+							bannedRights.sendMessages = true
+							bannedRights.sendGames = true
+							bannedRights.sendInline = true
+							bannedRights.sendGifs = true
+							bannedRights.pinMessages = true
+							bannedRights.sendPolls = true
+							bannedRights.inviteUsers = true
+							bannedRights.changeInfo = true
 						}
 
 						val fragment = ChatRightsEditActivity(peerId, chatId, adminRights, defaultBannedRights, bannedRights, rank, if (type == TYPE_ADMIN) ChatRightsEditActivity.TYPE_ADMIN else ChatRightsEditActivity.TYPE_BANNED, canEdit, participant == null, null)
 
 						fragment.setDelegate(object : ChatRightsEditActivityDelegate {
-							override fun didSetRights(rights: Int, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+							override fun didSetRights(rights: Int, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 								if (participant is ChannelParticipant) {
-									participant.admin_rights = rightsAdmin
-									participant.banned_rights = rightsBanned
+									participant.adminRights = rightsAdmin
+									participant.bannedRights = rightsBanned
 									participant.rank = rank
 									updateParticipantWithRights(participant, rightsAdmin, rightsBanned, 0, false)
 								}
@@ -1380,7 +1401,19 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				return@sortWith -1
 			}
 			if (lhs is ChannelParticipant && rhs is ChannelParticipant) {
-				return@sortWith (MessageObject.getPeerId(lhs.peer) - MessageObject.getPeerId(rhs.peer)).toInt()
+				var lhsPeerId = MessageObject.getPeerId(lhs.peer)
+
+				if (lhsPeerId == 0L) {
+					lhsPeerId = lhs.userId
+				}
+
+				var rhsPeerId = MessageObject.getPeerId(rhs.peer)
+
+				if (rhsPeerId == 0L) {
+					rhsPeerId = rhs.userId
+				}
+
+				return@sortWith (lhsPeerId - rhsPeerId).toInt()
 			}
 
 			0
@@ -1485,9 +1518,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			var `object` = map[user.id]
 
 			if (`object` is ChannelParticipant) {
-				val creator = TL_channelParticipantCreator()
-				creator.peer = TL_peerUser()
-				creator.peer.user_id = user.id
+				val creator = TLChannelParticipantCreator()
+				creator.userId = user.id
 				map.put(user.id, creator)
 
 				val index = arrayList.indexOf(`object`)
@@ -1505,25 +1537,24 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			`object` = map[selfUserId]
 
 			if (`object` is ChannelParticipant) {
-				val admin = TL_channelParticipantAdmin()
-				admin.peer = TL_peerUser()
-				admin.peer.user_id = selfUserId
-				admin.self = true
-				admin.inviter_id = selfUserId
-				admin.promoted_by = selfUserId
+				val admin = TLChannelParticipantAdmin()
+				admin.userId = selfUserId
+				admin.isSelf = true
+				admin.inviterId = selfUserId
+				admin.promotedBy = selfUserId
 				admin.date = (System.currentTimeMillis() / 1000).toInt()
-				admin.admin_rights = TL_chatAdminRights()
-				admin.admin_rights.add_admins = true
-				admin.admin_rights.pin_messages = admin.admin_rights.add_admins
-				admin.admin_rights.invite_users = admin.admin_rights.pin_messages
-				admin.admin_rights.ban_users = admin.admin_rights.invite_users
-				admin.admin_rights.delete_messages = admin.admin_rights.ban_users
-				admin.admin_rights.edit_messages = admin.admin_rights.delete_messages
-				admin.admin_rights.post_messages = admin.admin_rights.edit_messages
-				admin.admin_rights.change_info = admin.admin_rights.post_messages
+				admin.adminRights = TLChatAdminRights()
+				admin.adminRights?.addAdmins = true
+				admin.adminRights?.pinMessages = true
+				admin.adminRights?.inviteUsers = true
+				admin.adminRights?.banUsers = true
+				admin.adminRights?.deleteMessages = true
+				admin.adminRights?.editMessages = true
+				admin.adminRights?.postMessages = true
+				admin.adminRights?.changeInfo = true
 
 				if (!isChannel) {
-					admin.admin_rights.manage_call = true
+					admin.adminRights?.manageCall = true
 				}
 
 				map.put(selfUserId, admin)
@@ -1555,9 +1586,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		}
 
 		if (!foundAny) {
-			val creator = TL_channelParticipantCreator()
-			creator.peer = TL_peerUser()
-			creator.peer.user_id = user.id
+			val creator = TLChannelParticipantCreator()
+			creator.userId = user.id
 
 			participantsMap.put(user.id, creator)
 			participants.add(creator)
@@ -1571,16 +1601,16 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		delegate?.didChangeOwner(user)
 	}
 
-	private fun openRightsEdit2(peerId: Long, date: Int, participant: TLObject, adminRights: TL_chatAdminRights?, bannedRights: TL_chatBannedRights?, rank: String?, type: Int) {
+	private fun openRightsEdit2(peerId: Long, date: Int, participant: TLObject, adminRights: TLChatAdminRights?, bannedRights: TLChatBannedRights?, rank: String?, type: Int) {
 		val needShowBulletin = BooleanArray(1)
-		val isAdmin = participant is TL_channelParticipantAdmin || participant is TL_chatParticipantAdmin
+		val isAdmin = participant is TLChannelParticipantAdmin || participant is TLChatParticipantAdmin
 
 		val fragment = object : ChatRightsEditActivity(peerId, chatId, adminRights, defaultBannedRights, bannedRights, rank, type, true, false, null) {
 			override fun onTransitionAnimationEnd(isOpen: Boolean, backward: Boolean) {
 				if (!isOpen && backward && needShowBulletin[0] && BulletinFactory.canShowBulletin(this@ChatUsersActivity)) {
 					if (peerId > 0) {
 						val user = messagesController.getUser(peerId) ?: return
-						BulletinFactory.createPromoteToAdminBulletin(this@ChatUsersActivity, user.first_name).show()
+						BulletinFactory.createPromoteToAdminBulletin(this@ChatUsersActivity, user.firstName).show()
 					}
 					else {
 						val chat = messagesController.getChat(-peerId) ?: return
@@ -1591,31 +1621,35 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		}
 
 		fragment.setDelegate(object : ChatRightsEditActivityDelegate {
-			override fun didSetRights(rights: Int, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+			override fun didSetRights(rights: Int, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 				if (type == 0) {
 					for (a in participants.indices) {
 						val p = participants[a]
 
 						if (p is ChannelParticipant) {
-							if (MessageObject.getPeerId(p.peer) == peerId) {
+							var pp = MessageObject.getPeerId(p.peer)
+
+							if (pp == 0L) {
+								pp = p.userId
+							}
+
+							if (pp == peerId) {
 								val newPart = if (rights == 1) {
-									TL_channelParticipantAdmin()
+									TLChannelParticipantAdmin()
 								}
 								else {
-									TL_channelParticipant()
+									TLChannelParticipant()
 								}
 
-								newPart.admin_rights = rightsAdmin
-								newPart.banned_rights = rightsBanned
-								newPart.inviter_id = userConfig.getClientUserId()
+								newPart.adminRights = rightsAdmin
+								newPart.bannedRights = rightsBanned
+								newPart.inviterId = userConfig.getClientUserId()
 
 								if (peerId > 0) {
-									newPart.peer = TL_peerUser()
-									newPart.peer.user_id = peerId
+									newPart.userId = peerId
 								}
 								else {
-									newPart.peer = TL_peerChannel()
-									newPart.peer.channel_id = -peerId
+									newPart.peer = TLPeerChannel().also { it.channelId = -peerId }
 								}
 
 								newPart.date = date
@@ -1629,15 +1663,15 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						}
 						else if (p is ChatParticipant) {
 							val newParticipant = if (rights == 1) {
-								TL_chatParticipantAdmin()
+								TLChatParticipantAdmin()
 							}
 							else {
-								TL_chatParticipant()
+								TLChatParticipant()
 							}
 
-							newParticipant.user_id = p.user_id
+							newParticipant.userId = p.userId
 							newParticipant.date = p.date
-							newParticipant.inviter_id = p.inviter_id
+							newParticipant.inviterId = p.inviterId
 
 							val index = info?.participants?.participants?.indexOf(p)
 
@@ -1672,14 +1706,14 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		return checkDiscard()
 	}
 
-	private fun openRightsEdit(userId: Long, participant: TLObject?, adminRights: TL_chatAdminRights?, bannedRights: TL_chatBannedRights?, rank: String?, canEditAdmin: Boolean, type: Int, removeFragment: Boolean) {
+	private fun openRightsEdit(userId: Long, participant: TLObject?, adminRights: TLChatAdminRights?, bannedRights: TLChatBannedRights?, rank: String?, canEditAdmin: Boolean, type: Int, removeFragment: Boolean) {
 		val fragment = ChatRightsEditActivity(userId, chatId, adminRights, defaultBannedRights, bannedRights, rank, type, canEditAdmin, participant == null, null)
 
 		fragment.setDelegate(object : ChatRightsEditActivityDelegate {
-			override fun didSetRights(rights: Int, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+			override fun didSetRights(rights: Int, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 				if (participant is ChannelParticipant) {
-					participant.admin_rights = rightsAdmin
-					participant.banned_rights = rightsBanned
+					participant.adminRights = rightsAdmin
+					participant.bannedRights = rightsBanned
 					participant.rank = rank
 				}
 
@@ -1739,10 +1773,16 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 	private fun removeParticipants(`object`: TLObject) {
 		if (`object` is ChatParticipant) {
-			removeParticipants(`object`.user_id)
+			removeParticipants(`object`.userId)
 		}
 		else if (`object` is ChannelParticipant) {
-			removeParticipants(MessageObject.getPeerId(`object`.peer))
+			var peerId = MessageObject.getPeerId(`object`.peer)
+
+			if (peerId == 0L) {
+				peerId = `object`.userId
+			}
+
+			removeParticipants(peerId)
 		}
 	}
 
@@ -1779,7 +1819,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 				if (type == TYPE_BANNED) {
 					info?.let {
-						it.kicked_count--
+						it.kickedCount--
 					}
 				}
 			}
@@ -1794,7 +1834,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		}
 	}
 
-	private fun updateParticipantWithRights(channelParticipant: ChannelParticipant, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, userId: Long, withDelegate: Boolean) {
+	private fun updateParticipantWithRights(channelParticipant: ChannelParticipant, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, userId: Long, withDelegate: Boolean) {
 		@Suppress("NAME_SHADOWING") var channelParticipant = channelParticipant
 		var delegateCalled = false
 
@@ -1805,15 +1845,21 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				else -> participantsMap
 			}
 
-			val p = map[MessageObject.getPeerId(channelParticipant.peer)]
+			var pp = MessageObject.getPeerId(channelParticipant.peer)
+
+			if (pp == 0L) {
+				pp = channelParticipant.userId
+			}
+
+			val p = map[pp]
 
 			if (p is ChannelParticipant) {
 				channelParticipant = p
-				channelParticipant.admin_rights = rightsAdmin
-				channelParticipant.banned_rights = rightsBanned
+				channelParticipant.adminRights = rightsAdmin
+				channelParticipant.bannedRights = rightsBanned
 
 				if (withDelegate) {
-					channelParticipant.promoted_by = userConfig.getClientUserId()
+					channelParticipant.promotedBy = userConfig.getClientUserId()
 				}
 			}
 
@@ -1834,22 +1880,22 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		val peerId: Long
 		val canEdit: Boolean
 		val date: Int
-		val bannedRights: TL_chatBannedRights?
-		val adminRights: TL_chatAdminRights?
+		val bannedRights: TLChatBannedRights?
+		val adminRights: TLChatAdminRights?
 		val rank: String?
 
 		when (participant) {
 			is ChannelParticipant -> {
-				peerId = MessageObject.getPeerId(participant.peer)
-				canEdit = participant.can_edit
-				bannedRights = participant.banned_rights
-				adminRights = participant.admin_rights
+				peerId = MessageObject.getPeerId(participant.peer).takeIf { it != 0L } ?: participant.userId
+				canEdit = participant.canEdit
+				bannedRights = participant.bannedRights
+				adminRights = participant.adminRights
 				date = participant.date
 				rank = participant.rank
 			}
 
 			is ChatParticipant -> {
-				peerId = participant.user_id
+				peerId = participant.userId
 				date = participant.date
 				canEdit = ChatObject.canAddAdmins(currentChat)
 				bannedRights = null
@@ -1873,9 +1919,9 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 		if (type == TYPE_USERS) {
 			val user = messagesController.getUser(peerId)
-			var allowSetAdmin = ChatObject.canAddAdmins(currentChat) && (participant is TL_channelParticipant || participant is TL_channelParticipantBanned || participant is TL_chatParticipant || canEdit)
-			val canEditAdmin = !(participant is TL_channelParticipantAdmin || participant is TL_channelParticipantCreator || participant is TL_chatParticipantCreator || participant is TL_chatParticipantAdmin) || canEdit
-			val editingAdmin = participant is TL_channelParticipantAdmin || participant is TL_chatParticipantAdmin
+			var allowSetAdmin = ChatObject.canAddAdmins(currentChat) && (participant is TLChannelParticipant || participant is TLChannelParticipantBanned || participant is TLChatParticipant || canEdit)
+			val canEditAdmin = !(participant is TLChannelParticipantAdmin || participant is TLChannelParticipantCreator || participant is TLChatParticipantCreator || participant is TLChatParticipantAdmin) || canEdit
+			val editingAdmin = participant is TLChannelParticipantAdmin || participant is TLChatParticipantAdmin
 
 			allowSetAdmin = allowSetAdmin and !UserObject.isDeleted(user)
 
@@ -1959,7 +2005,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					showDialog(builder2.create())
 				}
 				else {
-					if (actions[i] == 1 && canEditAdmin && (participant is TL_channelParticipantAdmin || participant is TL_chatParticipantAdmin)) {
+					if (actions[i] == 1 && canEditAdmin && (participant is TLChannelParticipantAdmin || participant is TLChatParticipantAdmin)) {
 						val builder2 = AlertDialog.Builder(context)
 						builder2.setTitle(context.getString(R.string.AppName))
 						builder2.setMessage(LocaleController.formatString("AdminWillBeRemoved", R.string.AdminWillBeRemoved, UserObject.getUserName(user)))
@@ -2016,7 +2062,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					return true
 				}
 
-				if (currentChat?.creator == true || participant !is TL_channelParticipantCreator) {
+				if (currentChat?.creator == true || participant !is TLChannelParticipantCreator) {
 					items = arrayOf(context.getString(R.string.EditAdminRights), context.getString(R.string.ChannelRemoveUserAdmin))
 					icons = intArrayOf(R.drawable.msg_admins, R.drawable.msg_remove)
 				}
@@ -2042,10 +2088,10 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						val fragment = ChatRightsEditActivity(peerId, chatId, adminRights, null, null, rank, ChatRightsEditActivity.TYPE_ADMIN, edit = true, addingNew = false, addingNewBotHash = null)
 
 						fragment.setDelegate(object : ChatRightsEditActivityDelegate {
-							override fun didSetRights(rights: Int, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+							override fun didSetRights(rights: Int, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 								if (participant is ChannelParticipant) {
-									participant.admin_rights = rightsAdmin
-									participant.banned_rights = rightsBanned
+									participant.adminRights = rightsAdmin
+									participant.bannedRights = rightsBanned
 									participant.rank = rank
 
 									updateParticipantWithRights(participant, rightsAdmin, rightsBanned, 0, false)
@@ -2060,7 +2106,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						presentFragment(fragment)
 					}
 					else {
-						messagesController.setUserAdminRole(chatId, messagesController.getUser(peerId), TL_chatAdminRights(), "", !isChannel, this@ChatUsersActivity, addingNew = false, forceAdmin = false, botHash = null, onSuccess = null)
+						messagesController.setUserAdminRole(chatId, messagesController.getUser(peerId), TLChatAdminRights(), "", !isChannel, this@ChatUsersActivity, addingNew = false, forceAdmin = false, botHash = null, onSuccess = null)
 						removeParticipants(peerId)
 					}
 				}
@@ -2070,10 +2116,10 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 							val fragment = ChatRightsEditActivity(peerId, chatId, null, defaultBannedRights, bannedRights, rank, ChatRightsEditActivity.TYPE_BANNED, edit = true, addingNew = false, addingNewBotHash = null)
 
 							fragment.setDelegate(object : ChatRightsEditActivityDelegate {
-								override fun didSetRights(rights: Int, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+								override fun didSetRights(rights: Int, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 									if (participant is ChannelParticipant) {
-										participant.admin_rights = rightsAdmin
-										participant.banned_rights = rightsBanned
+										participant.adminRights = rightsAdmin
+										participant.bannedRights = rightsBanned
 										participant.rank = rank
 
 										updateParticipantWithRights(participant, rightsAdmin, rightsBanned, 0, false)
@@ -2095,10 +2141,10 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						}
 					}
 					else if (i == 1) {
-						val req = TL_channels_editBanned()
+						val req = TLChannelsEditBanned()
 						req.participant = messagesController.getInputPeer(peerId)
 						req.channel = messagesController.getInputChannel(chatId)
-						req.banned_rights = TL_chatBannedRights()
+						req.bannedRights = TLChatBannedRights()
 
 						connectionsManager.sendRequest(req) { response, _ ->
 							if (response != null) {
@@ -2184,7 +2230,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 	private val currentSlowMode: Int
 		get() {
-			return when (info?.slowmode_seconds) {
+			return when (info?.slowmodeSeconds) {
 				10 -> 1
 				30 -> 2
 				60 -> 3
@@ -2255,7 +2301,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		return selectType != SELECT_TYPE_MEMBERS
 	}
 
-	private fun formatUserPermissions(rights: TL_chatBannedRights?): String {
+	private fun formatUserPermissions(rights: TLChatBannedRights?): String {
 		val context = context
 
 		if (rights == null || context == null) {
@@ -2264,11 +2310,11 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 		val builder = StringBuilder()
 
-		if (rights.view_messages && defaultBannedRights.view_messages != rights.view_messages) {
+		if (rights.viewMessages && defaultBannedRights.viewMessages != rights.viewMessages) {
 			builder.append(context.getString(R.string.UserRestrictionsNoRead))
 		}
 
-		if (rights.send_messages && defaultBannedRights.send_messages != rights.send_messages) {
+		if (rights.sendMessages && defaultBannedRights.sendMessages != rights.sendMessages) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2276,7 +2322,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			builder.append(context.getString(R.string.UserRestrictionsNoSend))
 		}
 
-		if (rights.send_media && defaultBannedRights.send_media != rights.send_media) {
+		if (rights.sendMedia && defaultBannedRights.sendMedia != rights.sendMedia) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2284,7 +2330,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			builder.append(context.getString(R.string.UserRestrictionsNoSendMedia))
 		}
 
-		if (rights.send_stickers && defaultBannedRights.send_stickers != rights.send_stickers) {
+		if (rights.sendStickers && defaultBannedRights.sendStickers != rights.sendStickers) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2292,7 +2338,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			builder.append(context.getString(R.string.UserRestrictionsNoSendStickers))
 		}
 
-		if (rights.send_polls && defaultBannedRights.send_polls != rights.send_polls) {
+		if (rights.sendPolls && defaultBannedRights.sendPolls != rights.sendPolls) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2300,7 +2346,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			builder.append(context.getString(R.string.UserRestrictionsNoSendPolls))
 		}
 
-		if (rights.embed_links && defaultBannedRights.embed_links != rights.embed_links) {
+		if (rights.embedLinks && defaultBannedRights.embedLinks != rights.embedLinks) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2308,7 +2354,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			builder.append(context.getString(R.string.UserRestrictionsNoEmbedLinks))
 		}
 
-		if (rights.invite_users && defaultBannedRights.invite_users != rights.invite_users) {
+		if (rights.inviteUsers && defaultBannedRights.inviteUsers != rights.inviteUsers) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2316,7 +2362,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			builder.append(context.getString(R.string.UserRestrictionsNoInviteUsers))
 		}
 
-		if (rights.pin_messages && defaultBannedRights.pin_messages != rights.pin_messages) {
+		if (rights.pinMessages && defaultBannedRights.pinMessages != rights.pinMessages) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2324,7 +2370,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			builder.append(context.getString(R.string.UserRestrictionsNoPinMessages))
 		}
 
-		if (rights.change_info && defaultBannedRights.change_info != rights.change_info) {
+		if (rights.changeInfo && defaultBannedRights.changeInfo != rights.changeInfo) {
 			if (builder.isNotEmpty()) {
 				builder.append(", ")
 			}
@@ -2362,14 +2408,14 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		if (newBannedRights != initialBannedRights) {
 			messagesController.setDefaultBannedRole(chatId, defaultBannedRights, ChatObject.isChannel(currentChat), this)
 			val chat = messagesController.getChat(chatId)
-			chat?.default_banned_rights = defaultBannedRights
+			chat?.defaultBannedRights = defaultBannedRights
 		}
 
 		if (selectedSlowMode != initialSlowMode) {
 			info?.let { info ->
-				info.slowmode_seconds = getSecondsForIndex(selectedSlowMode)
+				info.slowmodeSeconds = getSecondsForIndex(selectedSlowMode)
 				info.flags = info.flags or 131072
-				messagesController.setChannelSlowMode(chatId, info.slowmode_seconds)
+				messagesController.setChannelSlowMode(chatId, info.slowmodeSeconds)
 			}
 		}
 
@@ -2391,65 +2437,65 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 	private fun getChannelAdminParticipantType(participant: TLObject?): Int {
 		return when (participant) {
-			is TL_channelParticipantCreator, is TL_channelParticipantSelf -> 0
-			is TL_channelParticipantAdmin, is TL_channelParticipant -> 1
+			is TLChannelParticipantCreator, is TLChannelParticipantSelf -> 0
+			is TLChannelParticipantAdmin, is TLChannelParticipant -> 1
 			else -> 2
 		}
 	}
 
-	private fun loadChatParticipantsRequests(offset: Int, count: Int): ArrayList<TL_channels_getParticipants> {
-		val req = TL_channels_getParticipants()
+	private fun loadChatParticipantsRequests(offset: Int, count: Int): ArrayList<TLChannelsGetParticipants> {
+		val req = TLChannelsGetParticipants()
 
-		val requests = ArrayList<TL_channels_getParticipants>()
+		val requests = ArrayList<TLChannelsGetParticipants>()
 		requests.add(req)
 
 		req.channel = messagesController.getInputChannel(chatId)
 
 		if (type == TYPE_BANNED) {
-			req.filter = TL_channelParticipantsKicked()
+			req.filter = TLChannelParticipantsKicked()
 		}
 		else if (type == TYPE_ADMIN) {
-			req.filter = TL_channelParticipantsAdmins()
+			req.filter = TLChannelParticipantsAdmins()
 		}
 		else if (type == TYPE_USERS) {
-			if (info != null && (info?.participants_count ?: 0) <= 200 && currentChat?.megagroup == true) {
-				req.filter = TL_channelParticipantsRecent()
+			if (info != null && (info?.participantsCount ?: 0) <= 200 && currentChat?.megagroup == true) {
+				req.filter = TLChannelParticipantsRecent()
 			}
 			else {
 				if (selectType == SELECT_TYPE_ADMIN) {
 					if (!contactsEndReached) {
 						delayResults = 2
-						req.filter = TL_channelParticipantsContacts()
+						req.filter = TLChannelParticipantsContacts()
 						contactsEndReached = true
 						requests.addAll(loadChatParticipantsRequests(0, 200))
 					}
 					else {
-						req.filter = TL_channelParticipantsRecent()
+						req.filter = TLChannelParticipantsRecent()
 					}
 				}
 				else {
 					if (!contactsEndReached) {
 						delayResults = 3
-						req.filter = TL_channelParticipantsContacts()
+						req.filter = TLChannelParticipantsContacts()
 						contactsEndReached = true
 						requests.addAll(loadChatParticipantsRequests(0, 200))
 					}
 					else if (!botsEndReached) {
-						req.filter = TL_channelParticipantsBots()
+						req.filter = TLChannelParticipantsBots()
 						botsEndReached = true
 						requests.addAll(loadChatParticipantsRequests(0, 200))
 					}
 					else {
-						req.filter = TL_channelParticipantsRecent()
+						req.filter = TLChannelParticipantsRecent()
 					}
 				}
 			}
 		}
 		else if (type == TYPE_KICKED) {
-			req.filter = TL_channelParticipantsBanned()
+			req.filter = TLChannelParticipantsBanned()
 		}
 
-		req.filter.q = ""
+		req.filter?.q = ""
 		req.offset = offset
 		req.limit = count
 
@@ -2475,21 +2521,16 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 			if (type == TYPE_ADMIN) {
 				if (info != null) {
-					var a = 0
-					val size = info!!.participants.participants.size
+					val participants = info?.participants?.participants
 
-					while (a < size) {
-						val participant = info?.participants?.participants?.get(a)
+					if (!participants.isNullOrEmpty()) {
+						for (participant in participants) {
+							if (participant is TLChatParticipantCreator || participant is TLChatParticipantAdmin) {
+								participants.add(participant)
+							}
 
-						if (participant is TL_chatParticipantCreator || participant is TL_chatParticipantAdmin) {
-							participants.add(participant)
+							participantsMap.put(participant.userId, participant)
 						}
-
-						participant?.let {
-							participantsMap.put(it.user_id, it)
-						}
-
-						a++
 					}
 				}
 			}
@@ -2498,38 +2539,39 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					val selfUserId = userConfig.clientUserId
 
 					info?.participants?.participants?.forEach { participant ->
-						if (selectType != SELECT_TYPE_MEMBERS && participant.user_id == selfUserId) {
+						if (selectType != SELECT_TYPE_MEMBERS && participant.userId == selfUserId) {
 							return@forEach
 						}
 
-						if ((ignoredUsers?.indexOfKey(participant.user_id) ?: -1) >= 0) {
+						if ((ignoredUsers?.indexOfKey(participant.userId) ?: -1) >= 0) {
 							return@forEach
 						}
 
 						if (selectType == SELECT_TYPE_ADMIN) {
-							if (contactsController.isContact(participant.user_id)) {
+							if (contactsController.isContact(participant.userId)) {
 								contacts.add(participant)
-								contactsMap.put(participant.user_id, participant)
+								contactsMap.put(participant.userId, participant)
 							}
-							else if (!UserObject.isDeleted(messagesController.getUser(participant.user_id))) {
+							else if (!UserObject.isDeleted(messagesController.getUser(participant.userId))) {
 								participants.add(participant)
-								participantsMap.put(participant.user_id, participant)
+								participantsMap.put(participant.userId, participant)
 							}
 						}
 						else {
-							if (contactsController.isContact(participant.user_id)) {
+							if (contactsController.isContact(participant.userId)) {
 								contacts.add(participant)
-								contactsMap.put(participant.user_id, participant)
+								contactsMap.put(participant.userId, participant)
 							}
 							else {
-								val user = messagesController.getUser(participant.user_id)
+								val user = messagesController.getUser(participant.userId)
+
 								if (user != null && user.bot) {
 									bots.add(participant)
-									botsMap.put(participant.user_id, participant)
+									botsMap.put(participant.userId, participant)
 								}
 								else {
 									participants.add(participant)
-									participantsMap.put(participant.user_id, participant)
+									participantsMap.put(participant.userId, participant)
 								}
 							}
 						}
@@ -2551,7 +2593,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			listViewAdapter?.notifyDataSetChanged()
 
 			val requests = loadChatParticipantsRequests(offset, count)
-			val responses = ArrayList<TL_channels_channelParticipants?>()
+			val responses = ArrayList<TLChannelsChannelParticipants?>()
 
 			val onRequestsEnd = Runnable {
 				var objectsCount = 0
@@ -2570,7 +2612,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 					if (selectType != SELECT_TYPE_MEMBERS) {
 						for (a in res.participants.indices) {
-							if (MessageObject.getPeerId(res.participants[a].peer) == selfId) {
+							if ((MessageObject.getPeerId(res.participants[a].peer).takeIf { it != 0L } ?: res.participants[a].userId) == selfId) {
 								res.participants.removeAt(a)
 								break
 							}
@@ -2584,12 +2626,12 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						delayResults--
 
 						when (req.filter) {
-							is TL_channelParticipantsContacts -> {
+							is TLChannelParticipantsContacts -> {
 								objects = contacts
 								map = contactsMap
 							}
 
-							is TL_channelParticipantsBots -> {
+							is TLChannelParticipantsBots -> {
 								objects = bots
 								map = botsMap
 							}
@@ -2615,11 +2657,11 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					while (a < size) {
 						val participant = res.participants[a]
 
-						if (participant.user_id == selfId) {
+						if (participant.userId == selfId) {
 							objects.remove(participant)
 						}
 						else {
-							map.put(MessageObject.getPeerId(participant.peer), participant)
+							map.put(MessageObject.getPeerId(participant.peer).takeIf { it != 0L } ?: participant.userId, participant)
 						}
 
 						a++
@@ -2643,7 +2685,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 								continue
 							}
 
-							val peerId = MessageObject.getPeerId(`object`.peer)
+							val peerId = MessageObject.getPeerId(`object`.peer).takeIf { it != 0L } ?: `object`.userId
 							var remove = false
 
 							if (contactsMap[peerId] != null || botsMap[peerId] != null) {
@@ -2668,7 +2710,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					}
 
 					try {
-						if ((type == TYPE_BANNED || type == TYPE_KICKED || type == TYPE_USERS) && currentChat != null && currentChat!!.megagroup && info is TL_channelFull && (info?.participants_count ?: 0) <= 200) {
+						if ((type == TYPE_BANNED || type == TYPE_KICKED || type == TYPE_USERS) && currentChat != null && currentChat!!.megagroup && info is TLRPC.TLChannelFull && (info?.participantsCount ?: 0) <= 200) {
 							sortUsers(objects)
 						}
 						else if (type == TYPE_ADMIN) {
@@ -2708,8 +2750,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 				val reqId = connectionsManager.sendRequest(requests[i]) { response, error ->
 					AndroidUtilities.runOnUIThread {
-						if (error == null && response is TL_channels_channelParticipants) {
-							responses[i] = response as TL_channels_channelParticipants?
+						if (error == null && response is TLChannelsChannelParticipants) {
+							responses[i] = response as TLChannelsChannelParticipants?
 						}
 						responsesReceived.getAndIncrement()
 						if (responsesReceived.get() == requests.size) {
@@ -2726,17 +2768,17 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 		val currentTime = connectionsManager.currentTime
 
 		objects.sortWith { lhs, rhs ->
-			val p1 = lhs as ChannelParticipant?
-			val p2 = rhs as ChannelParticipant?
-			val peer1 = MessageObject.getPeerId(p1!!.peer)
-			val peer2 = MessageObject.getPeerId(p2!!.peer)
+			val p1 = lhs as? ChannelParticipant
+			val p2 = rhs as? ChannelParticipant
+			val peer1 = MessageObject.getPeerId(p1?.peer).takeIf { it != 0L } ?: p1?.userId ?: 0L
+			val peer2 = MessageObject.getPeerId(p2?.peer).takeIf { it != 0L } ?: p2?.userId ?: 0L
 			var status1 = 0
 
 			if (peer1 > 0) {
-				val user1 = messagesController.getUser(MessageObject.getPeerId(p1.peer))
+				val user1 = messagesController.getUser(MessageObject.getPeerId(p1?.peer).takeIf { it != 0L } ?: p1?.userId) as? TLRPC.TLUser
 
 				if (user1?.status != null) {
-					status1 = if (user1.self) {
+					status1 = if (user1.isSelf) {
 						currentTime + 50000
 					}
 					else {
@@ -2745,16 +2787,16 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				}
 			}
 			else {
-				status1 = -100
+				status1 = USER_STATUS_RECENTLY
 			}
 
 			var status2 = 0
 
 			if (peer2 > 0) {
-				val user2 = messagesController.getUser(MessageObject.getPeerId(p2.peer))
+				val user2 = messagesController.getUser(MessageObject.getPeerId(p2?.peer).takeIf { it != 0L } ?: p2?.userId) as? TLRPC.TLUser
 
 				if (user2?.status != null) {
-					status2 = if (user2.self) {
+					status2 = if (user2.isSelf) {
 						currentTime + 50000
 					}
 					else {
@@ -2763,7 +2805,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				}
 			}
 			else {
-				status2 = -100
+				status2 = USER_STATUS_RECENTLY
 			}
 
 			if (status1 > 0 && status2 > 0) {
@@ -2859,7 +2901,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 		val listView = listView
 
-		if (listView != null && layoutManager != null && listView.childCount > 0) {
+		if (listView != null && layoutManager != null && listView.isNotEmpty()) {
 			var view: View? = null
 			var position = -1
 
@@ -3108,7 +3150,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					return true
 				}
 
-				override val excludeCallParticipants: LongSparseArray<TL_groupCallParticipant>?
+				override val excludeCallParticipants: LongSparseArray<TLGroupCallParticipant>?
 					get() = null
 
 				override val excludeUsers: LongSparseArray<User>?
@@ -3163,8 +3205,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 			AndroidUtilities.runOnUIThread(Runnable {
 				searchRunnable = null
 
-				val participantsCopy = if (!ChatObject.isChannel(currentChat) && info != null) ArrayList<TLObject>(info!!.participants.participants) else null
-				val contactsCopy = if (selectType == SELECT_TYPE_ADMIN) ArrayList(contactsController.contacts) else null
+				val participantsCopy = if (!ChatObject.isChannel(currentChat) && info != null) info?.participants?.participants?.toMutableList() else null
+				val contactsCopy = if (selectType == SELECT_TYPE_ADMIN) contactsController.contacts.toMutableList() else null
 				var addContacts: Runnable? = null
 
 				if (participantsCopy != null || contactsCopy != null) {
@@ -3204,10 +3246,10 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 								val o = participantsCopy[a]
 
 								peerId = if (o is ChatParticipant) {
-									o.user_id
+									o.userId
 								}
 								else if (o is ChannelParticipant) {
-									MessageObject.getPeerId(o.peer)
+									MessageObject.getPeerId(o.peer).takeIf { it != 0L } ?: o.userId
 								}
 								else {
 									a++
@@ -3229,8 +3271,8 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 									name = UserObject.getUserName(user).lowercase(Locale.getDefault())
 									username = user?.username
-									firstName = user?.first_name
-									lastName = user?.last_name
+									firstName = user?.firstName
+									lastName = user?.lastName
 								}
 								else {
 									val chat = messagesController.getChat(-peerId)
@@ -3281,7 +3323,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						if (contactsCopy != null) {
 							for (a in contactsCopy.indices) {
 								val contact = contactsCopy[a]
-								val user = messagesController.getUser(contact.user_id)
+								val user = messagesController.getUser(contact.userId)
 
 								if (user?.id == userConfig.getClientUserId()) {
 									continue
@@ -3306,7 +3348,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 									if (found != 0 && user != null) {
 										if (found == 1) {
-											resultArrayNames.add(AndroidUtilities.generateSearchName(user.first_name, user.last_name, q))
+											resultArrayNames.add(AndroidUtilities.generateSearchName(user.firstName, user.lastName, q))
 										}
 										else {
 											resultArrayNames.add(AndroidUtilities.generateSearchName("@" + user.username, null, "@$q"))
@@ -3524,7 +3566,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						peerObject = `object`
 					}
 					else if (`object` is ChannelParticipant) {
-						val peerId = MessageObject.getPeerId(`object`.peer)
+						val peerId = MessageObject.getPeerId(`object`.peer).takeIf { it != 0L } ?: `object`.userId
 
 						if (peerId >= 0) {
 							val user = messagesController.getUser(peerId)
@@ -3546,7 +3588,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 						}
 					}
 					else if (`object` is ChatParticipant) {
-						peerObject = messagesController.getUser(`object`.user_id)
+						peerObject = messagesController.getUser(`object`.userId)
 					}
 					else {
 						return
@@ -3701,7 +3743,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 				val `object` = cell.currentObject
 
 				if (type != TYPE_ADMIN && `object` is User) {
-					if (`object`.self) {
+					if (`object`.isSelf) {
 						return false
 					}
 				}
@@ -3753,7 +3795,13 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					view = TextInfoPrivacyCell(mContext)
 
 					if (isChannel) {
-						view.setText(mContext.getString(R.string.NoBlockedChannel2))
+						val description = if (ChatObject.isMasterclass(currentChat)) {
+							mContext.getString(R.string.NoBlockedMasterclass)
+						}
+						else {
+							mContext.getString(R.string.NoBlockedChannel2)
+						}
+						view.setText(description)
 					}
 					else {
 						view.setText(mContext.getString(R.string.NoBlockedGroup2))
@@ -3843,7 +3891,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					val peerId: Long
 					val kickedBy: Long
 					val promotedBy: Long
-					val bannedRights: TL_chatBannedRights?
+					val bannedRights: TLChatBannedRights?
 					val banned: Boolean
 					val creator: Boolean
 					val admin: Boolean
@@ -3851,25 +3899,25 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 					when (item) {
 						is ChannelParticipant -> {
-							peerId = MessageObject.getPeerId(item.peer)
-							kickedBy = item.kicked_by
-							promotedBy = item.promoted_by
-							bannedRights = item.banned_rights
+							peerId = MessageObject.getPeerId(item.peer).takeIf { it != 0L } ?: item.userId
+							kickedBy = item.kickedBy
+							promotedBy = item.promotedBy
+							bannedRights = item.bannedRights
 							joined = item.date
-							banned = item is TL_channelParticipantBanned
-							creator = item is TL_channelParticipantCreator
-							admin = item is TL_channelParticipantAdmin
+							banned = item is TLChannelParticipantBanned
+							creator = item is TLChannelParticipantCreator
+							admin = item is TLChannelParticipantAdmin
 						}
 
 						is ChatParticipant -> {
-							peerId = item.user_id
+							peerId = item.userId
 							joined = item.date
 							kickedBy = 0
 							promotedBy = 0
 							bannedRights = null
 							banned = false
-							creator = item is TL_chatParticipantCreator
-							admin = item is TL_chatParticipantAdmin
+							creator = item is TLChatParticipantCreator
+							admin = item is TLChatParticipantAdmin
 						}
 
 						else -> {
@@ -3959,7 +4007,13 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 							TYPE_ADMIN -> {
 								if (addNewRow != -1) {
 									if (isChannel) {
-										privacyCell.setText(mContext.getString(R.string.ChannelAdminsInfo))
+										val description = if (ChatObject.isMasterclass(currentChat)) {
+											mContext.getString(R.string.MasterclassAdminsInfo)
+										}
+										else {
+											mContext.getString(R.string.ChannelAdminsInfo)
+										}
+										privacyCell.setText(description)
 									}
 									else {
 										privacyCell.setText(mContext.getString(R.string.MegaAdminsInfo))
@@ -3977,7 +4031,13 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 									privacyCell.setText("")
 								}
 								else {
-									privacyCell.setText(mContext.getString(R.string.ChannelMembersInfo))
+									val description = if (ChatObject.isMasterclass(currentChat)) {
+										mContext.getString(R.string.MasterclassMembersInfo)
+									}
+									else {
+										mContext.getString(R.string.ChannelMembersInfo)
+									}
+									privacyCell.setText(description)
 								}
 
 								privacyCell.background = Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, mContext.getColor(R.color.shadow))
@@ -4057,7 +4117,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 					if (position == restricted1SectionRow) {
 						if (type == TYPE_BANNED) {
-							val count = if (info != null) info!!.kicked_count else participants.size
+							val count = if (info != null) info!!.kickedCount else participants.size
 
 							if (count != 0) {
 								headerCell.setText(LocaleController.formatPluralString("RemovedUser", count))
@@ -4083,7 +4143,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 				6 -> {
 					val settingsCell = holder.itemView as TextSettingsCell
-					settingsCell.setTextAndValue(mContext.getString(R.string.ChannelBlacklist), String.format(Locale.getDefault(), "%d", info?.kicked_count ?: 0), false)
+					settingsCell.setTextAndValue(mContext.getString(R.string.ChannelBlacklist), String.format(Locale.getDefault(), "%d", info?.kickedCount ?: 0), false)
 				}
 
 				7 -> {
@@ -4091,43 +4151,43 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 
 					when (position) {
 						changeInfoRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsChangeInfo), !defaultBannedRights.change_info && currentChat?.username.isNullOrEmpty(), false)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsChangeInfo), !defaultBannedRights.changeInfo && currentChat?.username.isNullOrEmpty(), false)
 						}
 
 						addUsersRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsInviteUsers), !defaultBannedRights.invite_users, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsInviteUsers), !defaultBannedRights.inviteUsers, true)
 						}
 
 						pinMessagesRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsPinMessages), !defaultBannedRights.pin_messages && currentChat?.username.isNullOrEmpty(), true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsPinMessages), !defaultBannedRights.pinMessages && currentChat?.username.isNullOrEmpty(), true)
 						}
 
 						sendMessagesRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSend), !defaultBannedRights.send_messages, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSend), !defaultBannedRights.sendMessages, true)
 						}
 
 						sendMediaRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendMedia), !defaultBannedRights.send_media, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendMedia), !defaultBannedRights.sendMedia, true)
 						}
 
 						sendStickersRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendStickers), !defaultBannedRights.send_stickers, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendStickers), !defaultBannedRights.sendStickers, true)
 						}
 
 						embedLinksRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsEmbedLinks), !defaultBannedRights.embed_links, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsEmbedLinks), !defaultBannedRights.embedLinks, true)
 						}
 
 						sendPollsRow -> {
-							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendPolls), !defaultBannedRights.send_polls, true)
+							checkCell.setTextAndCheck(mContext.getString(R.string.UserRestrictionsSendPolls), !defaultBannedRights.sendPolls, true)
 						}
 					}
 
 					if (position == sendMediaRow || position == sendStickersRow || position == embedLinksRow || position == sendPollsRow) {
-						checkCell.isEnabled = !defaultBannedRights.send_messages && !defaultBannedRights.view_messages
+						checkCell.isEnabled = !defaultBannedRights.sendMessages && !defaultBannedRights.viewMessages
 					}
 					else if (position == sendMessagesRow) {
-						checkCell.isEnabled = !defaultBannedRights.view_messages
+						checkCell.isEnabled = !defaultBannedRights.viewMessages
 					}
 					if (ChatObject.canBlockUsers(currentChat)) {
 						if (position == addUsersRow && !ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_INVITE) || position == pinMessagesRow && !ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_PIN) || position == changeInfoRow && !ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_CHANGE_INFO) || !currentChat?.username.isNullOrEmpty() && (position == pinMessagesRow || position == changeInfoRow)) {
@@ -4173,7 +4233,7 @@ class ChatUsersActivity(args: Bundle) : BaseFragment(args), NotificationCenterDe
 					val flickerLoadingView = holder.itemView as FlickerLoadingView
 
 					if (type == TYPE_BANNED) {
-						flickerLoadingView.setItemsCount(info?.kicked_count ?: 1)
+						flickerLoadingView.setItemsCount(info?.kickedCount ?: 1)
 					}
 					else {
 						flickerLoadingView.setItemsCount(1)

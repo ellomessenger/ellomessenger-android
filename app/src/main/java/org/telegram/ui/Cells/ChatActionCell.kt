@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -12,7 +12,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -36,6 +35,8 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.ColorInt
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.BuildConfig
@@ -59,6 +60,10 @@ import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.action
+import org.telegram.tgnet.document
+import org.telegram.tgnet.media
+import org.telegram.tgnet.photo
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedEmojiDrawable
@@ -92,7 +97,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 				val messageObject = messageObject
 
 				if (messageObject != null) {
-					setMessageObject(messageObject, force = true, collapseForDate = collapseForDate)
+					setMessageObject(messageObject, force = true)
 				}
 			}
 
@@ -101,7 +106,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 					val messageObject = messageObject
 
 					if (messageObject != null) {
-						setMessageObject(messageObject, force = true, collapseForDate = collapseForDate)
+						setMessageObject(messageObject, force = true)
 					}
 				}
 			}
@@ -116,7 +121,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 
 	interface ChatActionCellDelegate {
 		fun didClickImage(cell: ChatActionCell?) {}
-		fun didOpenPremiumGift(cell: ChatActionCell?, giftOption: TLRPC.TL_premiumGiftOption?, animateConfetti: Boolean) {}
+		fun didOpenPremiumGift(cell: ChatActionCell?, giftOption: TLRPC.TLPremiumGiftOption?, animateConfetti: Boolean) {}
 
 		fun didLongPress(cell: ChatActionCell?, x: Float, y: Float): Boolean {
 			return false
@@ -125,7 +130,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 		fun needOpenUserProfile(uid: Long) {}
 		fun didPressBotButton(messageObject: MessageObject?, button: TLRPC.KeyboardButton?) {}
 		fun didPressReplyMessage(cell: ChatActionCell?, id: Int) {}
-		fun needOpenInviteLink(invite: TLRPC.TL_chatInviteExported?) {}
+		fun needOpenInviteLink(invite: TLRPC.TLChatInviteExported?) {}
 		fun needShowEffectOverlay(cell: ChatActionCell?, document: TLRPC.Document?, videoSize: TLRPC.VideoSize?) {}
 	}
 
@@ -155,7 +160,6 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 	private var lastTouchY = 0f
 	private var wasLayout = false
 	private var hasReplyMessage = false
-	private var collapseForDate = false
 	private var customText: CharSequence? = null
 	private var overrideBackgroundPaint: Paint? = null
 	private var overrideTextPaint: TextPaint? = null
@@ -300,9 +304,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 		overrideText = text
 	}
 
-	fun setMessageObject(messageObject: MessageObject, force: Boolean = false, collapseForDate: Boolean) {
-		this.collapseForDate = collapseForDate
-
+	fun setMessageObject(messageObject: MessageObject, force: Boolean = false) {
 		if (this.messageObject === messageObject && (textLayout == null || TextUtils.equals(textLayout!!.text, messageObject.messageText)) && (hasReplyMessage || messageObject.replyMessageObject == null) && !force) {
 			return
 		}
@@ -332,7 +334,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 				photoImage.setImageBitmap(RLottieDrawable(R.raw.premium_gift, messageObject.id.toString() + "_" + R.raw.premium_gift, AndroidUtilities.dp(160f), AndroidUtilities.dp(160f)))
 			}
 			else {
-				var set: TLRPC.TL_messages_stickerSet?
+				var set: TLRPC.TLMessagesStickerSet?
 				var document: TLRPC.Document? = null
 				val packName = getInstance(currentAccount).premiumGiftsStickerPack
 
@@ -348,7 +350,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 				}
 
 				if (set != null) {
-					var months = messageObject.messageOwner?.action?.months ?: 0
+					var months = (messageObject.messageOwner?.action as? TLRPC.TLMessageActionGiftPremium)?.months ?: 0
 					val monthsEmoticon: String?
 
 					if (USE_PREMIUM_GIFT_MONTHS_AS_EMOJI_NUMBERS) {
@@ -394,15 +396,15 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 				forceWasUnread = messageObject.wasUnread
 				giftSticker = document
 
-				if (document != null) {
+				if (document is TLRPC.TLDocument) {
 					photoImage.setAllowStartLottieAnimation(false)
 					photoImage.setDelegate(giftStickerDelegate)
 
 					giftEffectAnimation = null
 
-					for (i in document.video_thumbs.indices) {
-						if ("f" == document.video_thumbs[i].type) {
-							giftEffectAnimation = document.video_thumbs[i]
+					for (i in document.videoThumbs.indices) {
+						if ("f" == document.videoThumbs[i].type) {
+							giftEffectAnimation = document.videoThumbs[i]
 							break
 						}
 					}
@@ -426,47 +428,47 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 
 			avatarDrawable.setInfo(null, null)
 
-			if (messageObject.messageOwner?.action is TLRPC.TL_messageActionUserUpdatedPhoto) {
-				photoImage.setImage(null, null, avatarDrawable, null, messageObject, 0)
+//			if (messageObject.messageOwner?.action is TLRPC.TLMessageActionUserUpdatedPhoto) {
+//				photoImage.setImage(null, null, avatarDrawable, null, messageObject, 0)
+//			}
+//			else {
+			val strippedPhotoSize = messageObject.photoThumbs?.firstOrNull {
+				it is TLRPC.TLPhotoStrippedSize
 			}
-			else {
-				val strippedPhotoSize = messageObject.photoThumbs?.firstOrNull {
-					it is TLRPC.TL_photoStrippedSize
-				}
 
-				val photoSize = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 640)
+			val photoSize = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 640)
 
-				if (photoSize != null) {
-					val photo = messageObject.messageOwner?.action?.photo
-					var videoSize: TLRPC.VideoSize? = null
+			if (photoSize != null) {
+				val photo = messageObject.messageOwner?.action?.photo
+				var videoSize: TLRPC.VideoSize? = null
 
-					if (photo != null) {
-						if (photo.video_sizes.isNotEmpty() && SharedConfig.autoplayGifs) {
-							videoSize = photo.video_sizes[0]
+				if (photo is TLRPC.TLPhoto) {
+					if (photo.videoSizes.isNotEmpty() && SharedConfig.autoplayGifs) {
+						videoSize = photo.videoSizes[0]
 
-							if (!messageObject.mediaExists && !DownloadController.getInstance(currentAccount).canDownloadMedia(DownloadController.AUTODOWNLOAD_TYPE_VIDEO, videoSize.size.toLong())) {
-								currentVideoLocation = ImageLocation.getForPhoto(videoSize, photo)
+						if (!messageObject.mediaExists && !DownloadController.getInstance(currentAccount).canDownloadMedia(DownloadController.AUTODOWNLOAD_TYPE_VIDEO, videoSize.size.toLong())) {
+							currentVideoLocation = ImageLocation.getForPhoto(videoSize, photo)
 
-								val fileName = FileLoader.getAttachFileName(videoSize)
+							val fileName = FileLoader.getAttachFileName(videoSize)
 
-								DownloadController.getInstance(currentAccount).addLoadingFileObserver(fileName, messageObject, this)
+							DownloadController.getInstance(currentAccount).addLoadingFileObserver(fileName, messageObject, this)
 
-								videoSize = null
-							}
+							videoSize = null
 						}
 					}
+				}
 
-					if (videoSize != null) {
-						photoImage.setImage(ImageLocation.getForPhoto(videoSize, photo), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(strippedPhotoSize, messageObject.photoThumbsObject), "50_50_b", avatarDrawable, 0, null, messageObject, 1)
-					}
-					else {
-						photoImage.setImage(ImageLocation.getForObject(photoSize, messageObject.photoThumbsObject), "150_150", ImageLocation.getForObject(strippedPhotoSize, messageObject.photoThumbsObject), "50_50_b", avatarDrawable, 0, null, messageObject, 1)
-					}
+				if (videoSize != null) {
+					photoImage.setImage(ImageLocation.getForPhoto(videoSize, photo), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(strippedPhotoSize, messageObject.photoThumbsObject), "50_50_b", avatarDrawable, 0, null, messageObject, 1)
 				}
 				else {
-					photoImage.setImageBitmap(avatarDrawable)
+					photoImage.setImage(ImageLocation.getForObject(photoSize, messageObject.photoThumbsObject), "150_150", ImageLocation.getForObject(strippedPhotoSize, messageObject.photoThumbsObject), "50_50_b", avatarDrawable, 0, null, messageObject, 1)
 				}
 			}
+			else {
+				photoImage.setImageBitmap(avatarDrawable)
+			}
+//			}
 
 			photoImage.setVisible(!PhotoViewer.isShowingImage(messageObject), false)
 		}
@@ -662,9 +664,9 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 	}
 
 	private fun openPremiumGiftPreview() {
-		val action = messageObject?.messageOwner?.action ?: return
+		val action = (messageObject?.messageOwner?.action as? TLRPC.TLMessageActionGiftPremium) ?: return
 
-		val giftOption = TLRPC.TL_premiumGiftOption()
+		val giftOption = TLRPC.TLPremiumGiftOption()
 		giftOption.amount = action.amount
 		giftOption.months = action.months
 		giftOption.currency = action.currency
@@ -682,7 +684,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 				val spanNoUnderline = pressedLink as URLSpanNoUnderline
 				val `object` = spanNoUnderline.getObject()
 
-				if (`object` is TLRPC.TL_chatInviteExported) {
+				if (`object` is TLRPC.TLChatInviteExported) {
 					delegate?.needOpenInviteLink(`object`)
 				}
 			}
@@ -775,12 +777,6 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 			return
 		}
 
-		if (messageObject?.messageOwner?.action != null || collapseForDate) {
-			// MARK: remove to show action messages in chat
-			setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), 0)
-			return
-		}
-
 		if (messageObject != null && messageObject.type == MessageObject.TYPE_GIFT_PREMIUM) {
 			giftRectSize = min((if (AndroidUtilities.isTablet()) AndroidUtilities.getMinTabletSide() * 0.6f else AndroidUtilities.displaySize.x * 0.6f).toInt(), AndroidUtilities.displaySize.y - ActionBar.getCurrentActionBarHeight() - AndroidUtilities.statusBarHeight - AndroidUtilities.dp(64f))
 			stickerSize = giftRectSize - AndroidUtilities.dp(106f)
@@ -831,11 +827,11 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 		val messageObject = messageObject
 
 		val text = if (messageObject != null) {
-			if (messageObject.messageOwner?.media != null && messageObject.messageOwner?.media?.ttl_seconds != 0) {
-				if (messageObject.messageOwner?.media?.photo is TLRPC.TL_photoEmpty) {
+			if (messageObject.messageOwner?.media != null && messageObject.messageOwner?.media?.ttlSeconds != 0) {
+				if (messageObject.messageOwner?.media?.photo is TLRPC.TLPhotoEmpty) {
 					context.getString(R.string.AttachPhotoExpired)
 				}
-				else if (messageObject.messageOwner?.media?.document is TLRPC.TL_documentEmpty) {
+				else if (messageObject.messageOwner?.media?.document is TLRPC.TLDocumentEmpty) {
 					context.getString(R.string.AttachVideoExpired)
 				}
 				else {
@@ -857,7 +853,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 				photoImage.setImageCoordinates((previousWidth - AndroidUtilities.roundMessageSize) / 2f, (textHeight + AndroidUtilities.dp(19f)).toFloat(), AndroidUtilities.roundMessageSize.toFloat(), AndroidUtilities.roundMessageSize.toFloat())
 			}
 			else if (messageObject.type == MessageObject.TYPE_GIFT_PREMIUM) {
-				createGiftPremiumLayouts(context.getString(R.string.ActionGiftPremiumTitle), context.getString(R.string.ActionGiftPremiumSubtitle, LocaleController.formatPluralString("Months", messageObject.messageOwner?.action?.months ?: 0)), context.getString(R.string.ActionGiftPremiumView), giftRectSize)
+				createGiftPremiumLayouts(context.getString(R.string.ActionGiftPremiumTitle), context.getString(R.string.ActionGiftPremiumSubtitle, LocaleController.formatPluralString("Months", (messageObject.messageOwner?.action as? TLRPC.TLMessageActionGiftPremium)?.months ?: 0)), context.getString(R.string.ActionGiftPremiumView), giftRectSize)
 			}
 		}
 	}
@@ -960,12 +956,10 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 			y += giftPremiumTitleLayout!!.height.toFloat()
 			y += AndroidUtilities.dp(4f).toFloat()
 
-			canvas.save()
-			canvas.translate(x, y)
+			canvas.withTranslation(x, y) {
+				giftPremiumSubtitleLayout?.draw(this)
 
-			giftPremiumSubtitleLayout?.draw(canvas)
-
-			canvas.restore()
+			}
 
 			y += giftPremiumSubtitleLayout!!.height.toFloat()
 			y += (height - y - giftPremiumButtonLayout!!.height - AndroidUtilities.dp(8f)) / 2f
@@ -981,22 +975,18 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 			starsPath.rewind()
 			starsPath.addRoundRect(giftButtonRect, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat(), Path.Direction.CW)
 
-			canvas.save()
-			canvas.clipPath(starsPath)
+			canvas.withClip(starsPath) {
+				starParticlesDrawable.onDraw(this)
 
-			starParticlesDrawable.onDraw(canvas)
+				if (!starParticlesDrawable.paused) {
+					invalidate()
+				}
 
-			if (!starParticlesDrawable.paused) {
-				invalidate()
 			}
 
-			canvas.restore()
-			canvas.save()
-			canvas.translate(x, y)
-
-			giftPremiumButtonLayout!!.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(x, y) {
+				giftPremiumButtonLayout?.draw(this)
+			}
 		}
 	}
 
@@ -1009,11 +999,6 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 			if (!hasGradientService() && fromParent) {
 				return
 			}
-		}
-
-		// MARK: prevent background from drawing for hidden service messages
-		if (measuredHeight == 0) {
-			return
 		}
 
 		var backgroundPaint = getThemedPaint(Theme.key_paint_chatActionBackground)
@@ -1239,7 +1224,7 @@ open class ChatActionCell @JvmOverloads constructor(context: Context, private va
 		val messageObject = messageObject
 
 		if (messageObject != null && messageObject.type == 11) {
-			val strippedPhotoSize = messageObject.photoThumbs?.firstOrNull { it is TLRPC.TL_photoStrippedSize }
+			val strippedPhotoSize = messageObject.photoThumbs?.firstOrNull { it is TLRPC.TLPhotoStrippedSize }
 			photoImage.setImage(currentVideoLocation, ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(strippedPhotoSize, messageObject.photoThumbsObject), "50_50_b", avatarDrawable, 0, null, messageObject, 1)
 			DownloadController.getInstance(currentAccount).removeLoadingFileObserver(this)
 		}

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
@@ -30,7 +30,7 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.Components.Bulletin.ButtonLayout
 import org.telegram.ui.Components.Bulletin.EmptyBulletin
@@ -88,7 +88,7 @@ class BulletinFactory {
 		layout.imageView.setImageDrawable(drawable)
 		layout.textView.text = text
 		layout.textView.isSingleLine = false
-		layout.textView.maxLines = 2
+		layout.textView.maxLines = 3
 		layout.setButton(UndoButton(context, true).setText(button).setUndoAction(onButtonClick))
 		return create(layout, Bulletin.DURATION_LONG)
 	}
@@ -303,11 +303,7 @@ class BulletinFactory {
 		enum class Icon(val resId: Int, val paddingBottom: Int, vararg layers: String) {
 			SAVED_TO_DOWNLOADS(R.raw.ic_download, 2, "Box", "Arrow"), SAVED_TO_GALLERY(R.raw.ic_save_to_gallery, 0, "Box", "Arrow", "Mask", "Arrow 2", "Splash"), SAVED_TO_MUSIC(R.raw.ic_save_to_music, 2, "Box", "Arrow"), SAVED_TO_GIFS(R.raw.ic_save_to_gifs, 0, "gif");
 
-			val layers: Array<String>
-
-			init {
-				this.layers = layers.asList().toTypedArray()
-			}
+			val layers = layers.asList().toTypedArray()
 		}
 	}
 
@@ -592,11 +588,11 @@ class BulletinFactory {
 			val layout = LottieLayout(fragment.parentActivity!!)
 			layout.setAnimation(R.raw.ic_ban, "Hand")
 
-			val name = if (user.deleted) {
+			val name = if ((user as? TLRPC.TLUser)?.deleted == true) {
 				LocaleController.formatString("HiddenName", R.string.HiddenName)
 			}
 			else {
-				user.first_name
+				user.firstName
 			}
 
 			layout.textView.text = AndroidUtilities.replaceTags(LocaleController.formatString("UserRemovedFromChatHint", R.string.UserRemovedFromChatHint, name, chatName))

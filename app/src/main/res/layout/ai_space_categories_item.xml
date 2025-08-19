@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="wrap_content"
+	android:layout_height="wrap_content"
+	android:gravity="center_vertical"
+	android:paddingVertical="8dp">
+
+	<LinearLayout
+		android:id="@+id/categories_bg"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:background="@drawable/ai_categories_filter_background"
+		android:gravity="center_vertical"
+		android:orientation="horizontal"
+		android:layout_marginEnd="10dp"
+		android:paddingHorizontal="16dp">
+
+		<TextView
+			android:id="@+id/filter_text"
+			android:layout_width="wrap_content"
+			android:layout_height="30dp"
+			android:gravity="center"
+			android:textColor="@color/dark_fixed"
+			android:textSize="13sp"
+			tools:text="All" />
+	</LinearLayout>
+
+</FrameLayout>

@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.channel
 
@@ -35,6 +35,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.isGone
 import androidx.core.widget.addTextChangedListener
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject
@@ -51,6 +52,7 @@ import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.link
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -122,12 +124,12 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 	private var lastNameAvailable = false
 	private var isPrivate = false
 	private var loadingInvite = false
-	private var invite: TLRPC.TL_chatInviteExported? = null
+	private var invite: TLRPC.ExportedChatInvite? = null
 	private var loadingAdministeredChannels = false
 	private var administeredInfoCell: TextInfoPrivacyCell? = null
 	private val administeredChannelCells = ArrayList<AdministeredChannelCell>()
 	private var loadingAdministeredCell: LoadingCell? = null
-	private val currentStep: Int
+	private val currentStep = args.getInt("step", 0)
 	private var chatId: Long = 0
 	private var canCreatePublic = true
 	private var inputPhoto: TLRPC.InputFile? = null
@@ -245,15 +247,14 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 	}
 
 	init {
-		currentStep = args.getInt("step", 0)
 
 		if (currentStep == 0) {
 			avatarDrawable = AvatarDrawable()
 			imageUpdater = ImageUpdater(false)
 
-			val req = TLRPC.TL_channels_checkUsername()
+			val req = TLRPC.TLChannelsCheckUsername()
 			req.username = "1"
-			req.channel = TLRPC.TL_inputChannelEmpty()
+			req.channel = TLRPC.TLInputChannelEmpty()
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req) { _, error ->
 				AndroidUtilities.runOnUIThread {
@@ -336,7 +337,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 							return
 						}
 
-						doneRequestId = MessagesController.getInstance(currentAccount).createChat(nameTextView?.text?.toString() ?: "", ArrayList(), descriptionTextView?.text?.toString(), ChatObject.CHAT_TYPE_CHANNEL, false, null, null, this@ChannelCreateActivity, false, TLRPC.Chat.PAY_TYPE_NONE, null, 0.0, null, invite?.link)
+						doneRequestId = MessagesController.getInstance(currentAccount).createChat(nameTextView?.text?.toString() ?: "", ArrayList(), descriptionTextView?.text?.toString(), ChatObject.CHAT_TYPE_CHANNEL, false, null, null, this@ChannelCreateActivity, false, TLRPC.PAY_TYPE_NONE, null, 0.0, null, invite?.link)
 					}
 					else if (currentStep == 1) {
 						if (!isPrivate) {
@@ -408,7 +409,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 					for (i in 0 until childCount) {
 						val child = getChildAt(i)
 
-						if (child == null || child.visibility == GONE || child === actionBar) {
+						if (child == null || child.isGone || child === actionBar) {
 							continue
 						}
 
@@ -441,7 +442,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 					for (i in 0 until count) {
 						val child = getChildAt(i)
 
-						if (child.visibility == GONE) {
+						if (child.isGone) {
 							continue
 						}
 
@@ -798,12 +799,12 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 
 			linkContainer?.addView(privateContainer, createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT))
 
-			val linkType = if (ChatObject.isChannel(messagesController.getChat(chatId))) {
-				LinkActionView.LinkActionType.CHANNEL
-			}
-			else {
-				LinkActionView.LinkActionType.GROUP
-			}
+//			val linkType = if (ChatObject.isChannel(messagesController.getChat(chatId))) {
+//				LinkActionView.LinkActionType.CHANNEL
+//			}
+//			else {
+//				LinkActionView.LinkActionType.GROUP
+//			}
 
 			permanentLinkView = LinkActionView(context, this, null, true)
 			permanentLinkView?.hideRevokeOption(true)
@@ -852,7 +853,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 		val chatFull = messagesController.getChatFull(chatId)
 
 		if (chatFull != null) {
-			invite = chatFull.exported_invite
+			invite = chatFull.exportedInvite
 		}
 
 		if (invite != null) {
@@ -861,16 +862,16 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 
 		loadingInvite = true
 
-		val req = TLRPC.TL_messages_getExportedChatInvites()
+		val req = TLRPC.TLMessagesGetExportedChatInvites()
 		req.peer = messagesController.getInputPeer(-chatId)
-		req.admin_id = messagesController.getInputUser(userConfig.getCurrentUser())
+		req.adminId = messagesController.getInputUser(userConfig.getCurrentUser())
 		req.limit = 1
 
 		connectionsManager.sendRequest(req) { response, error ->
 			AndroidUtilities.runOnUIThread {
 				if (error == null) {
-					val invites = response as TLRPC.TL_messages_exportedChatInvites
-					invite = invites.invites[0] as TLRPC.TL_chatInviteExported
+					val invites = response as TLRPC.TLMessagesExportedChatInvites
+					invite = invites.invites[0] as TLRPC.TLChatInviteExported
 				}
 
 				loadingInvite = false
@@ -1138,7 +1139,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 
 		updatePrivatePublic()
 
-		val req = TLRPC.TL_channels_getAdminedPublicChannels()
+		val req = TLRPC.TLChannelsGetAdminedPublicChannels()
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
@@ -1153,7 +1154,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 
 					administeredChannelCells.clear()
 
-					val res = response as TLRPC.TL_messages_chats
+					val res = response as TLRPC.TLMessagesChats
 
 					for (a in res.chats.indices) {
 						val administeredChannelCell = AdministeredChannelCell(parentActivity, false, 0) { view ->
@@ -1173,12 +1174,12 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 							builder.setNegativeButton(parentActivity.getString(R.string.Cancel), null)
 
 							builder.setPositiveButton(parentActivity.getString(R.string.RevokeButton)) { _, _ ->
-								val req1 = TLRPC.TL_channels_updateUsername()
+								val req1 = TLRPC.TLChannelsUpdateUsername()
 								req1.channel = MessagesController.getInputChannel(channel)
 								req1.username = ""
 
 								ConnectionsManager.getInstance(currentAccount).sendRequest(req1, { response1, _ ->
-									if (response1 is TLRPC.TL_boolTrue) {
+									if (response1 is TLRPC.TLBoolTrue) {
 										AndroidUtilities.runOnUIThread {
 											canCreatePublic = true
 
@@ -1272,7 +1273,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 		lastCheckName = name
 
 		checkRunnable = Runnable {
-			val req = TLRPC.TL_channels_checkUsername()
+			val req = TLRPC.TLChannelsCheckUsername()
 			req.username = name
 			req.channel = MessagesController.getInstance(currentAccount).getInputChannel(chatId)
 
@@ -1281,7 +1282,7 @@ class ChannelCreateActivity(args: Bundle) : BaseFragment(args), NotificationCent
 					checkReqId = 0
 
 					if (lastCheckName != null && lastCheckName == name) {
-						if (error == null && response is TLRPC.TL_boolTrue) {
+						if (error == null && response is TLRPC.TLBoolTrue) {
 							checkTextView?.text = LocaleController.formatString("LinkAvailable", R.string.LinkAvailable)
 							checkTextView?.setTextColor(ResourcesCompat.getColor(context.resources, R.color.green, null))
 							lastNameAvailable = true

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -36,7 +36,6 @@ import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.WalletHelper
-import org.telegram.tgnet.tlrpc.TL_error
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.Components.LayoutHelper
@@ -362,7 +361,7 @@ class TransactionsHistoryFragment(args: Bundle) : BaseFragment(args), WalletTran
 		recyclerView?.adapter?.notifyDataSetChanged()
 	}
 
-	override fun onTransactionsLoadError(error: TL_error?) {
+	override fun onTransactionsLoadError(error: TLRPC.TLError?) {
 		val context = context ?: return
 		val message = context.getString(R.string.failed_to_load_transactions_history_format, error?.text ?: context.getString(R.string.unknown_error_occurred))
 		Toast.makeText(context, message, Toast.LENGTH_SHORT).show()

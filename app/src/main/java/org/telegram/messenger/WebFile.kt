@@ -4,21 +4,21 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger
 
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.DocumentAttribute
 import org.telegram.tgnet.TLRPC.InputGeoPoint
 import org.telegram.tgnet.TLRPC.InputPeer
 import org.telegram.tgnet.TLRPC.InputWebFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputGeoPoint
-import org.telegram.tgnet.TLRPC.TL_inputWebFileGeoPointLocation
-import org.telegram.tgnet.TLRPC.TL_inputWebFileLocation
-import org.telegram.tgnet.TLRPC.TL_webDocument
+import org.telegram.tgnet.TLRPC.TLInputGeoPoint
+import org.telegram.tgnet.TLRPC.TLInputWebFileGeoPointLocation
+import org.telegram.tgnet.TLRPC.TLInputWebFileLocation
+import org.telegram.tgnet.TLRPC.TLWebDocument
 import org.telegram.tgnet.TLRPC.WebDocument
-import org.telegram.tgnet.tlrpc.TLObject
 import java.util.Locale
 
 class WebFile : TLObject() {
@@ -37,23 +37,29 @@ class WebFile : TLObject() {
 
 	companion object {
 		@JvmStatic
-		fun createWithGeoPoint(point: TLRPC.GeoPoint, w: Int, h: Int, zoom: Int, scale: Int): WebFile {
-			return createWithGeoPoint(point.lat, point._long, point.access_hash, w, h, zoom, scale)
+		fun createWithGeoPoint(point: TLRPC.GeoPoint?, w: Int, h: Int, zoom: Int, scale: Int): WebFile? {
+			if (point is TLRPC.TLGeoPoint) {
+				return createWithGeoPoint(point.lat, point.lon, point.accessHash, w, h, zoom, scale)
+			}
+
+			return null
 		}
 
 		fun createWithGeoPoint(latitude: Double, longitude: Double, accessHash: Long, w: Int, h: Int, zoom: Int, scale: Int): WebFile {
 			val webFile = WebFile()
 
-			val location = TL_inputWebFileGeoPointLocation()
+			val location = TLInputWebFileGeoPointLocation()
 
 			webFile.location = location
-			webFile.geoPoint = TL_inputGeoPoint()
 
-			location.geo_point = webFile.geoPoint
-			location.access_hash = accessHash
+			webFile.geoPoint = TLInputGeoPoint().also {
+				it.lat = latitude
+				it.lon = longitude
+			}
 
-			webFile.geoPoint?.lat = latitude
-			webFile.geoPoint?._long = longitude
+			location.geoPoint = webFile.geoPoint
+			location.accessHash = accessHash
+
 			webFile.w = w
 
 			location.w = webFile.w
@@ -78,22 +84,22 @@ class WebFile : TLObject() {
 		}
 
 		@JvmStatic
-		fun createWithWebDocument(webDocument: WebDocument): WebFile? {
-			if (webDocument !is TL_webDocument) {
+		fun createWithWebDocument(webDocument: WebDocument?): WebFile? {
+			if (webDocument !is TLWebDocument) {
 				return null
 			}
 
 			val webFile = WebFile()
-			val location = TL_inputWebFileLocation()
+			val location = TLInputWebFileLocation()
 
 			webFile.location = location
 			webFile.url = webDocument.url
 
 			location.url = webFile.url
-			location.access_hash = webDocument.access_hash
+			location.accessHash = webDocument.accessHash
 
 			webFile.size = webDocument.size
-			webFile.mimeType = webDocument.mime_type
+			webFile.mimeType = webDocument.mimeType
 			webFile.attributes = webDocument.attributes
 
 			return webFile

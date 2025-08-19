@@ -89,7 +89,7 @@ public:
 
     void resumeNetwork(bool partial);
 
-    void pauseNetwork(bool connectionsRetriesDepleted);
+    void pauseNetwork();
 
     void setNetworkAvailable(bool value, int32_t type, bool slow);
 
@@ -178,8 +178,6 @@ private:
 
     void removeEvent(EventObject *eventObject);
 
-    void onConnectionRetryFailed(Connection *connection);
-
     void onConnectionClosed(Connection *connection, int reason);
 
     void onConnectionConnected(Connection *connection);
@@ -195,8 +193,6 @@ private:
     void detachConnection(ConnectionSocket *connection);
 
     TLObject *TLdeserialize(TLObject *request, uint32_t bytes, NativeByteBuffer *data) const;
-
-    std::vector<Request*> getRequestsForConnection(Connection *connection);
 
     TLObject *getRequestWithMessageId(int64_t messageId);
 

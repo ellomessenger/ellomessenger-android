@@ -4,6 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2025.
  */
 package org.telegram.ui.Cells
 
@@ -25,6 +26,8 @@ import android.text.style.URLSpan
 import android.view.MotionEvent
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.Emoji.replaceEmoji
 import org.telegram.messenger.FileLoader.Companion.getClosestPhotoSizeWithSize
@@ -32,16 +35,15 @@ import org.telegram.messenger.FileRefController.Companion.getKeyForParentObject
 import org.telegram.messenger.ImageLoader
 import org.telegram.messenger.ImageLocation
 import org.telegram.messenger.ImageReceiver
-import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
 import org.telegram.messenger.SharedConfig
 import org.telegram.messenger.messageobject.MessageObject.Companion.addLinks
 import org.telegram.messenger.messageobject.MessageObject.Companion.getDocumentVideoThumb
 import org.telegram.messenger.utils.gone
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.BotInfo
-import org.telegram.tgnet.TLRPC.TL_photoStrippedSize
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.sizes
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.ActionBar.MessageDrawable
 import org.telegram.ui.Components.LinkPath
 import org.telegram.ui.Components.TypefaceSpan
@@ -51,7 +53,6 @@ import kotlin.math.max
 import kotlin.math.min
 
 class BotHelpCell(context: Context) : View(context) {
-
 	private var textLayout: StaticLayout? = null
 	private var oldText: String? = null
 	private var currentPhotoKey: String? = null
@@ -96,7 +97,7 @@ class BotHelpCell(context: Context) : View(context) {
 		gone()
 	}
 
-	fun setText(bot: Boolean, text: String?, imageOrAnimation: TLObject?, botInfo: BotInfo?) {
+	fun setText(bot: Boolean, text: String?, imageOrAnimation: TLObject?, botInfo: TLRPC.TLBotInfo?) {
 		var text = text
 		val photoVisible = imageOrAnimation != null
 		val textVisible = !TextUtils.isEmpty(text)
@@ -129,13 +130,15 @@ class BotHelpCell(context: Context) : View(context) {
 
 		val maxWidth = if (AndroidUtilities.isTablet()) {
 			(AndroidUtilities.getMinTabletSide() * 0.7f).toInt()
-		} else {
+		}
+		else {
 			(min(AndroidUtilities.displaySize.x.toDouble(), AndroidUtilities.displaySize.y.toDouble()) * 0.7f).toInt()
 		}
 
 		if (isTextVisible) {
 			setupTextLayout(bot, text, maxWidth)
-		} else if (isPhotoVisible) {
+		}
+		else if (isPhotoVisible) {
 			width = maxWidth
 		}
 
@@ -146,9 +149,8 @@ class BotHelpCell(context: Context) : View(context) {
 		}
 	}
 
-	private fun setupImageReceiver(imageOrAnimation: TLObject?, botInfo: BotInfo?) {
+	private fun setupImageReceiver(imageOrAnimation: TLObject?, botInfo: TLRPC.TLBotInfo?) {
 		when (imageOrAnimation) {
-
 			is TLRPC.Photo -> {
 				imageReceiver.setImage(ImageLocation.getForPhoto(getClosestPhotoSizeWithSize(imageOrAnimation.sizes, 400), imageOrAnimation), "400_400", null, "jpg", botInfo, 0)
 			}
@@ -158,9 +160,9 @@ class BotHelpCell(context: Context) : View(context) {
 				var strippedThumb: BitmapDrawable? = null
 
 				if (SharedConfig.getDevicePerformanceClass() != SharedConfig.PERFORMANCE_CLASS_LOW) {
-					for (photoSize in imageOrAnimation.thumbs) {
-						if (photoSize is TL_photoStrippedSize) {
-							strippedThumb = BitmapDrawable(resources, ImageLoader.getStrippedPhotoBitmap(photoSize.bytes, "b"))
+					for (photoSize in imageOrAnimation.thumbs ?: emptyList()) {
+						if (photoSize is TLRPC.TLPhotoStrippedSize) {
+							strippedThumb = ImageLoader.getStrippedPhotoBitmap(photoSize.bytes, "b")?.toDrawable(resources)
 						}
 					}
 				}
@@ -177,7 +179,7 @@ class BotHelpCell(context: Context) : View(context) {
 	private fun setupTextLayout(bot: Boolean, text: String, maxWidth: Int) {
 		val lines = text.split("\n").dropLastWhile { it.isEmpty() }
 		val stringBuilder = SpannableStringBuilder()
-		val help = LocaleController.getString(R.string.BotInfoTitle)
+		val help = context.getString(R.string.BotInfoTitle)
 
 		if (bot) {
 			stringBuilder.append(help).append("\n\n")
@@ -206,11 +208,7 @@ class BotHelpCell(context: Context) : View(context) {
 		}
 
 		try {
-			textLayout = StaticLayout.Builder.obtain(stringBuilder, 0, stringBuilder.length, textPaint, maxWidth - if (isPhotoVisible) AndroidUtilities.dp(5f) else 0)
-					.setAlignment(Layout.Alignment.ALIGN_NORMAL)
-					.setLineSpacing(0.0f, 1.0f)
-					.setIncludePad(false)
-					.build()
+			textLayout = StaticLayout.Builder.obtain(stringBuilder, 0, stringBuilder.length, textPaint, maxWidth - if (isPhotoVisible) AndroidUtilities.dp(5f) else 0).setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(0.0f, 1.0f).setIncludePad(false).build()
 
 			width = 0
 			height = textLayout?.height?.plus(AndroidUtilities.dp((4 + 18).toFloat())) ?: 0
@@ -223,7 +221,8 @@ class BotHelpCell(context: Context) : View(context) {
 			if (width > maxWidth || isPhotoVisible) {
 				width = maxWidth
 			}
-		} catch (e: Exception) {
+		}
+		catch (e: Exception) {
 			e.printStackTrace()
 		}
 	}
@@ -253,40 +252,49 @@ class BotHelpCell(context: Context) : View(context) {
 									val start = buffer.getSpanStart(pressedLink)
 									urlPath.setCurrentLayout(textLayout, start, 0f)
 									textLayout!!.getSelectionPath(start, buffer.getSpanEnd(pressedLink), urlPath)
-								} catch (e: Exception) {
+								}
+								catch (e: Exception) {
 									e.printStackTrace()
 								}
-							} else {
+							}
+							else {
 								resetPressedLink()
 							}
-						} else {
+						}
+						else {
 							resetPressedLink()
 						}
-					} catch (e: Exception) {
+					}
+					catch (e: Exception) {
 						resetPressedLink()
 						e.printStackTrace()
 					}
-				} else if (pressedLink != null) {
+				}
+				else if (pressedLink != null) {
 					try {
 						if (pressedLink is URLSpanNoUnderline) {
 							val url = (pressedLink as URLSpanNoUnderline).url
 							if (url.startsWith("@") || url.startsWith("#") || url.startsWith("/")) {
 								delegate?.didPressUrl(url)
 							}
-						} else {
+						}
+						else {
 							if (pressedLink is URLSpan) {
 								delegate?.didPressUrl((pressedLink as URLSpan).url)
-							} else {
+							}
+							else {
 								pressedLink!!.onClick(this)
 							}
 						}
-					} catch (e: Exception) {
+					}
+					catch (e: Exception) {
 						e.printStackTrace()
 					}
 					resetPressedLink()
 					result = true
 				}
-			} else if (event.action == MotionEvent.ACTION_CANCEL) {
+			}
+			else if (event.action == MotionEvent.ACTION_CANCEL) {
 				resetPressedLink()
 			}
 		}
@@ -294,10 +302,7 @@ class BotHelpCell(context: Context) : View(context) {
 	}
 
 	override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-		setMeasuredDimension(
-				MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY),
-				height + AndroidUtilities.dp(8f)
-		)
+		setMeasuredDimension(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), height + AndroidUtilities.dp(8f))
 	}
 
 	@SuppressLint("DrawAllocation")
@@ -307,7 +312,7 @@ class BotHelpCell(context: Context) : View(context) {
 
 		y += AndroidUtilities.dp(2f)
 
-		val drawable = MessageDrawable(MessageDrawable.TYPE_MEDIA, isOut = false, isSelected = false);
+		val drawable = MessageDrawable(MessageDrawable.TYPE_MEDIA, isOut = false, isSelected = false)
 		drawable.setTop(y, width, height, topNear = false, bottomNear = false)
 		drawable.setBounds(x, 0, width + x, height)
 		drawable.draw(canvas)
@@ -315,20 +320,18 @@ class BotHelpCell(context: Context) : View(context) {
 		imageReceiver.setImageCoordinates((x + imagePadding).toFloat(), imagePadding.toFloat(), (width - imagePadding * 2).toFloat(), (photoHeight - imagePadding).toFloat())
 		imageReceiver.draw(canvas)
 
-		canvas.save()
-		canvas.translate((AndroidUtilities.dp((if (isPhotoVisible) 14 else 11).toFloat()) + x).also { textX = it }.toFloat(), (AndroidUtilities.dp(11f) + y).also { textY = it }.toFloat())
+		canvas.withTranslation((AndroidUtilities.dp((if (isPhotoVisible) 14 else 11).toFloat()) + x).also { textX = it }.toFloat(), (AndroidUtilities.dp(11f) + y).also { textY = it }.toFloat()) {
+			pressedLink?.let {
+				val chatUrlPaint = Paint().apply {
+					pathEffect = LinkPath.getRoundedEffect()
+					typeface = Typeface.DEFAULT
+					color = context.getColor(R.color.brand)
+				}
 
-		pressedLink?.let {
-			val chatUrlPaint = Paint().apply {
-				pathEffect = LinkPath.getRoundedEffect()
-				typeface = Typeface.DEFAULT
-				color = context.getColor(R.color.brand)
+				drawPath(urlPath, chatUrlPaint)
 			}
-
-			canvas.drawPath(urlPath, chatUrlPaint)
+			textLayout?.draw(this)
 		}
-		textLayout?.draw(canvas)
-		canvas.restore()
 		wasDraw = true
 	}
 

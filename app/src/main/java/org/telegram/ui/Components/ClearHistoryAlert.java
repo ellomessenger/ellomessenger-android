@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2021.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -32,8 +32,8 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
-import org.telegram.tgnet.tlrpc.UserFull;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.CheckBoxCell;
@@ -108,12 +108,12 @@ public class ClearHistoryAlert extends BottomSheet {
 
 		int ttl;
 		if (user != null) {
-			UserFull userFull = MessagesController.getInstance(currentAccount).getUserFull(user.id);
-			ttl = userFull != null ? userFull.ttl_period : 0;
+			var userFull = MessagesController.getInstance(currentAccount).getUserFull(user.id);
+			ttl = userFull != null ? userFull.ttlPeriod : 0;
 		}
 		else {
-			TLRPC.ChatFull chatFull = MessagesController.getInstance(currentAccount).getChatFull(chat.id);
-			ttl = chatFull != null ? chatFull.ttl_period : 0;
+			var chatFull = MessagesController.getInstance(currentAccount).getChatFull(chat.id);
+			ttl = chatFull != null ? chatFull.ttlPeriod : 0;
 		}
 		if (ttl == 0) {
 			newTimer = currentTimer = 0;
@@ -226,7 +226,7 @@ public class ClearHistoryAlert extends BottomSheet {
 
 		long selfUserId = UserConfig.getInstance(currentAccount).getClientUserId();
 
-		boolean canRevokeInbox = user != null && !user.bot && user.id != selfUserId && MessagesController.getInstance(currentAccount).canRevokePmInbox;
+		boolean canRevokeInbox = user != null && !TLRPCExtensions.getBot(user) && user.id != selfUserId && MessagesController.getInstance(currentAccount).canRevokePmInbox;
 		int revokeTimeLimit;
 		if (user != null) {
 			revokeTimeLimit = MessagesController.getInstance(currentAccount).revokeTimePmLimit;

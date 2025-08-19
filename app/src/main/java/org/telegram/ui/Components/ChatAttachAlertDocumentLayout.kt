@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -20,7 +20,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.drawable.ColorDrawable
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Environment
@@ -35,7 +34,10 @@ import android.view.ViewTreeObserver
 import android.webkit.MimeTypeMap
 import android.widget.EditText
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.children
+import androidx.core.view.isNotEmpty
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
@@ -56,13 +58,13 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.ringtone.RingtoneDataStore
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.TL_inputPeerEmpty
-import org.telegram.tgnet.TLRPC.TL_messages_search
-import org.telegram.tgnet.TLRPC.TL_messages_searchGlobal
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.ActionBarMenuItem.ActionBarMenuItemSearchListener
@@ -99,7 +101,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 		val paint = Paint()
 
 		override fun dispatchDraw(canvas: Canvas) {
-			if (currentAnimationType == ANIMATION_FORWARD && childCount > 0) {
+			if (currentAnimationType == ANIMATION_FORWARD && isNotEmpty()) {
 				var top = Int.MAX_VALUE.toFloat()
 
 				for (i in 0 until childCount) {
@@ -126,9 +128,9 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 	private val filtersView = FiltersView(context)
 	private val loadingView = FlickerLoadingView(context)
 	private val emptyView: StickerEmptyView
-	private val selectedFiles = HashMap<String, ListItem>()
-	private val selectedFilesOrder = ArrayList<String>()
-	private val selectedMessages = HashMap<MessageHashId, MessageObject>()
+	private val selectedFiles = mutableMapOf<String, ListItem>()
+	private val selectedFilesOrder = mutableListOf<String>()
+	private val selectedMessages = mutableMapOf<MessageHashId, MessageObject>()
 	private val allowMusic = type == TYPE_MUSIC
 	var isSoundPicker = type == TYPE_RINGTONE
 	private var listAnimation: ValueAnimator? = null
@@ -260,7 +262,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 			val paint = Paint()
 
 			override fun dispatchDraw(canvas: Canvas) {
-				if (currentAnimationType == ANIMATION_BACKWARD && childCount > 0) {
+				if (currentAnimationType == ANIMATION_BACKWARD && isNotEmpty()) {
 					var top = Int.MAX_VALUE.toFloat()
 
 					for (i in 0 until childCount) {
@@ -382,8 +384,8 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 				else if (file == null) {
 					when (`object`.icon) {
 						R.drawable.files_gallery -> {
-							val selectedPhotos = HashMap<Any, Any>()
-							val selectedPhotosOrder = ArrayList<Any>()
+							val selectedPhotos = mutableMapOf<Any, Any>()
+							val selectedPhotosOrder = mutableListOf<Any>()
 							val chatActivity = parentAlert.baseFragment as? ChatActivity
 
 							val fragment = PhotoPickerActivity(0, MediaController.allMediaAlbumEntry, selectedPhotos, selectedPhotosOrder, 0, chatActivity != null, chatActivity, false, parentAlert.baseFragment is CreateMediaSaleFragment)
@@ -757,7 +759,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 		get() = selectedFiles.size + selectedMessages.size
 
 	override fun sendSelectedItems(notify: Boolean, scheduleDate: Int) {
-		if (selectedFiles.size == 0 && selectedMessages.size == 0 || delegate == null || sendPressed) {
+		if (selectedFiles.isEmpty() && selectedMessages.isEmpty() || delegate == null || sendPressed) {
 			return
 		}
 
@@ -774,7 +776,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 			}
 		}
 
-		val files = ArrayList(selectedFilesOrder)
+		val files = selectedFilesOrder.toList()
 
 		delegate?.didSelectFiles(files, parentAlert.commentTextView.text?.toString(), fmessages, notify, scheduleDate)
 
@@ -918,14 +920,14 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 		canSelectOnlyImageFiles = value
 	}
 
-	private fun sendSelectedPhotos(photos: HashMap<Any, Any>, order: ArrayList<Any>, notify: Boolean, scheduleDate: Int) {
+	private fun sendSelectedPhotos(photos: Map<Any, Any>, order: List<Any>, notify: Boolean, scheduleDate: Int) {
 		if (photos.isEmpty() || delegate == null || sendPressed) {
 			return
 		}
 
 		sendPressed = true
 
-		val media = ArrayList<SendingMediaInfo>()
+		val media = mutableListOf<SendingMediaInfo>()
 
 		for (a in order.indices) {
 			val `object` = photos[order[a]]
@@ -1360,38 +1362,37 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 
 		runCatching {
 			BufferedReader(FileReader("/proc/mounts")).use { bufferedReader ->
-				var line = ""
+				var line: String
 
-				while (bufferedReader.readLine()?.takeIf { it.isNotEmpty() }?.also { line = it } != null) {
+				while ((bufferedReader.readLine().also { line = it }) != null) {
 					if (line.contains("vfat") || line.contains("/mnt")) {
+						FileLog.d(line)
+
 						val tokens = StringTokenizer(line, " ")
+						val unused = tokens.nextToken()
 						var path = tokens.nextToken()
 
 						if (paths.contains(path)) {
 							continue
 						}
 
-						if (!line.contains("/mnt/secure") && !line.contains("/mnt/asec") && !line.contains("/mnt/obb") && !line.contains("/dev/mapper") && !line.contains("tmpfs")) {
-							val pathFile = File(path)
+						if (line.contains("/dev/block/vold")) {
+							if (!line.contains("/mnt/secure") && !line.contains("/mnt/asec") && !line.contains("/mnt/obb") && !line.contains("/dev/mapper") && !line.contains("tmpfs")) {
+								if (!File(path).isDirectory) {
+									val index = path.lastIndexOf('/')
 
-							if (!pathFile.isDirectory || !pathFile.canRead()) {
-								runCatching {
-									val newPath = tokens.nextToken()
-									val newPathFile = File(newPath)
+									if (index != -1) {
+										val newPath = "/storage/" + path.substring(index + 1)
 
-									if (newPathFile.isDirectory && newPathFile.canRead()) {
-										path = newPath
-
-										paths.add(path)
+										if (File(newPath).isDirectory) {
+											path = newPath
+										}
 									}
 								}
-							}
-							else {
-								paths.add(path)
-							}
 
-							if (paths.contains(path)) {
-								try {
+								paths.add(path)
+
+								runCatching {
 									val item = ListItem()
 
 									if (path.lowercase().contains("sd")) {
@@ -1406,20 +1407,21 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 									item.file = File(path)
 
 									listAdapter.items.add(item)
-								}
-								catch (e: Exception) {
-									FileLog.e(e)
+								}.onFailure {
+									FileLog.e(it)
 								}
 							}
 						}
 					}
 				}
 			}
+		}.onFailure {
+			FileLog.e(it)
 		}
 
 		var fs: ListItem
 
-		try {
+		runCatching {
 			val telegramPath = File(ApplicationLoader.applicationContext.getExternalFilesDir(null), "Ello")
 
 			if (telegramPath.exists()) {
@@ -1428,11 +1430,11 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 				fs.subtitle = context.getString(R.string.AppFolderInfo)
 				fs.icon = R.drawable.files_folder
 				fs.file = telegramPath
+
 				listAdapter.items.add(fs)
 			}
-		}
-		catch (e: Exception) {
-			FileLog.e(e)
+		}.onFailure {
+			FileLog.e(it)
 		}
 
 		if (!isSoundPicker) {
@@ -1441,6 +1443,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 			fs.subtitle = context.getString(R.string.GalleryInfo)
 			fs.icon = R.drawable.files_gallery
 			fs.file = null
+
 			listAdapter.items.add(fs)
 		}
 
@@ -1450,6 +1453,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 			fs.subtitle = context.getString(R.string.MusicInfo)
 			fs.icon = R.drawable.files_music
 			fs.file = null
+
 			listAdapter.items.add(fs)
 		}
 
@@ -1507,9 +1511,9 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 	}
 
 	private inner class ListAdapter(private val mContext: Context) : SelectionAdapter() {
-		val items = ArrayList<ListItem>()
-		val history = ArrayList<HistoryEntry>()
-		val recentItems = ArrayList<ListItem>()
+		val items = mutableListOf<ListItem>()
+		val history = mutableListOf<HistoryEntry>()
+		val recentItems = mutableListOf<ListItem>()
 
 		override fun isEnabled(holder: RecyclerView.ViewHolder): Boolean {
 			return holder.itemViewType == 1
@@ -1577,7 +1581,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 				2 -> {
 					view = ShadowSectionCell(mContext)
 					val drawable = Theme.getThemedDrawable(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow)
-					val combinedDrawable = CombinedDrawable(ColorDrawable(ResourcesCompat.getColor(resources, R.color.light_background, null)), drawable)
+					val combinedDrawable = CombinedDrawable(ResourcesCompat.getColor(resources, R.color.light_background, null).toDrawable(), drawable)
 					combinedDrawable.setFullSize(true)
 					view.setBackground(combinedDrawable)
 				}
@@ -1636,29 +1640,30 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 	}
 
 	inner class SearchAdapter(private val mContext: Context) : SectionsAdapter() {
+		private val localTipChats = mutableListOf<Any>()
+		private val localTipDates = mutableListOf<DateData>()
 		private val messageHashIdTmp = MessageHashId(0, 0)
-		private val localTipChats = ArrayList<Any>()
-		private val localTipDates = ArrayList<DateData>()
-		val currentSearchFilters = ArrayList<MediaFilterData>()
-		var messages = ArrayList<MessageObject>()
-		private var messagesById = SparseArray<MessageObject>()
-		var sections = ArrayList<String>()
-		private var sectionArrays = HashMap<String, ArrayList<MessageObject>>()
-
-		var searchResult = ArrayList<ListItem>()
-			private set
-
-		private var searchRunnable: Runnable? = null
-		private var localSearchRunnable: Runnable? = null
+		private var animationIndex = -1
+		private var currentDataQuery: String? = null
 		private var currentSearchDialogId: Long = 0
 		private var currentSearchFilter: MediaFilterData? = null
-		private var currentSearchMinDate: Long = 0
 		private var currentSearchMaxDate: Long = 0
-		private var nextSearchRate = 0
-		private var lastSearchFilterQueryString: String? = null
+		private var currentSearchMinDate: Long = 0
+		private var firstLoading = true
 		private var lastMessagesSearchString: String? = null
-		private var currentDataQuery: String? = null
+		private var lastSearchFilterQueryString: String? = null
+		private var localSearchRunnable: Runnable? = null
+		private var messagesById = SparseArray<MessageObject>()
+		private var nextSearchRate = 0
+		private var requestIndex = 0
+		private var searchRunnable: Runnable? = null
+		private var sectionArrays = mutableMapOf<String, MutableList<MessageObject>>()
+		val currentSearchFilters = mutableListOf<MediaFilterData>()
+		var endReached = false
 		var isLoading = false
+		var messages = mutableListOf<MessageObject>()
+		var searchResult = mutableListOf<ListItem>()
+		var sections = mutableListOf<String>()
 
 		private val clearCurrentResultsRunnable = Runnable {
 			if (isLoading) {
@@ -1668,11 +1673,6 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 				notifyDataSetChanged()
 			}
 		}
-
-		private var requestIndex = 0
-		private var firstLoading = true
-		private var animationIndex = -1
-		var endReached = false
 
 		fun search(query: String?, reset: Boolean) {
 			if (localSearchRunnable != null) {
@@ -1693,7 +1693,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 			}
 			else {
 				AndroidUtilities.runOnUIThread(Runnable {
-					val copy = ArrayList(listAdapter.items)
+					val copy = listAdapter.items.toMutableList()
 
 					if (listAdapter.history.isEmpty()) {
 						copy.addAll(0, listAdapter.recentItems)
@@ -1705,7 +1705,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 						val search1 = query.trim().lowercase()
 
 						if (search1.isEmpty()) {
-							updateSearchResults(ArrayList())
+							updateSearchResults(mutableListOf())
 							return@postRunnable
 						}
 
@@ -1722,7 +1722,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 							search[1] = search2
 						}
 
-						val resultArray = ArrayList<ListItem>()
+						val resultArray = mutableListOf<ListItem>()
 
 						if (!hasFilters) {
 							for (a in copy.indices) {
@@ -1810,7 +1810,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 			updateFiltersView(true, null, null, true)
 		}
 
-		fun updateFiltersView(showMediaFilters: Boolean, users: ArrayList<Any>?, dates: ArrayList<DateData>?, animated: Boolean) {
+		fun updateFiltersView(showMediaFilters: Boolean, users: List<Any>?, dates: List<DateData>?, animated: Boolean) {
 			var hasMediaFilter = false
 			var hasUserFilter = false
 			var hasDataFilter = false
@@ -1834,7 +1834,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 				// unused
 			}
 			else if (hasUsersOrDates) {
-				val finalUsers: ArrayList<Any>? = if (!users.isNullOrEmpty() && !hasUserFilter) users else null
+				val finalUsers = if (!users.isNullOrEmpty() && !hasUserFilter) users else null
 				val finalDates = if (!dates.isNullOrEmpty() && !hasDataFilter) dates else null
 
 				if (finalUsers != null || finalDates != null) {
@@ -1950,26 +1950,26 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 				var resultArray: ArrayList<Any>? = null
 
 				if (dialogId != 0L) {
-					val req = TL_messages_search()
+					val req = TLRPC.TLMessagesSearch()
 					req.q = query
 					req.limit = 20
 					req.filter = currentSearchFilter?.filter
 					req.peer = accountInstance.messagesController.getInputPeer(dialogId)
 
 					if (minDate > 0) {
-						req.min_date = (minDate / 1000).toInt()
+						req.minDate = (minDate / 1000).toInt()
 					}
 
 					if (maxDate > 0) {
-						req.max_date = (maxDate / 1000).toInt()
+						req.maxDate = (maxDate / 1000).toInt()
 					}
 
 					if (filterAndQueryIsSame && query == lastMessagesSearchString && messages.isNotEmpty()) {
 						val lastMessage = messages[messages.size - 1]
-						req.offset_id = lastMessage.id
+						req.offsetId = lastMessage.id
 					}
 					else {
-						req.offset_id = 0
+						req.offsetId = 0
 					}
 
 					request = req
@@ -1982,40 +1982,40 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 						accountInstance.messagesStorage.localSearch(0, query, resultArray, resultArrayNames, encUsers, -1)
 					}
 
-					val req = TL_messages_searchGlobal()
+					val req = TLRPC.TLMessagesSearchGlobal()
 					req.limit = 20
 					req.q = query
 					req.filter = currentSearchFilter?.filter
 
 					if (minDate > 0) {
-						req.min_date = (minDate / 1000).toInt()
+						req.minDate = (minDate / 1000).toInt()
 					}
 
 					if (maxDate > 0) {
-						req.max_date = (maxDate / 1000).toInt()
+						req.maxDate = (maxDate / 1000).toInt()
 					}
 
 					if (filterAndQueryIsSame && query == lastMessagesSearchString && messages.isNotEmpty()) {
 						val lastMessage = messages[messages.size - 1]
-						req.offset_id = lastMessage.id
-						req.offset_rate = nextSearchRate
+						req.offsetId = lastMessage.id
+						req.offsetRate = nextSearchRate
 
-						val id = if (lastMessage.messageOwner?.peer_id?.channel_id != 0L) {
-							-lastMessage.messageOwner!!.peer_id!!.channel_id
+						val id = if (lastMessage.messageOwner?.peerId?.channelId != 0L) {
+							-lastMessage.messageOwner!!.peerId!!.channelId
 						}
-						else if (lastMessage.messageOwner?.peer_id?.chat_id != 0L) {
-							-lastMessage.messageOwner!!.peer_id!!.chat_id
+						else if (lastMessage.messageOwner?.peerId?.chatId != 0L) {
+							-lastMessage.messageOwner!!.peerId!!.chatId
 						}
 						else {
-							lastMessage.messageOwner!!.peer_id!!.user_id
+							lastMessage.messageOwner!!.peerId!!.userId
 						}
 
-						req.offset_peer = accountInstance.messagesController.getInputPeer(id)
+						req.offsetPeer = accountInstance.messagesController.getInputPeer(id)
 					}
 					else {
-						req.offset_rate = 0
-						req.offset_id = 0
-						req.offset_peer = TL_inputPeerEmpty()
+						req.offsetRate = 0
+						req.offsetId = 0
+						req.offsetPeer = TLRPC.TLInputPeerEmpty()
 					}
 
 					request = req
@@ -2030,10 +2030,10 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 				FiltersView.fillTipDates(lastMessagesSearchString, dateData)
 
 				accountInstance.connectionsManager.sendRequest(request) { response, error ->
-					val messageObjects = ArrayList<MessageObject>()
+					val messageObjects = mutableListOf<MessageObject>()
 
 					if (error == null) {
-						val res = response as? messages_Messages
+						val res = response as? TLRPC.MessagesMessages
 						val n = res?.messages?.size ?: 0
 
 						for (i in 0 until n) {
@@ -2064,9 +2064,9 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 
 						emptyView.showProgress(false)
 
-						val res = response as? messages_Messages
+						val res = response as? TLRPC.MessagesMessages
 
-						nextSearchRate = res?.next_rate ?: 0
+						nextSearchRate = (res as? TLRPC.TLMessagesMessagesSlice)?.nextRate ?: 0
 
 						accountInstance.messagesStorage.putUsersAndChats(res?.users, res?.chats, true, true)
 						accountInstance.messagesController.putUsers(res?.users, false)
@@ -2090,7 +2090,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 							var messageObjectsByDate = sectionArrays[messageObject.monthKey]
 
 							if (messageObjectsByDate == null) {
-								messageObjectsByDate = ArrayList()
+								messageObjectsByDate = mutableListOf()
 								sectionArrays[messageObject.monthKey!!] = messageObjectsByDate
 								sections.add(messageObject.monthKey!!)
 							}
@@ -2171,7 +2171,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 							listView.removeView(progressView)
 						}
 
-						if (loadingView.visibility == VISIBLE && listView.childCount <= 1 || progressView != null) {
+						if (loadingView.isVisible && listView.childCount <= 1 || progressView != null) {
 							val finalProgressViewPosition = progressViewPosition
 
 							viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
@@ -2244,7 +2244,7 @@ class ChatAttachAlertDocumentLayout(alert: ChatAttachAlert, context: Context, ty
 			loadingView.setViewType(FlickerLoadingView.FILES_TYPE)
 		}
 
-		private fun updateSearchResults(result: ArrayList<ListItem>) {
+		private fun updateSearchResults(result: MutableList<ListItem>) {
 			AndroidUtilities.runOnUIThread {
 				if (searching) {
 					if (listView.adapter !== searchAdapter) {

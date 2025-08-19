@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui
 
@@ -24,11 +24,11 @@ import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_chatReactionsAll
-import org.telegram.tgnet.TLRPC.TL_chatReactionsNone
-import org.telegram.tgnet.TLRPC.TL_chatReactionsSome
-import org.telegram.tgnet.tlrpc.TL_availableReaction
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
+import org.telegram.tgnet.TLRPC.TLAvailableReaction
+import org.telegram.tgnet.TLRPC.TLChatReactionsAll
+import org.telegram.tgnet.TLRPC.TLChatReactionsNone
+import org.telegram.tgnet.TLRPC.TLChatReactionsSome
+import org.telegram.tgnet.TLRPC.TLReactionEmoji
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.BaseFragment
@@ -45,13 +45,13 @@ import java.util.concurrent.CountDownLatch
 class ChatReactionsEditActivity(args: Bundle) : BaseFragment(args), NotificationCenterDelegate {
 	private var currentChat: Chat? = null
 	private var info: ChatFull? = null
-	private val chatId: Long
+	private val chatId = args.getLong(KEY_CHAT_ID, 0)
 	private val chatReactions = mutableListOf<String>()
 	private var contentView: LinearLayout? = null
 	private var listView: RecyclerListView? = null
 	private var listAdapter: RecyclerView.Adapter<RecyclerView.ViewHolder>? = null
 	private var enableReactionsCell: TextCheckCell? = null
-	private val availableReactions = mutableListOf<TL_availableReaction>()
+	private val availableReactions = mutableListOf<TLAvailableReaction>()
 	private var allReactions: RadioCell? = null
 	private var someReactions: RadioCell? = null
 	private var disableReactions: RadioCell? = null
@@ -60,10 +60,6 @@ class ChatReactionsEditActivity(args: Bundle) : BaseFragment(args), Notification
 	private var isChannel = false
 	private var controlsLayout: LinearLayout? = null
 	private var selectedType = -1
-
-	init {
-		chatId = args.getLong(KEY_CHAT_ID, 0)
-	}
 
 	override fun onFragmentCreate(): Boolean {
 		currentChat = messagesController.getChat(chatId)
@@ -384,18 +380,18 @@ class ChatReactionsEditActivity(args: Bundle) : BaseFragment(args), Notification
 
 			chatReactions.clear()
 
-			when (val reactionsSome = info.available_reactions) {
-				is TL_chatReactionsAll -> {
+			when (val reactionsSome = info.availableReactions) {
+				is TLChatReactionsAll -> {
 					startFromType = SELECT_TYPE_ALL
 				}
 
-				is TL_chatReactionsNone -> {
+				is TLChatReactionsNone -> {
 					startFromType = SELECT_TYPE_NONE
 				}
 
-				is TL_chatReactionsSome -> {
+				is TLChatReactionsSome -> {
 					for (reaction in reactionsSome.reactions) {
-						if (reaction is TL_reactionEmoji) {
+						if (reaction is TLReactionEmoji) {
 							reaction.emoticon?.let {
 								chatReactions.add(it)
 							}

@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -121,7 +121,7 @@ class FeedSettingsFragment : BaseFragment() {
 			AndroidUtilities.runOnUIThread {
 				val context = context ?: return@runOnUIThread
 
-				if (error == null && response is TLRPC.TL_biz_dataRaw) {
+				if (error == null && response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.FeedSettingsResponse>()
 
 					allChannels = data?.allChannels?.toLongArray()
@@ -167,7 +167,7 @@ class FeedSettingsFragment : BaseFragment() {
 		connectionsManager.sendRequest(req, { response, error ->
 			val context = context ?: return@sendRequest
 
-			if (error == null && response is TLRPC.TL_biz_dataRaw) {
+			if (error == null && response is TLRPC.TLBizDataRaw) {
 				val data = response.readData<ElloRpc.SimpleStatusResponse>()
 
 				FileLog.d("Save feed settings: ${response.readString()}")

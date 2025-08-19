@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -19,7 +19,6 @@ import android.content.SharedPreferences;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
@@ -42,9 +41,10 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -85,7 +85,6 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 	private SearchAdapter searchAdapter;
 	private AnimatorSet animatorSet;
 
-	private boolean searchWas;
 	private boolean searching;
 
 	private final static int search_button = 0;
@@ -138,7 +137,6 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 	@Override
 	public View createView(@NonNull Context context) {
 		searching = false;
-		searchWas = false;
 
 		actionBar.setBackButtonImage(R.drawable.ic_back_arrow);
 		actionBar.setAllowOverlayTitle(true);
@@ -169,7 +167,6 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 				public void onSearchCollapse() {
 					searchAdapter.searchDialogs(null);
 					searching = false;
-					searchWas = false;
 					emptyView.setText(LocaleController.getString("NoExceptions", R.string.NoExceptions));
 					listView.setAdapter(adapter);
 					adapter.notifyDataSetChanged();
@@ -185,7 +182,6 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 					}
 					String text = editText.getText().toString();
 					if (text.length() != 0) {
-						searchWas = true;
 						if (listView != null) {
 							emptyView.setText(LocaleController.getString("NoResult", R.string.NoResult));
 							emptyView.showProgress();
@@ -250,8 +246,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 						}
 						else {
 							long did;
-							if (object instanceof User) {
-								User user = (User)object;
+							if (object instanceof User user) {
 								did = user.id;
 							}
 							else {
@@ -266,8 +261,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 								newException = true;
 								exception = new NotificationsSettingsActivity.NotificationException();
 								exception.did = did;
-								if (object instanceof User) {
-									User user = (User)object;
+								if (object instanceof User user) {
 									exception.did = user.id;
 								}
 								else {
@@ -458,8 +452,8 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 							editor.remove("notify2_" + exception.did).remove("custom_" + exception.did);
 							getMessagesStorage().setDialogFlags(exception.did, 0);
 							TLRPC.Dialog dialog = getMessagesController().dialogs_dict.get(exception.did);
-							if (dialog != null) {
-								dialog.notify_settings = new TLRPC.TL_peerNotifySettings();
+							if (dialog instanceof TLRPC.TLDialog tlDialog) {
+								tlDialog.notifySettings = new TLRPC.TLPeerNotifySettings();
 							}
 						}
 						editor.commit();
@@ -768,12 +762,12 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 								waitingForLoadExceptions.put(did, exception);
 							}
 							else {
-								User user = getMessagesController().getUser(encryptedChat.user_id);
+								User user = getMessagesController().getUser(encryptedChat.userId);
 								if (user == null) {
-									usersToLoad.add(encryptedChat.user_id);
-									waitingForLoadExceptions.put(encryptedChat.user_id, exception);
+									usersToLoad.add(encryptedChat.userId);
+									waitingForLoadExceptions.put(encryptedChat.userId, exception);
 								}
-								else if (user.deleted) {
+								else if (TLRPCExtensions.getDeleted(user)) {
 									continue;
 								}
 							}
@@ -785,7 +779,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 								usersToLoad.add(did);
 								waitingForLoadExceptions.put(did, exception);
 							}
-							else if (user.deleted) {
+							else if (TLRPCExtensions.getDeleted(user)) {
 								continue;
 							}
 							usersResult.add(exception);
@@ -797,7 +791,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 								waitingForLoadExceptions.put(did, exception);
 								continue;
 							}
-							else if (chat.left || chat.kicked || chat.migrated_to != null) {
+							else if (chat.left || TLRPCExtensions.getMigratedTo(chat) != null) {
 								continue;
 							}
 							if (ChatObject.isChannel(chat) && !chat.megagroup) {
@@ -827,7 +821,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 				}
 				for (int a = 0, size = chats.size(); a < size; a++) {
 					TLRPC.Chat chat = chats.get(a);
-					if (chat.left || chat.kicked || chat.migrated_to != null) {
+					if (chat.left || TLRPCExtensions.getMigratedTo(chat) != null) {
 						continue;
 					}
 					NotificationsSettingsActivity.NotificationException exception = waitingForLoadExceptions.get(-chat.id);
@@ -844,7 +838,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 				}
 				for (int a = 0, size = users.size(); a < size; a++) {
 					User user = users.get(a);
-					if (user.deleted) {
+					if (TLRPCExtensions.getDeleted(user)) {
 						continue;
 					}
 					waitingForLoadExceptions.remove(user.id);
@@ -898,12 +892,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 				messagePopupNotificationRow = rowCount++;
 			}
 			messageSoundRow = rowCount++;
-			if (Build.VERSION.SDK_INT >= 21) {
-				messagePriorityRow = rowCount++;
-			}
-			else {
-				messagePriorityRow = -1;
-			}
+			messagePriorityRow = rowCount++;
 			groupSection2Row = rowCount++;
 			exceptionsAddRow = rowCount++;
 		}
@@ -1059,7 +1048,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 
 				@Nullable
 				@Override
-				public androidx.collection.LongSparseArray<TLRPC.TL_groupCallParticipant> getExcludeCallParticipants() {
+				public androidx.collection.LongSparseArray<TLRPC.TLGroupCallParticipant> getExcludeCallParticipants() {
 					return null;
 				}
 
@@ -1135,26 +1124,26 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 						if (DialogObject.isEncryptedDialog(exception.did)) {
 							TLRPC.EncryptedChat encryptedChat = getMessagesController().getEncryptedChat(DialogObject.getEncryptedChatId(exception.did));
 							if (encryptedChat != null) {
-								User user = getMessagesController().getUser(encryptedChat.user_id);
+								User user = getMessagesController().getUser(encryptedChat.userId);
 								if (user != null) {
-									names[0] = ContactsController.formatName(user.getFirst_name(), user.getLast_name());
+									names[0] = ContactsController.formatName(user.firstName, user.lastName);
 									names[1] = user.username;
 								}
 							}
 						}
 						else if (DialogObject.isUserDialog(exception.did)) {
 							User user = getMessagesController().getUser(exception.did);
-							if (user == null || user.deleted) {
+							if (user == null || TLRPCExtensions.getDeleted(user)) {
 								continue;
 							}
-							names[0] = ContactsController.formatName(user.getFirst_name(), user.getLast_name());
+							names[0] = ContactsController.formatName(user.firstName, user.lastName);
 							names[1] = user.username;
 							object = user;
 						}
 						else {
 							TLRPC.Chat chat = getMessagesController().getChat(-exception.did);
 							if (chat != null) {
-								if (chat.left || chat.kicked || chat.migrated_to != null) {
+								if (chat.left || TLRPCExtensions.getMigratedTo(chat) != null) {
 									continue;
 								}
 								names[0] = chat.title;
@@ -1171,8 +1160,7 @@ public class NotificationsCustomSettingsActivity extends BaseFragment implements
 						}
 
 						int found = 0;
-						for (int b = 0; b < search.length; b++) {
-							String q = search[b];
+						for (String q : search) {
 							if (names[0] != null && (names[0].startsWith(q) || names[0].contains(" " + q)) || tName != null && (tName.startsWith(q) || tName.contains(" " + q))) {
 								found = 1;
 							}

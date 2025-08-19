@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -20,21 +20,42 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withTranslation
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
-import org.telegram.messenger.*
+import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.DialogObject
+import org.telegram.messenger.Emoji
+import org.telegram.messenger.LocaleController
+import org.telegram.messenger.MessagesController
+import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
+import org.telegram.messenger.R
+import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.UserObject.getUserName
 import org.telegram.messenger.UserObject.isUserSelf
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.botChatHistory
+import org.telegram.tgnet.emojiStatus
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.status
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
-import org.telegram.ui.Components.*
 import org.telegram.ui.Components.AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable
 import org.telegram.ui.Components.AnimatedEmojiDrawable.WrapSizeDrawable
+import org.telegram.ui.Components.AvatarDrawable
+import org.telegram.ui.Components.BackupImageView
+import org.telegram.ui.Components.CheckBox
+import org.telegram.ui.Components.CheckBoxSquare
+import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.LayoutHelper.createFrame
 import org.telegram.ui.NotificationsSettingsActivity.NotificationException
 import kotlin.math.ceil
@@ -292,7 +313,7 @@ class UserCell @JvmOverloads constructor(context: Context, padding: Int, checkbo
 			val encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(exception.did))
 
 			if (encryptedChat != null) {
-				val user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.user_id)
+				val user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.userId)
 
 				if (user != null) {
 					setData(user, encryptedChat, name, text, 0, false)
@@ -344,18 +365,18 @@ class UserCell @JvmOverloads constructor(context: Context, padding: Int, checkbo
 
 		if (currentObject is User) {
 			currentUser = currentObject as User?
-			photo = currentUser?.photo?.photo_small
+			photo = currentUser?.photo?.photoSmall
 		}
 		else if (currentObject is TLRPC.Chat) {
 			currentChat = currentObject as TLRPC.Chat?
-			photo = currentChat?.photo?.photo_small
+			photo = currentChat?.photo?.photoSmall
 		}
 
 		if (mask != 0) {
 			var continueUpdate = false
 
 			if (mask and MessagesController.UPDATE_MASK_AVATAR != 0) {
-				if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar!!.volume_id != photo!!.volume_id || lastAvatar!!.local_id != photo.local_id)) {
+				if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && (lastAvatar!!.volumeId != photo!!.volumeId || lastAvatar!!.localId != photo.localId)) {
 					continueUpdate = true
 				}
 			}
@@ -464,13 +485,13 @@ class UserCell @JvmOverloads constructor(context: Context, padding: Int, checkbo
 			nameTextView.setText(name)
 		}
 		if (currentUser != null && MessagesController.getInstance(currentAccount).isPremiumUser(currentUser)) {
-			if (currentUser.emoji_status is TLRPC.TL_emojiStatusUntil && (currentUser.emoji_status as TLRPC.TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
-				emojiStatus[(currentUser.emoji_status as TLRPC.TL_emojiStatusUntil).document_id] = false
+			if (currentUser.emojiStatus is TLRPC.TLEmojiStatusUntil && (currentUser.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+				emojiStatus[(currentUser.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId] = false
 				emojiStatus.color = ResourcesCompat.getColor(resources, R.color.brand, null)
 				nameTextView.rightDrawable = emojiStatus
 			}
-			else if (currentUser.emoji_status is TLRPC.TL_emojiStatus) {
-				emojiStatus[(currentUser.emoji_status as TLRPC.TL_emojiStatus).document_id] = false
+			else if (currentUser.emojiStatus is TLRPC.TLEmojiStatus) {
+				emojiStatus[(currentUser.emojiStatus as TLRPC.TLEmojiStatus).documentId] = false
 				emojiStatus.color = ResourcesCompat.getColor(resources, R.color.brand, null)
 				nameTextView.rightDrawable = emojiStatus
 			}
@@ -479,10 +500,9 @@ class UserCell @JvmOverloads constructor(context: Context, padding: Int, checkbo
 					premiumDrawable = ResourcesCompat.getDrawable(resources, R.drawable.msg_premium_liststar, null)?.mutate().let {
 						object : WrapSizeDrawable(it, AndroidUtilities.dp(14f), AndroidUtilities.dp(14f)) {
 							override fun draw(canvas: Canvas) {
-								canvas.save()
-								canvas.translate(0f, AndroidUtilities.dp(1f).toFloat())
-								super.draw(canvas)
-								canvas.restore()
+								canvas.withTranslation(0f, AndroidUtilities.dp(1f).toFloat()) {
+									super.draw(this)
+								}
 							}
 						}
 					}
@@ -508,7 +528,7 @@ class UserCell @JvmOverloads constructor(context: Context, padding: Int, checkbo
 			if (currentUser.bot) {
 				statusTextView.textColor = statusColor
 
-				if (currentUser.bot_chat_history || adminTextView?.visibility == VISIBLE) {
+				if (currentUser.botChatHistory || adminTextView?.visibility == VISIBLE) {
 					statusTextView.setText(context.getString(R.string.BotStatusRead))
 				}
 				else {
@@ -527,7 +547,7 @@ class UserCell @JvmOverloads constructor(context: Context, padding: Int, checkbo
 			}
 		}
 
-		if (imageView.visibility == VISIBLE && currentDrawable == 0 || imageView.visibility == GONE && currentDrawable != 0) {
+		if (imageView.isVisible && currentDrawable == 0 || imageView.isGone && currentDrawable != 0) {
 			imageView.visibility = if (currentDrawable == 0) GONE else VISIBLE
 			imageView.setImageResource(currentDrawable)
 		}

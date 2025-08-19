@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui;
 
@@ -33,7 +33,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.MessageEntity;
+import org.telegram.tgnet.TLRPC.MessageEntity;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -152,18 +152,22 @@ public class PollCreateActivity extends BaseFragment {
 						}
 						return;
 					}
-					TLRPC.TL_messageMediaPoll poll = new TLRPC.TL_messageMediaPoll();
-					poll.poll = new TLRPC.TL_poll();
-					poll.poll.multiple_choice = multipleChoise;
-					poll.poll.quiz = quizPoll;
-					poll.poll.public_voters = !anonymousPoll;
-					poll.poll.question = ChatAttachAlertPollLayout.getFixedString(questionString).toString();
+					var poll = new TLRPC.TLMessageMediaPoll();
+
+					var tlPoll = new TLRPC.TLPoll();
+					tlPoll.multipleChoice = multipleChoise;
+					tlPoll.quiz = quizPoll;
+					tlPoll.publicVoters = !anonymousPoll;
+					tlPoll.question = ChatAttachAlertPollLayout.getFixedString(questionString).toString();
+
+					poll.poll = tlPoll;
+
 					SerializedData serializedData = new SerializedData(10);
 					for (int a = 0; a < answers.length; a++) {
 						if (TextUtils.isEmpty(ChatAttachAlertPollLayout.getFixedString(answers[a]))) {
 							continue;
 						}
-						TLRPC.TL_pollAnswer answer = new TLRPC.TL_pollAnswer();
+						var answer = new TLRPC.TLPollAnswer();
 						answer.text = ChatAttachAlertPollLayout.getFixedString(answers[a]).toString();
 						answer.option = new byte[1];
 						answer.option[0] = (byte)(48 + poll.poll.answers.size());
@@ -174,14 +178,14 @@ public class PollCreateActivity extends BaseFragment {
 					}
 					HashMap<String, String> params = new HashMap<>();
 					params.put("answers", Utilities.bytesToHex(serializedData.toByteArray()));
-					poll.results = new TLRPC.TL_pollResults();
+					poll.results = new TLRPC.TLPollResults();
 					CharSequence solution = ChatAttachAlertPollLayout.getFixedString(solutionString);
 					if (solution != null) {
 						poll.results.solution = solution.toString();
 						CharSequence[] message = new CharSequence[]{solution};
 						List<MessageEntity> entities = getMediaDataController().getEntities(message, true);
 						if (entities != null && !entities.isEmpty()) {
-							poll.results.solution_entities = new ArrayList<>(entities);
+							poll.results.solutionEntities.addAll(entities);
 						}
 						if (!TextUtils.isEmpty(poll.results.solution)) {
 							poll.results.flags |= 16;
@@ -236,8 +240,7 @@ public class PollCreateActivity extends BaseFragment {
 			if (position == addAnswerRow) {
 				addNewField();
 			}
-			else if (view instanceof TextCheckCell) {
-				TextCheckCell cell = (TextCheckCell)view;
+			else if (view instanceof TextCheckCell cell) {
 				boolean checked;
 				boolean wasChecksBefore = quizPoll;
 				if (position == anonymousRow) {
@@ -297,11 +300,9 @@ public class PollCreateActivity extends BaseFragment {
 				if (hintShowed && !quizPoll) {
 					hintView.hide();
 				}
-				int count = listView.getChildCount();
 				for (int a = answerStartRow; a < answerStartRow + answersCount; a++) {
 					RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(a);
-					if (holder != null && holder.itemView instanceof PollEditTextCell) {
-						PollEditTextCell pollEditTextCell = (PollEditTextCell)holder.itemView;
+					if (holder != null && holder.itemView instanceof PollEditTextCell pollEditTextCell) {
 						pollEditTextCell.setShowCheckBox(quizPoll, true);
 						pollEditTextCell.setChecked(answersChecks[a - answerStartRow], wasChecksBefore);
 						if (pollEditTextCell.getTop() > AndroidUtilities.dp(40) && position == quizRow && !hintShowed) {
@@ -315,7 +316,7 @@ public class PollCreateActivity extends BaseFragment {
 				checkDoneButton();
 			}
 		});
-		listView.setOnScrollListener(new RecyclerView.OnScrollListener() {
+		listView.addOnScrollListener(new RecyclerView.OnScrollListener() {
 			@Override
 			public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
 
@@ -350,11 +351,9 @@ public class PollCreateActivity extends BaseFragment {
 	}
 
 	private void showQuizHint() {
-		int count = listView.getChildCount();
 		for (int a = answerStartRow; a < answerStartRow + answersCount; a++) {
 			RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(a);
-			if (holder != null && holder.itemView instanceof PollEditTextCell) {
-				PollEditTextCell pollEditTextCell = (PollEditTextCell)holder.itemView;
+			if (holder != null && holder.itemView instanceof PollEditTextCell pollEditTextCell) {
 				if (pollEditTextCell.getTop() > AndroidUtilities.dp(40)) {
 					hintView.showForView(pollEditTextCell.getCheckBox(), true);
 					break;
@@ -480,10 +479,9 @@ public class PollCreateActivity extends BaseFragment {
 	}
 
 	private void setTextLeft(View cell, int index) {
-		if (!(cell instanceof PollEditTextCell)) {
+		if (!(cell instanceof PollEditTextCell textCell)) {
 			return;
 		}
-		PollEditTextCell textCell = (PollEditTextCell)cell;
 		int max;
 		int left;
 		if (index == questionRow) {
@@ -569,7 +567,7 @@ public class PollCreateActivity extends BaseFragment {
 	}
 
 	public interface PollCreateActivityDelegate {
-		void sendPoll(TLRPC.TL_messageMediaPoll poll, HashMap<String, String> params, boolean notify, int scheduleDate);
+		void sendPoll(TLRPC.TLMessageMediaPoll poll, HashMap<String, String> params, boolean notify, int scheduleDate);
 	}
 
 	public class TouchHelperCallback extends ItemTouchHelper.Callback {
@@ -881,8 +879,7 @@ public class PollCreateActivity extends BaseFragment {
 								}
 								holder = listView.findViewHolderForAdapterPosition(position - 1);
 								EditTextBoldCursor editText = p.getTextView();
-								if (holder != null && holder.itemView instanceof PollEditTextCell) {
-									PollEditTextCell editTextCell = (PollEditTextCell)holder.itemView;
+								if (holder != null && holder.itemView instanceof PollEditTextCell editTextCell) {
 									editTextCell.getTextView().requestFocus();
 								}
 								else if (editText.isFocused()) {
@@ -900,9 +897,7 @@ public class PollCreateActivity extends BaseFragment {
 							RecyclerView.ViewHolder holder = listView.findContainingViewHolder(this);
 							if (holder != null) {
 								int position = holder.getAdapterPosition();
-								if (answersCount == 10 && position == answerStartRow + answersCount - 1) {
-									return false;
-								}
+								return answersCount != 10 || position != answerStartRow + answersCount - 1;
 							}
 							return true;
 						}
@@ -916,11 +911,9 @@ public class PollCreateActivity extends BaseFragment {
 						protected void onCheckBoxClick(PollEditTextCell editText, boolean checked) {
 							if (checked && quizPoll) {
 								Arrays.fill(answersChecks, false);
-								int count = listView.getChildCount();
 								for (int a = answerStartRow; a < answerStartRow + answersCount; a++) {
 									RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(a);
-									if (holder != null && holder.itemView instanceof PollEditTextCell) {
-										PollEditTextCell pollEditTextCell = (PollEditTextCell)holder.itemView;
+									if (holder != null && holder.itemView instanceof PollEditTextCell pollEditTextCell) {
 										pollEditTextCell.setChecked(false, true);
 									}
 								}
@@ -996,8 +989,7 @@ public class PollCreateActivity extends BaseFragment {
 										}
 										else {
 											holder = listView.findViewHolderForAdapterPosition(position + 1);
-											if (holder != null && holder.itemView instanceof PollEditTextCell) {
-												PollEditTextCell editTextCell = (PollEditTextCell)holder.itemView;
+											if (holder != null && holder.itemView instanceof PollEditTextCell editTextCell) {
 												editTextCell.getTextView().requestFocus();
 											}
 										}

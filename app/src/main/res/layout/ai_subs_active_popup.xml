@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:orientation="vertical"
+	android:paddingHorizontal="20dp"
+	android:paddingTop="20dp">
+
+	<FrameLayout
+		android:id="@+id/title_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="32dp">
+
+		<ImageView
+			android:id="@+id/close"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_gravity="end"
+			android:clickable="true"
+			android:contentDescription="@string/Close"
+			android:focusable="true"
+			android:src="@drawable/ic_layer_close"
+			android:tint="@color/icon_color_selector"
+			app:tint="@color/icon_color_selector"
+			tools:ignore="UseAppTint" />
+
+		<TextView
+			android:id="@+id/title"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:gravity="center"
+			android:text="@string/text_pack_active"
+			android:textColor="@color/dark"
+			android:textSize="@dimen/common_size_20dp"
+			android:textStyle="bold" />
+	</FrameLayout>
+
+
+	<FrameLayout
+		android:id="@+id/image_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="32dp"
+		android:gravity="center">
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image2"
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_popup"
+			android:translationX="32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image1_bg"
+			android:layout_width="88dp"
+			android:layout_height="88dp"
+			android:layout_gravity="center"
+			android:scaleType="fitCenter"
+			android:src="@drawable/ai_switch_thumb"
+			android:translationX="-32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image1"
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_text"
+			android:translationX="-32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:id="@+id/image1_fg"
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerInside"
+			android:src="@drawable/ai_buy_type_text"
+			android:translationX="-32dp"
+			app:contentPadding="20dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+	</FrameLayout>
+
+	<FrameLayout
+		android:id="@+id/image_text_layout"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="32dp"
+		android:visibility="gone"
+		android:gravity="center">
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_popup"
+			android:translationX="32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="88dp"
+			android:layout_height="88dp"
+			android:layout_gravity="center"
+			android:scaleType="fitCenter"
+			android:src="@drawable/ai_switch_thumb"
+			android:translationX="-32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerCrop"
+			android:src="@drawable/ai_buy_double"
+			android:translationX="-32dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+		<com.google.android.material.imageview.ShapeableImageView
+			android:layout_width="80dp"
+			android:layout_height="80dp"
+			android:layout_gravity="center"
+			android:scaleType="centerInside"
+			android:src="@drawable/ai_buy_type_double"
+			android:translationX="-32dp"
+			app:contentPadding="20dp"
+			app:shapeAppearanceOverlay="@style/AiRoundedImageView" />
+
+	</FrameLayout>
+
+	<TextView
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginBottom="8dp"
+		android:gravity="center"
+		android:text="@string/text_you_have_an_active_subscription"
+		android:textColor="@color/dark"
+		android:textStyle="bold"
+		android:textSize="@dimen/common_size_16dp" />
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:gravity="center"
+		android:padding="6dp"
+		android:orientation="vertical"
+		android:background="@drawable/dashed_gradient_border">
+
+		<TextView
+			android:id="@+id/subscription_status_text"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="@string/plans_subscription_status"
+			android:textColor="@color/brand"
+			android:textStyle="bold"
+			android:textSize="16sp" />
+
+		<TextView
+			android:id="@+id/expires_until_text"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:text="@string/plans_expires_until"
+			android:textColor="@color/dark"
+			android:textSize="14sp"
+			android:gravity="center"
+			android:layout_marginTop="4dp" />
+
+	</LinearLayout>
+
+	<TextView
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="16dp"
+		android:gravity="center"
+		android:text="@string/purchase_after_expiry_message"
+		android:textColor="@color/dark"
+		android:textStyle="bold"
+		android:textSize="@dimen/common_size_16dp" />
+
+	<View
+		android:id="@+id/divider"
+		android:layout_width="match_parent"
+		android:layout_height="1px"
+		android:layout_marginTop="16dp"
+		android:background="@color/disabled_text"
+		app:layout_constraintBottom_toTopOf="@id/buy_button"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent" />
+
+
+	<com.google.android.material.button.MaterialButton
+		android:id="@+id/buy_button"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/common_size_58dp"
+		android:layout_marginTop="16dp"
+		android:layout_marginBottom="16dp"
+		android:textColor="@color/white"
+		android:text="@string/ok"
+		app:cornerRadius="10dp"
+		app:backgroundTint="@color/brand"/>
+
+</LinearLayout>

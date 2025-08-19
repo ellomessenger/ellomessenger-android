@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2021.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -52,7 +52,8 @@ import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -235,7 +236,7 @@ public class EditWidgetActivity extends BaseFragment {
 						if (a < selectedDialogs.size()) {
 							dialog = getMessagesController().dialogs_dict.get(selectedDialogs.get(a));
 							if (dialog == null) {
-								dialog = new TLRPC.TL_dialog();
+								dialog = new TLRPC.TLDialog();
 								dialog.id = selectedDialogs.get(a);
 							}
 						}
@@ -266,19 +267,28 @@ public class EditWidgetActivity extends BaseFragment {
 								name = getContext().getString(R.string.HiddenName);
 							}
 							else {
-								name = ContactsController.formatName(user.getFirst_name(), user.getLast_name());
+								name = ContactsController.formatName(user.firstName, user.lastName);
 							}
-							if (!UserObject.isReplyUser(user) && !UserObject.isUserSelf(user) && user.photo != null && user.photo.photo_small != null && user.photo.photo_small.volume_id != 0 && user.photo.photo_small.local_id != 0) {
-								photoPath = user.photo.photo_small;
+
+							var photo = TLRPCExtensions.getPhoto(user);
+							var photoSmall = TLRPCExtensions.getPhotoSmall(photo);
+
+							if (!UserObject.isReplyUser(user) && !UserObject.isUserSelf(user) && photo != null && photoSmall != null && photoSmall.volumeId != 0 && photoSmall.localId != 0) {
+								photoPath = photoSmall;
 							}
 						}
 					}
 					else {
 						chat = getMessagesController().getChat(-dialog.id);
+
 						if (chat != null) {
 							name = chat.title;
-							if (chat.photo != null && chat.photo.photo_small != null && chat.photo.photo_small.volume_id != 0 && chat.photo.photo_small.local_id != 0) {
-								photoPath = chat.photo.photo_small;
+
+							var photo = chat.photo;
+							var photoSmall = TLRPCExtensions.getPhotoSmall(photo);
+
+							if (photoSmall != null && photoSmall.volumeId != 0 && photoSmall.localId != 0) {
+								photoPath = photoSmall;
 							}
 						}
 					}
@@ -347,8 +357,8 @@ public class EditWidgetActivity extends BaseFragment {
 						CharSequence messageString;
 						CharSequence messageNameString;
 						int textColor = getContext().getResources().getColor(R.color.widget_text);
-						if (message.messageOwner instanceof TLRPC.TL_messageService) {
-							if (ChatObject.isChannel(chat) && (message.messageOwner.action instanceof TLRPC.TL_messageActionHistoryClear || message.messageOwner.action instanceof TLRPC.TL_messageActionChannelMigrateFrom)) {
+						if (message.messageOwner instanceof TLRPC.TLMessageService serviceMessage) {
+							if (ChatObject.isChannel(chat) && (serviceMessage.action instanceof TLRPC.TLMessageActionHistoryClear || serviceMessage.action instanceof TLRPC.TLMessageActionChannelMigrateFrom)) {
 								messageString = "";
 							}
 							else {
@@ -369,6 +379,9 @@ public class EditWidgetActivity extends BaseFragment {
 								}
 								SpannableStringBuilder stringBuilder;
 								String messageFormat = "%2$s: \u2068%1$s\u2069";
+
+								var media = TLRPCExtensions.getMedia(message.messageOwner);
+
 								if (message.caption != null) {
 									String mess = message.caption.toString();
 									if (mess.length() > 150) {
@@ -392,15 +405,14 @@ public class EditWidgetActivity extends BaseFragment {
 									}
 									stringBuilder = SpannableStringBuilder.valueOf(String.format(messageFormat, emoji + mess.replace('\n', ' '), messageNameString));
 								}
-								else if (message.messageOwner.media != null && !message.isMediaEmpty()) {
+								else if (media != null && !message.isMediaEmpty()) {
 									textColor = getContext().getResources().getColor(R.color.widget_action_text);
 									String innerMessage;
-									if (message.messageOwner.media instanceof TLRPC.TL_messageMediaPoll) {
-										TLRPC.TL_messageMediaPoll mediaPoll = (TLRPC.TL_messageMediaPoll)message.messageOwner.media;
+									if (media instanceof TLRPC.TLMessageMediaPoll mediaPoll) {
 										innerMessage = String.format("\uD83D\uDCCA \u2068%s\u2069", mediaPoll.poll.question);
 									}
-									else if (message.messageOwner.media instanceof TLRPC.TL_messageMediaGame) {
-										innerMessage = String.format("\uD83C\uDFAE \u2068%s\u2069", message.messageOwner.media.game.title);
+									else if (media instanceof TLRPC.TLMessageMediaGame game) {
+										innerMessage = String.format("\uD83C\uDFAE \u2068%s\u2069", game.game.title);
 									}
 									else if (message.type == MessageObject.TYPE_MUSIC) {
 										innerMessage = String.format("\uD83C\uDFA7 \u2068%s - %s\u2069", message.getMusicAuthor(), message.getMusicTitle());
@@ -417,8 +429,8 @@ public class EditWidgetActivity extends BaseFragment {
 										FileLog.e(e);
 									}
 								}
-								else if (message.messageOwner.message != null) {
-									String mess = message.messageOwner.message;
+								else if (TLRPCExtensions.getMessage(message.messageOwner) != null) {
+									String mess = TLRPCExtensions.getMessage(message.messageOwner);
 									if (mess.length() > 150) {
 										mess = mess.substring(0, 150);
 									}
@@ -437,10 +449,12 @@ public class EditWidgetActivity extends BaseFragment {
 								messageString = stringBuilder;
 							}
 							else {
-								if (message.messageOwner.media instanceof TLRPC.TL_messageMediaPhoto && message.messageOwner.media.photo instanceof TLRPC.TL_photoEmpty && message.messageOwner.media.ttl_seconds != 0) {
+								var media = TLRPCExtensions.getMedia(message.messageOwner);
+
+								if (media instanceof TLRPC.TLMessageMediaPhoto photoMedia && photoMedia.photo instanceof TLRPC.TLPhotoEmpty && photoMedia.ttlSeconds != 0) {
 									messageString = getContext().getString(R.string.AttachPhotoExpired);
 								}
-								else if (message.messageOwner.media instanceof TLRPC.TL_messageMediaDocument && message.messageOwner.media.document instanceof TLRPC.TL_documentEmpty && message.messageOwner.media.ttl_seconds != 0) {
+								else if (media instanceof TLRPC.TLMessageMediaDocument mediaDocument && mediaDocument.document instanceof TLRPC.TLDocumentEmpty && mediaDocument.ttlSeconds != 0) {
 									messageString = getContext().getString(R.string.AttachVideoExpired);
 								}
 								else if (message.caption != null) {
@@ -463,12 +477,11 @@ public class EditWidgetActivity extends BaseFragment {
 									messageString = emoji + message.caption;
 								}
 								else {
-									if (message.messageOwner.media instanceof TLRPC.TL_messageMediaPoll) {
-										TLRPC.TL_messageMediaPoll mediaPoll = (TLRPC.TL_messageMediaPoll)message.messageOwner.media;
+									if (media instanceof TLRPC.TLMessageMediaPoll mediaPoll) {
 										messageString = "\uD83D\uDCCA " + mediaPoll.poll.question;
 									}
-									else if (message.messageOwner.media instanceof TLRPC.TL_messageMediaGame) {
-										messageString = "\uD83C\uDFAE " + message.messageOwner.media.game.title;
+									else if (media instanceof TLRPC.TLMessageMediaGame game) {
+										messageString = "\uD83C\uDFAE " + game.game.title;
 									}
 									else if (message.type == MessageObject.TYPE_MUSIC) {
 										messageString = String.format("\uD83C\uDFA7 %s - %s", message.getMusicAuthor(), message.getMusicTitle());
@@ -477,7 +490,8 @@ public class EditWidgetActivity extends BaseFragment {
 										messageString = message.messageText;
 										AndroidUtilities.highlightText(messageString, message.highlightedWords);
 									}
-									if (message.messageOwner.media != null && !message.isMediaEmpty()) {
+
+									if (media != null && !message.isMediaEmpty()) {
 										textColor = getContext().getResources().getColor(R.color.widget_action_text);
 									}
 								}
@@ -489,16 +503,16 @@ public class EditWidgetActivity extends BaseFragment {
 						((TextView)cells[a].findViewById(R.id.shortcut_widget_item_message)).setTextColor(textColor);
 					}
 					else {
-						if (dialog.last_message_date != 0) {
-							((TextView)cells[a].findViewById(R.id.shortcut_widget_item_time)).setText(LocaleController.stringForMessageListDate(dialog.last_message_date));
+						if (dialog.lastMessageDate != 0) {
+							((TextView)cells[a].findViewById(R.id.shortcut_widget_item_time)).setText(LocaleController.stringForMessageListDate(dialog.lastMessageDate));
 						}
 						else {
 							((TextView)cells[a].findViewById(R.id.shortcut_widget_item_time)).setText("");
 						}
 						((TextView)cells[a].findViewById(R.id.shortcut_widget_item_message)).setText("");
 					}
-					if (dialog.unread_count > 0) {
-						((TextView)cells[a].findViewById(R.id.shortcut_widget_item_badge)).setText(String.format(Locale.getDefault(), "%d", dialog.unread_count));
+					if (TLRPCExtensions.getUnreadCount(dialog) > 0) {
+						((TextView)cells[a].findViewById(R.id.shortcut_widget_item_badge)).setText(String.format(Locale.getDefault(), "%d", TLRPCExtensions.getUnreadCount(dialog)));
 						cells[a].findViewById(R.id.shortcut_widget_item_badge).setVisibility(VISIBLE);
 						if (getMessagesController().isDialogMuted(dialog.id)) {
 							cells[a].findViewById(R.id.shortcut_widget_item_badge).setBackgroundResource(R.drawable.widget_counter_muted);
@@ -521,10 +535,10 @@ public class EditWidgetActivity extends BaseFragment {
 						TLRPC.Dialog dialog;
 						if (selectedDialogs.isEmpty()) {
 							if (num < getMediaDataController().hints.size()) {
-								long userId = getMediaDataController().hints.get(num).peer.user_id;
+								long userId = TLRPCExtensions.getUserId(getMediaDataController().hints.get(num).peer);
 								dialog = getMessagesController().dialogs_dict.get(userId);
 								if (dialog == null) {
-									dialog = new TLRPC.TL_dialog();
+									dialog = new TLRPC.TLDialog();
 									dialog.id = userId;
 								}
 							}
@@ -536,7 +550,7 @@ public class EditWidgetActivity extends BaseFragment {
 							if (num < selectedDialogs.size()) {
 								dialog = getMessagesController().dialogs_dict.get(selectedDialogs.get(num));
 								if (dialog == null) {
-									dialog = new TLRPC.TL_dialog();
+									dialog = new TLRPC.TLDialog();
 									dialog.id = selectedDialogs.get(num);
 								}
 							}
@@ -575,15 +589,22 @@ public class EditWidgetActivity extends BaseFragment {
 							else {
 								name = UserObject.getFirstName(user);
 							}
-							if (!UserObject.isReplyUser(user) && !UserObject.isUserSelf(user) && user != null && user.photo != null && user.photo.photo_small != null && user.photo.photo_small.volume_id != 0 && user.photo.photo_small.local_id != 0) {
-								photoPath = user.photo.photo_small;
+
+							var photo = TLRPCExtensions.getPhoto(user);
+							var photoSmall = TLRPCExtensions.getPhotoSmall(photo);
+
+							if (!UserObject.isReplyUser(user) && !UserObject.isUserSelf(user) && user != null && photoSmall != null && photoSmall.volumeId != 0 && photoSmall.localId != 0) {
+								photoPath = photoSmall;
 							}
 						}
 						else {
 							chat = getMessagesController().getChat(-dialog.id);
 							name = chat.title;
-							if (chat.photo != null && chat.photo.photo_small != null && chat.photo.photo_small.volume_id != 0 && chat.photo.photo_small.local_id != 0) {
-								photoPath = chat.photo.photo_small;
+
+							var photoSmall = TLRPCExtensions.getPhotoSmall(chat.photo);
+
+							if (photoSmall != null && photoSmall.volumeId != 0 && photoSmall.localId != 0) {
+								photoPath = photoSmall;
 							}
 						}
 						((TextView)cells[position].findViewById(a == 0 ? R.id.contacts_widget_item_text1 : R.id.contacts_widget_item_text2)).setText(name);
@@ -632,13 +653,15 @@ public class EditWidgetActivity extends BaseFragment {
 							FileLog.e(e);
 						}
 
-						if (dialog.unread_count > 0) {
+						int unreadCount = TLRPCExtensions.getUnreadCount(dialog);
+
+						if (unreadCount > 0) {
 							String count;
-							if (dialog.unread_count > 99) {
+							if (unreadCount > 99) {
 								count = String.format(Locale.getDefault(), "%d+", 99);
 							}
 							else {
-								count = String.format(Locale.getDefault(), "%d", dialog.unread_count);
+								count = String.format(Locale.getDefault(), "%d", unreadCount);
 							}
 							((TextView)cells[position].findViewById(a == 0 ? R.id.contacts_widget_item_badge1 : R.id.contacts_widget_item_badge2)).setText(count);
 							cells[position].findViewById(a == 0 ? R.id.contacts_widget_item_badge_bg1 : R.id.contacts_widget_item_badge_bg2).setVisibility(VISIBLE);
@@ -663,7 +686,7 @@ public class EditWidgetActivity extends BaseFragment {
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			Drawable newDrawable = Theme.getCachedWallpaperNonBlocking();
 			if (newDrawable != backgroundDrawable && newDrawable != null) {
 				if (Theme.isAnimatingColor()) {
@@ -684,16 +707,14 @@ public class EditWidgetActivity extends BaseFragment {
 				drawable.setAlpha(255);
 				if (drawable instanceof ColorDrawable || drawable instanceof GradientDrawable || drawable instanceof MotionBackgroundDrawable) {
 					drawable.setBounds(0, 0, getMeasuredWidth(), getMeasuredHeight());
-					if (drawable instanceof BackgroundGradientDrawable) {
-						final BackgroundGradientDrawable backgroundGradientDrawable = (BackgroundGradientDrawable)drawable;
+					if (drawable instanceof BackgroundGradientDrawable backgroundGradientDrawable) {
 						backgroundGradientDisposable = backgroundGradientDrawable.drawExactBoundsSize(canvas, this);
 					}
 					else {
 						drawable.draw(canvas);
 					}
 				}
-				else if (drawable instanceof BitmapDrawable) {
-					BitmapDrawable bitmapDrawable = (BitmapDrawable)drawable;
+				else if (drawable instanceof BitmapDrawable bitmapDrawable) {
 					if (bitmapDrawable.getTileModeX() == Shader.TileMode.REPEAT) {
 						canvas.save();
 						float scale = 2.0f / AndroidUtilities.density;
@@ -886,7 +907,7 @@ public class EditWidgetActivity extends BaseFragment {
 					if (widgetPreviewCell != null) {
 						widgetPreviewCell.updateDialogs();
 					}
-				}, selectedDialogs);
+				});
 				bottomSheet.setSelectedContacts(selectedDialogs);
 				showDialog(bottomSheet);
 			}

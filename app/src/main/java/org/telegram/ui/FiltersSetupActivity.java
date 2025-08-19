@@ -1,9 +1,16 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
@@ -21,13 +28,6 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
-import androidx.recyclerview.widget.DefaultItemAnimator;
-import androidx.recyclerview.widget.ItemTouchHelper;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.FileLog;
@@ -37,12 +37,12 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Cells.HeaderCell;
 import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Components.CombinedDrawable;
@@ -53,16 +53,21 @@ import org.telegram.ui.Components.RLottieImageView;
 import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
+import java.util.List;
+
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 public class FiltersSetupActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
-
 	private RecyclerListView listView;
 	private ListAdapter adapter;
 	private ItemTouchHelper itemTouchHelper;
-
 	private boolean orderChanged;
 	private boolean showAllChats;
-
 	private int filterHelpRow;
 	private int recommendedHeaderRow;
 	private int recommendedStartRow;
@@ -74,13 +79,11 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 	private int createFilterRow;
 	private int createSectionRow;
 	private int rowCount = 0;
-
 	private boolean ignoreUpdates;
 
 	public static class TextCell extends FrameLayout {
-
-		private SimpleTextView textView;
-		private ImageView imageView;
+		private final SimpleTextView textView;
+		private final ImageView imageView;
 
 		public TextCell(Context context) {
 			super(context);
@@ -100,7 +103,6 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 		@Override
 		protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 			int width = MeasureSpec.getSize(widthMeasureSpec);
-			int height = AndroidUtilities.dp(48);
 
 			textView.measure(MeasureSpec.makeMeasureSpec(width - AndroidUtilities.dp(71 + 23), MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(20), MeasureSpec.EXACTLY));
 			imageView.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(50), MeasureSpec.EXACTLY));
@@ -126,7 +128,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 			imageView.layout(viewLeft, 0, viewLeft + imageView.getMeasuredWidth(), imageView.getMeasuredHeight());
 		}
 
-		public void setTextAndIcon(String text, Drawable icon, boolean divider) {
+		public void setTextAndIcon(String text, Drawable icon) {
 			textView.setText(text);
 			imageView.setImageDrawable(icon);
 		}
@@ -134,11 +136,11 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 
 	public static class SuggestedFilterCell extends FrameLayout {
 
-		private TextView textView;
-		private TextView valueTextView;
-		private ProgressButton addButton;
+		private final TextView textView;
+		private final TextView valueTextView;
+		private final ProgressButton addButton;
 		private boolean needDivider;
-		private TLRPC.TL_dialogFilterSuggested suggestedFilter;
+		private TLRPC.TLDialogFilterSuggested suggestedFilter;
 
 		public SuggestedFilterCell(Context context) {
 			super(context);
@@ -179,16 +181,22 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 			measureChildWithMargins(valueTextView, widthMeasureSpec, addButton.getMeasuredWidth(), heightMeasureSpec, 0);
 		}
 
-		public void setFilter(TLRPC.TL_dialogFilterSuggested filter, boolean divider) {
+		public void setFilter(TLRPC.TLDialogFilterSuggested filter, boolean divider) {
 			needDivider = divider;
 			suggestedFilter = filter;
 			setWillNotDraw(!needDivider);
 
-			textView.setText(filter.filter.title);
+			String title = null;
+
+			if (filter.filter instanceof TLRPC.TLDialogFilter tlDialogFilter) {
+				title = tlDialogFilter.title;
+			}
+
+			textView.setText(title);
 			valueTextView.setText(filter.description);
 		}
 
-		public TLRPC.TL_dialogFilterSuggested getSuggestedFilter() {
+		public TLRPC.TLDialogFilterSuggested getSuggestedFilter() {
 			return suggestedFilter;
 		}
 
@@ -197,7 +205,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			if (needDivider) {
 				canvas.drawLine(0, getHeight() - 1, getWidth() - getPaddingRight(), getHeight() - 1, Theme.dividerPaint);
 			}
@@ -215,8 +223,8 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 	@SuppressWarnings("FieldCanBeLocal")
 	public static class HintInnerCell extends FrameLayout {
 
-		private RLottieImageView imageView;
-		private TextView messageTextView;
+		private final RLottieImageView imageView;
+		private final TextView messageTextView;
 
 		public HintInnerCell(Context context) {
 			super(context);
@@ -250,12 +258,12 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 
 	public static class FilterCell extends FrameLayout {
 
-		private SimpleTextView textView;
-		private TextView valueTextView;
+		private final SimpleTextView textView;
+		private final TextView valueTextView;
 		@SuppressWarnings("FieldCanBeLocal")
-		private ImageView moveImageView;
+		private final ImageView moveImageView;
 		@SuppressWarnings("FieldCanBeLocal")
-		private ImageView optionsImageView;
+		private final ImageView optionsImageView;
 		private boolean needDivider;
 		float progressToLock;
 
@@ -370,7 +378,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 			if (!animated) {
 				progressToLock = currentFilter.locked ? 1f : 0;
 			}
-			textView.setText(Emoji.replaceEmoji(name, textView.getPaint().getFontMetricsInt(),  false));
+			textView.setText(Emoji.replaceEmoji(name, textView.getPaint().getFontMetricsInt(), false));
 
 			valueTextView.setText(info);
 			needDivider = divider;
@@ -393,7 +401,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			if (needDivider) {
 				canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(62), getMeasuredHeight() - 1, getMeasuredWidth() - (LocaleController.isRTL ? AndroidUtilities.dp(62) : 0), getMeasuredHeight() - 1, Theme.dividerPaint);
 			}
@@ -436,7 +444,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 		recommendedEndRow = -1;
 		recommendedSectionRow = -1;
 
-		ArrayList<TLRPC.TL_dialogFilterSuggested> suggestedFilters = getMessagesController().suggestedFilters;
+		ArrayList<TLRPC.TLDialogFilterSuggested> suggestedFilters = getMessagesController().suggestedFilters;
 		rowCount = 0;
 		filterHelpRow = rowCount++;
 		int count = getMessagesController().dialogFilters.size();
@@ -486,7 +494,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 		if (orderChanged) {
 			getNotificationCenter().postNotificationName(NotificationCenter.dialogFiltersUpdated);
 			getMessagesStorage().saveDialogFiltersOrder();
-			TLRPC.TL_messages_updateDialogFiltersOrder req = new TLRPC.TL_messages_updateDialogFiltersOrder();
+			TLRPC.TLMessagesUpdateDialogFiltersOrder req = new TLRPC.TLMessagesUpdateDialogFiltersOrder();
 			ArrayList<MessagesController.DialogFilter> filters = getMessagesController().dialogFilters;
 			for (int a = 0, N = filters.size(); a < N; a++) {
 				MessagesController.DialogFilter filter = filters.get(a);
@@ -519,11 +527,9 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 
 		listView = new RecyclerListView(context) {
 			@Override
-			public boolean onTouchEvent(MotionEvent e) {
+			public boolean onTouchEvent(@NonNull MotionEvent e) {
 				if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) {
-					AndroidUtilities.runOnUIThread(() -> {
-						getMessagesController().lockFiltersInternal();
-					}, 250);
+					AndroidUtilities.runOnUIThread(() -> getMessagesController().lockFiltersInternal(), 250);
 				}
 				return super.onTouchEvent(e);
 			}
@@ -608,7 +614,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 
 	private class ListAdapter extends RecyclerListView.SelectionAdapter {
 
-		private Context mContext;
+		private final Context mContext;
 
 		public ListAdapter(Context context) {
 			mContext = context;
@@ -625,8 +631,9 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 			return rowCount;
 		}
 
+		@NonNull
 		@Override
-		public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 			View view;
 			switch (viewType) {
 				case 0:
@@ -678,7 +685,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 										progressDialog.show();
 									}
 									final AlertDialog progressDialogFinal = progressDialog;
-									TLRPC.TL_messages_updateDialogFilter req = new TLRPC.TL_messages_updateDialogFilter();
+									TLRPC.TLMessagesUpdateDialogFilter req = new TLRPC.TLMessagesUpdateDialogFilter();
 									req.id = filter.id;
 									getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 										try {
@@ -746,61 +753,71 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 					SuggestedFilterCell suggestedFilterCell = new SuggestedFilterCell(mContext);
 					suggestedFilterCell.setBackgroundColor(mContext.getColor(R.color.background));
 					suggestedFilterCell.setAddOnClickListener(v -> {
-						TLRPC.TL_dialogFilterSuggested suggested = suggestedFilterCell.getSuggestedFilter();
-						MessagesController.DialogFilter filter = new MessagesController.DialogFilter();
-						filter.name = suggested.filter.title;
+						TLRPC.TLDialogFilterSuggested suggested = suggestedFilterCell.getSuggestedFilter();
+
+						var filter = new MessagesController.DialogFilter();
 						filter.id = 2;
+
 						while (getMessagesController().dialogFiltersById.get(filter.id) != null) {
 							filter.id++;
 						}
+
 						filter.pendingUnreadCount = filter.unreadCount = -1;
+
 						for (int b = 0; b < 2; b++) {
-							ArrayList<TLRPC.InputPeer> fromArray = b == 0 ? suggested.filter.include_peers : suggested.filter.exclude_peers;
-							ArrayList<Long> toArray = b == 0 ? filter.alwaysShow : filter.neverShow;
+							List<TLRPC.InputPeer> fromArray = b == 0 ? TLRPCExtensions.getIncludePeers(suggested.filter) : TLRPCExtensions.getExcludePeers(suggested.filter);
+							List<Long> toArray = b == 0 ? filter.alwaysShow : filter.neverShow;
 							for (int a = 0, N = fromArray.size(); a < N; a++) {
 								TLRPC.InputPeer peer = fromArray.get(a);
 								long lowerId;
-								if (peer.user_id != 0) {
-									lowerId = peer.user_id;
+								if (peer.userId != 0) {
+									lowerId = peer.userId;
 								}
-								else if (peer.chat_id != 0) {
-									lowerId = -peer.chat_id;
+								else if (TLRPCExtensions.getChatId(peer) != 0) {
+									lowerId = -TLRPCExtensions.getChatId(peer);
 								}
 								else {
-									lowerId = -peer.channel_id;
+									lowerId = -peer.channelId;
 								}
 								toArray.add(lowerId);
 							}
 						}
-						if (suggested.filter.groups) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_GROUPS;
+
+						if (suggested.filter instanceof TLRPC.TLDialogFilter tlDialogFilter) {
+							filter.name = tlDialogFilter.title;
+
+							if (tlDialogFilter.groups) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_GROUPS;
+							}
+							if (tlDialogFilter.bots) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_BOTS;
+							}
+							if (tlDialogFilter.contacts) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_CONTACTS;
+							}
+							if (tlDialogFilter.nonContacts) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_NON_CONTACTS;
+							}
+							if (tlDialogFilter.broadcasts) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_CHANNELS;
+							}
+							if (tlDialogFilter.excludeArchived) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED;
+							}
+							if (tlDialogFilter.excludeRead) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_READ;
+							}
+							if (tlDialogFilter.excludeMuted) {
+								filter.flags |= MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED;
+							}
 						}
-						if (suggested.filter.bots) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_BOTS;
-						}
-						if (suggested.filter.contacts) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_CONTACTS;
-						}
-						if (suggested.filter.non_contacts) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_NON_CONTACTS;
-						}
-						if (suggested.filter.broadcasts) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_CHANNELS;
-						}
-						if (suggested.filter.exclude_archived) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED;
-						}
-						if (suggested.filter.exclude_read) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_READ;
-						}
-						if (suggested.filter.exclude_muted) {
-							filter.flags |= MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED;
-						}
+
 						ignoreUpdates = true;
+
 						FilterCreateActivity.saveFilterToServer(filter, filter.flags, filter.name, filter.alwaysShow, filter.neverShow, filter.pinnedDialogs, true, true, true, true, false, FiltersSetupActivity.this, () -> {
 							getNotificationCenter().postNotificationName(NotificationCenter.dialogFiltersUpdated);
 							ignoreUpdates = false;
-							ArrayList<TLRPC.TL_dialogFilterSuggested> suggestedFilters = getMessagesController().suggestedFilters;
+							ArrayList<TLRPC.TLDialogFilterSuggested> suggestedFilters = getMessagesController().suggestedFilters;
 							int index = suggestedFilters.indexOf(suggested);
 							if (index != -1) {
 								boolean wasEmpty = filtersStartRow == -1;
@@ -880,7 +897,6 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 				}
 				case 4: {
 					TextCell textCell = (TextCell)holder.itemView;
-					SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
 					if (position == createFilterRow) {
 						Drawable drawable1 = mContext.getResources().getDrawable(R.drawable.poll_add_circle);
 						Drawable drawable2 = mContext.getResources().getDrawable(R.drawable.poll_add_plus);
@@ -888,7 +904,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 						drawable2.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_checkboxCheck), PorterDuff.Mode.MULTIPLY));
 						CombinedDrawable combinedDrawable = new CombinedDrawable(drawable1, drawable2);
 
-						textCell.setTextAndIcon(LocaleController.getString("CreateNewFilter", R.string.CreateNewFilter), combinedDrawable, false);
+						textCell.setTextAndIcon(LocaleController.getString("CreateNewFilter", R.string.CreateNewFilter), combinedDrawable);
 					}
 					break;
 				}
@@ -998,39 +1014,5 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 			super.clearView(recyclerView, viewHolder);
 			viewHolder.itemView.setPressed(false);
 		}
-	}
-
-	@Override
-	public ArrayList<ThemeDescription> getThemeDescriptions() {
-		ArrayList<ThemeDescription> themeDescriptions = new ArrayList<>();
-
-		themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_CELLBACKGROUNDCOLOR, new Class[]{HeaderCell.class, TextCell.class, FilterCell.class, SuggestedFilterCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
-		themeDescriptions.add(new ThemeDescription(fragmentView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundGray));
-
-		themeDescriptions.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_actionBarDefault));
-		themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_LISTGLOWCOLOR, null, null, null, null, Theme.key_actionBarDefault));
-		themeDescriptions.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_ITEMSCOLOR, null, null, null, null, Theme.key_actionBarDefaultIcon));
-		themeDescriptions.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_TITLECOLOR, null, null, null, null, Theme.key_actionBarDefaultTitle));
-		themeDescriptions.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_AB_SELECTORCOLOR, null, null, null, null, Theme.key_actionBarDefaultSelector));
-
-		themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_SELECTOR, null, null, null, null, Theme.key_listSelector));
-
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{View.class}, Theme.dividerPaint, null, null, Theme.key_divider));
-
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{HeaderCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlueHeader));
-
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{FilterCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{FilterCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{FilterCell.class}, new String[]{"moveImageView"}, null, null, null, Theme.key_stickers_menu));
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{FilterCell.class}, new String[]{"optionsImageView"}, null, null, null, Theme.key_stickers_menu));
-		themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_USEBACKGROUNDDRAWABLE | ThemeDescription.FLAG_DRAWABLESELECTEDSTATE, new Class[]{FilterCell.class}, new String[]{"optionsImageView"}, null, null, null, Theme.key_stickers_menuSelector));
-
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{TextCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlueText2));
-		themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_BACKGROUNDFILTER, new Class[]{TextCell.class}, new String[]{"imageView"}, null, null, null, Theme.key_switchTrackChecked));
-		themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{TextCell.class}, new String[]{"imageView"}, null, null, null, Theme.key_checkboxCheck));
-
-		themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_BACKGROUNDFILTER, new Class[]{ShadowSectionCell.class}, null, null, null, Theme.key_windowBackgroundGrayShadow));
-
-		return themeDescriptions;
 	}
 }

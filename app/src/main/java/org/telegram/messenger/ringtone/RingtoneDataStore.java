@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger.ringtone;
 
@@ -14,7 +14,6 @@ import android.text.TextUtils;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
-import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.NotificationCenter;
@@ -29,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 
 public class RingtoneDataStore {
 	private final long clientUserId;
@@ -61,19 +61,21 @@ public class RingtoneDataStore {
 
 	public void loadUserRingtones() {
 		boolean needReload = System.currentTimeMillis() - lastReloadTimeMs > reloadTimeoutMs;
-		TLRPC.TL_account_getSavedRingtones req = new TLRPC.TL_account_getSavedRingtones();
+
+		var req = new TLRPC.TLAccountGetSavedRingtones();
 		req.hash = queryHash;
+
 		if (needReload) {
 			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 				if (response != null) {
-					if (response instanceof TLRPC.TL_account_savedRingtonesNotModified) {
+					if (response instanceof TLRPC.TLAccountSavedRingtonesNotModified) {
 						loadFromPrefs(true);
 					}
-					else if (response instanceof TLRPC.TL_account_savedRingtones) {
-						TLRPC.TL_account_savedRingtones res = (TLRPC.TL_account_savedRingtones)response;
+					else if (response instanceof TLRPC.TLAccountSavedRingtones res) {
 						saveTones(res.ringtones);
 						getSharedPreferences().edit().putLong("hash", queryHash = res.hash).putLong("lastReload", lastReloadTimeMs = System.currentTimeMillis()).commit();
 					}
+
 					checkRingtoneSoundsLoaded();
 				}
 			}));
@@ -83,52 +85,62 @@ public class RingtoneDataStore {
 				loadFromPrefs(true);
 				loaded = true;
 			}
+
 			checkRingtoneSoundsLoaded();
 		}
 	}
 
 	private void loadFromPrefs(boolean notify) {
 		SharedPreferences preferences = getSharedPreferences();
+
 		int count = preferences.getInt("count", 0);
+
 		userRingtones.clear();
+
 		for (int i = 0; i < count; ++i) {
 			String value = preferences.getString("tone_document" + i, "");
 			String localPath = preferences.getString("tone_local_path" + i, "");
 			SerializedData serializedData = new SerializedData(Utilities.hexToBytes(value));
+
 			try {
-				TLRPC.Document document = TLRPC.Document.TLdeserialize(serializedData, serializedData.readInt32(true), true);
+				TLRPC.Document document = TLRPC.Document.deserialize(serializedData, serializedData.readInt32(true), true);
+
 				CachedTone tone = new CachedTone();
 				tone.document = document;
 				tone.localUri = localPath;
 				tone.localId = localIds++;
+
 				userRingtones.add(tone);
 			}
 			catch (Throwable e) {
-				if (BuildConfig.DEBUG_PRIVATE_VERSION) {
-					throw e;
-				}
 				FileLog.e(e);
 			}
 		}
+
 		if (notify) {
 			AndroidUtilities.runOnUIThread(() -> NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.onUserRingtonesUpdated));
 		}
 	}
 
-	private void saveTones(ArrayList<TLRPC.Document> ringtones) {
+	private void saveTones(List<TLRPC.Document> ringtones) {
 		if (!loaded) {
 			loadFromPrefs(false);
 			loaded = true;
 		}
+
 		HashMap<Long, String> documentIdToLocalFilePath = new HashMap<>();
+
 		for (CachedTone cachedTone : userRingtones) {
 			if (cachedTone.localUri != null && cachedTone.document != null) {
 				documentIdToLocalFilePath.put(cachedTone.document.id, cachedTone.localUri);
 			}
 		}
+
 		userRingtones.clear();
+
 		SharedPreferences preferences = getSharedPreferences();
 		preferences.edit().clear().commit();
+
 		SharedPreferences.Editor editor = preferences.edit();
 		editor.putInt("count", ringtones.size());
 
@@ -138,16 +150,21 @@ public class RingtoneDataStore {
 			SerializedData data = new SerializedData(document.getObjectSize());
 			document.serializeToStream(data);
 			editor.putString("tone_document" + i, Utilities.bytesToHex(data.toByteArray()));
+
 			if (localPath != null) {
 				editor.putString("tone_local_path" + i, localPath);
 			}
+
 			CachedTone tone = new CachedTone();
 			tone.document = document;
 			tone.localUri = localPath;
 			tone.localId = localIds++;
+
 			userRingtones.add(tone);
 		}
+
 		editor.commit();
+
 		NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.onUserRingtonesUpdated);
 	}
 
@@ -157,16 +174,20 @@ public class RingtoneDataStore {
 		SharedPreferences.Editor editor = preferences.edit();
 
 		int count = 0;
+
 		for (int i = 0; i < userRingtones.size(); i++) {
 			if (userRingtones.get(i).uploading) {
 				continue;
 			}
+
 			count++;
+
 			TLRPC.Document document = userRingtones.get(i).document;
 			String localPath = userRingtones.get(i).localUri;
 			SerializedData data = new SerializedData(document.getObjectSize());
 			document.serializeToStream(data);
 			editor.putString("tone_document" + i, Utilities.bytesToHex(data.toByteArray()));
+
 			if (localPath != null) {
 				editor.putString("tone_local_path" + i, localPath);
 			}
@@ -174,6 +195,7 @@ public class RingtoneDataStore {
 
 		editor.putInt("count", count);
 		editor.commit();
+
 		NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.onUserRingtonesUpdated);
 	}
 
@@ -259,7 +281,8 @@ public class RingtoneDataStore {
 				if (tone.document != null) {
 					TLRPC.Document document = tone.document;
 					File file = FileLoader.getInstance(currentAccount).getPathToAttach(document);
-					if (file == null || !file.exists()) {
+
+					if (!file.exists()) {
 						AndroidUtilities.runOnUIThread(() -> FileLoader.getInstance(currentAccount).loadFile(document, document, FileLoader.PRIORITY_LOW, 0));
 					}
 				}

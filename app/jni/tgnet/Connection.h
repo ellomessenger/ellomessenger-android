@@ -61,7 +61,7 @@ public:
 
     static bool isMediaConnectionType(ConnectionType type);
 
-    [[nodiscard]] bool canReconnect() const;
+//    [[nodiscard]] bool canReconnect() const;
 
 protected:
 
@@ -74,8 +74,6 @@ protected:
     bool hasPendingRequests() override;
 
     void reconnect();
-
-    void resetAllRetries();
 
 private:
 
@@ -100,9 +98,9 @@ private:
 
     void onDisconnectedInternal(int32_t reason, int32_t error);
 
-    void retryWithBackoff();
+    //void retryWithBackoff();
 
-    void discardConnectionAfterTimeout();
+    //void discardConnectionAfterTimeout();
 
     ProtocolType currentProtocolType = ProtocolTypeEE;
 
@@ -146,10 +144,10 @@ private:
     uint32_t decryptNum = 0;
     uint8_t decryptCount[16] = {0};
 
-    uint32_t baseReconnectTimeout = 1000;
-    int maxReconnectRetries = 5;
-    int retryReconnectAttempt = 0;
-    uint32_t lastReconnectTimeout = baseReconnectTimeout;
+//    uint32_t baseReconnectTimeout = 1000;
+//    int maxReconnectRetries = 5;
+//    int retryReconnectAttempt = 0;
+    uint32_t lastReconnectTimeout = 100;
 
     friend class ConnectionsManager;
 };

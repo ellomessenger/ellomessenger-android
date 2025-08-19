@@ -35,7 +35,7 @@ public class GroupCallGridCell extends FrameLayout {
         if (isTabletGrid) {
             float totalSpans = 6;
             float w = ((View) getParent()).getMeasuredWidth() / totalSpans * spanCount;
-            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(gridAdapter.getItemHeight(position), MeasureSpec.EXACTLY));
+            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(gridAdapter.getItemHeight(), MeasureSpec.EXACTLY));
         } else {
             float spanCount = GroupCallActivity.isLandscapeMode ? 3f : 2f;
             float parentWidth;
@@ -85,7 +85,7 @@ public class GroupCallGridCell extends FrameLayout {
 
     public float getItemHeight() {
         if (gridAdapter != null) {
-            return gridAdapter.getItemHeight(position);
+            return gridAdapter.getItemHeight();
         } else {
             return getMeasuredHeight();
         }

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -39,10 +39,10 @@ import org.telegram.messenger.utils.gone
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
-import org.telegram.tgnet.TLRPC.TL_channels_getGroupsForDiscussion
-import org.telegram.tgnet.TLRPC.TL_channels_setDiscussionGroup
-import org.telegram.tgnet.TLRPC.TL_inputChannelEmpty
-import org.telegram.tgnet.TLRPC.messages_Chats
+import org.telegram.tgnet.TLRPC.MessagesChats
+import org.telegram.tgnet.TLRPC.TLChannelsGetGroupsForDiscussion
+import org.telegram.tgnet.TLRPC.TLChannelsSetDiscussionGroup
+import org.telegram.tgnet.TLRPC.TLInputChannelEmpty
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -65,7 +65,6 @@ import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import org.telegram.ui.group.GroupCreateFinalActivity
 import org.telegram.ui.group.GroupCreateFinalActivity.GroupCreateFinalActivityDelegate
-import java.util.Locale
 
 class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), NotificationCenterDelegate {
 	private var listViewAdapter: ListAdapter? = null
@@ -78,7 +77,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 	private var waitingForFullChat: Chat? = null
 	private var waitingForFullChatProgressAlert: AlertDialog? = null
 	private val isChannel: Boolean
-	private var chats = ArrayList<Chat>()
+	private var chats = mutableListOf<Chat>()
 	private var loadingChats = false
 	private var chatsLoaded = false
 	private var joinToSendSettings: JoinToSendSettingsView? = null
@@ -113,10 +112,10 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 		}
 
 		private fun setSticker() {
-			var set = MediaDataController.getInstance(currentAccount).getStickerSetByName(stickerSetName)
+			var set = MediaDataController.getInstance(currentAccount).getStickerSetByName(STICKER_SET_NAME)
 
 			if (set == null) {
-				set = MediaDataController.getInstance(currentAccount).getStickerSetByEmojiOrName(stickerSetName)
+				set = MediaDataController.getInstance(currentAccount).getStickerSetByEmojiOrName(STICKER_SET_NAME)
 			}
 
 			if (set != null && set.documents.size >= 3) {
@@ -126,7 +125,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 				stickerView.setImage(imageLocation, "104_104", "tgs", drawable, set)
 			}
 			else {
-				MediaDataController.getInstance(currentAccount).loadStickersByEmojiOrName(stickerSetName, false, set == null)
+				MediaDataController.getInstance(currentAccount).loadStickersByEmojiOrName(STICKER_SET_NAME, false, set == null)
 				stickerView.setImageDrawable(drawable)
 			}
 		}
@@ -146,14 +145,14 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 			if (id == NotificationCenter.diceStickersDidLoad) {
 				val name = args[0] as String
 
-				if (stickerSetName == name) {
+				if (STICKER_SET_NAME == name) {
 					setSticker()
 				}
 			}
 		}
 
 		companion object {
-			private const val stickerSetName = AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME
+			private const val STICKER_SET_NAME = AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME
 		}
 	}
 
@@ -170,7 +169,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 		helpRow = rowCount++
 
 		if (isChannel) {
-			if (info?.linked_chat_id == 0L) {
+			if (info?.linkedChatId == 0L) {
 				createChatRow = rowCount++
 			}
 
@@ -178,7 +177,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 			rowCount += chats.size
 			chatEndRow = rowCount
 
-			if (info?.linked_chat_id != 0L) {
+			if (info?.linkedChatId != 0L) {
 				createChatRow = rowCount++
 			}
 		}
@@ -191,10 +190,10 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 		detailRow = rowCount++
 
-		if (!isChannel || chats.size > 0 && info?.linked_chat_id != 0L) {
+		if (!isChannel || chats.size > 0 && info?.linkedChatId != 0L) {
 			val chat = if (isChannel) chats[0] else currentChat
 
-			if (chat != null && (chat.username.isNullOrEmpty() || isChannel) && (chat.creator || chat.admin_rights != null && chat.admin_rights.ban_users)) {
+			if (chat != null && (chat.username.isNullOrEmpty() || isChannel) && (chat.creator || chat.adminRights != null && chat.adminRights!!.banUsers)) {
 				joinToSendRow = rowCount++
 			}
 		}
@@ -281,11 +280,11 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 					if (chat != null && joinToSendSettings != null) {
 						if (!joinRequestProgress) {
-							joinToSendSettings?.setJoinRequest(chat.join_request)
+							joinToSendSettings?.setJoinRequest(chat.joinRequest)
 						}
 
 						if (!joinToSendProgress) {
-							joinToSendSettings?.setJoinToSend(chat.join_to_send)
+							joinToSendSettings?.setJoinToSend(chat.joinToSend)
 						}
 					}
 				}
@@ -311,7 +310,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 		val menu = actionBar?.createMenu()
 
-		searchItem = menu?.addItem(search_button, R.drawable.ic_search_menu)?.setIsSearchField(true)?.setActionBarMenuItemSearchListener(object : ActionBarMenuItemSearchListener() {
+		searchItem = menu?.addItem(SEARCH_BUTTON, R.drawable.ic_search_menu)?.setIsSearchField(true)?.setActionBarMenuItemSearchListener(object : ActionBarMenuItemSearchListener() {
 			override fun onSearchExpand() {
 				searching = true
 				emptyView?.setShowAtCenter(true)
@@ -397,7 +396,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 			}
 
 			if (chat != null) {
-				if (isChannel && info?.linked_chat_id == 0L) {
+				if (isChannel && info?.linkedChatId == 0L) {
 					showLinkAlert(chat, true)
 				}
 				else {
@@ -410,7 +409,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 			}
 
 			if (position == createChatRow) {
-				if (isChannel && info?.linked_chat_id == 0L) {
+				if (isChannel && info?.linkedChatId == 0L) {
 					val args = Bundle()
 
 					val array = longArrayOf(userConfig.getClientUserId())
@@ -459,16 +458,16 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 					builder.setMessage(AndroidUtilities.replaceTags(message))
 
 					builder.setPositiveButton(context.getString(R.string.DiscussionUnlink)) { _, _ ->
-						if (!isChannel || info?.linked_chat_id != 0L) {
+						if (!isChannel || info?.linkedChatId != 0L) {
 							var progressDialog: AlertDialog? = AlertDialog(parentActivity, 3)
-							val req = TL_channels_setDiscussionGroup()
+							val req = TLChannelsSetDiscussionGroup()
 
 							if (isChannel) {
 								req.broadcast = MessagesController.getInputChannel(currentChat)
-								req.group = TL_inputChannelEmpty()
+								req.group = TLInputChannelEmpty()
 							}
 							else {
-								req.broadcast = TL_inputChannelEmpty()
+								req.broadcast = TLInputChannelEmpty()
 								req.group = MessagesController.getInputChannel(currentChat)
 							}
 
@@ -480,7 +479,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 									progressDialog = null
 
-									info?.linked_chat_id = 0
+									info?.linkedChatId = 0
 
 									NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.chatInfoDidLoad, info, 0, false, false)
 
@@ -573,7 +572,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 			}
 		}
 
-		if (chatFull.hidden_prehistory) {
+		if (chatFull.hiddenPrehistory) {
 			message += "\n\n${parentActivity.getString(R.string.DiscussionLinkGroupAlertHistory)}"
 		}
 
@@ -610,7 +609,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 		imageView.setForUserOrChat(chat, avatarDrawable)
 
 		builder.setPositiveButton(parentActivity.getString(R.string.DiscussionLinkGroup)) { _, _ ->
-			if (chatFull.hidden_prehistory) {
+			if (chatFull.hiddenPrehistory) {
 				messagesController.toggleChannelInvitesHistory(chat.id, false)
 			}
 
@@ -641,7 +640,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 		var progressDialog = if (createFragment != null) null else parentActivity?.let { AlertDialog(it, 3) }
 
-		val req = TL_channels_setDiscussionGroup()
+		val req = TLChannelsSetDiscussionGroup()
 		req.broadcast = MessagesController.getInputChannel(currentChat)
 		req.group = MessagesController.getInputChannel(chat)
 
@@ -653,7 +652,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 				progressDialog = null
 
-				info?.linked_chat_id = chat.id
+				info?.linkedChatId = chat.id
 
 				NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.chatInfoDidLoad, info, 0, false, false)
 
@@ -689,10 +688,10 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 	}
 
 	private fun loadChats() {
-		if (info?.linked_chat_id != 0L) {
+		if (info?.linkedChatId != 0L) {
 			chats.clear()
 
-			val chat = messagesController.getChat(info?.linked_chat_id)
+			val chat = messagesController.getChat(info?.linkedChatId)
 
 			if (chat != null) {
 				chats.add(chat)
@@ -701,17 +700,17 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 			searchItem?.gone()
 		}
 
-		if (loadingChats || !isChannel || info?.linked_chat_id != 0L) {
+		if (loadingChats || !isChannel || info?.linkedChatId != 0L) {
 			return
 		}
 
 		loadingChats = true
 
-		val req = TL_channels_getGroupsForDiscussion()
+		val req = TLChannelsGetGroupsForDiscussion()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is messages_Chats) {
+				if (response is MessagesChats) {
 					messagesController.putChats(response.chats, false)
 					chats = response.chats
 				}
@@ -730,22 +729,19 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 	}
 
 	inner class HintInnerCell(context: Context) : FrameLayout(context) {
-		private val emptyView: EmptyView
-		private val messageTextView: TextView
+		private val emptyView = EmptyView(context)
+		private val messageTextView = TextView(context)
 
 		init {
-			emptyView = EmptyView(context)
-
 			addView(emptyView, createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT.toFloat(), Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0f, 10f, 0f, 0f))
 
-			messageTextView = TextView(context)
 			messageTextView.setTextColor(ResourcesCompat.getColor(getContext().resources, R.color.text, null))
 			messageTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f)
 			messageTextView.gravity = Gravity.CENTER
 
 			if (isChannel) {
-				if (info != null && info?.linked_chat_id != 0L) {
-					val chat = messagesController.getChat(info?.linked_chat_id)
+				if (info != null && info?.linkedChatId != 0L) {
+					val chat = messagesController.getChat(info?.linkedChatId)
 
 					if (chat != null) {
 						messageTextView.text = AndroidUtilities.replaceTags(LocaleController.formatString("DiscussionChannelGroupSetHelp2", R.string.DiscussionChannelGroupSetHelp2, chat.title))
@@ -756,7 +752,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 				}
 			}
 			else {
-				val chat = messagesController.getChat(info?.linked_chat_id)
+				val chat = messagesController.getChat(info?.linkedChatId)
 
 				if (chat != null) {
 					messageTextView.text = AndroidUtilities.replaceTags(LocaleController.formatString("DiscussionGroupHelp", R.string.DiscussionGroupHelp, chat.title))
@@ -803,7 +799,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 				val chatsCopy = ArrayList(chats)
 
 				Utilities.searchQueue.postRunnable {
-					val search1 = query?.trim()?.lowercase(Locale.getDefault())
+					val search1 = query?.trim()?.lowercase()
 
 					if (search1.isNullOrEmpty()) {
 						updateSearchResults(ArrayList(), ArrayList())
@@ -829,7 +825,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 					for (a in chatsCopy.indices) {
 						val chat = chatsCopy[a]
-						val name = chat.title.lowercase(Locale.getDefault())
+						val name = chat.title?.lowercase()
 						var tName = LocaleController.getInstance().getTranslitString(name)
 
 						if (name == tName) {
@@ -839,10 +835,10 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 						var found = 0
 
 						for (q in search) {
-							if (name.startsWith(q!!) || name.contains(" $q") || tName != null && (tName.startsWith(q) || tName.contains(" $q"))) {
+							if (name?.startsWith(q!!) == true || name?.contains(" $q") == true || tName != null && (tName.startsWith(q!!) || tName.contains(" $q"))) {
 								found = 1
 							}
-							else if (chat.username != null && chat.username.startsWith(q)) {
+							else if (chat.username != null && chat.username?.startsWith(q!!) == true) {
 								found = 2
 							}
 
@@ -999,7 +995,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 							joinRequestProgress = true
 
 							migrateIfNeeded(overrideCancel(cancel)) {
-								chat.join_request = newValue
+								chat.joinRequest = newValue
 
 								messagesController.toggleChatJoinRequest(chat.id, newValue, { joinRequestProgress = false }) {
 									joinRequestProgress = false
@@ -1026,17 +1022,17 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 							joinToSendProgress = true
 
 							migrateIfNeeded(overrideCancel(cancel)) {
-								chat.join_to_send = newValue
+								chat.joinToSend = newValue
 
 								messagesController.toggleChatJoinToSend(chat.id, newValue, {
 									joinToSendProgress = false
 
-									if (!newValue && chat.join_request) {
-										chat.join_request = false
+									if (!newValue && chat.joinRequest) {
+										chat.joinRequest = false
 										joinRequestProgress = true
 
 										messagesController.toggleChatJoinRequest(chat.id, false, { joinRequestProgress = false }) {
-											chat.join_request = true
+											chat.joinRequest = true
 											isJoinRequest = true
 											joinRequestCell.isChecked = true
 										}
@@ -1074,7 +1070,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 
 					val chat = chats[position - chatStartRow]
 
-					userCell.setData(chat, null, chat.username?.takeIf { it.isNotEmpty() }?.let { "@$it" }, position != chatEndRow - 1 || info?.linked_chat_id != 0L)
+					userCell.setData(chat, null, chat.username?.takeIf { it.isNotEmpty() }?.let { "@$it" }, position != chatEndRow - 1 || info?.linkedChatId != 0L)
 				}
 
 				1 -> {
@@ -1094,7 +1090,7 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 					val actionCell = holder.itemView as ManageChatTextCell
 
 					if (isChannel) {
-						if (info?.linked_chat_id != 0L) {
+						if (info?.linkedChatId != 0L) {
 							actionCell.setColors(ResourcesCompat.getColor(actionCell.resources, R.color.purple, null), ResourcesCompat.getColor(actionCell.resources, R.color.purple, null))
 							actionCell.setText(actionCell.context.getString(R.string.DiscussionUnlinkGroup), null, R.drawable.msg_remove, false)
 						}
@@ -1129,6 +1125,6 @@ class ChatLinkActivity(private var currentChatId: Long) : BaseFragment(), Notifi
 	}
 
 	companion object {
-		private const val search_button = 0
+		private const val SEARCH_BUTTON = 0
 	}
 }

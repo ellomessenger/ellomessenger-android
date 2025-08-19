@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -55,11 +55,12 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_messages_updateDialogFiltersOrder
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.RecyclerListView.OnItemClickListenerExtended
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import org.telegram.ui.Components.ViewPagerFixed.TabsView.TabsViewDelegate
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
@@ -67,6 +68,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import androidx.core.graphics.withTranslation
+import androidx.core.view.isVisible
 
 open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 	var nextPosition = 0
@@ -81,20 +84,14 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 	private var animatingForward = false
 	private var additionalOffset = 0f
 	private var backAnimation = false
-	private val maximumVelocity: Int
+	private val maximumVelocity = ViewConfiguration.get(context).scaledMaximumFlingVelocity
 	private var startedTracking = false
 	private var maybeStartTracking = false
 	private val touchSlop = AndroidUtilities.getPixelsInCM(0.3f, true)
 	private var adapter: Adapter? = null
 	private val rect = Rect()
-
-	@JvmField
-	var tabsView: TabsView? = null
-
-	@JvmField
-	protected var viewsByType = SparseArray<View?>()
-
-	@JvmField
+	open var tabsView: TabsView? = null
+	protected var viewsByType = SparseArray<View>()
 	var currentPosition = 0
 
 	private var updateTabProgress = AnimatorUpdateListener {
@@ -107,7 +104,6 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 	}
 
 	init {
-		maximumVelocity = ViewConfiguration.get(context).scaledMaximumFlingVelocity
 		clipChildren = true
 	}
 
@@ -204,7 +200,7 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 				viewsByType.remove(viewTypes[index])
 			}
 
-			if (v?.parent != null) {
+			if (v.parent != null) {
 				val parent = v.parent as ViewGroup
 				parent.removeView(v)
 			}
@@ -618,7 +614,7 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 
 	abstract class Adapter {
 		abstract val itemCount: Int
-		abstract fun createView(viewType: Int): View?
+		abstract fun createView(viewType: Int): View
 		abstract fun bindView(view: View?, position: Int, viewType: Int)
 
 		fun getItemId(position: Int): Int {
@@ -753,7 +749,7 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 				val counterText: String?
 
 				if (currentTab!!.counter > 0) {
-					counterText = String.format("%d", currentTab!!.counter)
+					counterText = String.format(Locale.getDefault(), "%d", currentTab!!.counter)
 					counterWidth = ceil(textCounterPaint.measureText(counterText).toDouble()).toInt()
 					countWidth = max(AndroidUtilities.dp(10f), counterWidth) + AndroidUtilities.dp(10f)
 				}
@@ -782,10 +778,9 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 				}
 
 				if (textLayout != null) {
-					canvas.save()
-					canvas.translate((textX + textOffsetX).toFloat(), ((measuredHeight - textHeight) / 2 + 1).toFloat())
-					textLayout?.draw(canvas)
-					canvas.restore()
+					canvas.withTranslation((textX + textOffsetX).toFloat(), ((measuredHeight - textHeight) / 2 + 1).toFloat()) {
+						textLayout?.draw(this)
+					}
 				}
 
 				if (counterText != null || currentTab!!.id != Int.MAX_VALUE && (isEditing || editingStartAnimationProgress != 0f)) {
@@ -1456,7 +1451,7 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 
 			if (!isEditing && orderChanged) {
 				MessagesStorage.getInstance(UserConfig.selectedAccount).saveDialogFiltersOrder()
-				val req = TL_messages_updateDialogFiltersOrder()
+				val req = TLRPC.TLMessagesUpdateDialogFiltersOrder()
 				val filters = MessagesController.getInstance(UserConfig.selectedAccount).dialogFilters
 				req.order.addAll(filters.map { it.id })
 
@@ -1549,7 +1544,7 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 		for (i in viewPages.indices) {
 			val viewPage = viewPages[i] ?: continue
 
-			if (viewPage.visibility == VISIBLE) {
+			if (viewPage.isVisible) {
 				val recyclerListView = findRecyclerView(viewPage)
 
 				if (recyclerListView != null) {
@@ -1557,10 +1552,9 @@ open class ViewPagerFixed(context: Context) : FrameLayout(context) {
 						val child = recyclerListView.getChildAt(j)
 
 						if (child.y < AndroidUtilities.dp(203f) + AndroidUtilities.dp(100f)) {
-							val restore = blurCanvas.save()
-							blurCanvas.translate(viewPage.x, y + viewPage.y + recyclerListView.y + child.y)
-							child.draw(blurCanvas)
-							blurCanvas.restoreToCount(restore)
+							blurCanvas.withTranslation(viewPage.x, y + viewPage.y + recyclerListView.y + child.y) {
+								child.draw(blurCanvas)
+							}
 						}
 					}
 				}

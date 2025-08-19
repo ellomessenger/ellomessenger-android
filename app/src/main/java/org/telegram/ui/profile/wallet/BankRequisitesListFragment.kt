@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -142,7 +142,7 @@ class BankRequisitesListFragment(args: Bundle) : BaseFragment(args) {
 		val req = ElloRpc.getBankWithdrawsRequisites()
 
 		reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, _ ->
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val list = response.readData<ElloRpc.BankRequisiteResponse>()?.data
 
 				if (list != null) {

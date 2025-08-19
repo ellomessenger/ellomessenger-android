@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Reactions
 
@@ -17,16 +17,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ImageLocation
 import org.telegram.messenger.ImageReceiver
 import org.telegram.messenger.MediaDataController
 import org.telegram.messenger.MessagesController
 import org.telegram.messenger.messageobject.MessageObject
-import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.MessagePeerReaction
-import org.telegram.tgnet.tlrpc.TL_availableReaction
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.reactions
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.Cells.ChatMessageCell
 import org.telegram.ui.ChatActivity
@@ -86,7 +85,7 @@ class ReactionsEffectOverlay private constructor(context: Context, fragment: Bas
 
 		if (animationType == SHORT_ANIMATION) {
 			val random = Random()
-			var recentReactions: List<MessagePeerReaction>? = null
+			var recentReactions: List<TLRPC.TLMessagePeerReaction>? = null
 			val messageOwnerReactions = cell.getMessageObject()?.messageOwner?.reactions
 
 			if (messageOwnerReactions != null) {
@@ -96,11 +95,11 @@ class ReactionsEffectOverlay private constructor(context: Context, fragment: Bas
 			if (recentReactions != null && chatActivity != null && chatActivity.dialogId < 0) {
 				for (i in recentReactions.indices) {
 					if (reaction.equals(recentReactions[i].reaction) && recentReactions[i].unread) {
-						var user: User?
-						var chat: Chat?
+						var user: TLRPC.User?
+						var chat: TLRPC.Chat?
 						val avatarDrawable = AvatarDrawable()
 						val imageReceiver = ImageReceiver()
-						val peerId = MessageObject.getPeerId(recentReactions[i].peer_id)
+						val peerId = MessageObject.getPeerId(recentReactions[i].peerId)
 
 						if (peerId < 0) {
 							chat = MessagesController.getInstance(currentAccount).getChat(-peerId)
@@ -505,14 +504,11 @@ class ReactionsEffectOverlay private constructor(context: Context, fragment: Bas
 						avatars[i].imageReceiver?.setImageCoordinates(cx - size / 2f, cy - size / 2f, size.toFloat(), size.toFloat())
 						avatars[i].imageReceiver?.setRoundRadius(size shr 1)
 
-						canvas.save()
-						canvas.translate(0f, particle.globalTranslationY)
-						canvas.scale(s, s, cx, cy)
-						canvas.rotate(particle.currentRotation, cx, cy)
-
-						avatars[i].imageReceiver?.draw(canvas)
-
-						canvas.restore()
+						canvas.withTranslation(0f, particle.globalTranslationY) {
+							scale(s, s, cx, cy)
+							rotate(particle.currentRotation, cx, cy)
+							avatars[i].imageReceiver?.draw(this)
+						}
 
 						if (particle.progress < 1f) {
 							particle.progress += 16f / 350f
@@ -565,7 +561,7 @@ class ReactionsEffectOverlay private constructor(context: Context, fragment: Bas
 			}
 		}
 
-		var availableReaction: TL_availableReaction? = null
+		var availableReaction: TLRPC.TLAvailableReaction? = null
 
 		if (reaction.emojicon != null) {
 			availableReaction = MediaDataController.getInstance(currentAccount).reactionsMap[reaction.emojicon]
@@ -574,7 +570,7 @@ class ReactionsEffectOverlay private constructor(context: Context, fragment: Bas
 		if (availableReaction != null || reaction.documentId != 0L) {
 			if (availableReaction != null) {
 				if (animationType != ONLY_MOVE_ANIMATION) {
-					val document = if (animationType == SHORT_ANIMATION) availableReaction.around_animation else availableReaction.effect_animation
+					val document = if (animationType == SHORT_ANIMATION) availableReaction.aroundAnimation else availableReaction.effectAnimation
 					val filter = if (animationType == SHORT_ANIMATION) filterForAroundAnimation else sizeForFilter.toString() + "_" + sizeForFilter
 
 					effectImageView.imageReceiver.uniqueKeyPrefix = uniquePrefix++.toString() + "_" + cell.getMessageObject()!!.id + "_"
@@ -587,12 +583,12 @@ class ReactionsEffectOverlay private constructor(context: Context, fragment: Bas
 				}
 
 				if (animationType == ONLY_MOVE_ANIMATION) {
-					val document = availableReaction.appear_animation
+					val document = availableReaction.appearAnimation
 					emojiImageView.imageReceiver.uniqueKeyPrefix = uniquePrefix++.toString() + "_" + cell.getMessageObject()!!.id + "_"
 					emojiImageView.setImage(ImageLocation.getForDocument(document), emojiSizeForFilter.toString() + "_" + emojiSizeForFilter, null, null, 0, null)
 				}
 				else if (animationType == LONG_ANIMATION) {
-					val document = availableReaction.activate_animation
+					val document = availableReaction.activateAnimation
 					emojiImageView.imageReceiver.uniqueKeyPrefix = uniquePrefix++.toString() + "_" + cell.getMessageObject()!!.id + "_"
 					emojiImageView.setImage(ImageLocation.getForDocument(document), emojiSizeForFilter.toString() + "_" + emojiSizeForFilter, null, null, 0, null)
 				}

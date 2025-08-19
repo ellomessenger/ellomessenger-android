@@ -352,11 +352,6 @@ void Connection::connect() {
         return;
     }
 
-    if (!canReconnect()) {
-        discardConnectionAfterTimeout();
-        return;
-    }
-
     if (!ConnectionsManager::getInstance(currentDatacenter->instanceNum).isNetworkAvailable()) {
         ConnectionsManager::getInstance(currentDatacenter->instanceNum).onConnectionClosed(this, 0);
         return;
@@ -522,10 +517,6 @@ bool Connection::hasUsefulData() {
     return usefulData;
 }
 
-bool Connection::canReconnect() const {
-    return retryReconnectAttempt < maxReconnectRetries;
-}
-
 bool Connection::isSuspended() {
     return connectionState == TcpConnectionStageSuspended;
 }
@@ -538,8 +529,7 @@ void Connection::setHasUsefulData() {
     if (!usefulData) {
         usefulDataReceiveTime = ConnectionsManager::getInstance(currentDatacenter->instanceNum).getCurrentTimeMonotonicMillis();
         usefulData = true;
-        lastReconnectTimeout = baseReconnectTimeout;
-        retryReconnectAttempt = 0;
+        lastReconnectTimeout = 50;
     }
 }
 
@@ -555,7 +545,6 @@ void Connection::sendData(NativeByteBuffer *buff, bool reportAck, bool encrypted
     buff->rewind();
 
     if (connectionState == TcpConnectionStageIdle || connectionState == TcpConnectionStageReconnecting || connectionState == TcpConnectionStageSuspended) {
-        if (LOGS_ENABLED) DEBUG_D("Connect when sending data");
         connect();
     }
 
@@ -860,100 +849,54 @@ void Connection::onDisconnectedInternal(int32_t reason, int32_t error) {
     connectionToken = 0;
 
     if (connectionState == TcpConnectionStageIdle) {
-        if (canReconnect()) {
-            uint32_t datacenterId = currentDatacenter->getDatacenterId();
+        uint32_t datacenterId = currentDatacenter->getDatacenterId();
 
-            connectionState = TcpConnectionStageReconnecting;
+        connectionState = TcpConnectionStageReconnecting;
 
-            failedConnectionCount++;
+        failedConnectionCount++;
 
-            if (failedConnectionCount == 1) {
-                if (hasUsefulData()) {
-                    willRetryConnectCount = 3;
-                }
-                else {
-                    willRetryConnectCount = 1;
-                }
-            }
-
-            if (ConnectionsManager::getInstance(currentDatacenter->instanceNum).isNetworkAvailable() && connectionType != ConnectionTypeProxy) {
-                isTryingNextPort = true;
-
-                if (failedConnectionCount > willRetryConnectCount || switchToNextPort) {
-                    currentDatacenter->nextAddressOrPort(currentAddressFlags);
-
-                    if (currentDatacenter->isRepeatCheckingAddresses() && (ConnectionsManager::getInstance(currentDatacenter->instanceNum).getIpStrategy() == USE_IPV4_ONLY || ConnectionsManager::getInstance(currentDatacenter->instanceNum).getIpStrategy() == USE_IPV6_ONLY)) {
-                        if (LOGS_ENABLED) DEBUG_D("started retrying connection, set ipv4 ipv6 random strategy");
-                        ConnectionsManager::getInstance(currentDatacenter->instanceNum).setIpStrategy(USE_IPV4_IPV6_RANDOM);
-                    }
-
-                    failedConnectionCount = 0;
-                }
-            }
-
-            if (error == 0x68 || error == 0x71) {
-                if (connectionType != ConnectionTypeProxy) {
-                    retryWithBackoff();
-                }
+        if (failedConnectionCount == 1) {
+            if (hasUsefulData()) {
+                willRetryConnectCount = 3;
             }
             else {
-                waitForReconnectTimer = false;
+                willRetryConnectCount = 1;
+            }
+        }
 
-                if ((connectionType == ConnectionTypeGenericMedia && currentDatacenter->isHandshaking(true)) || (connectionType == ConnectionTypeGeneric && (currentDatacenter->isHandshaking(false) || datacenterId == ConnectionsManager::getInstance(currentDatacenter->instanceNum).currentDatacenterId || datacenterId == ConnectionsManager::getInstance(currentDatacenter->instanceNum).movingToDatacenterId))) {
-                    if (LOGS_ENABLED) DEBUG_D("connection(%p, account%u, dc%u, type %d) reconnect %s:%hu", this, currentDatacenter->instanceNum, currentDatacenter->getDatacenterId(), connectionType, hostAddress.c_str(), hostPort);
+        if (ConnectionsManager::getInstance(currentDatacenter->instanceNum).isNetworkAvailable() && connectionType != ConnectionTypeProxy) {
+            isTryingNextPort = true;
 
-                    retryWithBackoff();
+            if (failedConnectionCount > willRetryConnectCount || switchToNextPort) {
+                currentDatacenter->nextAddressOrPort(currentAddressFlags);
+
+                if (currentDatacenter->isRepeatCheckingAddresses() && (ConnectionsManager::getInstance(currentDatacenter->instanceNum).getIpStrategy() == USE_IPV4_ONLY || ConnectionsManager::getInstance(currentDatacenter->instanceNum).getIpStrategy() == USE_IPV6_ONLY)) {
+                    if (LOGS_ENABLED) DEBUG_D("started retrying connection, set ipv4 ipv6 random strategy");
+                    ConnectionsManager::getInstance(currentDatacenter->instanceNum).setIpStrategy(USE_IPV4_IPV6_RANDOM);
                 }
+
+                failedConnectionCount = 0;
+            }
+        }
+
+        if (error == 0x68 || error == 0x71) {
+            if (connectionType != ConnectionTypeProxy) {
+                reconnectTimer->start();
             }
         }
         else {
-            discardConnectionAfterTimeout();
+            waitForReconnectTimer = false;
+
+            if ((connectionType == ConnectionTypeGenericMedia && currentDatacenter->isHandshaking(true)) || (connectionType == ConnectionTypeGeneric && (currentDatacenter->isHandshaking(false) || datacenterId == ConnectionsManager::getInstance(currentDatacenter->instanceNum).currentDatacenterId || datacenterId == ConnectionsManager::getInstance(currentDatacenter->instanceNum).movingToDatacenterId))) {
+                if (LOGS_ENABLED) DEBUG_D("connection(%p, account%u, dc%u, type %d) reconnect %s:%hu", this, currentDatacenter->instanceNum, currentDatacenter->getDatacenterId(), connectionType, hostAddress.c_str(), hostPort);
+
+                reconnectTimer->setTimeout(1000, false);
+                reconnectTimer->start();
+            }
         }
     }
 
     usefulData = false;
-}
-
-void Connection::retryWithBackoff() {
-    if (++retryReconnectAttempt > maxReconnectRetries) {
-        if (LOGS_ENABLED) DEBUG_D("Max retries reached. Connection failed.");
-        discardConnectionAfterTimeout();
-        return;
-    }
-
-    if (LOGS_ENABLED) DEBUG_D("Attempt %d: Trying to connect with timeout %d", retryReconnectAttempt, lastReconnectTimeout);
-
-    waitForReconnectTimer = true;
-
-    reconnectTimer->setTimeout(lastReconnectTimeout, false);
-    reconnectTimer->start();
-
-    lastReconnectTimeout = backoffStrategy.getDelayMs(retryReconnectAttempt);
-}
-
-void Connection::discardConnectionAfterTimeout() {
-    connectionInProcess = false;
-    connectionState = TcpConnectionStageIdle;
-    isMediaConnection = false;
-    hasSomeDataSinceLastConnect = false;
-    isTryingNextPort = false;
-    wasConnected = false;
-    reconnectTimer->stop();
-
-    auto requests = ConnectionsManager::getInstance(currentDatacenter->instanceNum).getRequestsForConnection(this);
-
-    for (auto request: requests) {
-        ConnectionsManager::getInstance(currentDatacenter->instanceNum).cancelRequest(request->requestToken, false);
-    }
-
-    ConnectionsManager::getInstance(currentDatacenter->instanceNum).pauseNetwork(true);
-}
-
-void Connection::resetAllRetries() {
-    retryReconnectAttempt = 0;
-    lastReconnectTimeout = baseReconnectTimeout;
-    failedConnectionCount = 0;
-    willRetryConnectCount = 0;
 }
 
 void Connection::onDisconnected(int32_t reason, int32_t error) {

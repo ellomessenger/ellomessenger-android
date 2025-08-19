@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Mykhailo Mykytyn, Ello 2023.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile
 
@@ -191,7 +191,7 @@ class CodeVerificationFragment(args: Bundle?) : BaseFragment(args), CodeVerifica
 
 					var ok = false
 
-					if (error == null && response is TLRPC.TL_biz_dataRaw) {
+					if (error == null && response is TLRPC.TLBizDataRaw) {
 						val data = response.readData<ElloRpc.RichVerifyResponse>()
 						ok = data?.status == true
 					}
@@ -267,7 +267,7 @@ class CodeVerificationFragment(args: Bundle?) : BaseFragment(args), CodeVerifica
 
 				var ok = false
 
-				if (error == null && response is TLRPC.TL_biz_dataRaw) {
+				if (error == null && response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.RichVerifyResponse>()
 					ok = data?.status == true
 				}
@@ -287,7 +287,7 @@ class CodeVerificationFragment(args: Bundle?) : BaseFragment(args), CodeVerifica
 
 		binding?.errorLayout?.invisible()
 
-		val req = ElloRpc.changeEmailRequest(newEmail = email, code = code)
+		val req = ElloRpc.changeEmailRequest(newEmail = email, hash = code)
 
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
@@ -295,7 +295,7 @@ class CodeVerificationFragment(args: Bundle?) : BaseFragment(args), CodeVerifica
 
 				var ok = false
 
-				if (error == null && response is TLRPC.TL_biz_dataRaw) {
+				if (error == null && response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.RichVerifyResponse>()
 					ok = data?.status == true
 				}
@@ -342,7 +342,7 @@ class CodeVerificationFragment(args: Bundle?) : BaseFragment(args), CodeVerifica
 
 						setControlsEnabled(true)
 
-						if (error == null && response is TLRPC.TL_biz_dataRaw) {
+						if (error == null && response is TLRPC.TLBizDataRaw) {
 							val data = response.readData<ElloRpc.ForgotPasswordVerifyResponse>()
 
 							if (data?.status == true) {
@@ -372,7 +372,7 @@ class CodeVerificationFragment(args: Bundle?) : BaseFragment(args), CodeVerifica
 
 						setControlsEnabled(true)
 
-						if (error == null && response is TLRPC.TL_biz_dataRaw) {
+						if (error == null && response is TLRPC.TLBizDataRaw) {
 							val data = response.readData<ElloRpc.ForgotPasswordVerifyResponse>()
 
 							if (data?.status == true) {

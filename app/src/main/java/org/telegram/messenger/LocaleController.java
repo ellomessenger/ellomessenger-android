@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger;
 
@@ -22,11 +22,12 @@ import android.util.Xml;
 
 import org.telegram.messenger.time.FastDateFormat;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.TL_error;
-import org.telegram.tgnet.tlrpc.User;
-import org.telegram.tgnet.tlrpc.Vector;
+import org.telegram.tgnet.TLRPC.TLError;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
+import org.telegram.tgnet.Vector;
 import org.xmlpull.v1.XmlPullParser;
 
 import java.io.BufferedWriter;
@@ -125,7 +126,7 @@ public class LocaleController {
 		}
 
 		public static LocaleInfo createWithString(String string) {
-			if (string == null || string.length() == 0) {
+			if (string == null || string.isEmpty()) {
 				return null;
 			}
 			String[] args = string.split("\\|");
@@ -473,20 +474,14 @@ public class LocaleController {
 	}
 
 	private String stringForQuantity(int quantity) {
-		switch (quantity) {
-			case QUANTITY_ZERO:
-				return "zero";
-			case QUANTITY_ONE:
-				return "one";
-			case QUANTITY_TWO:
-				return "two";
-			case QUANTITY_FEW:
-				return "few";
-			case QUANTITY_MANY:
-				return "many";
-			default:
-				return "other";
-		}
+		return switch (quantity) {
+			case QUANTITY_ZERO -> "zero";
+			case QUANTITY_ONE -> "one";
+			case QUANTITY_TWO -> "two";
+			case QUANTITY_FEW -> "few";
+			case QUANTITY_MANY -> "many";
+			default -> "other";
+		};
 	}
 
 	public Locale getSystemDefaultLocale() {
@@ -599,34 +594,21 @@ public class LocaleController {
 		if (code == null) {
 			return null;
 		}
-		switch (code) {
-			case "in":
-				return "id";
-			case "iw":
-				return "he";
-			case "jw":
-				return "jv";
-			case "no":
-				return "nb";
-			case "tl":
-				return "fil";
-			case "ji":
-				return "yi";
-			case "id":
-				return "in";
-			case "he":
-				return "iw";
-			case "jv":
-				return "jw";
-			case "nb":
-				return "no";
-			case "fil":
-				return "tl";
-			case "yi":
-				return "ji";
-		}
-
-		return null;
+		return switch (code) {
+			case "in" -> "id";
+			case "iw" -> "he";
+			case "jw" -> "jv";
+			case "no" -> "nb";
+			case "tl" -> "fil";
+			case "ji" -> "yi";
+			case "id" -> "in";
+			case "he" -> "iw";
+			case "jv" -> "jw";
+			case "nb" -> "no";
+			case "fil" -> "tl";
+			case "yi" -> "ji";
+			default -> null;
+		};
 	}
 
 	public boolean applyLanguageFile(File file, int currentAccount) {
@@ -1328,43 +1310,13 @@ public class LocaleController {
 	}
 
 	public static int getCurrencyExpDivider(String type) {
-		switch (type) {
-			case "CLF":
-				return 10000;
-			case "BHD":
-			case "IQD":
-			case "JOD":
-			case "KWD":
-			case "LYD":
-			case "OMR":
-			case "TND":
-				return 1000;
-			case "BIF":
-			case "BYR":
-			case "CLP":
-			case "CVE":
-			case "DJF":
-			case "GNF":
-			case "ISK":
-			case "JPY":
-			case "KMF":
-			case "KRW":
-			case "MGA":
-			case "PYG":
-			case "RWF":
-			case "UGX":
-			case "UYI":
-			case "VND":
-			case "VUV":
-			case "XAF":
-			case "XOF":
-			case "XPF":
-				return 1;
-			case "MRO":
-				return 10;
-			default:
-				return 100;
-		}
+		return switch (type) {
+			case "CLF" -> 10000;
+			case "BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND" -> 1000;
+			case "BIF", "BYR", "CLP", "CVE", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "MGA", "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF" -> 1;
+			case "MRO" -> 10;
+			default -> 100;
+		};
 	}
 
 	public String formatCurrencyDecimalString(long amount, String type, boolean inludeType) {
@@ -2063,51 +2015,58 @@ public class LocaleController {
 	}
 
 	public static String formatUserStatus(int currentAccount, User user, boolean[] isOnline, boolean[] madeShorter) {
-		if (user != null && user.status != null && user.status.expires == 0) {
-			if (user.status instanceof TLRPC.TL_userStatusRecently) {
-				user.status.expires = -100;
-			}
-			else if (user.status instanceof TLRPC.TL_userStatusLastWeek) {
-				user.status.expires = -101;
-			}
-			else if (user.status instanceof TLRPC.TL_userStatusLastMonth) {
-				user.status.expires = -102;
+		TLRPC.UserStatus status = null;
+		int expires = 0;
+
+		if (user instanceof TLRPC.TLUser tlUser) {
+			status = tlUser.status;
+
+			if (status instanceof TLRPC.TLUserStatusOnline statusOnline) {
+				expires = statusOnline.expires;
 			}
 		}
-		if (user != null && user.status != null && user.status.expires <= 0) {
+
+		if (status != null && expires == 0) {
+			expires = TLRPCExtensions.getExpires(status);
+		}
+
+		if (user != null && status != null && expires <= 0) {
 			if (MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(user.id)) {
 				if (isOnline != null) {
 					isOnline[0] = true;
 				}
+
 				return getString("Online", R.string.Online);
 			}
 		}
-		if (user == null || user.status == null || user.status.expires == 0 || UserObject.isDeleted(user) || user instanceof TLRPC.TL_userEmpty) {
+
+		if (user == null || status == null || expires == TLRPCExtensions.USER_STATUS_OFFLINE || UserObject.isDeleted(user) || user instanceof TLRPC.TLUserEmpty) {
 			return getString("ALongTimeAgo", R.string.ALongTimeAgo);
 		}
 		else {
 			int currentTime = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
-			if (user.status.expires > currentTime) {
+
+			if (expires > currentTime) {
 				if (isOnline != null) {
 					isOnline[0] = true;
 				}
 				return getString("Online", R.string.Online);
 			}
 			else {
-				if (user.status.expires == -1) {
+				if (expires == TLRPCExtensions.USER_STATUS_INVISIBLE) {
 					return getString("Invisible", R.string.Invisible);
 				}
-				else if (user.status.expires == -100) {
+				else if (expires == TLRPCExtensions.USER_STATUS_RECENTLY) {
 					return getString("Lately", R.string.Lately);
 				}
-				else if (user.status.expires == -101) {
+				else if (expires == TLRPCExtensions.USER_STATUS_LAST_WEEK) {
 					return getString("WithinAWeek", R.string.WithinAWeek);
 				}
-				else if (user.status.expires == -102) {
+				else if (expires == TLRPCExtensions.USER_STATUS_LAST_MONTH) {
 					return getString("WithinAMonth", R.string.WithinAMonth);
 				}
 				else {
-					return formatDateOnline(user.status.expires, madeShorter);
+					return formatDateOnline(expires, madeShorter);
 				}
 			}
 		}
@@ -2120,23 +2079,28 @@ public class LocaleController {
 		return str.replace("<", "&lt;").replace(">", "&gt;").replace("& ", "&amp; ");
 	}
 
-	public void saveRemoteLocaleStringsForCurrentLocale(final TLRPC.TL_langPackDifference difference, int currentAccount) {
+	public void saveRemoteLocaleStringsForCurrentLocale(final TLRPC.TLLangPackDifference difference, int currentAccount) {
 		if (currentLocaleInfo == null) {
 			return;
 		}
-		final String langCode = difference.lang_code.replace('-', '_').toLowerCase();
+
+		final String langCode = difference.langCode.replace('-', '_').toLowerCase();
+
 		if (!langCode.equals(currentLocaleInfo.shortName) && !langCode.equals(currentLocaleInfo.baseLangCode)) {
 			return;
 		}
+
 		saveRemoteLocaleStrings(currentLocaleInfo, difference, currentAccount);
 	}
 
-	public void saveRemoteLocaleStrings(LocaleInfo localeInfo, final TLRPC.TL_langPackDifference difference, int currentAccount) {
+	public void saveRemoteLocaleStrings(LocaleInfo localeInfo, final TLRPC.TLLangPackDifference difference, int currentAccount) {
 		if (difference == null || difference.strings.isEmpty() || localeInfo == null || localeInfo.isLocal()) {
 			return;
 		}
-		final String langCode = difference.lang_code.replace('-', '_').toLowerCase();
+
+		final String langCode = difference.langCode.replace('-', '_').toLowerCase();
 		int type;
+
 		if (langCode.equals(localeInfo.shortName)) {
 			type = 0;
 		}
@@ -2146,38 +2110,45 @@ public class LocaleController {
 		else {
 			type = -1;
 		}
+
 		if (type == -1) {
 			return;
 		}
+
 		File finalFile;
+
 		if (type == 0) {
 			finalFile = localeInfo.getPathToFile();
 		}
 		else {
 			finalFile = localeInfo.getPathToBaseFile();
 		}
+
 		try {
 			final HashMap<String, String> values;
-			if (difference.from_version == 0) {
+
+			if (difference.fromVersion == 0) {
 				values = new HashMap<>();
 			}
 			else {
 				values = getLocaleFileStrings(finalFile, true);
 			}
+
 			for (int a = 0; a < difference.strings.size(); a++) {
 				TLRPC.LangPackString string = difference.strings.get(a);
-				if (string instanceof TLRPC.TL_langPackString) {
-					values.put(string.key, escapeString(string.value));
+
+				if (string instanceof TLRPC.TLLangPackString str) {
+					values.put(string.key, escapeString(str.value));
 				}
-				else if (string instanceof TLRPC.TL_langPackStringPluralized) {
-					values.put(string.key + "_zero", string.zero_value != null ? escapeString(string.zero_value) : "");
-					values.put(string.key + "_one", string.one_value != null ? escapeString(string.one_value) : "");
-					values.put(string.key + "_two", string.two_value != null ? escapeString(string.two_value) : "");
-					values.put(string.key + "_few", string.few_value != null ? escapeString(string.few_value) : "");
-					values.put(string.key + "_many", string.many_value != null ? escapeString(string.many_value) : "");
-					values.put(string.key + "_other", string.other_value != null ? escapeString(string.other_value) : "");
+				else if (string instanceof TLRPC.TLLangPackStringPluralized str) {
+					values.put(string.key + "_zero", str.zeroValue != null ? escapeString(str.zeroValue) : "");
+					values.put(string.key + "_one", str.oneValue != null ? escapeString(str.oneValue) : "");
+					values.put(string.key + "_two", str.twoValue != null ? escapeString(str.twoValue) : "");
+					values.put(string.key + "_few", str.fewValue != null ? escapeString(str.fewValue) : "");
+					values.put(string.key + "_many", str.manyValue != null ? escapeString(str.manyValue) : "");
+					values.put(string.key + "_other", str.otherValue != null ? escapeString(str.otherValue) : "");
 				}
-				else if (string instanceof TLRPC.TL_langPackStringDeleted) {
+				else if (string instanceof TLRPC.TLLangPackStringDeleted) {
 					values.remove(string.key);
 				}
 			}
@@ -2272,8 +2243,11 @@ public class LocaleController {
 		if (loadingRemoteLanguages) {
 			return;
 		}
+
 		loadingRemoteLanguages = true;
-		TLRPC.TL_langpack_getLanguages req = new TLRPC.TL_langpack_getLanguages();
+
+		var req = new TLRPC.TLLangpackGetLanguages();
+
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
 			if (response != null) {
 				AndroidUtilities.runOnUIThread(() -> {
@@ -2283,21 +2257,23 @@ public class LocaleController {
 						remoteLanguages.get(a).serverIndex = Integer.MAX_VALUE;
 					}
 					for (int a = 0, size = res.objects.size(); a < size; a++) {
-						TLRPC.TL_langPackLanguage language = (TLRPC.TL_langPackLanguage)res.objects.get(a);
+						var language = (TLRPC.TLLangPackLanguage)res.objects.get(a);
+
 						if (BuildConfig.DEBUG) {
 							FileLog.d("loaded lang " + language.name);
 						}
+
 						LocaleInfo localeInfo = new LocaleInfo();
 						localeInfo.nameEnglish = language.name;
-						localeInfo.name = language.native_name;
-						localeInfo.shortName = language.lang_code.replace('-', '_').toLowerCase();
-						if (language.base_lang_code != null) {
-							localeInfo.baseLangCode = language.base_lang_code.replace('-', '_').toLowerCase();
+						localeInfo.name = language.nativeName;
+						localeInfo.shortName = language.langCode.replace('-', '_').toLowerCase();
+						if (language.baseLangCode != null) {
+							localeInfo.baseLangCode = language.baseLangCode.replace('-', '_').toLowerCase();
 						}
 						else {
 							localeInfo.baseLangCode = "";
 						}
-						localeInfo.pluralLangCode = language.plural_code.replace('-', '_').toLowerCase();
+						localeInfo.pluralLangCode = language.pluralCode.replace('-', '_').toLowerCase();
 						localeInfo.isRtl = language.rtl;
 						localeInfo.pathToFile = "remote";
 						localeInfo.serverIndex = a;
@@ -2352,36 +2328,39 @@ public class LocaleController {
 		if (localeInfo.hasBaseLang() && (langCode == null || langCode.equals(localeInfo.baseLangCode))) {
 			if (localeInfo.baseVersion != 0 && !force) {
 				if (localeInfo.hasBaseLang()) {
-					TLRPC.TL_langpack_getDifference req = new TLRPC.TL_langpack_getDifference();
-					req.from_version = localeInfo.baseVersion;
-					req.lang_code = localeInfo.getBaseLangCode();
-					req.lang_pack = "";
+					var req = new TLRPC.TLLangpackGetDifference();
+					req.fromVersion = localeInfo.baseVersion;
+					req.langCode = localeInfo.getBaseLangCode();
+					req.langPack = "";
+
 					ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
 						if (response != null) {
-							AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TL_langPackDifference)response, currentAccount));
+							AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TLLangPackDifference)response, currentAccount));
 						}
 					}, ConnectionsManager.RequestFlagWithoutLogin);
 				}
 			}
 			else {
-				TLRPC.TL_langpack_getLangPack req = new TLRPC.TL_langpack_getLangPack();
-				req.lang_code = localeInfo.getBaseLangCode();
-				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TL_error error) -> {
+				var req = new TLRPC.TLLangpackGetLangPack();
+				req.langCode = localeInfo.getBaseLangCode();
+				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TLError error) -> {
 					if (response != null) {
-						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TL_langPackDifference)response, currentAccount));
+						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TLLangPackDifference)response, currentAccount));
 					}
 				}, ConnectionsManager.RequestFlagWithoutLogin);
 			}
 		}
+
 		if (langCode == null || langCode.equals(localeInfo.shortName)) {
 			if (localeInfo.version != 0 && !force) {
-				TLRPC.TL_langpack_getDifference req = new TLRPC.TL_langpack_getDifference();
-				req.from_version = localeInfo.version;
-				req.lang_code = localeInfo.getLangCode();
-				req.lang_pack = "";
+				var req = new TLRPC.TLLangpackGetDifference();
+				req.fromVersion = localeInfo.version;
+				req.langCode = localeInfo.getLangCode();
+				req.langPack = "";
+
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
 					if (response != null) {
-						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TL_langPackDifference)response, currentAccount));
+						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TLLangPackDifference)response, currentAccount));
 					}
 				}, ConnectionsManager.RequestFlagWithoutLogin);
 			}
@@ -2389,11 +2368,13 @@ public class LocaleController {
 				for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
 					ConnectionsManager.setLangCode(localeInfo.getLangCode());
 				}
-				TLRPC.TL_langpack_getLangPack req = new TLRPC.TL_langpack_getLangPack();
-				req.lang_code = localeInfo.getLangCode();
-				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TL_error error) -> {
+
+				var req = new TLRPC.TLLangpackGetLangPack();
+				req.langCode = localeInfo.getLangCode();
+
+				ConnectionsManager.getInstance(currentAccount).sendRequest(req, (TLObject response, TLError error) -> {
 					if (response != null) {
-						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TL_langPackDifference)response, currentAccount));
+						AndroidUtilities.runOnUIThread(() -> saveRemoteLocaleStrings(localeInfo, (TLRPC.TLLangPackDifference)response, currentAccount));
 					}
 				}, ConnectionsManager.RequestFlagWithoutLogin);
 			}
@@ -3337,15 +3318,11 @@ public class LocaleController {
 		if (imperial) {
 			distance *= 3.28084f;
 			if (distance < 1000) {
-				switch (type) {
-					case 0:
-						return formatString("FootsAway", R.string.FootsAway, String.format("%d", (int)Math.max(1, distance)));
-					case 1:
-						return formatString("FootsFromYou", R.string.FootsFromYou, String.format("%d", (int)Math.max(1, distance)));
-					case 2:
-					default:
-						return formatString("FootsShort", R.string.FootsShort, String.format("%d", (int)Math.max(1, distance)));
-				}
+				return switch (type) {
+					case 0 -> formatString("FootsAway", R.string.FootsAway, String.format("%d", (int)Math.max(1, distance)));
+					case 1 -> formatString("FootsFromYou", R.string.FootsFromYou, String.format("%d", (int)Math.max(1, distance)));
+					default -> formatString("FootsShort", R.string.FootsShort, String.format("%d", (int)Math.max(1, distance)));
+				};
 			}
 			else {
 				String arg;
@@ -3355,28 +3332,20 @@ public class LocaleController {
 				else {
 					arg = String.format("%.2f", distance / 5280.0f);
 				}
-				switch (type) {
-					case 0:
-						return formatString("MilesAway", R.string.MilesAway, arg);
-					case 1:
-						return formatString("MilesFromYou", R.string.MilesFromYou, arg);
-					default:
-					case 2:
-						return formatString("MilesShort", R.string.MilesShort, arg);
-				}
+				return switch (type) {
+					case 0 -> formatString("MilesAway", R.string.MilesAway, arg);
+					case 1 -> formatString("MilesFromYou", R.string.MilesFromYou, arg);
+					default -> formatString("MilesShort", R.string.MilesShort, arg);
+				};
 			}
 		}
 		else {
 			if (distance < 1000) {
-				switch (type) {
-					case 0:
-						return formatString("MetersAway2", R.string.MetersAway2, String.format("%d", (int)Math.max(1, distance)));
-					case 1:
-						return formatString("MetersFromYou2", R.string.MetersFromYou2, String.format("%d", (int)Math.max(1, distance)));
-					case 2:
-					default:
-						return formatString("MetersShort", R.string.MetersShort, String.format("%d", (int)Math.max(1, distance)));
-				}
+				return switch (type) {
+					case 0 -> formatString("MetersAway2", R.string.MetersAway2, String.format("%d", (int)Math.max(1, distance)));
+					case 1 -> formatString("MetersFromYou2", R.string.MetersFromYou2, String.format("%d", (int)Math.max(1, distance)));
+					default -> formatString("MetersShort", R.string.MetersShort, String.format("%d", (int)Math.max(1, distance)));
+				};
 			}
 			else {
 				String arg;
@@ -3386,15 +3355,12 @@ public class LocaleController {
 				else {
 					arg = String.format("%.2f", distance / 1000.0f);
 				}
-				switch (type) {
-					case 0:
-						return formatString("KMetersAway2", R.string.KMetersAway2, arg);
-					case 1:
-						return formatString("KMetersFromYou2", R.string.KMetersFromYou2, arg);
-					case 2:
-					default:
-						return formatString("KMetersShort", R.string.KMetersShort, arg);
-				}
+
+				return switch (type) {
+					case 0 -> formatString("KMetersAway2", R.string.KMetersAway2, arg);
+					case 1 -> formatString("KMetersFromYou2", R.string.KMetersFromYou2, arg);
+					default -> formatString("KMetersShort", R.string.KMetersShort, arg);
+				};
 			}
 		}
 	}

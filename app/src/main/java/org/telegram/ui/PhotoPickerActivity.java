@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -24,7 +24,6 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.TextPaint;
@@ -67,9 +66,10 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -84,7 +84,6 @@ import org.telegram.ui.Cells.SharedDocumentCell;
 import org.telegram.ui.Cells.TextCell;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.BackupImageView;
-import org.telegram.ui.Components.CombinedDrawable;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.EditTextEmoji;
 import org.telegram.ui.Components.FlickerLoadingView;
@@ -131,7 +130,6 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 
 	private final ArrayList<MediaController.SearchImage> searchResult = new ArrayList<>();
 	private final HashMap<String, MediaController.SearchImage> searchResultKeys = new HashMap<>();
-	private final HashMap<String, MediaController.SearchImage> searchResultUrls = new HashMap<>();
 
 	private final ArrayList<String> recentSearches = new ArrayList<>();
 
@@ -155,7 +153,6 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 	private ListAdapter listAdapter;
 	private GridLayoutManager layoutManager;
 	private StickerEmptyView emptyView;
-	private FlickerLoadingView flickerView;
 	private ActionBarMenuItem searchItem;
 	private ActionBarMenuSubItem showAsListItem;
 	private int itemSize = 100;
@@ -173,9 +170,6 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 	protected View selectedCountView;
 	protected View shadow;
 	protected EditTextEmoji commentTextView;
-	private ImageView writeButton;
-	private Drawable writeButtonDrawable;
-	private SizeNotifierFrameLayout sizeNotifierFrameLayout;
 	private int itemsPerRow = 3;
 	private final TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
 	private final RectF rect = new RectF();
@@ -204,11 +198,6 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 	private final String selectorKey;
 
 	private final PhotoViewer.PhotoViewerProvider provider = new PhotoViewer.EmptyPhotoViewerProvider() {
-		@Override
-		public boolean scaleToFill() {
-			return false;
-		}
-
 		@Override
 		public PhotoViewer.PlaceProviderObject getPlaceForPhoto(MessageObject messageObject, TLRPC.FileLocation fileLocation, int index, boolean needPreview) {
 			PhotoAttachPhotoCell cell = getCellForIndex(index);
@@ -305,8 +294,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 			int count = listView.getChildCount();
 			for (int a = 0; a < count; a++) {
 				View view = listView.getChildAt(a);
-				if (view instanceof PhotoAttachPhotoCell) {
-					PhotoAttachPhotoCell cell = (PhotoAttachPhotoCell)view;
+				if (view instanceof PhotoAttachPhotoCell cell) {
 					cell.showCheck(true);
 				}
 			}
@@ -613,7 +601,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 			}
 		}
 
-		sizeNotifierFrameLayout = new SizeNotifierFrameLayout(context) {
+		SizeNotifierFrameLayout sizeNotifierFrameLayout = new SizeNotifierFrameLayout(context) {
 
 			private int lastNotifyWidth;
 			private boolean ignoreLayout;
@@ -741,31 +729,18 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 					final int absoluteGravity = gravity & Gravity.HORIZONTAL_GRAVITY_MASK;
 					final int verticalGravity = gravity & Gravity.VERTICAL_GRAVITY_MASK;
 
-					switch (absoluteGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
-						case Gravity.CENTER_HORIZONTAL:
-							childLeft = (r - l - width) / 2 + lp.leftMargin - lp.rightMargin;
-							break;
-						case Gravity.RIGHT:
-							childLeft = (r - l) - width - lp.rightMargin - getPaddingRight();
-							break;
-						case Gravity.LEFT:
-						default:
-							childLeft = lp.leftMargin + getPaddingLeft();
-					}
+					childLeft = switch (absoluteGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
+						case Gravity.CENTER_HORIZONTAL -> (r - l - width) / 2 + lp.leftMargin - lp.rightMargin;
+						case Gravity.RIGHT -> (r - l) - width - lp.rightMargin - getPaddingRight();
+						default -> lp.leftMargin + getPaddingLeft();
+					};
 
-					switch (verticalGravity) {
-						case Gravity.TOP:
-							childTop = lp.topMargin + getPaddingTop();
-							break;
-						case Gravity.CENTER_VERTICAL:
-							childTop = ((b - paddingBottom) - t - height) / 2 + lp.topMargin - lp.bottomMargin;
-							break;
-						case Gravity.BOTTOM:
-							childTop = ((b - paddingBottom) - t) - height - lp.bottomMargin;
-							break;
-						default:
-							childTop = lp.topMargin;
-					}
+					childTop = switch (verticalGravity) {
+						case Gravity.TOP -> lp.topMargin + getPaddingTop();
+						case Gravity.CENTER_VERTICAL -> ((b - paddingBottom) - t - height) / 2 + lp.topMargin - lp.bottomMargin;
+						case Gravity.BOTTOM -> ((b - paddingBottom) - t) - height - lp.bottomMargin;
+						default -> lp.topMargin;
+					};
 
 					if (commentTextView != null && commentTextView.isPopupView(child)) {
 						if (AndroidUtilities.isTablet()) {
@@ -900,8 +875,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 					return true;
 				}
 				else {
-					if (view instanceof PhotoAttachPhotoCell) {
-						PhotoAttachPhotoCell cell = (PhotoAttachPhotoCell)view;
+					if (view instanceof PhotoAttachPhotoCell cell) {
 						itemRangeSelector.setIsActive(view, true, position, shouldSelect = !cell.isChecked());
 					}
 				}
@@ -916,10 +890,9 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 
 			@Override
 			public void setSelected(View view, int index, boolean selected) {
-				if (selected != shouldSelect || !(view instanceof PhotoAttachPhotoCell)) {
+				if (selected != shouldSelect || !(view instanceof PhotoAttachPhotoCell cell)) {
 					return;
 				}
-				PhotoAttachPhotoCell cell = (PhotoAttachPhotoCell)view;
 				cell.callDelegate();
 			}
 
@@ -955,7 +928,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 			listView.addOnItemTouchListener(itemRangeSelector);
 		}
 
-		flickerView = new FlickerLoadingView(context) {
+		FlickerLoadingView flickerView = new FlickerLoadingView(context) {
 			@Override
 			public int getViewType() {
 				return PHOTOS_TYPE;
@@ -1082,30 +1055,21 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 			writeButtonContainer.setAlpha(0.0f);
 			sizeNotifierFrameLayout.addView(writeButtonContainer, LayoutHelper.createFrame(60, 60, Gravity.RIGHT | Gravity.BOTTOM, 0, 0, 12, 10));
 
-			writeButton = new ImageView(context);
-			writeButtonDrawable = Theme.createSimpleSelectorCircleDrawable(AndroidUtilities.dp(56), Theme.getColor(Theme.key_dialogFloatingButton), Theme.getColor(Build.VERSION.SDK_INT >= 21 ? Theme.key_dialogFloatingButtonPressed : Theme.key_dialogFloatingButton));
-			if (Build.VERSION.SDK_INT < 21) {
-				Drawable shadowDrawable = context.getResources().getDrawable(R.drawable.floating_shadow_profile).mutate();
-				shadowDrawable.setColorFilter(new PorterDuffColorFilter(0xff000000, PorterDuff.Mode.MULTIPLY));
-				CombinedDrawable combinedDrawable = new CombinedDrawable(shadowDrawable, writeButtonDrawable, 0, 0);
-				combinedDrawable.setIconSize(AndroidUtilities.dp(56), AndroidUtilities.dp(56));
-				writeButtonDrawable = combinedDrawable;
-			}
+			ImageView writeButton = new ImageView(context);
+			Drawable writeButtonDrawable = Theme.createSimpleSelectorCircleDrawable(AndroidUtilities.dp(56), Theme.getColor(Theme.key_dialogFloatingButton), Theme.getColor(Theme.key_dialogFloatingButtonPressed));
 			writeButton.setBackgroundDrawable(writeButtonDrawable);
 			writeButton.setImageResource(R.drawable.arrow_up);
 			writeButton.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 			writeButton.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_dialogFloatingIcon), PorterDuff.Mode.MULTIPLY));
 			writeButton.setScaleType(ImageView.ScaleType.CENTER);
-			if (Build.VERSION.SDK_INT >= 21) {
-				writeButton.setOutlineProvider(new ViewOutlineProvider() {
-					@SuppressLint("NewApi")
-					@Override
-					public void getOutline(View view, Outline outline) {
-						outline.setOval(0, 0, AndroidUtilities.dp(56), AndroidUtilities.dp(56));
-					}
-				});
-			}
-			writeButtonContainer.addView(writeButton, LayoutHelper.createFrame(Build.VERSION.SDK_INT >= 21 ? 56 : 60, Build.VERSION.SDK_INT >= 21 ? 56 : 60, Gravity.LEFT | Gravity.TOP, Build.VERSION.SDK_INT >= 21 ? 2 : 0, 0, 0, 0));
+			writeButton.setOutlineProvider(new ViewOutlineProvider() {
+				@SuppressLint("NewApi")
+				@Override
+				public void getOutline(View view, Outline outline) {
+					outline.setOval(0, 0, AndroidUtilities.dp(56), AndroidUtilities.dp(56));
+				}
+			});
+			writeButtonContainer.addView(writeButton, LayoutHelper.createFrame(56, 56, Gravity.LEFT | Gravity.TOP, 2, 0, 0, 0));
 			writeButton.setOnClickListener(v -> {
 				if (chatActivity != null && chatActivity.isInScheduleMode()) {
 					AlertsCreator.createScheduleDatePickerDialog(getParentActivity(), chatActivity.getDialogId(), this::sendSelectedPhotos);
@@ -1118,7 +1082,6 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 				if (chatActivity == null || maxSelectedPhotos == 1) {
 					return false;
 				}
-				TLRPC.Chat chat = chatActivity.currentChat;
 				User user = chatActivity.currentUser;
 
 				if (sendPopupLayout == null) {
@@ -1214,7 +1177,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 					int textSize = (int)Math.ceil(textPaint.measureText(text));
 					int size = Math.max(AndroidUtilities.dp(16) + textSize, AndroidUtilities.dp(24));
 					int cx = getMeasuredWidth() / 2;
-					int cy = getMeasuredHeight() / 2;
+					// int cy = getMeasuredHeight() / 2;
 
 					textPaint.setColor(Theme.getColor(Theme.key_dialogRoundCheckBoxCheck));
 					paint.setColor(Theme.getColor(dialogBackgroundKey));
@@ -1276,28 +1239,20 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 		}
 		Object imageId = selectedPhotosOrder.get(0);
 		Object entry = selectedPhotos.get(imageId);
-		if (entry instanceof MediaController.PhotoEntry) {
-			MediaController.PhotoEntry photoEntry = (MediaController.PhotoEntry)entry;
+		if (entry instanceof MediaController.PhotoEntry photoEntry) {
 			photoEntry.caption = commentTextView.getText().toString();
 		}
-		else if (entry instanceof MediaController.SearchImage) {
-			MediaController.SearchImage searchImage = (MediaController.SearchImage)entry;
+		else if (entry instanceof MediaController.SearchImage searchImage) {
 			searchImage.caption = commentTextView.getText().toString();
 		}
 	}
 
 	private void onListItemClick(View view, Object item) {
 		boolean add;
-		if (addToSelectedPhotos(item, -1) == -1) {
-			add = true;
-		}
-		else {
-			add = false;
-		}
-		if (view instanceof SharedDocumentCell) {
+		add = addToSelectedPhotos(item, -1) == -1;
+		if (view instanceof SharedDocumentCell cell) {
 			Integer index = (Integer)view.getTag();
 			MediaController.PhotoEntry photoEntry = selectedAlbum.photos.get(index);
-			SharedDocumentCell cell = (SharedDocumentCell)view;
 			cell.setChecked(selectedPhotosOrder.contains(photoEntry.imageId), true);
 		}
 		updatePhotosButton(add ? 1 : 2);
@@ -1504,8 +1459,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 		int count = listView.getChildCount();
 		for (int a = 0; a < count; a++) {
 			View view = listView.getChildAt(a);
-			if (view instanceof PhotoAttachPhotoCell) {
-				PhotoAttachPhotoCell cell = (PhotoAttachPhotoCell)view;
+			if (view instanceof PhotoAttachPhotoCell cell) {
 				Integer index = (Integer)view.getTag();
 				if (selectedAlbum != null) {
 					MediaController.PhotoEntry photoEntry = selectedAlbum.photos.get(index);
@@ -1516,10 +1470,9 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 					cell.setNum(allowIndices ? selectedPhotosOrder.indexOf(photoEntry.id) : -1);
 				}
 			}
-			else if (view instanceof SharedDocumentCell) {
+			else if (view instanceof SharedDocumentCell cell) {
 				Integer index = (Integer)view.getTag();
 				MediaController.PhotoEntry photoEntry = selectedAlbum.photos.get(index);
-				SharedDocumentCell cell = (SharedDocumentCell)view;
 				cell.setChecked(selectedPhotosOrder.indexOf(photoEntry.imageId) != 0, false);
 			}
 		}
@@ -1530,8 +1483,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 
 		for (int a = 0; a < count; a++) {
 			View view = listView.getChildAt(a);
-			if (view instanceof PhotoAttachPhotoCell) {
-				PhotoAttachPhotoCell cell = (PhotoAttachPhotoCell)view;
+			if (view instanceof PhotoAttachPhotoCell cell) {
 				int num = (Integer)cell.getTag();
 				if (selectedAlbum != null) {
 					if (num < 0 || num >= selectedAlbum.photos.size()) {
@@ -1635,12 +1587,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 		if (listAdapter != null) {
 			listAdapter.notifyDataSetChanged();
 		}
-		if (searching || recentSearches.size() > 0 && (lastSearchString == null || TextUtils.isEmpty(lastSearchString))) {
-			emptyView.showProgress(true);
-		}
-		else {
-			emptyView.showProgress(false);
-		}
+		emptyView.showProgress(searching || recentSearches.size() > 0 && (lastSearchString == null || TextUtils.isEmpty(lastSearchString)));
 	}
 
 	private void searchBotUser(boolean gif) {
@@ -1648,12 +1595,12 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 			return;
 		}
 		searchingUser = true;
-		TLRPC.TL_contacts_resolveUsername req = new TLRPC.TL_contacts_resolveUsername();
+		TLRPC.TLContactsResolveUsername req = new TLRPC.TLContactsResolveUsername();
 		req.username = gif ? MessagesController.getInstance(currentAccount).gifSearchBot : MessagesController.getInstance(currentAccount).imageSearchBot;
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
 			if (response != null) {
 				AndroidUtilities.runOnUIThread(() -> {
-					TLRPC.TL_contacts_resolvedPeer res = (TLRPC.TL_contacts_resolvedPeer)response;
+					TLRPC.TLContactsResolvedPeer res = (TLRPC.TLContactsResolvedPeer)response;
 					MessagesController.getInstance(currentAccount).putUsers(res.users, false);
 					MessagesController.getInstance(currentAccount).putChats(res.chats, false);
 					MessagesStorage.getInstance(currentAccount).putUsersAndChats(res.users, res.chats, true, true);
@@ -1678,15 +1625,14 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 		searching = true;
 
 		TLObject object = MessagesController.getInstance(currentAccount).getUserOrChat(gif ? MessagesController.getInstance(currentAccount).gifSearchBot : MessagesController.getInstance(currentAccount).imageSearchBot);
-		if (!(object instanceof User)) {
+		if (!(object instanceof User user)) {
 			if (searchUser) {
 				searchBotUser(gif);
 			}
 			return;
 		}
-		User user = (User)object;
 
-		TLRPC.TL_messages_getInlineBotResults req = new TLRPC.TL_messages_getInlineBotResults();
+		TLRPC.TLMessagesGetInlineBotResults req = new TLRPC.TLMessagesGetInlineBotResults();
 		req.query = query == null ? "" : query;
 		req.bot = MessagesController.getInstance(currentAccount).getInputUser(user);
 		req.offset = offset;
@@ -1694,14 +1640,14 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 		if (chatActivity != null) {
 			long dialogId = chatActivity.getDialogId();
 			if (DialogObject.isEncryptedDialog(dialogId)) {
-				req.peer = new TLRPC.TL_inputPeerEmpty();
+				req.peer = new TLRPC.TLInputPeerEmpty();
 			}
 			else {
 				req.peer = getMessagesController().getInputPeer(dialogId);
 			}
 		}
 		else {
-			req.peer = new TLRPC.TL_inputPeerEmpty();
+			req.peer = new TLRPC.TLInputPeerEmpty();
 		}
 
 		final int token = ++lastSearchToken;
@@ -1714,8 +1660,8 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 			int oldCount = searchResult.size();
 			if (response != null) {
 
-				TLRPC.messages_BotResults res = (TLRPC.messages_BotResults)response;
-				nextImagesSearchOffset = res.next_offset;
+				TLRPC.TLMessagesBotResults res = (TLRPC.TLMessagesBotResults)response;
+				nextImagesSearchOffset = res.nextOffset;
 
 				for (int a = 0, count = res.results.size(); a < count; a++) {
 					TLRPC.BotInlineResult result = res.results.get(a);
@@ -1728,58 +1674,64 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 
 					MediaController.SearchImage image = new MediaController.SearchImage();
 
-					if (gif && result.document != null) {
-						for (int b = 0; b < result.document.attributes.size(); b++) {
-							TLRPC.DocumentAttribute attribute = result.document.attributes.get(b);
-							if (attribute instanceof TLRPC.TL_documentAttributeImageSize || attribute instanceof TLRPC.TL_documentAttributeVideo) {
+					var document = TLRPCExtensions.getDocument(result);
+					var photo = TLRPCExtensions.getPhoto(result);
+					var content = TLRPCExtensions.getContent(result);
+					var thumb = TLRPCExtensions.getThumb(result);
+
+					if (gif && document instanceof TLRPC.TLDocument tlDocument) {
+						for (int b = 0; b < tlDocument.attributes.size(); b++) {
+							TLRPC.DocumentAttribute attribute = tlDocument.attributes.get(b);
+							if (attribute instanceof TLRPC.TLDocumentAttributeImageSize || attribute instanceof TLRPC.TLDocumentAttributeVideo) {
 								image.width = attribute.w;
 								image.height = attribute.h;
 								break;
 							}
 						}
-						image.document = result.document;
+						image.document = tlDocument;
 						image.size = 0;
-						if (result.photo != null) {
-							TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(result.photo.sizes, itemSize, true);
+
+						if (photo != null) {
+							TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getSizes(photo), itemSize, true);
 							if (size != null) {
-								result.document.thumbs.add(size);
-								result.document.flags |= 1;
+								tlDocument.thumbs.add(size);
+								tlDocument.flags |= 1;
 							}
 						}
 					}
-					else if (!gif && result.photo != null) {
-						TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(result.photo.sizes, AndroidUtilities.getPhotoSize());
-						TLRPC.PhotoSize size2 = FileLoader.getClosestPhotoSizeWithSize(result.photo.sizes, 320);
+					else if (!gif && photo != null) {
+						TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getSizes(photo), AndroidUtilities.getPhotoSize());
+						TLRPC.PhotoSize size2 = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getSizes(photo), 320);
 						if (size == null) {
 							continue;
 						}
 						image.width = size.w;
 						image.height = size.h;
 						image.photoSize = size;
-						image.photo = result.photo;
+						image.photo = photo;
 						image.size = size.size;
 						image.thumbPhotoSize = size2;
 					}
 					else {
-						if (result.content == null) {
+						if (content == null) {
 							continue;
 						}
-						for (int b = 0; b < result.content.attributes.size(); b++) {
-							TLRPC.DocumentAttribute attribute = result.content.attributes.get(b);
-							if (attribute instanceof TLRPC.TL_documentAttributeImageSize) {
+						for (int b = 0; b < content.attributes.size(); b++) {
+							TLRPC.DocumentAttribute attribute = content.attributes.get(b);
+							if (attribute instanceof TLRPC.TLDocumentAttributeImageSize) {
 								image.width = attribute.w;
 								image.height = attribute.h;
 								break;
 							}
 						}
-						if (result.thumb != null) {
-							image.thumbUrl = result.thumb.url;
+						if (thumb != null) {
+							image.thumbUrl = thumb.url;
 						}
 						else {
 							image.thumbUrl = null;
 						}
-						image.imageUrl = result.content.url;
-						image.size = gif ? 0 : result.content.size;
+						image.imageUrl = content.url;
+						image.size = gif ? 0 : content.size;
 					}
 
 					image.id = result.id;
@@ -1787,7 +1739,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 					image.inlineResult = result;
 					image.params = new HashMap<>();
 					image.params.put("id", result.id);
-					image.params.put("query_id", "" + res.query_id);
+					image.params.put("query_id", "" + res.queryId);
 					image.params.put("bot_name", user.username);
 
 					searchResult.add(image);
@@ -1888,7 +1840,7 @@ public class PhotoPickerActivity extends BaseFragment implements NotificationCen
 						private void checkSlowMode() {
 							if (allowOrder && chatActivity != null) {
 								TLRPC.Chat chat = chatActivity.currentChat;
-								if (chat != null && !ChatObject.hasAdminRights(chat) && chat.slowmode_enabled) {
+								if (chat != null && !ChatObject.hasAdminRights(chat) && chat.slowmodeEnabled) {
 									if (alertOnlyOnce != 2) {
 										AlertsCreator.showSimpleAlert(PhotoPickerActivity.this, LocaleController.getString("Slowmode", R.string.Slowmode), LocaleController.getString("SlowmodeSelectSendError", R.string.SlowmodeSelectSendError));
 										if (alertOnlyOnce == 1) {

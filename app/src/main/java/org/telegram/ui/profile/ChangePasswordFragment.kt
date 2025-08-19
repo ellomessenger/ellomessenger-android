@@ -1,3 +1,12 @@
+/*
+ * This is the source code of Ello for Android.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Mykhailo Mykytyn, Ello 2023.
+ * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
+ */
 package org.telegram.ui.profile
 
 import android.content.Context
@@ -29,12 +38,12 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.UserFull
+import org.telegram.tgnet.TLRPC.TLUserFull
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 import java.util.concurrent.TimeUnit
 
-class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCenterDelegate, CodeVerification  {
+class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCenterDelegate, CodeVerification {
 	private var email: String? = null
 	private var binding: FragmentChangePasswordBinding? = null
 	private var countDownTimer: CountDownTimer? = null
@@ -122,7 +131,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 
 				var ok = false
 
-				if (error == null && response is TLRPC.TL_biz_dataRaw) {
+				if (error == null && response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.ForgotPasswordVerifyResponse>()
 
 					if (data?.status == true) {
@@ -240,7 +249,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		}
 		else {
 			binding.errorLabel.setTextColor(ResourcesCompat.getColor(context.resources, R.color.purple, null))
-			when(errorText) {
+			when (errorText) {
 				INVALID_CODE -> binding.errorLabel.text = context.getString(R.string.invalid_code)
 				INVALID_PASSWORD -> binding.errorLabel.text = context.getString(R.string.invalid_password)
 			}
@@ -264,7 +273,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 
 					setControlsEnabled(true)
 
-					if (error == null && response is TLRPC.TL_biz_dataRaw) {
+					if (error == null && response is TLRPC.TLBizDataRaw) {
 						val data = response.readData<ElloRpc.ForgotPasswordVerifyResponse>()
 
 						if (data?.status == true) {
@@ -309,7 +318,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		}
 
 		if (oldPass == newPass) {
-			binding?.newPasswordFieldLayout?.error = context.getString(R.string.passwords_the_same)
+			binding?.currentPasswordFieldLayout?.error = context.getString(R.string.error_passwords_do_not_match)
 			return
 		}
 
@@ -341,7 +350,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 
 				var ok = false
 
-				if (error == null && response is TLRPC.TL_biz_dataRaw) {
+				if (error == null && response is TLRPC.TLBizDataRaw) {
 					val data = response.readData<ElloRpc.RichVerifyResponse>()
 					ok = data?.status == true
 				}
@@ -370,7 +379,7 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 
 	override fun didReceivedNotification(id: Int, account: Int, vararg args: Any?) {
 		if (id == NotificationCenter.userInfoDidLoad) {
-			val userInfo = args[1] as UserFull
+			val userInfo = args[1] as TLUserFull
 			email = userInfo.email
 		}
 	}
@@ -379,5 +388,4 @@ class ChangePasswordFragment : BaseFragment(), NotificationCenter.NotificationCe
 		private const val INVALID_PASSWORD = "password is not matched"
 		private const val INVALID_CODE = "code mismatch"
 	}
-
 }

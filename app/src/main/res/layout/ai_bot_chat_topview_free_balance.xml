@@ -2,18 +2,29 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:tools="http://schemas.android.com/tools"
 	android:layout_width="match_parent"
-	android:layout_height="match_parent">
+	android:layout_height="match_parent"
+	android:background="@android:color/transparent">
 
 	<TextView
 		android:id="@+id/text"
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
 		android:layout_gravity="center"
-		android:background="@drawable/top_chat_message_text_background"
-		android:gravity="center"
+		android:background="@color/white_semi_transparent"
+		android:gravity="center|start"
 		android:paddingHorizontal="12dp"
-		android:textColor="@color/white"
-		android:textSize="13sp"
+		android:textColor="@color/dark_fixed"
+		android:textSize="15sp"
+		android:textStyle="bold"
 		tools:text="7 requests" />
+
+	<ImageView
+		android:id="@+id/model_logo"
+		android:layout_width="74dp"
+		android:layout_height="40dp"
+		android:layout_gravity="center|end"
+		android:contentDescription="@string/cont_desc_ai_bot_logo"
+		android:visibility="gone"
+		tools:src="@drawable/claude_logo" />
 
 </FrameLayout>

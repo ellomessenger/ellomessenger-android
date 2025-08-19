@@ -4,12 +4,11 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
 import android.content.Context
-import android.graphics.Color
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.accessibility.AccessibilityNodeInfo

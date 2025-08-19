@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.ActionBar
 
@@ -228,7 +228,7 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 
 					topImageView?.let { topImageView ->
 						topImageView.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(topHeight.toFloat()), MeasureSpec.EXACTLY))
-						availableHeight -= topImageView.measuredHeight - AndroidUtilities.dp(8f)
+						availableHeight -= topImageView.measuredHeight // - AndroidUtilities.dp(8f)
 					}
 
 					topView?.let { topView ->
@@ -442,7 +442,7 @@ open class AlertDialog(context: Context, progressStyle: Int) : Dialog(context, R
 		}
 		else if (topView != null) {
 			topView?.setPadding(0, 0, 0, 0)
-			containerView.addView(topView, createLinear(LayoutHelper.MATCH_PARENT, topHeight, Gravity.LEFT or Gravity.TOP, 0, 0, 0, 0))
+			containerView.addView(topView, createLinear(LayoutHelper.MATCH_PARENT, topHeight, Gravity.CENTER_HORIZONTAL or Gravity.TOP, 0, 0, 0, 0))
 		}
 		if (title != null) {
 			titleContainer = FrameLayout(context)

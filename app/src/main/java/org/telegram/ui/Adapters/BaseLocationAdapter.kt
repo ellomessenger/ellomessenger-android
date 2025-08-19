@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Adapters
 
@@ -17,15 +17,7 @@ import org.telegram.messenger.MessagesStorage
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.Utilities
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_botInlineMessageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_contacts_resolveUsername
-import org.telegram.tgnet.TLRPC.TL_contacts_resolvedPeer
-import org.telegram.tgnet.TLRPC.TL_inputGeoPoint
-import org.telegram.tgnet.TLRPC.TL_inputPeerEmpty
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_messages_getInlineBotResults
-import org.telegram.tgnet.TLRPC.messages_BotResults
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
 import kotlin.math.max
 
@@ -33,7 +25,7 @@ import kotlin.math.max
 abstract class BaseLocationAdapter : SelectionAdapter() {
 	protected var searched: Boolean = false
 	protected var searching: Boolean = false
-	protected val places = mutableListOf<TL_messageMediaVenue>()
+	protected val places = mutableListOf<TLRPC.TLMessageMediaVenue>()
 	protected val iconUrls = mutableListOf<String>()
 	private var lastSearchLocation: Location? = null
 	private var lastSearchQuery: String? = null
@@ -91,13 +83,13 @@ abstract class BaseLocationAdapter : SelectionAdapter() {
 
 		searchingUser = true
 
-		val req = TL_contacts_resolveUsername()
+		val req = TLRPC.TLContactsResolveUsername()
 		req.username = MessagesController.getInstance(currentAccount).venueSearchBot
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
 			if (response != null) {
 				AndroidUtilities.runOnUIThread {
-					val res = response as TL_contacts_resolvedPeer
+					val res = response as TLRPC.TLContactsResolvedPeer
 
 					MessagesController.getInstance(currentAccount).putUsers(res.users, false)
 					MessagesController.getInstance(currentAccount).putChats(res.chats, false)
@@ -160,7 +152,7 @@ abstract class BaseLocationAdapter : SelectionAdapter() {
 
 		val `object` = MessagesController.getInstance(currentAccount).getUserOrChat(MessagesController.getInstance(currentAccount).venueSearchBot)
 
-		if (`object` !is User) {
+		if (`object` !is TLRPC.User) {
 			if (searchUser) {
 				searchBotUser()
 			}
@@ -168,17 +160,20 @@ abstract class BaseLocationAdapter : SelectionAdapter() {
 			return
 		}
 
-		val req = TL_messages_getInlineBotResults()
+		val req = TLRPC.TLMessagesGetInlineBotResults()
 		req.query = query ?: ""
 		req.bot = MessagesController.getInstance(currentAccount).getInputUser(`object`)
 		req.offset = ""
-		req.geo_point = TL_inputGeoPoint()
-		req.geo_point.lat = AndroidUtilities.fixLocationCoordinate(coordinate.latitude)
-		req.geo_point._long = AndroidUtilities.fixLocationCoordinate(coordinate.longitude)
+
+		req.geoPoint = TLRPC.TLInputGeoPoint().also {
+			it.lat = AndroidUtilities.fixLocationCoordinate(coordinate.latitude)
+			it.lon = AndroidUtilities.fixLocationCoordinate(coordinate.longitude)
+		}
+
 		req.flags = req.flags or 1
 
 		if (DialogObject.isEncryptedDialog(dialogId)) {
-			req.peer = TL_inputPeerEmpty()
+			req.peer = TLRPC.TLInputPeerEmpty()
 		}
 		else {
 			req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId)
@@ -186,7 +181,7 @@ abstract class BaseLocationAdapter : SelectionAdapter() {
 
 		currentRequestNum = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is messages_BotResults) {
+				if (response is TLRPC.TLMessagesBotResults) {
 					currentRequestNum = 0
 					searching = false
 					places.clear()
@@ -200,21 +195,21 @@ abstract class BaseLocationAdapter : SelectionAdapter() {
 					while (a < size) {
 						val result = response.results[a]
 
-						if ("venue" != result.type || result.send_message !is TL_botInlineMessageMediaVenue) {
+						if ("venue" != result.type || result.sendMessage !is TLRPC.TLBotInlineMessageMediaVenue) {
 							a++
 							continue
 						}
 
-						val mediaVenue = result.send_message as TL_botInlineMessageMediaVenue
+						val mediaVenue = result.sendMessage as TLRPC.TLBotInlineMessageMediaVenue
 
-						iconUrls.add("https://ss3.4sqi.net/img/categories_v2/" + mediaVenue.venue_type + "_64.png")
+						iconUrls.add("https://ss3.4sqi.net/img/categories_v2/" + mediaVenue.venueType + "_64.png")
 
-						val venue = TL_messageMediaVenue()
+						val venue = TLRPC.TLMessageMediaVenue()
 						venue.geo = mediaVenue.geo
 						venue.address = mediaVenue.address
 						venue.title = mediaVenue.title
-						venue.venue_type = mediaVenue.venue_type
-						venue.venue_id = mediaVenue.venue_id
+						venue.venueType = mediaVenue.venueType
+						venue.venueId = mediaVenue.venueId
 						venue.provider = mediaVenue.provider
 
 						places.add(venue)
@@ -233,6 +228,6 @@ abstract class BaseLocationAdapter : SelectionAdapter() {
 	}
 
 	fun interface BaseLocationAdapterDelegate {
-		fun didLoadSearchResult(places: List<TL_messageMediaVenue>?)
+		fun didLoadSearchResult(places: List<TLRPC.TLMessageMediaVenue>?)
 	}
 }

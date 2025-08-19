@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -39,6 +39,8 @@ import org.telegram.ui.Components.ExtendedGridLayoutManager
 class PaymentMethodsFragment(args: Bundle) : BaseFragment(args) {
 	private var binding: PaymentMethodsFragmentBinding? = null
 	private var walletId = 0L
+	private var channelId = 0L
+	private var amount: Double = 0.0
 	private var isTopUp = false
 	private var showElloCard = false
 	private var showPaypal = false
@@ -52,6 +54,8 @@ class PaymentMethodsFragment(args: Bundle) : BaseFragment(args) {
 		walletId = arguments?.getLong(WalletFragment.ARG_WALLET_ID, 0L) ?: return false
 		isTopUp = arguments?.getBoolean(WalletFragment.ARG_IS_TOPUP, false) ?: false
 		showElloCard = arguments?.getBoolean(ARG_SHOW_ELLO_CARD, false) ?: false
+		channelId = arguments?.getLong(WalletFragment.ARG_CHANNEL_ID, 0L) ?: 0L
+		amount = arguments?.getDouble(WalletFragment.ARG_AMOUNT, 0.0) ?: 0.0
 
 		return true
 	}
@@ -154,6 +158,8 @@ class PaymentMethodsFragment(args: Bundle) : BaseFragment(args) {
 							args.putInt(WalletFragment.ARG_MODE, WalletFragment.MY_BALANCE)
 							args.putBoolean(WalletFragment.ARG_IS_TOPUP, isTopUp)
 							args.putLong(WalletFragment.ARG_WALLET_ID, walletId)
+							args.putLong(WalletFragment.ARG_CHANNEL_ID, channelId)
+							args.putDouble(WalletFragment.ARG_AMOUNT, amount)
 
 							presentFragment(TopupSumFragment(args))
 						}
@@ -170,6 +176,8 @@ class PaymentMethodsFragment(args: Bundle) : BaseFragment(args) {
 							args.putInt(WalletFragment.ARG_MODE, WalletFragment.PAYPAL)
 							args.putBoolean(WalletFragment.ARG_IS_TOPUP, isTopUp)
 							args.putLong(WalletFragment.ARG_WALLET_ID, walletId)
+							args.putLong(WalletFragment.ARG_CHANNEL_ID, channelId)
+							args.putDouble(WalletFragment.ARG_AMOUNT, amount)
 
 							paypalInfo?.let {
 								args.putSerializable(TopupSumFragment.ARG_COMMISSION_INFO, it)
@@ -196,6 +204,8 @@ class PaymentMethodsFragment(args: Bundle) : BaseFragment(args) {
 							args.putInt(WalletFragment.ARG_MODE, WalletFragment.CARD)
 							args.putBoolean(WalletFragment.ARG_IS_TOPUP, isTopUp)
 							args.putLong(WalletFragment.ARG_WALLET_ID, walletId)
+							args.putLong(WalletFragment.ARG_CHANNEL_ID, channelId)
+							args.putDouble(WalletFragment.ARG_AMOUNT, amount)
 
 							bankInfo?.let {
 								args.putSerializable(TopupSumFragment.ARG_COMMISSION_INFO, it)
@@ -224,7 +234,7 @@ class PaymentMethodsFragment(args: Bundle) : BaseFragment(args) {
 			val req = ElloRpc.getCommissionInfo()
 			val response = connectionsManager.performRequest(req)
 
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val commissionInfo = response.readString()?.fromJson<List<Map<String, Any>>>()?.map {
 					ElloRpc.CommissionInfo(type = it["type"] as String, value = it["value"] as Double, onOffDeposit = it["on_off_deposit"] as? Boolean, minDeposit = it["min_deposit"] as? Double, maxDeposit = it["max_deposit"] as? Double, onOffWithdrawals = it["on_off_withdrawals"] as? Boolean, minWithdrawals = it["min_withdrawals"] as? Double, maxWithdrawals = it["max_withdrawals"] as? Double)
 				}

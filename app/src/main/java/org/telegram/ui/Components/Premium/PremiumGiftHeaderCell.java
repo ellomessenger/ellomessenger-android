@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Premium;
 
@@ -19,7 +19,7 @@ import android.widget.TextView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
@@ -98,6 +98,6 @@ public class PremiumGiftHeaderCell extends LinearLayout {
 		avatarImageView.setForUserOrChat(user, avatarDrawable);
 
 		titleView.setText(AndroidUtilities.replaceTags(getContext().getString(R.string.GiftTelegramPremiumTitle)));
-		subtitleView.setText(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.GiftTelegramPremiumDescription, user.getFirst_name())));
+		subtitleView.setText(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.GiftTelegramPremiumDescription, user.firstName)));
 	}
 }

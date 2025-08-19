@@ -899,52 +899,9 @@ Connection *Datacenter::createUploadConnection(uint8_t num) {
     return uploadConnection[num];
 }
 
-std::vector<Connection *> Datacenter::getAllConnections() {
-    std::vector<Connection *> result;
-
-    if (genericConnection != nullptr) {
-        result.push_back(genericConnection);
-    }
-
-    if (genericMediaConnection != nullptr) {
-        result.push_back(genericMediaConnection);
-    }
-
-    if (pushConnection != nullptr) {
-        result.push_back(pushConnection);
-    }
-
-    if (tempConnection != nullptr) {
-        result.push_back(tempConnection);
-    }
-
-    for (auto &a: uploadConnection) {
-        if (a != nullptr) {
-            result.push_back(a);
-        }
-    }
-
-    for (auto &a: downloadConnection) {
-        if (a != nullptr) {
-            result.push_back(a);
-        }
-    }
-
-    for (auto &a: proxyConnection) {
-        if (a != nullptr) {
-            result.push_back(a);
-        }
-    }
-
-    return result;
-}
-
 Connection *Datacenter::createGenericConnection() {
     if (genericConnection == nullptr) {
         genericConnection = new Connection(this, ConnectionTypeGeneric, 0);
-    }
-    else if (!genericConnection->canReconnect()) {
-        return nullptr;
     }
 
     return genericConnection;
@@ -1454,11 +1411,7 @@ Connection *Datacenter::getGenericConnection(bool create, int32_t allowPendingKe
     }
 
     if (create) {
-        auto connection = createGenericConnection();
-
-        if (connection != nullptr && connection->canReconnect()) {
-            connection->connect();
-        }
+        createGenericConnection()->connect();
     }
 
     return genericConnection;

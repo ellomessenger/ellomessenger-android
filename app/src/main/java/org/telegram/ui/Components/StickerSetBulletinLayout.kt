@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
@@ -25,12 +25,14 @@ import org.telegram.messenger.messageobject.MessageObject.Companion.getInputStic
 import org.telegram.messenger.messageobject.MessageObject.Companion.isAnimatedStickerDocument
 import org.telegram.messenger.messageobject.MessageObject.Companion.isGifDocument
 import org.telegram.messenger.messageobject.MessageObject.Companion.isVideoSticker
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.PhotoSize
-import org.telegram.tgnet.TLRPC.StickerSet
 import org.telegram.tgnet.TLRPC.StickerSetCovered
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLRPC.TLMessagesStickerSet
+import org.telegram.tgnet.cover
+import org.telegram.tgnet.covers
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.Components.Bulletin.TwoLineLayout
 import org.telegram.ui.Components.Premium.LimitReachedBottomSheet
 import org.telegram.ui.Components.Premium.LimitReachedBottomSheet.Companion.limitTypeToServerString
@@ -45,10 +47,10 @@ class StickerSetBulletinLayout(context: Context, setObject: TLObject?, count: In
 
 	init {
 		@Suppress("NAME_SHADOWING") var sticker = sticker
-		var stickerSet: StickerSet?
+		var stickerSet: TLRPC.TLStickerSet?
 
 		when (setObject) {
-			is TL_messages_stickerSet -> {
+			is TLMessagesStickerSet -> {
 				stickerSet = setObject.set
 				val documents = setObject.documents
 				sticker = documents.firstOrNull()
@@ -56,7 +58,7 @@ class StickerSetBulletinLayout(context: Context, setObject: TLObject?, count: In
 
 			is StickerSetCovered -> {
 				stickerSet = setObject.set
-				sticker = setObject.cover ?: setObject.covers.firstOrNull()
+				sticker = setObject.cover ?: setObject.covers?.firstOrNull()
 			}
 
 			else -> {
@@ -91,10 +93,10 @@ class StickerSetBulletinLayout(context: Context, setObject: TLObject?, count: In
 				var thumbVersion = 0
 
 				if (setObject is StickerSetCovered) {
-					thumbVersion = setObject.set.thumb_version
+					thumbVersion = setObject.set?.thumbVersion ?: 0
 				}
-				else if (setObject is TL_messages_stickerSet) {
-					thumbVersion = setObject.set.thumb_version
+				else if (setObject is TLMessagesStickerSet) {
+					thumbVersion = setObject.set?.thumbVersion ?: 0
 				}
 
 				imageLocation = ImageLocation.getForSticker(thumb, sticker, thumbVersion)

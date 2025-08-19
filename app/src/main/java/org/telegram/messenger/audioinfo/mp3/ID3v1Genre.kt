@@ -20,6 +20,7 @@ enum class ID3v1Genre(val description: String) {
 	 * The following genres is defined in ID3v1 (0-79)
 	 */
 	Blues("Blues"), ClassicRock("Classic Rock"), Country("Country"), Dance("Dance"), Disco("Disco"), Funk("Funk"), Grunge("Grunge"), HipHop("Hip-Hop"), Jazz("Jazz"), Metal("Metal"), NewAge("New Age"), Oldies("Oldies"), Other("Other"), Pop("Pop"), RnB("R&B"), Rap("Rap"), Reggae("Reggae"), Rock("Rock"), Techno("Techno"), Industrial("Industrial"), Alternative("Alternative"), Ska("Ska"), DeathMetal("Death Metal"), Pranks("Pranks"), Soundtrack("Soundtrack"), EuroTechno("Euro-Techno"), Ambient("Ambient"), TripHop("Trip-Hop"), Vocal("Vocal"), JazzFunk("Jazz+Funk"), Fusion("Fusion"), Trance("Trance"), Classical("Classical"), Instrumental("Instrumental"), Acid("Acid"), House("House"), Game("Game"), SoundClip("Sound Clip"), Gospel("Gospel"), Noise("Noise"), AlternRock("AlternRock"), Bass("Bass"), Soul("Soul"), Punk("Punk"), Space("Space"), Meditative("Meditative"), InstrumentalPop("Instrumental Pop"), InstrumentalRock("Instrumental Rock"), Ethnic("Ethnic"), Gothic("Gothic"), Darkwave("Darkwave"), TechnoIndustrial("Techno-Industrial"), Electronic("Electronic"), PopFolk("Pop-Folk"), Eurodance("Eurodance"), Dream("Dream"), SouthernRock("Southern Rock"), Comedy("Comedy"), Cult("Cult"), Gangsta("Gangsta"), Top40("Top 40"), ChristianRap("Christian Rap"), PopFunk("Pop/Funk"), Jungle("Jungle"), NativeAmerican("Native American"), Cabaret("Cabaret"), NewWave("New Wave"), Psychadelic("Psychadelic"), Rave("Rave"), Showtunes("Showtunes"), Trailer("Trailer"), LoFi("Lo-Fi"), Tribal("Tribal"), AcidPunk("Acid Punk"), AcidJazz("Acid Jazz"), Polka("Polka"), Retro("Retro"), Musical("Musical"), RockAndRoll("Rock & Roll"), HardRock("Hard Rock"),
+
 	/*
 	 * The following genres are Winamp extensions (80-125)
 	 */
@@ -32,7 +33,7 @@ enum class ID3v1Genre(val description: String) {
 	companion object {
 		@JvmStatic
 		fun getGenre(id: Int): ID3v1Genre? {
-			return values().getOrNull(id)
+			return entries.getOrNull(id)
 		}
 	}
 }

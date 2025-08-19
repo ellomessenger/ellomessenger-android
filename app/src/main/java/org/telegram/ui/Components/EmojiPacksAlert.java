@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -57,8 +57,8 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
 import org.telegram.ui.ActionBar.ActionBarPopupWindow;
@@ -141,7 +141,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			private Boolean lastOpen = null;
 
 			@Override
-			protected void dispatchDraw(Canvas canvas) {
+			protected void dispatchDraw(@NonNull Canvas canvas) {
 				if (!attached) {
 					return;
 				}
@@ -497,6 +497,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 						view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
 					}
 					catch (Exception e) {
+						// ignored
 					}
 				}
 				return;
@@ -516,12 +517,12 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 					break;
 				}
 			}
-			TLRPC.TL_messages_stickerSet stickerSet = customEmojiPacks.stickerSets == null || i >= customEmojiPacks.stickerSets.size() ? null : customEmojiPacks.stickerSets.get(i);
+			TLRPC.TLMessagesStickerSet stickerSet = customEmojiPacks.stickerSets == null || i >= customEmojiPacks.stickerSets.size() ? null : customEmojiPacks.stickerSets.get(i);
 			if (stickerSet != null && stickerSet.set != null) {
 				ArrayList<TLRPC.InputStickerSet> inputStickerSets = new ArrayList<>();
-				TLRPC.TL_inputStickerSetID inputStickerSet = new TLRPC.TL_inputStickerSetID();
+				TLRPC.TLInputStickerSetID inputStickerSet = new TLRPC.TLInputStickerSetID();
 				inputStickerSet.id = stickerSet.set.id;
-				inputStickerSet.access_hash = stickerSet.set.access_hash;
+				inputStickerSet.accessHash = stickerSet.set.accessHash;
 				inputStickerSets.add(inputStickerSet);
 				new EmojiPacksAlert(fragment, getContext(), inputStickerSets) {
 					@Override
@@ -579,6 +580,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 					view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
 				}
 				catch (Exception e) {
+					// ignored
 				}
 
 				return true;
@@ -641,8 +643,8 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 		if (obj == null) {
 			return;
 		}
-		TLRPC.TL_messages_stickerSet stickerSet = obj instanceof TLRPC.TL_messages_stickerSet ? (TLRPC.TL_messages_stickerSet)obj : null;
-		TLRPC.StickerSet set = stickerSet != null ? stickerSet.set : obj instanceof TLRPC.StickerSet ? (TLRPC.StickerSet)obj : null;
+		TLRPC.TLMessagesStickerSet stickerSet = obj instanceof TLRPC.TLMessagesStickerSet ? (TLRPC.TLMessagesStickerSet)obj : null;
+		TLRPC.TLStickerSet set = stickerSet != null ? stickerSet.set : obj instanceof TLRPC.TLStickerSet ? (TLRPC.TLStickerSet)obj : null;
 		if (set == null) {
 			return;
 		}
@@ -653,10 +655,14 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			}
 			return;
 		}
-		TLRPC.TL_messages_installStickerSet req = new TLRPC.TL_messages_installStickerSet();
-		req.stickerset = new TLRPC.TL_inputStickerSetID();
-		req.stickerset.id = set.id;
-		req.stickerset.access_hash = set.access_hash;
+
+		var stickerset = new TLRPC.TLInputStickerSetID();
+		stickerset.id = set.id;
+		stickerset.accessHash = set.accessHash;
+
+		TLRPC.TLMessagesInstallStickerSet req = new TLRPC.TLMessagesInstallStickerSet();
+		req.stickerset = stickerset;
+
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 			int type = MediaDataController.TYPE_IMAGE;
 			if (set.masks) {
@@ -670,8 +676,8 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 					if (showBulletIn && fragmentView != null) {
 						Bulletin.make(fragment, new StickerSetBulletinLayout(fragment.getFragmentView().getContext(), stickerSet == null ? set : stickerSet, StickerSetBulletinLayout.TYPE_ADDED, null), Bulletin.DURATION_SHORT).show();
 					}
-					if (response instanceof TLRPC.TL_messages_stickerSetInstallResultArchive) {
-						MediaDataController.getInstance(currentAccount).processStickerSetInstallResultArchive(fragment, true, type, (TLRPC.TL_messages_stickerSetInstallResultArchive)response);
+					if (response instanceof TLRPC.TLMessagesStickerSetInstallResultArchive) {
+						MediaDataController.getInstance(currentAccount).processStickerSetInstallResultArchive(fragment, true, type, (TLRPC.TLMessagesStickerSetInstallResultArchive)response);
 					}
 					if (onDone != null) {
 						onDone.run(true);
@@ -700,7 +706,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 		}));
 	}
 
-	public static void uninstallSet(BaseFragment fragment, TLRPC.TL_messages_stickerSet set, boolean showBulletin, Runnable onUndo) {
+	public static void uninstallSet(BaseFragment fragment, TLRPC.TLMessagesStickerSet set, boolean showBulletin, Runnable onUndo) {
 		if (fragment == null || set == null || fragment.getFragmentView() == null) {
 			return;
 		}
@@ -776,8 +782,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 	public void updateInstallment() {
 		for (int i = 0; i < listView.getChildCount(); ++i) {
 			View child = listView.getChildAt(i);
-			if (child instanceof EmojiPackHeader) {
-				EmojiPackHeader header = (EmojiPackHeader)child;
+			if (child instanceof EmojiPackHeader header) {
 				if (header.set != null && header.set.set != null) {
 					header.toggle(MediaDataController.getInstance(currentAccount).isStickerPackInstalled(header.set.set.id), true);
 				}
@@ -809,17 +814,17 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			return;
 		}
 
-		ArrayList<TLRPC.TL_messages_stickerSet> allPacks = customEmojiPacks.stickerSets == null ? new ArrayList<>() : new ArrayList<>(customEmojiPacks.stickerSets);
+		ArrayList<TLRPC.TLMessagesStickerSet> allPacks = customEmojiPacks.stickerSets == null ? new ArrayList<>() : new ArrayList<>(customEmojiPacks.stickerSets);
 		for (int i = 0; i < allPacks.size(); ++i) {
 			if (allPacks.get(i) == null) {
 				allPacks.remove(i--);
 			}
 		}
 		MediaDataController mediaDataController = MediaDataController.getInstance(currentAccount);
-		ArrayList<TLRPC.TL_messages_stickerSet> installedPacks = new ArrayList<>();
-		ArrayList<TLRPC.TL_messages_stickerSet> notInstalledPacks = new ArrayList<>();
+		ArrayList<TLRPC.TLMessagesStickerSet> installedPacks = new ArrayList<>();
+		ArrayList<TLRPC.TLMessagesStickerSet> notInstalledPacks = new ArrayList<>();
 		for (int i = 0; i < allPacks.size(); ++i) {
-			TLRPC.TL_messages_stickerSet stickerSet = allPacks.get(i);
+			TLRPC.TLMessagesStickerSet stickerSet = allPacks.get(i);
 			if (stickerSet != null && stickerSet.set != null) {
 				if (!mediaDataController.isStickerPackInstalled(stickerSet.set.id)) {
 					notInstalledPacks.add(stickerSet);
@@ -831,7 +836,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 		}
 
 		boolean mePremium = UserConfig.getInstance(currentAccount).isPremium();
-		ArrayList<TLRPC.TL_messages_stickerSet> canInstallPacks = new ArrayList<>(notInstalledPacks);
+		ArrayList<TLRPC.TLMessagesStickerSet> canInstallPacks = new ArrayList<>(notInstalledPacks);
 		for (int i = 0; i < canInstallPacks.size(); ++i) {
 			if (MessageObject.isPremiumEmojiPack(canInstallPacks.get(i)) && !mePremium) {
 				canInstallPacks.remove(i--);
@@ -909,7 +914,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 					}
 					else {
 						for (int i = 0; i < installedPacks.size(); ++i) {
-							TLRPC.TL_messages_stickerSet stickerSet = installedPacks.get(i);
+							TLRPC.TLMessagesStickerSet stickerSet = installedPacks.get(i);
 							uninstallSet(fragment, stickerSet, i == 0, null);
 						}
 					}
@@ -960,13 +965,13 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 		if (customEmojiPacks == null || customEmojiPacks.stickerSets == null || customEmojiPacks.stickerSets.isEmpty()) {
 			return;
 		}
-		TLRPC.TL_messages_stickerSet stickerSet = customEmojiPacks.stickerSets.get(0);
+		TLRPC.TLMessagesStickerSet stickerSet = customEmojiPacks.stickerSets.get(0);
 		String stickersUrl;
 		if (stickerSet.set != null && stickerSet.set.emojis) {
-			stickersUrl = "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/addemoji/" + stickerSet.set.short_name;
+			stickersUrl = "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/addemoji/" + stickerSet.set.shortName;
 		}
 		else {
-			stickersUrl = "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/addstickers/" + stickerSet.set.short_name;
+			stickersUrl = "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/addstickers/" + stickerSet.set.shortName;
 		}
 		if (id == 1) {
 			Context context = null;
@@ -978,7 +983,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			}
 			ShareAlert alert = new ShareAlert(context, null, stickersUrl, false, stickersUrl, false) {
 				@Override
-				protected void onSend(androidx.collection.LongSparseArray<TLRPC.Dialog> dids, int count) {
+				protected void onSend(@NonNull androidx.collection.LongSparseArray<TLRPC.Dialog> dids, int count) {
 					AndroidUtilities.runOnUIThread(() -> {
 						UndoView undoView;
 						if (fragment instanceof ChatActivity) {
@@ -1107,10 +1112,10 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 							view.span = null;
 						}
 						else {
-							TLRPC.TL_inputStickerSetID inputStickerSet = new TLRPC.TL_inputStickerSetID();
+							TLRPC.TLInputStickerSetID inputStickerSet = new TLRPC.TLInputStickerSetID();
 							inputStickerSet.id = customEmoji.stickerSet.set.id;
-							inputStickerSet.short_name = customEmoji.stickerSet.set.short_name;
-							inputStickerSet.access_hash = customEmoji.stickerSet.set.access_hash;
+							// inputStickerSet.shortName = customEmoji.stickerSet.set.shortName;
+							inputStickerSet.accessHash = customEmoji.stickerSet.set.accessHash;
 							view.span = new AnimatedEmojiSpan(customEmoji.documentId, null);
 						}
 					}
@@ -1130,9 +1135,9 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 						}
 						j += 1 + sz + 1;
 					}
-					TLRPC.TL_messages_stickerSet stickerSet = customEmojiPacks.stickerSets == null || i >= customEmojiPacks.stickerSets.size() ? null : customEmojiPacks.stickerSets.get(i);
+					TLRPC.TLMessagesStickerSet stickerSet = customEmojiPacks.stickerSets == null || i >= customEmojiPacks.stickerSets.size() ? null : customEmojiPacks.stickerSets.get(i);
 					boolean premium = false;
-					if (stickerSet != null && stickerSet.documents != null) {
+					if (stickerSet != null) {
 						for (int j = 0; j < stickerSet.documents.size(); ++j) {
 							if (!MessageObject.isFreeEmoji(stickerSet.documents.get(j))) {
 								premium = true;
@@ -1266,7 +1271,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			}
 		};
 		private final boolean single;
-		private TLRPC.TL_messages_stickerSet set;
+		private TLRPC.TLMessagesStickerSet set;
 		private boolean toggled = false;
 		private float toggleT = 0;
 		private ValueAnimator animator;
@@ -1429,7 +1434,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			}
 		}
 
-		public void set(TLRPC.TL_messages_stickerSet set, int size, boolean premium) {
+		public void set(TLRPC.TLMessagesStickerSet set, int size, boolean premium) {
 			this.set = set;
 
 			if (set != null && set.set != null) {
@@ -1507,7 +1512,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 		final int loadingStickersCount = 12;
 
 		public List<TLRPC.InputStickerSet> inputStickerSets;
-		public List<TLRPC.TL_messages_stickerSet> stickerSets;
+		public List<TLRPC.TLMessagesStickerSet> stickerSets;
 		public List<EmojiView.CustomEmoji>[] data;
 		private final int currentAccount;
 
@@ -1526,7 +1531,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.groupStickersDidLoad);
 			final boolean[] failed = new boolean[1];
 			for (int i = 0; i < data.length; ++i) {
-				TLRPC.TL_messages_stickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(inputStickerSets.get(i), false, () -> {
+				TLRPC.TLMessagesStickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(inputStickerSets.get(i), false, () -> {
 					if (!failed[0]) {
 						failed[0] = true;
 						AndroidUtilities.runOnUIThread(() -> {
@@ -1553,7 +1558,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			if (id == NotificationCenter.groupStickersDidLoad) {
 				for (int i = 0; i < stickerSets.size(); ++i) {
 					if (stickerSets.get(i) == null) {
-						TLRPC.TL_messages_stickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(this.inputStickerSets.get(i), true);
+						TLRPC.TLMessagesStickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(this.inputStickerSets.get(i), true);
 						if (stickerSets.size() == 1 && stickerSet != null && stickerSet.set != null && !stickerSet.set.emojis) {
 							EmojiPacksAlert.this.dismiss();
 							StickersAlert alert = new StickersAlert(getContext(), fragment, inputStickerSets.get(i), null, fragment instanceof ChatActivity ? ((ChatActivity)fragment).chatActivityEnterView : null);
@@ -1570,7 +1575,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			}
 		}
 
-		private void putStickerSet(int index, TLRPC.TL_messages_stickerSet stickerSet) {
+		private void putStickerSet(int index, TLRPC.TLMessagesStickerSet stickerSet) {
 			if (index < 0 || index >= data.length) {
 				return;
 			}
@@ -1606,7 +1611,7 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			if (index < 0 || index >= stickerSets.size()) {
 				return null;
 			}
-			TLRPC.TL_messages_stickerSet stickerSet = stickerSets.get(index);
+			TLRPC.TLMessagesStickerSet stickerSet = stickerSets.get(index);
 			if (stickerSet == null || stickerSet.set == null) {
 				return null;
 			}
@@ -1652,23 +1657,30 @@ public class EmojiPacksAlert extends BottomSheet implements NotificationCenter.N
 			if (inputStickerSet == null) {
 				return null;
 			}
-			TLRPC.TL_messages_stickerSet stickerSet = null;
+
+			TLRPC.TLMessagesStickerSet stickerSet = null;
+
 			for (int i = 0; i < stickerSets.size(); ++i) {
-				TLRPC.TL_messages_stickerSet s = stickerSets.get(i);
-				if (s != null && s.set != null && (inputStickerSet.id == s.set.id || inputStickerSet.short_name != null && inputStickerSet.short_name.equals(s.set.short_name))) {
+				TLRPC.TLMessagesStickerSet s = stickerSets.get(i);
+
+				var id = inputStickerSet instanceof TLRPC.TLInputStickerSetID ? ((TLRPC.TLInputStickerSetID)inputStickerSet).id : 0;
+				var shortName = inputStickerSet instanceof TLRPC.TLInputStickerSetShortName ? ((TLRPC.TLInputStickerSetShortName)inputStickerSet).shortName : null;
+
+				if (s != null && s.set != null && (id == s.set.id || shortName != null && shortName.equals(s.set.shortName))) {
 					stickerSet = s;
 					break;
 				}
 			}
+
 			return findEmoticon(stickerSet, documentId);
 		}
 
-		public String findEmoticon(TLRPC.TL_messages_stickerSet stickerSet, long documentId) {
+		public String findEmoticon(TLRPC.TLMessagesStickerSet stickerSet, long documentId) {
 			if (stickerSet == null) {
 				return null;
 			}
 			for (int o = 0; o < stickerSet.packs.size(); ++o) {
-				TLRPC.TL_stickerPack pack = stickerSet.packs.get(o);
+				TLRPC.TLStickerPack pack = stickerSet.packs.get(o);
 				if (pack.documents != null && pack.documents.contains(documentId)) {
 					return pack.emoticon;
 				}

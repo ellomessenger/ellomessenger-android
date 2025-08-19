@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -39,7 +39,6 @@ import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
-import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.DownloadController;
 import org.telegram.messenger.FileLoader;
@@ -47,7 +46,6 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
-import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
@@ -57,9 +55,12 @@ import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.WebFile;
+import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.GeoPoint;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -80,6 +81,7 @@ import org.telegram.ui.Components.TypingDotsDrawable;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Locale;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -185,8 +187,8 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 		SizeNotifierFrameLayout contentView = new SizeNotifierFrameLayout(this) {
 			@Override
 			protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-				int widthMode = MeasureSpec.getMode(widthMeasureSpec);
-				int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+//				int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+//				int heightMode = MeasureSpec.getMode(heightMeasureSpec);
 				int widthSize = MeasureSpec.getSize(widthMeasureSpec);
 				int heightSize = MeasureSpec.getSize(heightMeasureSpec);
 
@@ -243,28 +245,17 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 					final int absoluteGravity = gravity & Gravity.HORIZONTAL_GRAVITY_MASK;
 					final int verticalGravity = gravity & Gravity.VERTICAL_GRAVITY_MASK;
 
-					switch (absoluteGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
-						case Gravity.CENTER_HORIZONTAL:
-							childLeft = (r - l - width) / 2 + lp.leftMargin - lp.rightMargin;
-							break;
-						case Gravity.RIGHT:
-							childLeft = r - width - lp.rightMargin;
-							break;
-						case Gravity.LEFT:
-						default:
-							childLeft = lp.leftMargin;
-					}
+					childLeft = switch (absoluteGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
+						case Gravity.CENTER_HORIZONTAL -> (r - l - width) / 2 + lp.leftMargin - lp.rightMargin;
+						case Gravity.RIGHT -> r - width - lp.rightMargin;
+						default -> lp.leftMargin;
+					};
 
-					switch (verticalGravity) {
-						case Gravity.CENTER_VERTICAL:
-							childTop = ((b - paddingBottom) - t - height) / 2 + lp.topMargin - lp.bottomMargin;
-							break;
-						case Gravity.BOTTOM:
-							childTop = ((b - paddingBottom) - t) - height - lp.bottomMargin;
-							break;
-						default:
-							childTop = lp.topMargin;
-					}
+					childTop = switch (verticalGravity) {
+						case Gravity.CENTER_VERTICAL -> ((b - paddingBottom) - t - height) / 2 + lp.topMargin - lp.bottomMargin;
+						case Gravity.BOTTOM -> ((b - paddingBottom) - t) - height - lp.bottomMargin;
+						default -> lp.topMargin;
+					};
 					if (chatActivityEnterView.isPopupView(child)) {
 						childTop = paddingBottom != 0 ? getMeasuredHeight() - paddingBottom : getMeasuredHeight();
 					}
@@ -290,7 +281,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 				super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 				int w = chatActivityEnterView.getMeasuredWidth();
 				int h = chatActivityEnterView.getMeasuredHeight();
-				for (int a = 0, count; a < getChildCount(); a++) {
+				for (int a = 0; a < getChildCount(); a++) {
 					View v = getChildAt(a);
 					if (v.getTag() instanceof String) {
 						v.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h - AndroidUtilities.dp(3), MeasureSpec.EXACTLY));
@@ -301,7 +292,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 			@Override
 			protected void onLayout(boolean changed, int l, int t, int r, int b) {
 				super.onLayout(changed, l, t, r, b);
-				for (int a = 0, count; a < getChildCount(); a++) {
+				for (int a = 0; a < getChildCount(); a++) {
 					View v = getChildAt(a);
 					if (v.getTag() instanceof String) {
 						v.layout(v.getLeft(), chatActivityEnterView.getTop() + AndroidUtilities.dp(3), v.getRight(), chatActivityEnterView.getBottom());
@@ -326,7 +317,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 
 			@Nullable
 			@Override
-			public TLRPC.TL_channels_sendAsPeers getSendAsPeers() {
+			public TLRPC.TLChannelsSendAsPeers getSendAsPeers() {
 				return null;
 			}
 
@@ -606,7 +597,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 	}
 
 	@Override
-	public void onConfigurationChanged(Configuration newConfig) {
+	public void onConfigurationChanged(@NonNull Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);
 		AndroidUtilities.checkDisplaySize(this, newConfig);
 		fixLayout();
@@ -619,7 +610,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 	}
 
 	@Override
-	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+	public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
 		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 		if (requestCode == 3) {
 			if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -653,7 +644,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 			}
 			currentMessageObject = popupMessages.get(currentMessageNum);
 			updateInterfaceForCurrentMessage(2);
-			countText.setText(String.format("%d/%d", currentMessageNum + 1, popupMessages.size()));
+			countText.setText(String.format(Locale.getDefault(), "%d/%d", currentMessageNum + 1, popupMessages.size()));
 		}
 	}
 
@@ -667,7 +658,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 			}
 			currentMessageObject = popupMessages.get(currentMessageNum);
 			updateInterfaceForCurrentMessage(1);
-			countText.setText(String.format("%d/%d", currentMessageNum + 1, popupMessages.size()));
+			countText.setText(String.format(Locale.getDefault(), "%d/%d", currentMessageNum + 1, popupMessages.size()));
 		}
 	}
 
@@ -811,23 +802,22 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 
 	private void applyViewsLayoutParams(int xOffset) {
 		FrameLayout.LayoutParams layoutParams;
-		RelativeLayout.LayoutParams rLayoutParams;
-		int widht = AndroidUtilities.displaySize.x - AndroidUtilities.dp(24);
+		int width = AndroidUtilities.displaySize.x - AndroidUtilities.dp(24);
 		if (leftView != null) {
 			layoutParams = (FrameLayout.LayoutParams)leftView.getLayoutParams();
-			if (layoutParams.width != widht) {
-				layoutParams.width = widht;
+			if (layoutParams.width != width) {
+				layoutParams.width = width;
 				leftView.setLayoutParams(layoutParams);
 			}
-			leftView.setTranslationX(-widht + xOffset);
+			leftView.setTranslationX(-width + xOffset);
 		}
 		if (leftButtonsView != null) {
-			leftButtonsView.setTranslationX(-widht + xOffset);
+			leftButtonsView.setTranslationX(-width + xOffset);
 		}
 		if (centerView != null) {
 			layoutParams = (FrameLayout.LayoutParams)centerView.getLayoutParams();
-			if (layoutParams.width != widht) {
-				layoutParams.width = widht;
+			if (layoutParams.width != width) {
+				layoutParams.width = width;
 				centerView.setLayoutParams(layoutParams);
 			}
 			centerView.setTranslationX(xOffset);
@@ -837,14 +827,14 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 		}
 		if (rightView != null) {
 			layoutParams = (FrameLayout.LayoutParams)rightView.getLayoutParams();
-			if (layoutParams.width != widht) {
-				layoutParams.width = widht;
+			if (layoutParams.width != width) {
+				layoutParams.width = width;
 				rightView.setLayoutParams(layoutParams);
 			}
-			rightView.setTranslationX(widht + xOffset);
+			rightView.setTranslationX(width + xOffset);
 		}
 		if (rightButtonsView != null) {
-			rightButtonsView.setTranslationX(widht + xOffset);
+			rightButtonsView.setTranslationX(width + xOffset);
 		}
 		messageContainer.invalidate();
 	}
@@ -863,15 +853,15 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 		final MessageObject messageObject = popupMessages.get(num);
 		int buttonsCount = 0;
 
-		TLRPC.ReplyMarkup markup = messageObject.messageOwner.reply_markup;
+		TLRPC.ReplyMarkup markup = TLRPCExtensions.getReplyMarkup(messageObject.messageOwner);
 
 		if (messageObject.getDialogId() == 777000 && markup != null) {
-			ArrayList<TLRPC.TL_keyboardButtonRow> rows = markup.rows;
+			var rows = markup.rows;
 			for (int a = 0, size = rows.size(); a < size; a++) {
-				TLRPC.TL_keyboardButtonRow row = rows.get(a);
+				TLRPC.TLKeyboardButtonRow row = rows.get(a);
 				for (int b = 0, size2 = row.buttons.size(); b < size2; b++) {
 					TLRPC.KeyboardButton button = row.buttons.get(b);
-					if (button instanceof TLRPC.TL_keyboardButtonCallback) {
+					if (button instanceof TLRPC.TLKeyboardButtonCallback) {
 						buttonsCount++;
 					}
 				}
@@ -880,12 +870,12 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 
 		final int account = messageObject.currentAccount;
 		if (buttonsCount > 0) {
-			ArrayList<TLRPC.TL_keyboardButtonRow> rows = markup.rows;
+			var rows = markup.rows;
 			for (int a = 0, size = rows.size(); a < size; a++) {
-				TLRPC.TL_keyboardButtonRow row = rows.get(a);
+				TLRPC.TLKeyboardButtonRow row = rows.get(a);
 				for (int b = 0, size2 = row.buttons.size(); b < size2; b++) {
 					TLRPC.KeyboardButton button = row.buttons.get(b);
-					if (button instanceof TLRPC.TL_keyboardButtonCallback) {
+					if (button instanceof TLRPC.TLKeyboardButtonCallback) {
 						if (view == null) {
 							view = new LinearLayout(this);
 							view.setOrientation(LinearLayout.HORIZONTAL);
@@ -907,7 +897,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 						textView.setOnClickListener(v -> {
 							TLRPC.KeyboardButton button1 = (TLRPC.KeyboardButton)v.getTag();
 							if (button1 != null) {
-								SendMessagesHelper.getInstance(account).sendNotificationCallback(messageObject.getDialogId(), messageObject.getId(), button1.data);
+								SendMessagesHelper.getInstance(account).sendNotificationCallback(messageObject.getDialogId(), messageObject.getId(), TLRPCExtensions.getData(button1));
 							}
 						});
 					}
@@ -1022,9 +1012,20 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 				messageText.setVisibility(View.GONE);
 				messageText.setText(messageObject.messageText);
 				imageView.setVisibility(View.VISIBLE);
-				TLRPC.GeoPoint geoPoint = messageObject.messageOwner.media.geo;
-				double lat = geoPoint.lat;
-				double lon = geoPoint._long;
+
+				var media = TLRPCExtensions.getMedia(messageObject.messageOwner);
+				double lat = 0.0;
+				double lon = 0.0;
+				GeoPoint geoPoint = null;
+
+				if (media != null) {
+					geoPoint = media.geo;
+
+					if (geoPoint instanceof TLRPC.TLGeoPoint tlGeoPoint) {
+						lat = tlGeoPoint.lat;
+						lon = tlGeoPoint.lon;
+					}
+				}
 
 				if (MessagesController.getInstance(messageObject.currentAccount).mapProvider == MessagesController.MAP_PROVIDER_ELLO) {
 					imageView.setImage(ImageLocation.getForWebFile(WebFile.createWithGeoPoint(geoPoint, 100, 100, 15, Math.min(2, (int)Math.ceil(AndroidUtilities.density)))), null, null, null, messageObject);
@@ -1352,7 +1353,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 				prepareLayouts(4);
 			}
 		}
-		countText.setText(String.format("%d/%d", currentMessageNum + 1, popupMessages.size()));
+		countText.setText(String.format(Locale.getDefault(), "%d/%d", currentMessageNum + 1, popupMessages.size()));
 	}
 
 	private void openCurrentMessage() {
@@ -1395,7 +1396,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 		chatActivityEnterView.setDialogId(dialogId, currentMessageObject.currentAccount);
 		if (DialogObject.isEncryptedDialog(dialogId)) {
 			TLRPC.EncryptedChat encryptedChat = MessagesController.getInstance(currentMessageObject.currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(dialogId));
-			currentUser = MessagesController.getInstance(currentMessageObject.currentAccount).getUser(encryptedChat.user_id);
+			currentUser = MessagesController.getInstance(currentMessageObject.currentAccount).getUser(encryptedChat.userId);
 		}
 		else if (DialogObject.isUserDialog(dialogId)) {
 			currentUser = MessagesController.getInstance(currentMessageObject.currentAccount).getUser(dialogId);
@@ -1403,7 +1404,7 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 		else if (DialogObject.isChatDialog(dialogId)) {
 			currentChat = MessagesController.getInstance(currentMessageObject.currentAccount).getChat(-dialogId);
 			if (currentMessageObject.isFromUser()) {
-				currentUser = MessagesController.getInstance(currentMessageObject.currentAccount).getUser(currentMessageObject.messageOwner.from_id.user_id);
+				currentUser = MessagesController.getInstance(currentMessageObject.currentAccount).getUser(TLRPCExtensions.getUserId(currentMessageObject.messageOwner.fromId));
 			}
 		}
 
@@ -1443,12 +1444,9 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 		if (currentChat != null || currentUser == null) {
 			return;
 		}
-		if (currentUser.id / 1000 != 777 && currentUser.id / 1000 != 333 && ContactsController.getInstance(currentMessageObject.currentAccount).contactsDict.get(currentUser.id) == null && (ContactsController.getInstance(currentMessageObject.currentAccount).contactsDict.size() != 0 || !ContactsController.getInstance(currentMessageObject.currentAccount).isLoadingContacts())) {
-			nameTextView.setText(UserObject.getUserName(currentUser));
-		}
-		else {
-			nameTextView.setText(UserObject.getUserName(currentUser));
-		}
+
+		nameTextView.setText(UserObject.getUserName(currentUser));
+
 		if (currentUser != null && currentUser.id == 777000) {
 			onlineTextView.setText(LocaleController.getString("ServiceNotifications", R.string.ServiceNotifications));
 		}
@@ -1524,8 +1522,8 @@ public class PopupNotificationActivity extends Activity implements NotificationC
 		else {
 			onlineTextView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null);
 			onlineTextView.setCompoundDrawablePadding(0);
-			for (int a = 0; a < statusDrawables.length; a++) {
-				statusDrawables[a].stop();
+			for (StatusDrawable statusDrawable : statusDrawables) {
+				statusDrawable.stop();
 			}
 		}
 	}

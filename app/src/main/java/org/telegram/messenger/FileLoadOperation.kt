@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger
 
@@ -14,34 +14,11 @@ import org.telegram.messenger.FilePathDatabase.PathData
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.NativeByteBuffer
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.InputFileLocation
-import org.telegram.tgnet.TLRPC.InputWebFileLocation
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentAttributeVideo
-import org.telegram.tgnet.TLRPC.TL_documentEncrypted
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.TLRPC.TL_fileHash
-import org.telegram.tgnet.TLRPC.TL_inputDocumentFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputEncryptedFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputPeerPhotoFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputPhotoFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputSecureFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetThumb
-import org.telegram.tgnet.TLRPC.TL_theme
-import org.telegram.tgnet.TLRPC.TL_upload_cdnFile
-import org.telegram.tgnet.TLRPC.TL_upload_cdnFileReuploadNeeded
-import org.telegram.tgnet.TLRPC.TL_upload_file
-import org.telegram.tgnet.TLRPC.TL_upload_fileCdnRedirect
-import org.telegram.tgnet.TLRPC.TL_upload_getCdnFile
-import org.telegram.tgnet.TLRPC.TL_upload_getCdnFileHashes
-import org.telegram.tgnet.TLRPC.TL_upload_getFile
-import org.telegram.tgnet.TLRPC.TL_upload_getWebFile
-import org.telegram.tgnet.TLRPC.TL_upload_reuploadCdnFile
-import org.telegram.tgnet.TLRPC.TL_upload_webFile
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.Vector
+import org.telegram.tgnet.Vector
+import org.telegram.tgnet.media
+import org.telegram.tgnet.webpage
 import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
@@ -91,7 +68,7 @@ class FileLoadOperation {
 	private var started = false
 	private var datacenterId = 0
 	private var initialDatacenterId = 0
-	private var webLocation: InputWebFileLocation? = null
+	private var webLocation: TLRPC.InputWebFileLocation? = null
 	private var webFile: WebFile? = null
 	private var downloadedBytes: Long = 0
 	private var totalBytesCount: Long = 0
@@ -109,7 +86,7 @@ class FileLoadOperation {
 	private var encryptFile = false
 	private var allowDisordererFileSave = false
 	var parentObject: Any? = null
-	private var cdnHashes: HashMap<Long, TL_fileHash>? = null
+	private var cdnHashes: HashMap<Long, TLRPC.TLFileHash>? = null
 	private var isStream = false
 	private var encryptKey: ByteArray? = null
 	private var encryptIv: ByteArray? = null
@@ -150,7 +127,7 @@ class FileLoadOperation {
 	private var notLoadedBytesRangesCopy: ArrayList<Range>? = null
 
 	@JvmField
-	var location: InputFileLocation? = null
+	var location: TLRPC.InputFileLocation? = null
 
 	@Volatile
 	private var state = STATE_IDLE
@@ -186,9 +163,9 @@ class FileLoadOperation {
 	class RequestInfo {
 		var requestToken = 0
 		var offset: Long = 0
-		var response: TL_upload_file? = null
-		var responseWeb: TL_upload_webFile? = null
-		var responseCdn: TL_upload_cdnFile? = null
+		var response: TLRPC.TLUploadFile? = null
+		var responseWeb: TLRPC.TLUploadWebFile? = null
+		var responseCdn: TLRPC.TLUploadCdnFile? = null
 	}
 
 	data class Range(var start: Long, var end: Long)
@@ -230,11 +207,11 @@ class FileLoadOperation {
 		isStream = imageLocation.imageType == FileLoader.IMAGE_TYPE_ANIMATION
 
 		if (imageLocation.isEncrypted) {
-			location = TL_inputEncryptedFileLocation()
-			location?.id = imageLocation.location?.volume_id ?: 0L
-			location?.volume_id = imageLocation.location?.volume_id ?: 0L
-			location?.local_id = imageLocation.location?.local_id ?: 0
-			location?.access_hash = imageLocation.accessHash
+			location = TLRPC.TLInputEncryptedFileLocation()
+			location?.id = imageLocation.location?.volumeId ?: 0L
+			location?.volumeId = imageLocation.location?.volumeId ?: 0L
+			location?.localId = imageLocation.location?.localId ?: 0
+			location?.accessHash = imageLocation.accessHash
 
 			iv = ByteArray(32)
 
@@ -243,63 +220,63 @@ class FileLoadOperation {
 			key = imageLocation.key
 		}
 		else if (imageLocation.photoPeer != null) {
-			val inputPeerPhotoFileLocation = TL_inputPeerPhotoFileLocation()
-			inputPeerPhotoFileLocation.id = imageLocation.location?.volume_id ?: 0L
-			inputPeerPhotoFileLocation.volume_id = imageLocation.location?.volume_id ?: 0L
-			inputPeerPhotoFileLocation.local_id = imageLocation.location?.local_id ?: 0
-			inputPeerPhotoFileLocation.photo_id = imageLocation.photoId
+			val inputPeerPhotoFileLocation = TLRPC.TLInputPeerPhotoFileLocation()
+			inputPeerPhotoFileLocation.id = imageLocation.location?.volumeId ?: 0L
+			inputPeerPhotoFileLocation.volumeId = imageLocation.location?.volumeId ?: 0L
+			inputPeerPhotoFileLocation.localId = imageLocation.location?.localId ?: 0
+			inputPeerPhotoFileLocation.photoId = imageLocation.photoId
 			inputPeerPhotoFileLocation.big = imageLocation.photoPeerType == ImageLocation.TYPE_BIG
 			inputPeerPhotoFileLocation.peer = imageLocation.photoPeer
 
 			location = inputPeerPhotoFileLocation
 		}
 		else if (imageLocation.stickerSet != null) {
-			val inputStickerSetThumb = TL_inputStickerSetThumb()
-			inputStickerSetThumb.id = imageLocation.location?.volume_id ?: 0L
-			inputStickerSetThumb.volume_id = imageLocation.location?.volume_id ?: 0L
-			inputStickerSetThumb.local_id = imageLocation.location?.local_id ?: 0
-			inputStickerSetThumb.thumb_version = imageLocation.thumbVersion
+			val inputStickerSetThumb = TLRPC.TLInputStickerSetThumb()
+			inputStickerSetThumb.id = imageLocation.location?.volumeId ?: 0L
+			inputStickerSetThumb.volumeId = imageLocation.location?.volumeId ?: 0L
+			inputStickerSetThumb.localId = imageLocation.location?.localId ?: 0
+			inputStickerSetThumb.thumbVersion = imageLocation.thumbVersion
 			inputStickerSetThumb.stickerset = imageLocation.stickerSet
 
 			location = inputStickerSetThumb
 		}
 		else if (imageLocation.thumbSize != null) {
 			if (imageLocation.photoId != 0L) {
-				location = TL_inputPhotoFileLocation()
+				location = TLRPC.TLInputPhotoFileLocation()
 				location?.id = imageLocation.photoId
-				location?.volume_id = imageLocation.location?.volume_id ?: 0L
-				location?.local_id = imageLocation.location?.local_id ?: 0
-				location?.access_hash = imageLocation.accessHash
-				location?.file_reference = imageLocation.fileReference
-				location?.thumb_size = imageLocation.thumbSize
+				location?.volumeId = imageLocation.location?.volumeId ?: 0L
+				location?.localId = imageLocation.location?.localId ?: 0
+				location?.accessHash = imageLocation.accessHash
+				location?.fileReference = imageLocation.fileReference
+				location?.thumbSize = imageLocation.thumbSize
 
 				if (imageLocation.imageType == FileLoader.IMAGE_TYPE_ANIMATION) {
 					allowDisordererFileSave = true
 				}
 			}
 			else {
-				location = TL_inputDocumentFileLocation()
+				location = TLRPC.TLInputDocumentFileLocation()
 				location?.id = imageLocation.documentId
-				location?.volume_id = imageLocation.location?.volume_id ?: 0L
-				location?.local_id = imageLocation.location?.local_id ?: 0
-				location?.access_hash = imageLocation.accessHash
-				location?.file_reference = imageLocation.fileReference
-				location?.thumb_size = imageLocation.thumbSize
+				location?.volumeId = imageLocation.location?.volumeId ?: 0L
+				location?.localId = imageLocation.location?.localId ?: 0
+				location?.accessHash = imageLocation.accessHash
+				location?.fileReference = imageLocation.fileReference
+				location?.thumbSize = imageLocation.thumbSize
 			}
 
-			if (location?.file_reference == null) {
-				location?.file_reference = ByteArray(0)
+			if (location?.fileReference == null) {
+				location?.fileReference = ByteArray(0)
 			}
 		}
 		else {
-			location = TL_inputFileLocation()
-			location?.volume_id = imageLocation.location?.volume_id ?: 0L
-			location?.local_id = imageLocation.location?.local_id ?: 0
+			location = TLRPC.TLInputFileLocation()
+			location?.volumeId = imageLocation.location?.volumeId ?: 0L
+			location?.localId = imageLocation.location?.localId ?: 0
 			location?.secret = imageLocation.accessHash
-			location?.file_reference = imageLocation.fileReference
+			location?.fileReference = imageLocation.fileReference
 
-			if (location?.file_reference == null) {
-				location?.file_reference = ByteArray(0)
+			if (location?.fileReference == null) {
+				location?.fileReference = ByteArray(0)
 			}
 
 			allowDisordererFileSave = true
@@ -316,11 +293,11 @@ class FileLoadOperation {
 	constructor(secureDocument: SecureDocument) {
 		updateParams()
 
-		location = TL_inputSecureFileLocation()
+		location = TLRPC.TLInputSecureFileLocation()
 		location?.id = secureDocument.secureFile.id
-		location?.access_hash = secureDocument.secureFile.access_hash
+		location?.accessHash = secureDocument.secureFile.accessHash
 
-		datacenterId = secureDocument.secureFile.dc_id
+		datacenterId = secureDocument.secureFile.dcId
 		totalBytesCount = secureDocument.secureFile.size
 		allowDisordererFileSave = true
 		currentType = ConnectionsManager.FileTypeFile
@@ -363,43 +340,45 @@ class FileLoadOperation {
 		try {
 			parentObject = parent
 
-			if (documentLocation is TL_documentEncrypted) {
-				location = TL_inputEncryptedFileLocation()
+			// MARK: uncomment to enable secret chats
+//			if (documentLocation is TLRPC.TLDocumentEncrypted) {
+//				location = TL_inputEncryptedFileLocation()
+//				location?.id = documentLocation.id
+//				location?.accessHash = documentLocation.accessHash
+//
+//				datacenterId = documentLocation.dcId
+//				initialDatacenterId = datacenterId
+//				iv = ByteArray(32)
+//
+//				System.arraycopy(documentLocation.iv, 0, iv!!, 0, iv!!.size)
+//
+//				key = documentLocation.key
+//			}
+//			else
+			if (documentLocation is TLRPC.TLDocument) {
+				location = TLRPC.TLInputDocumentFileLocation()
 				location?.id = documentLocation.id
-				location?.access_hash = documentLocation.access_hash
+				location?.accessHash = documentLocation.accessHash
+				location?.fileReference = documentLocation.fileReference
+				location?.thumbSize = ""
 
-				datacenterId = documentLocation.dc_id
-				initialDatacenterId = datacenterId
-				iv = ByteArray(32)
-
-				System.arraycopy(documentLocation.iv, 0, iv!!, 0, iv!!.size)
-
-				key = documentLocation.key
-			}
-			else if (documentLocation is TL_document) {
-				location = TL_inputDocumentFileLocation()
-				location?.id = documentLocation.id
-				location?.access_hash = documentLocation.access_hash
-				location?.file_reference = documentLocation.file_reference
-				location?.thumb_size = ""
-
-				if (location?.file_reference == null) {
-					location?.file_reference = ByteArray(0)
+				if (location?.fileReference == null) {
+					location?.fileReference = ByteArray(0)
 				}
 
-				datacenterId = documentLocation.dc_id
+				datacenterId = documentLocation.dcId
 				initialDatacenterId = datacenterId
 				allowDisordererFileSave = true
 
 				for (attributes in documentLocation.attributes) {
-					if (attributes is TL_documentAttributeVideo) {
+					if (attributes is TLRPC.TLDocumentAttributeVideo) {
 						supportsPreloading = true
 						break
 					}
 				}
 			}
 
-			ungzip = "application/x-tgsticker" == documentLocation.mime_type || "application/x-tgwallpattern" == documentLocation.mime_type
+			ungzip = "application/x-tgsticker" == documentLocation.mimeType || "application/x-tgwallpattern" == documentLocation.mimeType
 			totalBytesCount = documentLocation.size
 
 			if (key != null) {
@@ -419,10 +398,10 @@ class FileLoadOperation {
 				ext = ext?.substring(idx)
 			}
 
-			currentType = if ("audio/ogg" == documentLocation.mime_type) {
+			currentType = if ("audio/ogg" == documentLocation.mimeType) {
 				ConnectionsManager.FileTypeAudio
 			}
-			else if (FileLoader.isVideoMimeType(documentLocation.mime_type)) {
+			else if (FileLoader.isVideoMimeType(documentLocation.mimeType)) {
 				ConnectionsManager.FileTypeVideo
 			}
 			else {
@@ -430,7 +409,7 @@ class FileLoadOperation {
 			}
 
 			if ((ext?.length ?: 0) <= 1) {
-				ext = FileLoader.getExtensionByMimeType(documentLocation.mime_type)
+				ext = FileLoader.getExtensionByMimeType(documentLocation.mimeType)
 			}
 		}
 		catch (e: Exception) {
@@ -844,30 +823,30 @@ class FileLoadOperation {
 			}
 		}
 		else if (location != null) {
-			if (location.volume_id != 0L && location.local_id != 0) {
-				if (datacenterId == Int.MIN_VALUE || location.volume_id == Int.MIN_VALUE.toLong() || datacenterId == 0) {
+			if (location.volumeId != 0L && location.localId != 0) {
+				if (datacenterId == Int.MIN_VALUE || location.volumeId == Int.MIN_VALUE.toLong() || datacenterId == 0) {
 					onFail(true, 0)
 					return false
 				}
 
 				if (encryptFile) {
-					fileNameTemp = location.volume_id.toString() + "_" + location.local_id + ".temp.enc"
-					fileNameFinal = location.volume_id.toString() + "_" + location.local_id + "." + ext + ".enc"
+					fileNameTemp = location.volumeId.toString() + "_" + location.localId + ".temp.enc"
+					fileNameFinal = location.volumeId.toString() + "_" + location.localId + "." + ext + ".enc"
 
 					if (key != null) {
-						fileNameIv = location.volume_id.toString() + "_" + location.local_id + "_64.iv.enc"
+						fileNameIv = location.volumeId.toString() + "_" + location.localId + "_64.iv.enc"
 					}
 				}
 				else {
-					fileNameTemp = location.volume_id.toString() + "_" + location.local_id + ".temp"
-					fileNameFinal = location.volume_id.toString() + "_" + location.local_id + "." + ext
+					fileNameTemp = location.volumeId.toString() + "_" + location.localId + ".temp"
+					fileNameFinal = location.volumeId.toString() + "_" + location.localId + "." + ext
 					if (key != null) {
-						fileNameIv = location.volume_id.toString() + "_" + location.local_id + "_64.iv"
+						fileNameIv = location.volumeId.toString() + "_" + location.localId + "_64.iv"
 					}
 					if (notLoadedBytesRanges != null) {
-						fileNameParts = location.volume_id.toString() + "_" + location.local_id + "_64.pt"
+						fileNameParts = location.volumeId.toString() + "_" + location.localId + "_64.pt"
 					}
-					fileNamePreload = location.volume_id.toString() + "_" + location.local_id + "_64.preload"
+					fileNamePreload = location.volumeId.toString() + "_" + location.localId + "_64.preload"
 				}
 			}
 			else {
@@ -905,8 +884,8 @@ class FileLoadOperation {
 		delayedRequestInfos = ArrayList(currentMaxDownloadRequests - 1)
 		state = STATE_DOWNLOADING
 
-		cacheFileFinal = if (parentObject is TL_theme) {
-			val theme = parentObject as TL_theme
+		cacheFileFinal = if (parentObject is TLRPC.TLTheme) {
+			val theme = parentObject as TLRPC.TLTheme
 			File(filesDirFixed, "remote" + theme.id + ".attheme")
 		}
 		else {
@@ -920,7 +899,7 @@ class FileLoadOperation {
 
 		var finalFileExist = cacheFileFinal?.exists() == true
 
-		if (finalFileExist && (parentObject is TL_theme || totalBytesCount != 0L && totalBytesCount != cacheFileFinal?.length())) {
+		if (finalFileExist && (parentObject is TLRPC.TLTheme || totalBytesCount != 0L && totalBytesCount != cacheFileFinal?.length())) {
 			if (delegate?.hasAnotherRefOnFile(cacheFileFinal.toString()) != true) {
 				cacheFileFinal?.delete()
 			}
@@ -1498,7 +1477,7 @@ class FileLoadOperation {
 				if (!ungzip) {
 					var renameResult: Boolean
 
-					if (parentObject is TL_theme) {
+					if (parentObject is TLRPC.TLTheme) {
 						try {
 							renameResult = AndroidUtilities.copyFile(cacheFileTemp, cacheFileFinal)
 						}
@@ -1688,8 +1667,8 @@ class FileLoadOperation {
 
 		requestingCdnOffsets = true
 
-		val req = TL_upload_getCdnFileHashes()
-		req.file_token = cdnToken
+		val req = TLRPC.TLUploadGetCdnFileHashes()
+		req.fileToken = cdnToken
 		req.offset = offset
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response, _ ->
@@ -1702,7 +1681,7 @@ class FileLoadOperation {
 					}
 
 					response.objects.forEach {
-						val hash = it as TL_fileHash
+						val hash = it as TLRPC.TLFileHash
 						cdnHashes?.put(hash.offset, hash)
 					}
 				}
@@ -1738,7 +1717,7 @@ class FileLoadOperation {
 		}, null, null, 0, datacenterId, ConnectionsManager.ConnectionTypeGeneric, true)
 	}
 
-	fun processRequestResult(requestInfo: RequestInfo, error: TL_error?): Boolean {
+	fun processRequestResult(requestInfo: RequestInfo, error: TLRPC.TLError?): Boolean {
 		if (state != STATE_DOWNLOADING) {
 			if (BuildConfig.DEBUG && state == STATE_FINISHED) {
 				FileLog.e(Exception("trying to write to finished file " + fileName + " offset " + requestInfo.offset + " " + totalBytesCount))
@@ -1965,7 +1944,7 @@ class FileLoadOperation {
 								if (!sha256.contentEquals(hash!!.hash)) {
 									if (BuildConfig.DEBUG) {
 										if (location != null) {
-											FileLog.e("invalid cdn hash " + location + " id = " + location!!.id + " local_id = " + location!!.local_id + " access_hash = " + location!!.access_hash + " volume_id = " + location!!.volume_id + " secret = " + location!!.secret)
+											FileLog.e("invalid cdn hash " + location + " id = " + location!!.id + " local_id = " + location!!.localId + " access_hash = " + location!!.accessHash + " volume_id = " + location!!.volumeId + " secret = " + location!!.secret)
 										}
 										else if (webLocation != null) {
 											FileLog.e("invalid cdn hash  $webLocation id = $fileName")
@@ -2078,7 +2057,7 @@ class FileLoadOperation {
 			else {
 				if (BuildConfig.DEBUG) {
 					if (location != null) {
-						FileLog.e(error.text + " " + location + " id = " + location!!.id + " local_id = " + location!!.local_id + " access_hash = " + location!!.access_hash + " volume_id = " + location!!.volume_id + " secret = " + location!!.secret)
+						FileLog.e(error.text + " " + location + " id = " + location!!.id + " local_id = " + location!!.localId + " access_hash = " + location!!.accessHash + " volume_id = " + location!!.volumeId + " secret = " + location!!.secret)
 					}
 					else if (webLocation != null) {
 						FileLog.e(error.text + " " + webLocation + " id = " + fileName)
@@ -2312,8 +2291,8 @@ class FileLoadOperation {
 			var flags = if (isForceRequest) ConnectionsManager.RequestFlagForceDownload else ConnectionsManager.RequestFlagFailOnServerErrors
 
 			if (isCdn) {
-				val req = TL_upload_getCdnFile()
-				req.file_token = cdnToken
+				val req = TLRPC.TLUploadGetCdnFile()
+				req.fileToken = cdnToken
 				req.offset = downloadOffset
 				req.limit = currentDownloadChunkSize
 
@@ -2323,7 +2302,7 @@ class FileLoadOperation {
 			}
 			else {
 				if (webLocation != null) {
-					val req = TL_upload_getWebFile()
+					val req = TLRPC.TLUploadGetWebFile()
 					req.location = webLocation
 					req.offset = downloadOffset.toInt()
 					req.limit = currentDownloadChunkSize
@@ -2331,11 +2310,11 @@ class FileLoadOperation {
 					request = req
 				}
 				else {
-					val req = TL_upload_getFile()
+					val req = TLRPC.TLUploadGetFile()
 					req.location = location
 					req.offset = downloadOffset
 					req.limit = currentDownloadChunkSize
-					req.cdn_supported = true
+					req.cdnSupported = true
 
 					request = req
 				}
@@ -2353,7 +2332,7 @@ class FileLoadOperation {
 				val range = preloadedBytesRanges!![requestInfo.offset]
 
 				if (range != null) {
-					requestInfo.response = TL_upload_file()
+					requestInfo.response = TLRPC.TLUploadFile()
 
 					try {
 						if (BuildConfig.DEBUG && range.length > Int.MAX_VALUE) {
@@ -2391,10 +2370,10 @@ class FileLoadOperation {
 				priorityRequestInfo = requestInfo
 			}
 
-			if (location is TL_inputPeerPhotoFileLocation) {
-				val inputPeerPhotoFileLocation = location as TL_inputPeerPhotoFileLocation
+			if (location is TLRPC.TLInputPeerPhotoFileLocation) {
+				val inputPeerPhotoFileLocation = location as TLRPC.TLInputPeerPhotoFileLocation
 
-				if (inputPeerPhotoFileLocation.photo_id == 0L) {
+				if (inputPeerPhotoFileLocation.photoId == 0L) {
 					requestReference(requestInfo)
 					continue
 				}
@@ -2420,7 +2399,7 @@ class FileLoadOperation {
 						requestReference(requestInfo)
 						return@sendRequest
 					}
-					else if (request is TL_upload_getCdnFile) {
+					else if (request is TLRPC.TLUploadGetCdnFile) {
 						if (error.text == "FILE_TOKEN_INVALID") {
 							isCdn = false
 
@@ -2432,20 +2411,20 @@ class FileLoadOperation {
 					}
 				}
 
-				if (response is TL_upload_fileCdnRedirect) {
-					if (response.file_hashes.isNotEmpty()) {
+				if (response is TLRPC.TLUploadFileCdnRedirect) {
+					if (response.fileHashes.isNotEmpty()) {
 						if (cdnHashes == null) {
 							cdnHashes = HashMap()
 						}
 
-						for (a1 in response.file_hashes.indices) {
-							val hash = response.file_hashes[a1]
+						for (a1 in response.fileHashes.indices) {
+							val hash = response.fileHashes[a1]
 							cdnHashes!![hash.offset] = hash
 						}
 					}
 
-					if (response.encryption_iv == null || response.encryption_key == null || response.encryption_iv.size != 16 || response.encryption_key.size != 32) {
-						error = TL_error()
+					if (response.encryptionIv == null || response.encryptionKey == null || response.encryptionIv?.size != 16 || response.encryptionKey?.size != 32) {
+						error = TLRPC.TLError()
 						error.text = "bad redirect response"
 						error.code = 400
 
@@ -2459,24 +2438,24 @@ class FileLoadOperation {
 							notCheckedCdnRanges?.add(Range(0, maxCdnParts.toLong()))
 						}
 
-						cdnDatacenterId = response.dc_id
-						cdnIv = response.encryption_iv
-						cdnKey = response.encryption_key
-						cdnToken = response.file_token
+						cdnDatacenterId = response.dcId
+						cdnIv = response.encryptionIv
+						cdnKey = response.encryptionKey
+						cdnToken = response.fileToken
 
 						clearOperaion(requestInfo, false)
 						startDownloadRequest()
 					}
 				}
-				else if (response is TL_upload_cdnFileReuploadNeeded) {
+				else if (response is TLRPC.TLUploadCdnFileReuploadNeeded) {
 					if (!reuploadingCdn) {
 						clearOperaion(requestInfo, false)
 
 						reuploadingCdn = true
 
-						val req = TL_upload_reuploadCdnFile()
-						req.file_token = cdnToken
-						req.request_token = response.request_token
+						val req = TLRPC.TLUploadReuploadCdnFile()
+						req.fileToken = cdnToken
+						req.requestToken = response.requestToken
 
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req, { response1, error1 ->
 							reuploadingCdn = false
@@ -2490,7 +2469,7 @@ class FileLoadOperation {
 									}
 
 									for (a1 in vector.objects.indices) {
-										val hash = vector.objects[a1] as TL_fileHash
+										val hash = vector.objects[a1] as TLRPC.TLFileHash
 										cdnHashes!![hash.offset] = hash
 									}
 								}
@@ -2511,10 +2490,10 @@ class FileLoadOperation {
 					}
 				}
 				else {
-					if (response is TL_upload_file) {
+					if (response is TLRPC.TLUploadFile) {
 						requestInfo.response = response
 					}
-					else if (response is TL_upload_webFile) {
+					else if (response is TLRPC.TLUploadWebFile) {
 						requestInfo.responseWeb = response
 
 						if (totalBytesCount == 0L && requestInfo.responseWeb?.size != 0) {
@@ -2522,7 +2501,7 @@ class FileLoadOperation {
 						}
 					}
 					else {
-						requestInfo.responseCdn = response as? TL_upload_cdnFile
+						requestInfo.responseCdn = response as? TLRPC.TLUploadCdnFile
 					}
 
 					if (response != null) {

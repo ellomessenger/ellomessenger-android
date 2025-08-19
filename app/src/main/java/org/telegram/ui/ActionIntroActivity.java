@@ -4,11 +4,12 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -16,9 +17,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
-import android.location.LocationManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.SpannableStringBuilder;
@@ -40,7 +39,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LocationController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -111,6 +110,7 @@ public class ActionIntroActivity extends BaseFragment implements LocationControl
 		currentType = type;
 	}
 
+	@SuppressLint("AppCompatCustomView")
 	@Override
 	public View createView(@NonNull Context context) {
 		if (actionBar != null) {
@@ -806,30 +806,30 @@ public class ActionIntroActivity extends BaseFragment implements LocationControl
 		currentGroupCreateLocation = location;
 	}
 
-	@Override
-	public void onResume() {
-		super.onResume();
-		if (currentType == ACTION_TYPE_NEARBY_LOCATION_ENABLED) {
-			boolean enabled = true;
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-				LocationManager lm = (LocationManager)ApplicationLoader.applicationContext.getSystemService(Context.LOCATION_SERVICE);
-				enabled = lm.isLocationEnabled();
-			}
-			else {
-				try {
-					int mode = Settings.Secure.getInt(ApplicationLoader.applicationContext.getContentResolver(), Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF);
-					enabled = (mode != Settings.Secure.LOCATION_MODE_OFF);
-				}
-				catch (Throwable e) {
-					FileLog.e(e);
-				}
-			}
-
-			if (enabled) {
-				presentFragment(new PeopleNearbyActivity(), true);
-			}
-		}
-	}
+//	@Override
+//	public void onResume() {
+//		super.onResume();
+//		if (currentType == ACTION_TYPE_NEARBY_LOCATION_ENABLED) {
+//			boolean enabled = true;
+//			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+//				LocationManager lm = (LocationManager)ApplicationLoader.applicationContext.getSystemService(Context.LOCATION_SERVICE);
+//				enabled = lm.isLocationEnabled();
+//			}
+//			else {
+//				try {
+//					int mode = Settings.Secure.getInt(ApplicationLoader.applicationContext.getContentResolver(), Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF);
+//					enabled = (mode != Settings.Secure.LOCATION_MODE_OFF);
+//				}
+//				catch (Throwable e) {
+//					FileLog.e(e);
+//				}
+//			}
+//
+//			if (enabled) {
+//				presentFragment(new PeopleNearbyActivity(), true);
+//			}
+//		}
+//	}
 
 	private void updateColors() {
 		if (colors == null || imageView == null) {
@@ -873,7 +873,7 @@ public class ActionIntroActivity extends BaseFragment implements LocationControl
 					showDialog(AlertsCreator.createLocationRequiredDialog(parentActivity, false));
 				}
 				else {
-					AndroidUtilities.runOnUIThread(() -> presentFragment(new PeopleNearbyActivity(), true));
+					// AndroidUtilities.runOnUIThread(() -> presentFragment(new PeopleNearbyActivity(), true));
 				}
 			}
 		}

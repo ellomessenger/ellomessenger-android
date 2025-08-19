@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -25,6 +25,10 @@ import org.telegram.messenger.WebFile
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.accessHash
+import org.telegram.tgnet.lat
+import org.telegram.tgnet.lon
+import org.telegram.tgnet.period
 import org.telegram.ui.Components.LayoutHelper
 import kotlin.math.abs
 import kotlin.math.atan
@@ -48,11 +52,11 @@ class LocationLayout(context: Context, private val contentWidth: Int) : FrameLay
 	private val invalidateRunnable = Runnable { checkLocationExpired() }
 
 	val isLiveLocation: Boolean
-		get() = MessageObject.getMedia(messageObject?.messageOwner) is TLRPC.TL_messageMediaGeoLive
+		get() = MessageObject.getMedia(messageObject?.messageOwner) is TLRPC.TLMessageMediaGeoLive
 
 	val expiresIn: Int
 		get() {
-			val media = MessageObject.getMedia(messageObject?.messageOwner) as? TLRPC.TL_messageMediaGeoLive ?: return 0
+			val media = MessageObject.getMedia(messageObject?.messageOwner) as? TLRPC.TLMessageMediaGeoLive ?: return 0
 			return ((messageObject?.messageOwner?.date ?: 0) + media.period) - ConnectionsManager.getInstance(currentAccount).currentTime
 		}
 
@@ -62,12 +66,12 @@ class LocationLayout(context: Context, private val contentWidth: Int) : FrameLay
 	val coordinates: Pair<Double, Double>?
 		get() {
 			val media = when (val msgMedia = MessageObject.getMedia(messageObject?.messageOwner)) {
-				is TLRPC.TL_messageMediaGeoLive -> msgMedia
-				is TLRPC.TL_messageMediaGeo -> msgMedia
+				is TLRPC.TLMessageMediaGeoLive -> msgMedia
+				is TLRPC.TLMessageMediaGeo -> msgMedia
 				else -> null
 			} ?: return null
 
-			return media.geo.lat to media.geo._long
+			return (media.geo?.lat ?: 0.0) to (media.geo?.lon ?: 0.0)
 		}
 
 	var messageObject: MessageObject? = null
@@ -102,7 +106,7 @@ class LocationLayout(context: Context, private val contentWidth: Int) : FrameLay
 			val point = MessageObject.getMedia(value.messageOwner)?.geo ?: return
 
 			var lat = point.lat
-			val lon = point._long
+			val lon = point.lon
 
 			val provider = if (value.dialogId.toInt() == 0) {
 				when (SharedConfig.mapPreviewType) {
@@ -125,7 +129,7 @@ class LocationLayout(context: Context, private val contentWidth: Int) : FrameLay
 
 				currentUrl = AndroidUtilities.formatMapUrl(currentAccount, lat, lon, (contentWidth / AndroidUtilities.density).toInt(), (contentWidth / AndroidUtilities.density).toInt(), false, 15, provider)
 
-				currentWebFile = WebFile.createWithGeoPoint(lat, lon, point.access_hash, (contentWidth / AndroidUtilities.density).toInt(), (contentWidth / AndroidUtilities.density).toInt(), 15, min(2, ceil(AndroidUtilities.density.toDouble()).toInt()))
+				currentWebFile = WebFile.createWithGeoPoint(lat, lon, point.accessHash, (contentWidth / AndroidUtilities.density).toInt(), (contentWidth / AndroidUtilities.density).toInt(), 15, min(2, ceil(AndroidUtilities.density.toDouble()).toInt()))
 
 				if (!isCurrentLocationTimeExpired().also { locationExpired = it }) {
 					AndroidUtilities.runOnUIThread(invalidateRunnable, 1_000)

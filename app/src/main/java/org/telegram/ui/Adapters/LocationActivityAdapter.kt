@@ -4,18 +4,18 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Adapters
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.drawable.ColorDrawable
 import android.location.Location
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.LocationController
@@ -24,9 +24,7 @@ import org.telegram.messenger.LocationController.LocationFetchCallback
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.messageobject.MessageObject
-import org.telegram.tgnet.TLRPC.TL_channelLocation
-import org.telegram.tgnet.TLRPC.TL_geoPoint
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.HeaderCell
 import org.telegram.ui.Cells.LocationCell
@@ -43,9 +41,9 @@ import org.telegram.ui.LocationActivity
 import java.util.Locale
 
 @SuppressLint("NotifyDataSetChanged")
-open class LocationActivityAdapter(private val mContext: Context, private val locationType: Int, private val dialogId: Long, private val needEmptyView: Boolean, private val showVenues: Boolean = false) : BaseLocationAdapter(), LocationFetchCallback {
+open class LocationActivityAdapter(private val context: Context, private val locationType: Int, private val dialogId: Long, private val needEmptyView: Boolean, private val showVenues: Boolean = false) : BaseLocationAdapter(), LocationFetchCallback {
 	private val currentAccount = UserConfig.selectedAccount
-	private val globalGradientView = FlickerLoadingView(mContext)
+	private val globalGradientView = FlickerLoadingView(context)
 	private var overScrollHeight = 0
 	private var sendLocationCell: SendLocationCell? = null
 	private var gpsLocation: Location? = null
@@ -54,8 +52,8 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 	private var previousFetchedLocation: Location? = null
 	private var shareLiveLocationPosition = -1
 	private var currentMessageObject: MessageObject? = null
-	private var chatLocation: TL_channelLocation? = null
-	private var currentLiveLocations = ArrayList<LocationActivity.LiveLocation>()
+	private var chatLocation: TLRPC.TLChannelLocation? = null
+	private val currentLiveLocations = mutableListOf<LocationActivity.LiveLocation>()
 	private var fetchingLocation = false
 	private var updateRunnable: Runnable? = null
 	private var myLocationDenied = false
@@ -141,7 +139,11 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 	}
 
 	fun setLiveLocations(liveLocations: List<LocationActivity.LiveLocation>?) {
-		currentLiveLocations = ArrayList(liveLocations ?: emptyList())
+		currentLiveLocations.clear()
+
+		liveLocations?.let {
+			currentLiveLocations.addAll(it)
+		}
 
 		val uid = UserConfig.getInstance(currentAccount).getClientUserId()
 
@@ -160,48 +162,57 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 		notifyDataSetChanged()
 	}
 
-	fun setChatLocation(location: TL_channelLocation?) {
+	fun setChatLocation(location: TLRPC.TLChannelLocation?) {
 		chatLocation = location
 	}
 
 	private fun updateCell() {
 		val sendLocationCell = sendLocationCell ?: return
-		if (locationType == LocationActivity.LOCATION_TYPE_GROUP || customLocation != null) {
-			var address: String? = ""
+		val customLocation = customLocation
+		val gpsLocation = gpsLocation
 
-			if (!addressName.isNullOrEmpty()) {
-				address = addressName
+		if (locationType == LocationActivity.LOCATION_TYPE_GROUP || customLocation != null) {
+			val address = if (!addressName.isNullOrEmpty()) {
+				addressName
 			}
 			else if (customLocation == null && gpsLocation == null || fetchingLocation) {
-				address = mContext.getString(R.string.Loading)
+				if (myLocationDenied) {
+					context.getString(R.string.unknown_address)
+				}
+				else {
+					context.getString(R.string.Loading)
+				}
 			}
 			else if (customLocation != null) {
-				address = String.format(Locale.US, "(%f,%f)", customLocation!!.latitude, customLocation!!.longitude)
+				String.format(Locale.US, "(%f,%f)", customLocation.latitude, customLocation.longitude)
 			}
 			else if (gpsLocation != null) {
-				address = String.format(Locale.US, "(%f,%f)", gpsLocation!!.latitude, gpsLocation!!.longitude)
+				String.format(Locale.US, "(%f,%f)", gpsLocation.latitude, gpsLocation.longitude)
 			}
 			else if (!myLocationDenied) {
-				address = mContext.getString(R.string.Loading)
+				context.getString(R.string.Loading)
+			}
+			else {
+				context.getString(R.string.unknown_address)
 			}
 
 			if (locationType == LocationActivity.LOCATION_TYPE_GROUP) {
-				sendLocationCell.setText(mContext.getString(R.string.ChatSetThisLocation), address)
+				sendLocationCell.setText(context.getString(R.string.ChatSetThisLocation), address)
 			}
 			else {
-				sendLocationCell.setText(mContext.getString(R.string.SendSelectedLocation), address)
+				sendLocationCell.setText(context.getString(R.string.SendSelectedLocation), address)
 			}
 
 			sendLocationCell.setHasLocation(true)
 		}
 		else {
 			if (gpsLocation != null) {
-				sendLocationCell.setText(mContext.getString(R.string.SendLocation), LocaleController.formatString("AccurateTo", R.string.AccurateTo, LocaleController.formatPluralString("Meters", gpsLocation!!.accuracy.toInt())))
+				sendLocationCell.setText(context.getString(R.string.SendLocation), LocaleController.formatString("AccurateTo", R.string.AccurateTo, LocaleController.formatPluralString("Meters", gpsLocation.accuracy.toInt())))
 				sendLocationCell.setHasLocation(true)
 			}
 			else {
-				sendLocationCell.setText(mContext.getString(R.string.SendLocation), if (myLocationDenied) "" else mContext.getString(R.string.Loading))
-				sendLocationCell.setHasLocation(!myLocationDenied)
+				sendLocationCell.setText(context.getString(R.string.SendLocation), if (myLocationDenied) context.getString(R.string.unknown_address) else context.getString(R.string.Loading))
+				sendLocationCell.setHasLocation(true)
 			}
 		}
 	}
@@ -272,16 +283,12 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 					5
 				}
 
-				if (!myLocationDenied && (searching || !searched)) {
+				if (searching || !searched) {
 					count += 2
 				}
 
 				if (needEmptyView) {
 					count += 1
-				}
-
-				if (myLocationDenied) {
-					count -= 2
 				}
 			}
 			else {
@@ -313,46 +320,46 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 		val view: View
 
 		when (viewType) {
-			0 -> {
-				view = FrameLayout(mContext).also {
+			ITEM_VIEW_EMPTY_CELL -> {
+				view = FrameLayout(context).also {
 					it.layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, overScrollHeight)
 					emptyCell = it
 				}
 			}
 
-			1 -> {
-				view = SendLocationCell(mContext, false)
+			ITEM_VIEW_SEND_LOCATION_CELL -> {
+				view = SendLocationCell(context, false)
 			}
 
-			2 -> {
-				view = HeaderCell(mContext)
+			ITEM_VIEW_HEADER -> {
+				view = HeaderCell(context)
 			}
 
-			3 -> {
-				val locationCell = LocationCell(mContext, false)
+			ITEM_VIEW_LOCATION_CELL -> {
+				val locationCell = LocationCell(context, false)
 				view = locationCell
 			}
 
-			4 -> {
-				view = LocationLoadingCell(mContext)
+			ITEM_VIEW_LOCATION_LOADING_CELL -> {
+				view = LocationLoadingCell(context)
 			}
 
-			5 -> {
-				view = LocationPoweredCell(mContext)
+			ITEM_VIEW_LOCATION_POWERED_CELL -> {
+				view = LocationPoweredCell(context)
 			}
 
-			6 -> {
-				val cell = SendLocationCell(mContext, true)
+			ITEM_VIEW_SEND_LOCATION_DIALOG_CELL -> {
+				val cell = SendLocationCell(context, true)
 				cell.setDialogId(dialogId)
 				view = cell
 			}
 
-			7 -> {
-				view = SharingLiveLocationCell(mContext, true, if (locationType == LocationActivity.LOCATION_TYPE_GROUP || locationType == LocationActivity.LOCATION_TYPE_GROUP_VIEW) 16 else 54)
+			ITEM_VIEW_SHARING_LIVE_LOCATION_CELL -> {
+				view = SharingLiveLocationCell(context, true, if (locationType == LocationActivity.LOCATION_TYPE_GROUP || locationType == LocationActivity.LOCATION_TYPE_GROUP_VIEW) 16 else 54)
 			}
 
-			8 -> {
-				val cell = LocationDirectionCell(mContext)
+			ITEM_VIEW_LOCATION_DIRECTION_CELL -> {
+				val cell = LocationDirectionCell(context)
 
 				cell.setOnButtonClick {
 					onDirectionClick()
@@ -361,22 +368,23 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 				view = cell
 			}
 
-			9 -> {
-				view = ShadowSectionCell(mContext)
-				val drawable = Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow)
-				val combinedDrawable = CombinedDrawable(ColorDrawable(ResourcesCompat.getColor(mContext.resources, R.color.light_background, null)), drawable)
+			ITEM_VIEW_SHADOW_CELL -> {
+				view = ShadowSectionCell(context)
+				val drawable = Theme.getThemedDrawable(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow)
+				val combinedDrawable = CombinedDrawable(ResourcesCompat.getColor(context.resources, R.color.light_background, null).toDrawable(), drawable)
 				combinedDrawable.setFullSize(true)
 				view.setBackground(combinedDrawable)
 			}
 
-			10 -> {
-				view = View(mContext)
+			ITEM_VIEW_EMPTY_VIEW_CELL -> {
+				view = View(context)
 			}
 
 			else -> {
-				view = View(mContext)
+				view = View(context)
 			}
 		}
+
 		return RecyclerListView.Holder(view)
 	}
 
@@ -384,7 +392,7 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 		@Suppress("NAME_SHADOWING") var position = position
 
 		when (holder.itemViewType) {
-			0 -> {
+			ITEM_VIEW_EMPTY_CELL -> {
 				var lp = holder.itemView.layoutParams as? RecyclerView.LayoutParams
 
 				if (lp == null) {
@@ -397,23 +405,23 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 				holder.itemView.layoutParams = lp
 			}
 
-			1 -> {
+			ITEM_VIEW_SEND_LOCATION_CELL -> {
 				sendLocationCell = holder.itemView as SendLocationCell
 				updateCell()
 			}
 
-			2 -> {
+			ITEM_VIEW_HEADER -> {
 				val cell = holder.itemView as HeaderCell
 
 				if (currentMessageObject != null) {
-					cell.setText(mContext.getString(R.string.LiveLocations))
+					cell.setText(context.getString(R.string.LiveLocations))
 				}
 				else {
-					cell.setText(mContext.getString(R.string.NearbyVenue))
+					cell.setText(context.getString(R.string.NearbyVenue))
 				}
 			}
 
-			3 -> {
+			ITEM_VIEW_LOCATION_CELL -> {
 				val cell = holder.itemView as LocationCell
 
 				position -= if (locationType == 0) {
@@ -429,15 +437,15 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 				cell.setLocation(place, iconUrl, position, true)
 			}
 
-			4 -> {
+			ITEM_VIEW_LOCATION_LOADING_CELL -> {
 				(holder.itemView as LocationLoadingCell).setLoading(searching)
 			}
 
-			6 -> {
+			ITEM_VIEW_LOCATION_POWERED_CELL -> {
 				(holder.itemView as SendLocationCell).setHasLocation(gpsLocation != null)
 			}
 
-			7 -> {
+			ITEM_VIEW_SHARING_LIVE_LOCATION_CELL -> {
 				val locationCell = holder.itemView as SharingLiveLocationCell
 
 				if (locationType == LocationActivity.LOCATION_TYPE_LIVE_VIEW) {
@@ -454,9 +462,9 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 				}
 			}
 
-			10 -> {
+			ITEM_VIEW_EMPTY_VIEW_CELL -> {
 				val emptyView = holder.itemView
-				emptyView.setBackgroundColor(ResourcesCompat.getColor(mContext.resources, if (myLocationDenied) R.color.light_background else R.color.background, null))
+				emptyView.setBackgroundColor(ResourcesCompat.getColor(context.resources, if (myLocationDenied) R.color.light_background else R.color.background, null))
 			}
 		}
 	}
@@ -467,17 +475,18 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 				null
 			}
 			else {
-				val venue = TL_messageMediaVenue()
+				val venue = TLRPC.TLMessageMediaVenue()
 				venue.address = addressName
-				venue.geo = TL_geoPoint()
 
-				if (customLocation != null) {
-					venue.geo.lat = customLocation!!.latitude
-					venue.geo._long = customLocation!!.longitude
-				}
-				else if (gpsLocation != null) {
-					venue.geo.lat = gpsLocation!!.latitude
-					venue.geo._long = gpsLocation!!.longitude
+				venue.geo = TLRPC.TLGeoPoint().also {
+					if (customLocation != null) {
+						it.lat = customLocation!!.latitude
+						it.lon = customLocation!!.longitude
+					}
+					else if (gpsLocation != null) {
+						it.lat = gpsLocation!!.latitude
+						it.lon = gpsLocation!!.longitude
+					}
 				}
 
 				venue
@@ -515,121 +524,135 @@ open class LocationActivityAdapter(private val mContext: Context, private val lo
 
 	override fun getItemViewType(position: Int): Int {
 		if (position == 0) {
-			return 0
+			return ITEM_VIEW_EMPTY_CELL
 		}
 
 		if (locationType == LocationActivity.LOCATION_TYPE_LIVE_VIEW) {
-			return 7
+			return ITEM_VIEW_SHARING_LIVE_LOCATION_CELL
 		}
 
 		if (needEmptyView && position == itemCount - 1) {
-			return 10
+			return ITEM_VIEW_EMPTY_VIEW_CELL
 		}
 
 		if (locationType == LocationActivity.LOCATION_TYPE_GROUP_VIEW) {
-			return 7
+			return ITEM_VIEW_SHARING_LIVE_LOCATION_CELL
 		}
 
 		if (locationType == LocationActivity.LOCATION_TYPE_GROUP) {
-			return 1
+			return ITEM_VIEW_SEND_LOCATION_CELL
 		}
 
 		if (currentMessageObject != null) {
 			if (currentLiveLocations.isEmpty()) {
 				if (position == 2) {
-					return 8
+					return ITEM_VIEW_LOCATION_DIRECTION_CELL
 				}
 			}
 			else {
 				when (position) {
 					2 -> {
-						return 9
+						return ITEM_VIEW_SHADOW_CELL
 					}
 
 					3 -> {
-						return 2
+						return ITEM_VIEW_HEADER
 					}
 
 					4 -> {
 						shareLiveLocationPosition = position
-						return 6
+						return ITEM_VIEW_SEND_LOCATION_DIALOG_CELL
 					}
 				}
 			}
 
-			return 7
+			return ITEM_VIEW_SHARING_LIVE_LOCATION_CELL
 		}
 
 		if (locationType == 2) {
 			return if (position == 1) {
 				shareLiveLocationPosition = position
-				6
+				ITEM_VIEW_SEND_LOCATION_DIALOG_CELL
 			}
 			else {
-				7
+				ITEM_VIEW_SHARING_LIVE_LOCATION_CELL
 			}
 		}
 
 		if (locationType == LocationActivity.LOCATION_TYPE_SEND_WITH_LIVE) {
 			if (position == 1) {
-				return 1
+				return ITEM_VIEW_SEND_LOCATION_CELL
 			}
 			else if (position == 2) {
 				shareLiveLocationPosition = position
-				return 6
+				return ITEM_VIEW_SEND_LOCATION_DIALOG_CELL
 			}
 			else if (position == 3) {
-				return 9
+				return ITEM_VIEW_SHADOW_CELL
 			}
 			else if (position == 4) {
-				return 2
+				return ITEM_VIEW_HEADER
 			}
 			else if (searching || places.isEmpty() || !searched) {
-				return if (position <= 4 + 3 && (searching || !searched) && !myLocationDenied) {
-					3
+				return if (position <= 4 + 3 && (searching || !searched)) {
+					ITEM_VIEW_LOCATION_CELL
 				}
 				else {
-					4
+					ITEM_VIEW_LOCATION_LOADING_CELL
 				}
 			}
 			else if (position == places.size + 5) {
-				return 5
+				return ITEM_VIEW_LOCATION_POWERED_CELL
 			}
 		}
 		else {
 			if (position == 1) {
-				return 1
+				return ITEM_VIEW_SEND_LOCATION_CELL
 			}
 			else if (position == 2) {
-				return 9
+				return ITEM_VIEW_SHADOW_CELL
 			}
 			else if (position == 3) {
-				return 2
+				return ITEM_VIEW_HEADER
 			}
 			else if (searching || places.isEmpty()) {
-				return if (position <= 3 + 3 && (searching || !searched) && !myLocationDenied) {
-					3
+				return if (position <= 3 + 3 && (searching || !searched)) {
+					ITEM_VIEW_LOCATION_CELL
 				}
 				else {
-					4
+					ITEM_VIEW_LOCATION_LOADING_CELL
 				}
 			}
 			else if (position == places.size + 4) {
-				return 5
+				return ITEM_VIEW_LOCATION_POWERED_CELL
 			}
 		}
 
-		return 3
+		return ITEM_VIEW_LOCATION_CELL
 	}
 
 	override fun isEnabled(holder: RecyclerView.ViewHolder): Boolean {
 		val viewType = holder.itemViewType
 
-		return if (viewType == 6) {
+		return if (viewType == ITEM_VIEW_SEND_LOCATION_DIALOG_CELL) {
 			!(LocationController.getInstance(currentAccount).getSharingLocationInfo(dialogId) == null && gpsLocation == null)
 		}
 		else {
-			viewType == 1 || viewType == 3 || viewType == 7
+			viewType == ITEM_VIEW_SEND_LOCATION_CELL || viewType == ITEM_VIEW_LOCATION_CELL || viewType == ITEM_VIEW_SHARING_LIVE_LOCATION_CELL
 		}
+	}
+
+	companion object {
+		private const val ITEM_VIEW_EMPTY_CELL = 0
+		private const val ITEM_VIEW_SEND_LOCATION_CELL = 1
+		private const val ITEM_VIEW_HEADER = 2
+		private const val ITEM_VIEW_LOCATION_CELL = 3
+		private const val ITEM_VIEW_LOCATION_LOADING_CELL = 4
+		private const val ITEM_VIEW_LOCATION_POWERED_CELL = 5
+		private const val ITEM_VIEW_SEND_LOCATION_DIALOG_CELL = 6
+		private const val ITEM_VIEW_SHARING_LIVE_LOCATION_CELL = 7
+		private const val ITEM_VIEW_LOCATION_DIRECTION_CELL = 8
+		private const val ITEM_VIEW_SHADOW_CELL = 9
+		private const val ITEM_VIEW_EMPTY_VIEW_CELL = 10
 	}
 }

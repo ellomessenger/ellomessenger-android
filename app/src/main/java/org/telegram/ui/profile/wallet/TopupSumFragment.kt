@@ -41,6 +41,7 @@ import kotlin.math.min
 class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWalletChangedListener {
 	private var binding: TopupSumFragmentBinding? = null
 	private var walletId = 0L
+	private var channelId = 0L
 	private var mode = WalletFragment.CARD
 	private var isTopUp = true
 	private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -49,10 +50,10 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 	private var commissionInfo: ElloRpc.CommissionInfo? = null
 
 	private val minWithdrawalAmount: Float
-		get() = commissionInfo?.minWithdrawals?.toFloat() ?: WalletHelper.minTopupAmount
+		get() = commissionInfo?.minWithdrawals?.toFloat() ?: WalletHelper.MIN_TOPUP_AMOUNT
 
 	private val minDepositAmount: Float
-		get() = commissionInfo?.minDeposit?.toFloat() ?: WalletHelper.minTopupAmount
+		get() = commissionInfo?.minDeposit?.toFloat() ?: WalletHelper.MIN_TOPUP_AMOUNT
 
 	private val walletAmount: Float
 		get() = walletHelper.findWallet(walletId)?.amount ?: 0f
@@ -61,6 +62,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 		walletId = arguments?.getLong(WalletFragment.ARG_WALLET_ID)?.takeIf { it != 0L } ?: return false
 		mode = arguments?.getInt(WalletFragment.ARG_MODE) ?: WalletFragment.CARD
 		isTopUp = arguments?.getBoolean(WalletFragment.ARG_IS_TOPUP, true) ?: true
+		channelId = arguments?.getLong(WalletFragment.ARG_CHANNEL_ID, 0L) ?: 0L
 
 		if (mode != WalletFragment.MY_BALANCE) {
 			commissionInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -157,7 +159,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 
 		binding?.topupButton?.setOnClickListener {
 			val amount = binding?.amountField?.text?.toString()?.toFloatOrNull() ?: 0f
-			val minAmount = (if (isTopUp) commissionInfo?.minDeposit else commissionInfo?.minWithdrawals)?.toFloat() ?: if ((!isTopUp && mode == WalletFragment.MY_BALANCE)) 0.01f else WalletHelper.minTopupAmount
+			val minAmount = (if (isTopUp) commissionInfo?.minDeposit else commissionInfo?.minWithdrawals)?.toFloat() ?: if ((!isTopUp && mode == WalletFragment.MY_BALANCE)) 0.01f else WalletHelper.MIN_TOPUP_AMOUNT
 
 			if (amount < minAmount) {
 				return@setOnClickListener
@@ -170,6 +172,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 			args.putFloat(WalletFragment.ARG_AMOUNT, amount)
 			args.putString(WalletFragment.ARG_CURRENCY, currency)
 			args.putLong(WalletFragment.ARG_WALLET_ID, walletId)
+			args.putLong(WalletFragment.ARG_CHANNEL_ID, channelId)
 
 			when (mode) {
 				WalletFragment.PAYPAL -> {
@@ -219,19 +222,19 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 		}
 
 		val withdrawMin = if (isTopUp) {
-			commissionInfo?.minDeposit
+			max(commissionInfo?.minDeposit ?: WalletHelper.MIN_TOPUP_AMOUNT.toDouble(), arguments?.getDouble(WalletFragment.ARG_AMOUNT, 0.0) ?: 0.0)
 		}
 		else {
-			commissionInfo?.minWithdrawals
-		} ?: WalletHelper.minTopupAmount
+			commissionInfo?.minWithdrawals ?: WalletHelper.MIN_TOPUP_AMOUNT.toDouble()
+		}
 
 		binding?.amountField?.setText(withdrawMin.toString())
 
 		if (isTopUp) {
-			binding?.minTopupInfoLabel?.text = context.getString(R.string.min_topup_hint, commissionInfo?.minDeposit?.toFloat() ?: WalletHelper.minTopupAmount).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
+			binding?.minTopupInfoLabel?.text = context.getString(R.string.min_topup_hint, commissionInfo?.minDeposit?.toFloat() ?: WalletHelper.MIN_TOPUP_AMOUNT).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
 		}
 		else {
-			binding?.minTopupInfoLabel?.text = context.getString(R.string.min_transfer_out_hint, commissionInfo?.minWithdrawals?.toFloat() ?: WalletHelper.minTopupAmount).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
+			binding?.minTopupInfoLabel?.text = context.getString(R.string.min_transfer_out_hint, commissionInfo?.minWithdrawals?.toFloat() ?: WalletHelper.MIN_TOPUP_AMOUNT).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
 		}
 
 		binding?.amountField?.requestFocus()
@@ -245,7 +248,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 		val context = context ?: return
 
 		if (!isTopUp && mode == WalletFragment.MY_BALANCE) {
-			val maxAvailable = walletHelper.earnings?.availableBalance ?: 0f
+			val maxAvailable = walletHelper.availableBalance() ?: 0f
 
 			if (amount > maxAvailable) {
 				binding?.amountField?.setTextColor(ResourcesCompat.getColor(context.resources, R.color.purple, null))
@@ -298,27 +301,32 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 				binding?.elloCommissionInfoLabel?.text = context.getString(R.string.transfer_out_commission_hint, fee).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
 				if (fee > 0f) {
 					binding?.elloCommissionInfoLabel?.visible()
-				} else {
+				}
+				else {
 					binding?.elloCommissionInfoLabel?.gone()
 				}
 			}
 
 			if (paymentSystemFee != null) {
-				 when (mode) {
+				when (mode) {
 					WalletFragment.PAYPAL -> {
 						if (paymentSystemFee > 0f) {
 							binding?.commissionInfoLabel?.visible()
-						} else {
+						}
+						else {
 							binding?.commissionInfoLabel?.gone()
 						}
 					}
+
 					WalletFragment.MY_BALANCE -> {
 						if (paymentSystemFee > 0f) {
 							binding?.commissionInfoLabel?.visible()
-						} else {
+						}
+						else {
 							binding?.commissionInfoLabel?.gone()
 						}
 					}
+
 					else -> binding?.commissionInfoLabel?.gone()
 				}
 
@@ -379,7 +387,7 @@ class TopupSumFragment(args: Bundle) : BaseFragment(args), WalletHelper.OnWallet
 		binding?.balanceLabel?.text = context.getString(R.string.balance_format, walletAmount).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
 
 		if (isTopUp) {
-			binding?.minTopupInfoLabel?.text = context.getString(R.string.min_topup_hint, commissionInfo?.minDeposit?.toFloat() ?: WalletHelper.minTopupAmount).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
+			binding?.minTopupInfoLabel?.text = context.getString(R.string.min_topup_hint, commissionInfo?.minDeposit?.toFloat() ?: WalletHelper.MIN_TOPUP_AMOUNT).fillElloCoinLogos(tintColor = context.getColor(R.color.disabled_text))
 		}
 	}
 

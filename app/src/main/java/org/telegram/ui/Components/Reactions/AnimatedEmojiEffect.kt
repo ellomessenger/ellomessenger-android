@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Reactions
 
@@ -19,11 +19,12 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.Utilities
 import org.telegram.messenger.messageobject.MessageObject
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.Components.AnimatedEmojiDrawable
 import org.telegram.ui.Components.CubicBezierInterpolator
 import org.telegram.ui.Components.RLottieDrawable
 import kotlin.math.abs
+import androidx.core.graphics.withSave
 
 class AnimatedEmojiEffect private constructor(@JvmField var animatedEmojiDrawable: AnimatedEmojiDrawable, var currentAccount: Int, var longAnimation: Boolean, private var showGeneric: Boolean) {
 	private var bounds = Rect()
@@ -110,15 +111,15 @@ class AnimatedEmojiEffect private constructor(@JvmField var animatedEmojiDrawabl
 			if (emojicon != null) {
 				val reaction = MediaDataController.getInstance(currentAccount).reactionsMap[emojicon]
 
-				if (reaction?.around_animation != null) {
-					effectImageReceiver?.setImage(ImageLocation.getForDocument(reaction.around_animation), ReactionsEffectOverlay.filterForAroundAnimation, null, null, reaction.around_animation, 0)
+				if (reaction?.aroundAnimation != null) {
+					effectImageReceiver?.setImage(ImageLocation.getForDocument(reaction.aroundAnimation), ReactionsEffectOverlay.filterForAroundAnimation, null, null, reaction.aroundAnimation, 0)
 					imageSet = true
 				}
 			}
 
 			if (!imageSet) {
 				val packName = UserConfig.getInstance(currentAccount).genericAnimationsStickerPack
-				var set: TL_messages_stickerSet? = null
+				var set: TLRPC.TLMessagesStickerSet? = null
 
 				if (packName != null) {
 					set = MediaDataController.getInstance(currentAccount).getStickerSetByName(packName)
@@ -282,20 +283,18 @@ class AnimatedEmojiEffect private constructor(@JvmField var animatedEmojiDrawabl
 
 			val sizeHalf = size / 2f * outAlpha
 
-			canvas.save()
+			canvas.withSave {
+				if (mirror) {
+					scale(-1f, 1f, cx, cy)
+				}
 
-			if (mirror) {
-				canvas.scale(-1f, 1f, cx, cy)
+				rotate(randomRotation, cx, cy)
+
+				animatedEmojiDrawable.alpha = (255 * outAlpha * Utilities.clamp(progress / 0.2f, 1f, 0f)).toInt()
+				animatedEmojiDrawable.setBounds((cx - sizeHalf).toInt(), (cy - sizeHalf).toInt(), (cx + sizeHalf).toInt(), (cy + sizeHalf).toInt())
+				animatedEmojiDrawable.draw(this)
+				animatedEmojiDrawable.alpha = 255
 			}
-
-			canvas.rotate(randomRotation, cx, cy)
-
-			animatedEmojiDrawable.alpha = (255 * outAlpha * Utilities.clamp(progress / 0.2f, 1f, 0f)).toInt()
-			animatedEmojiDrawable.setBounds((cx - sizeHalf).toInt(), (cy - sizeHalf).toInt(), (cx + sizeHalf).toInt(), (cy + sizeHalf).toInt())
-			animatedEmojiDrawable.draw(canvas)
-			animatedEmojiDrawable.alpha = 255
-
-			canvas.restore()
 		}
 	}
 

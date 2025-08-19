@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -21,6 +21,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.isNotEmpty
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AndroidUtilities
@@ -37,7 +38,10 @@ import org.telegram.messenger.Utilities
 import org.telegram.messenger.support.LongSparseIntArray
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.FileLocation
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.status
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.ChatAttachAlert.AttachAlertLayout
@@ -173,8 +177,8 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 						contact = `object`
 
 						if (contact.user != null) {
-							firstName = contact.user?.first_name
-							lastName = contact.user?.last_name
+							firstName = contact.user?.firstName
+							lastName = contact.user?.lastName
 						}
 						else {
 							firstName = contact.firstName
@@ -182,26 +186,26 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 						}
 					}
 
-					is TLRPC.TL_contact -> {
-						val userId = `object`.user_id
+					is TLRPC.TLContact -> {
+						val userId = `object`.userId
 						val user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId)
 
 						contact = Contact()
-						contact.firstName = user?.first_name
-						contact.lastName = user?.last_name
+						contact.firstName = user?.firstName
+						contact.lastName = user?.lastName
 						contact.user = user
 
 						firstName = contact.firstName
 						lastName = contact.lastName
 					}
 
-					is TLRPC.TL_user -> {
+					is TLRPC.TLUser -> {
 						val userId = `object`.id
 						val user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId)
 
 						contact = Contact()
-						contact.firstName = user?.first_name
-						contact.lastName = user?.last_name
+						contact.firstName = user?.firstName
+						contact.lastName = user?.lastName
 						contact.user = user
 
 						firstName = contact.firstName
@@ -360,7 +364,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 
 	private val currentTop: Int
 		get() {
-			if (listView.childCount != 0) {
+			if (listView.isNotEmpty()) {
 				val child = listView.getChildAt(0)
 				val holder = listView.findContainingViewHolder(child) as? RecyclerListView.Holder
 
@@ -407,7 +411,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 	}
 
 	fun interface PhonebookShareAlertDelegate {
-		fun didSelectContact(user: User?, notify: Boolean, scheduleDate: Int)
+		fun didSelectContact(user: TLRPC.User?, notify: Boolean, scheduleDate: Int)
 	}
 
 	class UserCell(context: Context) : FrameLayout(context) {
@@ -415,7 +419,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 		private val nameTextView = SimpleTextView(context)
 		private val statusTextView = SimpleTextView(context)
 		private val avatarDrawable: AvatarDrawable = AvatarDrawable()
-		private var currentUser: User? = null
+		private var currentUser: TLRPC.User? = null
 		private var currentId = 0
 		private var currentName: CharSequence? = null
 		private var currentStatus: CharSequence? = null
@@ -447,7 +451,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 			currentId = id
 		}
 
-		fun setData(user: User?, name: CharSequence?, status: CharSequence?, divider: Boolean) {
+		fun setData(user: TLRPC.User?, name: CharSequence?, status: CharSequence?, divider: Boolean) {
 			if (user == null && name == null && status == null) {
 				currentStatus = null
 				currentName = null
@@ -467,7 +471,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 			update(0)
 		}
 
-		fun setData(user: User?, name: CharSequence?, status: CharSequenceCallback, divider: Boolean) {
+		fun setData(user: TLRPC.User?, name: CharSequence?, status: CharSequenceCallback, divider: Boolean) {
 			setData(user, name, null as CharSequence?, divider)
 
 			Utilities.globalQueue.postRunnable {
@@ -485,7 +489,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 			if (!currentStatus.isNullOrEmpty()) {
 				statusTextView.setText(currentStatus)
 			}
-			else if (currentUser != null && currentUser?.is_public == true) {
+			else if (currentUser != null && (currentUser as? TLRPC.TLUser)?.isPublic == true) {
 				statusTextView.setText(currentUser?.username?.let { "@$it" } ?: "")
 			}
 			else {
@@ -498,14 +502,14 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 		}
 
 		fun update(mask: Int) {
-			val photo = currentUser?.photo?.photo_small
+			val photo = currentUser?.photo?.photoSmall
 			var newName: String? = null
 
 			if (mask != 0) {
 				var continueUpdate = false
 
 				if (mask and MessagesController.UPDATE_MASK_AVATAR != 0) {
-					if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar!!.volume_id != photo.volume_id || lastAvatar!!.local_id != photo.local_id)) {
+					if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar!!.volumeId != photo.volumeId || lastAvatar!!.localId != photo.localId)) {
 						continueUpdate = true
 					}
 				}
@@ -683,7 +687,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 			if (holder.itemViewType == 0) {
 				val userCell = holder.itemView as UserCell
 				val `object` = getItem(section, position)
-				var user: User? = null
+				var user: TLRPC.User? = null
 				val divider = section != getSectionCount() - 2 || position != getCountForSection(section) - 1
 
 				when (`object`) {
@@ -697,12 +701,12 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 						}
 					}
 
-					is TLRPC.TL_contact -> {
-						val userId = `object`.user_id
+					is TLRPC.TLContact -> {
+						val userId = `object`.userId
 						user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId)
 					}
 
-					is TLRPC.TL_user -> {
+					is TLRPC.TLUser -> {
 						val userId = `object`.id
 						user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId)
 					}
@@ -799,12 +803,12 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 					for (a in contactsCopy.indices) {
 						val contact = contactsCopy[a]
 
-						if (foundUids.indexOfKey(contact.user_id) >= 0) {
+						if (foundUids.indexOfKey(contact.userId) >= 0) {
 							continue
 						}
 
-						val user = MessagesController.getInstance(currentAccount).getUser(contact.user_id) ?: continue
-						val name = ContactsController.formatName(user.first_name, user.last_name).lowercase(Locale.getDefault())
+						val user = MessagesController.getInstance(currentAccount).getUser(contact.userId) ?: continue
+						val name = ContactsController.formatName(user.firstName, user.lastName).lowercase(Locale.getDefault())
 						var tName = LocaleController.getInstance().getTranslitString(name)
 
 						if (name == tName) {
@@ -827,7 +831,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 
 							if (found != 0) {
 								if (found == 1) {
-									resultArrayNames.add(AndroidUtilities.generateSearchName(user.first_name, user.last_name, q))
+									resultArrayNames.add(AndroidUtilities.generateSearchName(user.firstName, user.lastName, q))
 								}
 								else {
 									resultArrayNames.add(AndroidUtilities.generateSearchName("@" + user.username, null, "@$q"))
@@ -899,7 +903,7 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 				val userCell = holder.itemView as UserCell
 				val divider = position != itemCount - 2
 				val `object` = getItem(position)
-				var user: User? = null
+				var user: TLRPC.User? = null
 
 				when (`object`) {
 					is Contact -> {
@@ -912,12 +916,12 @@ class ChatAttachAlertContactsLayout(alert: ChatAttachAlert, context: Context) : 
 						}
 					}
 
-					is TLRPC.TL_contact -> {
-						val userId = `object`.user_id
+					is TLRPC.TLContact -> {
+						val userId = `object`.userId
 						user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId)
 					}
 
-					is TLRPC.TL_user -> {
+					is TLRPC.TLUser -> {
 						val userId = `object`.id
 						user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId)
 					}

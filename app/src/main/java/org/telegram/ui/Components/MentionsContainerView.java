@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -22,6 +22,7 @@ import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.Adapters.MentionsAdapter;
 import org.telegram.ui.Adapters.PaddedListAdapter;
 import org.telegram.ui.ChatActivity;
@@ -93,50 +94,58 @@ public class MentionsContainerView extends BlurredFrameLayout {
 				}
 				size.width = 0;
 				size.height = 0;
+
 				Object object = adapter.getItem(i);
-				if (object instanceof TLRPC.BotInlineResult) {
-					TLRPC.BotInlineResult inlineResult = (TLRPC.BotInlineResult)object;
-					if (inlineResult.document != null) {
-						TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(inlineResult.document.thumbs, 90);
-						size.width = thumb != null ? thumb.w : 100;
-						size.height = thumb != null ? thumb.h : 100;
-						for (int b = 0; b < inlineResult.document.attributes.size(); b++) {
-							TLRPC.DocumentAttribute attribute = inlineResult.document.attributes.get(b);
-							if (attribute instanceof TLRPC.TL_documentAttributeImageSize || attribute instanceof TLRPC.TL_documentAttributeVideo) {
+
+				if (object instanceof TLRPC.BotInlineResult inlineResult) {
+					final var document = TLRPCExtensions.getDocument(inlineResult);
+					final var content = TLRPCExtensions.getContent(inlineResult);
+					final var thumb = TLRPCExtensions.getThumb(inlineResult);
+					final var photo = TLRPCExtensions.getPhoto(inlineResult);
+
+					if (document instanceof TLRPC.TLDocument tlDocument) {
+						TLRPC.PhotoSize photoSizeThumb = FileLoader.getClosestPhotoSizeWithSize(tlDocument.thumbs, 90);
+						size.width = photoSizeThumb != null ? photoSizeThumb.w : 100;
+						size.height = photoSizeThumb != null ? photoSizeThumb.h : 100;
+						for (int b = 0; b < tlDocument.attributes.size(); b++) {
+							TLRPC.DocumentAttribute attribute = tlDocument.attributes.get(b);
+							if (attribute instanceof TLRPC.TLDocumentAttributeImageSize || attribute instanceof TLRPC.TLDocumentAttributeVideo) {
 								size.width = attribute.w;
 								size.height = attribute.h;
 								break;
 							}
 						}
 					}
-					else if (inlineResult.content != null) {
-						for (int b = 0; b < inlineResult.content.attributes.size(); b++) {
-							TLRPC.DocumentAttribute attribute = inlineResult.content.attributes.get(b);
-							if (attribute instanceof TLRPC.TL_documentAttributeImageSize || attribute instanceof TLRPC.TL_documentAttributeVideo) {
+					else if (content != null) {
+						for (int b = 0; b < content.attributes.size(); b++) {
+							TLRPC.DocumentAttribute attribute = content.attributes.get(b);
+							if (attribute instanceof TLRPC.TLDocumentAttributeImageSize || attribute instanceof TLRPC.TLDocumentAttributeVideo) {
 								size.width = attribute.w;
 								size.height = attribute.h;
 								break;
 							}
 						}
 					}
-					else if (inlineResult.thumb != null) {
-						for (int b = 0; b < inlineResult.thumb.attributes.size(); b++) {
-							TLRPC.DocumentAttribute attribute = inlineResult.thumb.attributes.get(b);
-							if (attribute instanceof TLRPC.TL_documentAttributeImageSize || attribute instanceof TLRPC.TL_documentAttributeVideo) {
+					else if (thumb != null) {
+						for (int b = 0; b < thumb.attributes.size(); b++) {
+							TLRPC.DocumentAttribute attribute = thumb.attributes.get(b);
+							if (attribute instanceof TLRPC.TLDocumentAttributeImageSize || attribute instanceof TLRPC.TLDocumentAttributeVideo) {
 								size.width = attribute.w;
 								size.height = attribute.h;
 								break;
 							}
 						}
 					}
-					else if (inlineResult.photo != null) {
-						TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(inlineResult.photo.sizes, AndroidUtilities.photoSize);
+					else if (photo instanceof TLRPC.TLPhoto tlPhoto) {
+						TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(tlPhoto.sizes, AndroidUtilities.photoSize);
+
 						if (photoSize != null) {
 							size.width = photoSize.w;
 							size.height = photoSize.h;
 						}
 					}
 				}
+
 				return size;
 			}
 
@@ -158,7 +167,7 @@ public class MentionsContainerView extends BlurredFrameLayout {
 					position--;
 				}
 				Object object = adapter.getItem(position);
-				if (object instanceof TLRPC.TL_inlineBotSwitchPM) {
+				if (object instanceof TLRPC.TLInlineBotSwitchPM) {
 					return 100;
 				}
 				else if (object instanceof TLRPC.Document) {

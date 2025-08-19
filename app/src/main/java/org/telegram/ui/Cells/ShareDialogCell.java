@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -28,12 +28,15 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CheckBox2;
 import org.telegram.ui.Components.LayoutHelper;
+
+import androidx.annotation.NonNull;
 
 public class ShareDialogCell extends FrameLayout {
 	public static final int TYPE_SHARE = 0;
@@ -113,7 +116,7 @@ public class ShareDialogCell extends FrameLayout {
 					nameTextView.setText(name);
 				}
 				else if (user != null) {
-					nameTextView.setText(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+					nameTextView.setText(ContactsController.formatName(user.firstName, user.lastName));
 				}
 				else {
 					nameTextView.setText("");
@@ -149,18 +152,31 @@ public class ShareDialogCell extends FrameLayout {
 	}
 
 	@Override
-	protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+	protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 		boolean result = super.drawChild(canvas, child, drawingTime);
+
 		if (child == imageView && currentType != TYPE_CREATE) {
 			if (user != null && !MessagesController.isSupportUser(user)) {
 				long newTime = SystemClock.elapsedRealtime();
 				long dt = newTime - lastUpdateTime;
+
 				if (dt > 17) {
 					dt = 17;
 				}
+
 				lastUpdateTime = newTime;
 
-				boolean isOnline = !user.self && !user.bot && (user.status != null && user.status.expires > ConnectionsManager.getInstance(currentAccount).getCurrentTime() || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(user.id));
+				boolean isSelf = TLRPCExtensions.isSelf(user);
+				boolean isBot = TLRPCExtensions.getBot(user);
+				TLRPC.UserStatus status = TLRPCExtensions.getStatus(user);
+				int expires = 0;
+
+				if (status != null) {
+					expires = TLRPCExtensions.getExpires(status);
+				}
+
+				boolean isOnline = !isSelf && !isBot && (expires > ConnectionsManager.getInstance(currentAccount).getCurrentTime() || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(user.id));
+
 				if (isOnline || onlineProgress != 0) {
 					int top = imageView.getBottom() - AndroidUtilities.dp(6);
 					int left = imageView.getRight() - AndroidUtilities.dp(10);

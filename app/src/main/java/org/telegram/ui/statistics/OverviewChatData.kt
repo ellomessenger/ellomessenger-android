@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.statistics
 
@@ -15,7 +15,7 @@ import org.telegram.tgnet.TLRPC
 import java.util.Locale
 import kotlin.math.abs
 
-class OverviewChatData(stats: TLRPC.TL_stats_megagroupStats) {
+class OverviewChatData(stats: TLRPC.TLStatsMegagroupStats) {
 	var membersTitle: String
 	var membersPrimary: String
 	var membersSecondary: String? = null
@@ -35,11 +35,12 @@ class OverviewChatData(stats: TLRPC.TL_stats_megagroupStats) {
 
 	init {
 		val context = ApplicationLoader.applicationContext
-		var dif = (stats.members.current - stats.members.previous).toInt()
-		var difPercent: Float = if (stats.members.previous == 0.0) 0f else abs(dif / stats.members.previous.toFloat() * 100f)
+		val members = stats.members ?: TLRPC.TLStatsAbsValueAndPrev()
+		var dif = (members.current - members.previous).toInt()
+		var difPercent: Float = if (members.previous == 0.0) 0f else abs(dif / members.previous.toFloat() * 100f)
 
 		membersTitle = context.getString(R.string.MembersOverviewTitle)
-		membersPrimary = AndroidUtilities.formatWholeNumber(stats.members.current.toInt(), 0)
+		membersPrimary = AndroidUtilities.formatWholeNumber(members.current.toInt(), 0)
 
 		membersSecondary = if (dif == 0 || difPercent == 0f) {
 			""
@@ -53,11 +54,13 @@ class OverviewChatData(stats: TLRPC.TL_stats_megagroupStats) {
 
 		membersUp = dif >= 0
 
-		dif = (stats.viewers.current - stats.viewers.previous).toInt()
-		difPercent = if (stats.viewers.previous == 0.0) 0f else abs(dif / stats.viewers.previous.toFloat() * 100f)
+		val viewers = stats.viewers ?: TLRPC.TLStatsAbsValueAndPrev()
+
+		dif = (viewers.current - viewers.previous).toInt()
+		difPercent = if (viewers.previous == 0.0) 0f else abs(dif / viewers.previous.toFloat() * 100f)
 
 		viewingMembersTitle = context.getString(R.string.ViewingMembers)
-		viewingMembersPrimary = AndroidUtilities.formatWholeNumber(stats.viewers.current.toInt(), 0)
+		viewingMembersPrimary = AndroidUtilities.formatWholeNumber(viewers.current.toInt(), 0)
 
 		viewingMembersSecondary = if (dif == 0 || difPercent == 0f) {
 			""
@@ -68,11 +71,13 @@ class OverviewChatData(stats: TLRPC.TL_stats_megagroupStats) {
 
 		viewingMembersUp = dif >= 0
 
-		dif = (stats.posters.current - stats.posters.previous).toInt()
-		difPercent = if (stats.posters.previous == 0.0) 0f else abs(dif / stats.posters.previous.toFloat() * 100f)
+		val posters = stats.posters ?: TLRPC.TLStatsAbsValueAndPrev()
+
+		dif = (posters.current - posters.previous).toInt()
+		difPercent = if (posters.previous == 0.0) 0f else abs(dif / posters.previous.toFloat() * 100f)
 
 		postingMembersTitle = context.getString(R.string.PostingMembers)
-		postingMembersPrimary = AndroidUtilities.formatWholeNumber(stats.posters.current.toInt(), 0)
+		postingMembersPrimary = AndroidUtilities.formatWholeNumber(posters.current.toInt(), 0)
 
 		postingMembersSecondary = if (dif == 0 || difPercent == 0f) {
 			""
@@ -83,11 +88,13 @@ class OverviewChatData(stats: TLRPC.TL_stats_megagroupStats) {
 
 		postingMembersUp = dif >= 0
 
-		dif = (stats.messages.current - stats.messages.previous).toInt()
-		difPercent = if (stats.messages.previous == 0.0) 0f else abs(dif / stats.messages.previous.toFloat() * 100f)
+		val messages = stats.messages ?: TLRPC.TLStatsAbsValueAndPrev()
+
+		dif = (messages.current - messages.previous).toInt()
+		difPercent = if (messages.previous == 0.0) 0f else abs(dif / messages.previous.toFloat() * 100f)
 
 		messagesTitle = context.getString(R.string.MessagesOverview)
-		messagesPrimary = AndroidUtilities.formatWholeNumber(stats.messages.current.toInt(), 0)
+		messagesPrimary = AndroidUtilities.formatWholeNumber(messages.current.toInt(), 0)
 
 		messagesSecondary = if (dif == 0 || difPercent == 0f) {
 			""

@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
@@ -29,6 +29,7 @@ import android.widget.PopupWindow
 import androidx.annotation.ColorInt
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.isVisible
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.BuildConfig
@@ -48,7 +49,11 @@ import org.telegram.messenger.UserObject
 import org.telegram.messenger.utils.combineDrawables
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.participants
+import org.telegram.tgnet.status
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
 import org.telegram.ui.ActionBar.SimpleTextView
@@ -56,7 +61,7 @@ import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.ChatActivity
 import org.telegram.ui.Components.AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable
 import org.telegram.ui.Components.AnimatedEmojiDrawable.WrapSizeDrawable
-import org.telegram.ui.Components.SharedMediaLayout.SharedMediaPreloader
+import org.telegram.ui.Components.sharedmedia.SharedMediaPreloader
 import org.telegram.ui.ProfileActivity
 import java.util.Locale
 import kotlin.math.min
@@ -267,10 +272,10 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 		var ttl = 0
 
 		if (userInfo != null) {
-			ttl = userInfo.ttl_period
+			ttl = userInfo.ttlPeriod
 		}
 		else if (chatInfo != null) {
-			ttl = chatInfo.ttl_period
+			ttl = chatInfo.ttlPeriod
 		}
 
 		val scrimPopupWindow = arrayOfNulls<ActionBarPopupWindow>(1)
@@ -287,7 +292,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 				@Suppress("NAME_SHADOWING") val userInfo = parentFragment.currentUserInfo
 
 				if (userInfo != null || chatInfo != null) {
-					parentFragment.undoView?.showWithAction(parentFragment.dialogId, action, parentFragment.currentUser, userInfo?.ttl_period ?: chatInfo?.ttl_period, null, null)
+					parentFragment.undoView?.showWithAction(parentFragment.dialogId, action, parentFragment.currentUser, userInfo?.ttlPeriod ?: chatInfo?.ttlPeriod, null, null)
 				}
 			}
 		}, true)
@@ -398,7 +403,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 
 	override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
 		val width = MeasureSpec.getSize(widthMeasureSpec) + titleTextView.paddingRight
-		val availableWidth = width - AndroidUtilities.dp(((if (avatarImageView.visibility == VISIBLE) 54 else 0) + 16).toFloat())
+		val availableWidth = width - AndroidUtilities.dp(((if (avatarImageView.isVisible) 54 else 0) + 16).toFloat())
 
 		avatarImageView.measure(MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(42f), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(42f), MeasureSpec.EXACTLY))
 		titleTextView.measure(MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp((24 + 8).toFloat()) + titleTextView.paddingRight, MeasureSpec.AT_MOST))
@@ -412,7 +417,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 		}
 
 		if (titleTextLargerCopyView != null) {
-			val largerAvailableWidth = largerWidth - AndroidUtilities.dp(((if (avatarImageView.visibility == VISIBLE) 54 else 0) + 16).toFloat())
+			val largerAvailableWidth = largerWidth - AndroidUtilities.dp(((if (avatarImageView.isVisible) 54 else 0) + 16).toFloat())
 			titleTextLargerCopyView?.measure(MeasureSpec.makeMeasureSpec(largerAvailableWidth, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(24f), MeasureSpec.AT_MOST))
 		}
 
@@ -471,7 +476,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 
 		avatarImageView.layout(leftPadding, viewTop + 1, leftPadding + AndroidUtilities.dp(42f), viewTop + 1 + AndroidUtilities.dp(42f))
 
-		val l = leftPadding + if (avatarImageView.visibility == VISIBLE) AndroidUtilities.dp(54f) else 0
+		val l = leftPadding + if (avatarImageView.isVisible) AndroidUtilities.dp(54f) else 0
 
 		if (subtitleTextView.visibility != GONE) {
 			titleTextView.layout(l, viewTop + AndroidUtilities.dp(1.3f) - titleTextView.paddingTop, l + titleTextView.measuredWidth, viewTop + titleTextView.textHeight + AndroidUtilities.dp(1.3f) - titleTextView.paddingTop + titleTextView.paddingBottom)
@@ -555,12 +560,24 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 		titleTextLargerCopyView?.leftDrawable = leftIcon
 	}
 
-	fun setVerifiedMuteIcon(isMuted: Boolean, verified: Boolean?, dialogId: Long) {
+	fun setVerifiedMuteIcon(isMuted: Boolean, verified: Boolean?, isDonated: Boolean, isUserSelf: Boolean) {
 		val drawables = mutableListOf<Drawable>()
 
-		if (verified == true) {
-			ResourcesCompat.getDrawable(resources, R.drawable.verified_icon, null)?.let { drawables.add(it) }
-			rightDrawableContentDescription = context.getString(R.string.AccDescrVerified)
+		if (!isUserSelf) {
+			when {
+				verified == true && isDonated -> {
+					ResourcesCompat.getDrawable(resources, R.drawable.verified_donated_icon, null)?.let { drawables.add(it) }
+				}
+
+				verified == true -> {
+					ResourcesCompat.getDrawable(resources, R.drawable.verified_icon, null)?.let { drawables.add(it) }
+					rightDrawableContentDescription = context.getString(R.string.AccDescrVerified)
+				}
+
+				isDonated -> {
+					ResourcesCompat.getDrawable(resources, R.drawable.donated, null)?.let { drawables.add(it) }
+				}
+			}
 		}
 		if (isMuted) {
 			ResourcesCompat.getDrawable(context!!.resources, R.drawable.volume_slash, null)?.let { drawables.add(it) }
@@ -599,11 +616,11 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 				((titleTextView.rightDrawable as WrapSizeDrawable).drawable as AnimatedEmojiDrawable).removeView(titleTextView)
 			}
 
-			if (emojiStatus is TLRPC.TL_emojiStatus) {
-				emojiStatusDrawable[emojiStatus.document_id] = animated
+			if (emojiStatus is TLRPC.TLEmojiStatus) {
+				emojiStatusDrawable[emojiStatus.documentId] = animated
 			}
-			else if (emojiStatus is TLRPC.TL_emojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt()) {
-				emojiStatusDrawable[emojiStatus.document_id] = animated
+			else if (emojiStatus is TLRPC.TLEmojiStatusUntil && emojiStatus.until > (System.currentTimeMillis() / 1000).toInt()) {
+				emojiStatusDrawable[emojiStatus.documentId] = animated
 			}
 			else {
 				val drawable = ContextCompat.getDrawable(ApplicationLoader.applicationContext, R.drawable.msg_premium_liststar)!!.mutate()
@@ -771,18 +788,18 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 				val info = parentFragment.currentChatInfo
 
 				if (ChatObject.isChannel(chat)) {
-					newSubtitle = if (info != null && info.participants_count != 0) {
+					newSubtitle = if (info != null && info.participantsCount != 0) {
 						if (chat.megagroup) {
 							if (onlineCount > 1) {
-								String.format("%s, %s", LocaleController.formatPluralString("Members", info.participants_count), LocaleController.formatPluralString("OnlineCount", min(onlineCount, info.participants_count)))
+								String.format("%s, %s", LocaleController.formatPluralString("Members", info.participantsCount), LocaleController.formatPluralString("OnlineCount", min(onlineCount, info.participantsCount)))
 							}
 							else {
-								LocaleController.formatPluralString("Members", info.participants_count)
+								LocaleController.formatPluralString("Members", info.participantsCount)
 							}
 						}
 						else {
 							val result = IntArray(1)
-							val shortNumber = LocaleController.formatShortNumber(info.participants_count, result)
+							val shortNumber = LocaleController.formatShortNumber(info.participantsCount, result)
 
 							if (chat.megagroup) {
 								LocaleController.formatPluralString("Members", result[0]).replace(String.format(Locale.getDefault(), "%d", result[0]), shortNumber)
@@ -798,7 +815,7 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 								context.getString(R.string.Loading).lowercase()
 							}
 							else {
-								if (chat.has_geo) {
+								if (chat.hasGeo) {
 									context.getString(R.string.MegaLocation).lowercase()
 								}
 								else if (!chat.username.isNullOrEmpty()) {
@@ -810,8 +827,8 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 							}
 						}
 						else {
-							if (ChatObject.isOnlineCourse(chat)) {
-								context.getString(R.string.online_course).lowercase()
+							if (ChatObject.isMasterclass(chat)) {
+								context.getString(R.string.masterclass).lowercase()
 							}
 							else if (ChatObject.isSubscriptionChannel(chat) || ChatObject.isPaidChannel(chat)) {
 								context.getString(R.string.paid_channel).lowercase()
@@ -833,10 +850,10 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 						newSubtitle = context.getString(R.string.YouLeft)
 					}
 					else {
-						var count = chat.participants_count
+						var count = chat.participantsCount
 
 						if (info?.participants != null) {
-							count = info.participants.participants.size
+							count = info.participants?.participants?.size ?: 0
 						}
 
 						newSubtitle = if (onlineCount > 1 && count != 0) {
@@ -1008,10 +1025,10 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 		val info = parentFragment.currentChatInfo ?: return
 		val currentTime = ConnectionsManager.getInstance(currentAccount).currentTime
 
-		if (info is TLRPC.TL_chatFull || info is TLRPC.TL_channelFull && info.participants_count <= 200 && info.participants != null) {
-			for (a in info.participants.participants.indices) {
-				val participant = info.participants.participants[a]
-				val user = MessagesController.getInstance(currentAccount).getUser(participant.user_id)
+		if (info is TLRPC.TLChatFull || info is TLRPC.TLChannelFull && info.participantsCount <= 200 && info.participants != null) {
+			for (a in info.participants!!.participants!!.indices) {
+				val participant = info.participants!!.participants!![a]
+				val user = MessagesController.getInstance(currentAccount).getUser(participant.userId)
 
 				user?.status?.let {
 					if ((it.expires > currentTime || user.id == getInstance(currentAccount).getClientUserId()) && it.expires > 10000) {
@@ -1020,8 +1037,8 @@ open class ChatAvatarContainer(context: Context, private val parentFragment: Cha
 				}
 			}
 		}
-		else if (info is TLRPC.TL_channelFull && info.participants_count > 200) {
-			onlineCount = info.online_count
+		else if (info is TLRPC.TLChannelFull && info.participantsCount > 200) {
+			onlineCount = info.onlineCount
 		}
 	}
 

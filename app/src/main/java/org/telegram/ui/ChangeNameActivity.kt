@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -12,15 +12,21 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.text.InputType
 import android.util.TypedValue
-import android.view.*
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
 import android.widget.TextView.OnEditorActionListener
 import androidx.core.content.res.ResourcesCompat
-import org.telegram.messenger.*
+import org.telegram.messenger.AndroidUtilities
+import org.telegram.messenger.LocaleController
+import org.telegram.messenger.MessagesController
+import org.telegram.messenger.NotificationCenter
+import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_account_updateProfile
+import org.telegram.tgnet.TLRPC
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
@@ -35,18 +41,16 @@ class ChangeNameActivity : BaseFragment() {
 
 	@SuppressLint("ClickableViewAccessibility")
 	override fun createView(context: Context): View? {
-		// actionBar.setItemsBackgroundColor(Theme.getColor(Theme.key_avatar_actionBarSelectorBlue), false);
-		// actionBar.setItemsColor(Theme.getColor(Theme.key_actionBarDefaultIcon), false);
 		actionBar?.setBackButtonImage(R.drawable.ic_back_arrow)
 		actionBar?.setAllowOverlayTitle(true)
-		actionBar?.setTitle(LocaleController.getString("EditName", R.string.EditName))
+		actionBar?.setTitle(context.getString(R.string.EditName))
 
 		actionBar?.setActionBarMenuOnItemClick(object : ActionBarMenuOnItemClick() {
 			override fun onItemClick(id: Int) {
 				if (id == -1) {
 					finishFragment()
 				}
-				else if (id == done_button) {
+				else if (id == DONE_BUTTON) {
 					if (!firstNameField?.text.isNullOrEmpty()) {
 						saveName()
 						finishFragment()
@@ -57,7 +61,7 @@ class ChangeNameActivity : BaseFragment() {
 
 		val menu = actionBar?.createMenu()
 
-		doneButton = menu?.addItemWithWidth(done_button, R.drawable.ic_ab_done, AndroidUtilities.dp(56f), LocaleController.getString("Done", R.string.Done))
+		doneButton = menu?.addItemWithWidth(DONE_BUTTON, R.drawable.ic_ab_done, AndroidUtilities.dp(56f), context.getString(R.string.Done))
 
 		var user = MessagesController.getInstance(currentAccount).getUser(getInstance(currentAccount).getClientUserId())
 
@@ -87,7 +91,7 @@ class ChangeNameActivity : BaseFragment() {
 		firstNameField?.gravity = if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT
 		firstNameField?.inputType = InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
 		firstNameField?.imeOptions = EditorInfo.IME_ACTION_NEXT
-		firstNameField?.hint = LocaleController.getString("FirstName", R.string.FirstName)
+		firstNameField?.hint = context.getString(R.string.FirstName)
 		firstNameField?.setCursorColor(ResourcesCompat.getColor(context.resources, R.color.text, null))
 		firstNameField?.setCursorSize(AndroidUtilities.dp(20f))
 		firstNameField?.setCursorWidth(1.5f)
@@ -116,7 +120,7 @@ class ChangeNameActivity : BaseFragment() {
 		lastNameField?.gravity = if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT
 		lastNameField?.inputType = InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
 		lastNameField?.imeOptions = EditorInfo.IME_ACTION_DONE
-		lastNameField?.hint = LocaleController.getString("LastName", R.string.LastName)
+		lastNameField?.hint = context.getString(R.string.LastName)
 		lastNameField?.setCursorColor(ResourcesCompat.getColor(context.resources, R.color.text, null))
 		lastNameField?.setCursorSize(AndroidUtilities.dp(20f))
 		lastNameField?.setCursorWidth(1.5f)
@@ -132,9 +136,9 @@ class ChangeNameActivity : BaseFragment() {
 		})
 
 		if (user != null) {
-			firstNameField?.setText(user.first_name)
+			firstNameField?.setText(user.firstName)
 			firstNameField?.setSelection(firstNameField?.length() ?: 0)
-			lastNameField?.setText(user.last_name)
+			lastNameField?.setText(user.lastName)
 		}
 		return fragmentView
 	}
@@ -161,23 +165,23 @@ class ChangeNameActivity : BaseFragment() {
 		val newFirst = firstNameField?.text?.toString()
 		val newLast = lastNameField?.text?.toString()
 
-		if (currentUser.first_name != null && currentUser.first_name == newFirst && currentUser.last_name != null && currentUser.last_name == newLast) {
+		if (currentUser.firstName != null && currentUser.firstName == newFirst && currentUser.lastName != null && currentUser.lastName == newLast) {
 			return
 		}
 
-		val req = TL_account_updateProfile()
+		val req = TLRPC.TLAccountUpdateProfile()
 		req.flags = 3
-		req.first_name = newFirst
+		req.firstName = newFirst
 
-		currentUser.first_name = req.first_name
+		currentUser.firstName = req.firstName
 
-		req.last_name = newLast
+		req.lastName = newLast
 
-		currentUser.last_name = req.last_name
+		currentUser.lastName = req.lastName
 
 		val user = MessagesController.getInstance(currentAccount).getUser(getInstance(currentAccount).getClientUserId())
-		user?.first_name = req.first_name
-		user?.last_name = req.last_name
+		user?.firstName = req.firstName
+		user?.lastName = req.lastName
 
 		getInstance(currentAccount).saveConfig(true)
 
@@ -201,6 +205,6 @@ class ChangeNameActivity : BaseFragment() {
 	}
 
 	companion object {
-		private const val done_button = 1
+		private const val DONE_BUTTON = 1
 	}
 }

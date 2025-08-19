@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -18,6 +18,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.os.Build
 import android.os.Bundle
+import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.Gravity
 import android.view.MotionEvent
@@ -29,7 +30,6 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.math.MathUtils
-import androidx.core.view.GestureDetectorCompat
 import androidx.dynamicanimation.animation.FloatValueHolder
 import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
@@ -46,10 +46,10 @@ import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
 import org.telegram.messenger.UserObject.getUserName
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_dataJSON
-import org.telegram.tgnet.TLRPC.TL_messages_prolongWebView
-import org.telegram.tgnet.TLRPC.TL_messages_requestWebView
-import org.telegram.tgnet.TLRPC.TL_webViewResultUrl
+import org.telegram.tgnet.TLRPC.TLDataJSON
+import org.telegram.tgnet.TLRPC.TLMessagesProlongWebView
+import org.telegram.tgnet.TLRPC.TLMessagesRequestWebView
+import org.telegram.tgnet.TLRPC.TLWebViewResult
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.ActionBarMenuItem
@@ -115,14 +115,14 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 	private val pollRunnable: Runnable by lazy {
 		Runnable {
 			if (!destroyed) {
-				val prolongWebView = TL_messages_prolongWebView()
+				val prolongWebView = TLMessagesProlongWebView()
 				prolongWebView.bot = MessagesController.getInstance(currentAccount).getInputUser(botId)
 				prolongWebView.peer = MessagesController.getInstance(currentAccount).getInputPeer(peerId)
-				prolongWebView.query_id = queryId
+				prolongWebView.queryId = queryId
 				prolongWebView.silent = silent
 
 				if (replyToMsgId != 0) {
-					prolongWebView.reply_to_msg_id = replyToMsgId
+					prolongWebView.replyToMsgId = replyToMsgId
 					prolongWebView.flags = prolongWebView.flags or 1
 				}
 
@@ -130,10 +130,10 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 					val chatFull = MessagesController.getInstance(currentAccount).getChatFull(-peerId)
 
 					if (chatFull != null) {
-						val peer = chatFull.default_send_as
+						val peer = chatFull.defaultSendAs
 
 						if (peer != null) {
-							prolongWebView.send_as = MessagesController.getInstance(currentAccount).getInputPeer(peer)
+							prolongWebView.sendAs = MessagesController.getInstance(currentAccount).getInputPeer(peer)
 							prolongWebView.flags = prolongWebView.flags or 8192
 						}
 					}
@@ -201,7 +201,7 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 
 					R.id.menu_delete_bot -> {
 						for (bot in MediaDataController.getInstance(currentAccount).attachMenuBots.bots) {
-							if (bot.bot_id == botId) {
+							if (bot.botId == botId) {
 								parentAlert.onLongClickBotButton(bot, MessagesController.getInstance(currentAccount).getUser(botId))
 								break
 							}
@@ -286,7 +286,7 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 			val user = MessagesController.getInstance(currentAccount).getUser(botId)
 
 			if (user != null) {
-				botName = ContactsController.formatName(user.first_name, user.last_name)
+				botName = ContactsController.formatName(user.firstName, user.lastName)
 			}
 
 			val dialog = AlertDialog.Builder(context).setTitle(botName).setMessage(context.getString(R.string.BotWebViewChangesMayNotBeSaved)).setPositiveButton(context.getString(R.string.BotWebViewCloseAnyway)) { _, _ -> parentAlert.dismiss() }.setNegativeButton(context.getString(R.string.Cancel), null).create()
@@ -468,7 +468,7 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 		webViewContainer.setBotUser(MessagesController.getInstance(currentAccount).getUser(botId))
 		webViewContainer.loadFlickerAndSettingsItem(currentAccount, botId, settingsItem)
 
-		val req = TL_messages_requestWebView()
+		val req = TLMessagesRequestWebView()
 		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(peerId)
 		req.bot = MessagesController.getInstance(currentAccount).getInputUser(botId)
 		req.silent = silent
@@ -478,22 +478,22 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 			val chatFull = MessagesController.getInstance(currentAccount).getChatFull(-peerId)
 
 			if (chatFull != null) {
-				val peer = chatFull.default_send_as
+				val peer = chatFull.defaultSendAs
 
 				if (peer != null) {
-					req.send_as = MessagesController.getInstance(currentAccount).getInputPeer(peer)
+					req.sendAs = MessagesController.getInstance(currentAccount).getInputPeer(peer)
 					req.flags = req.flags or 8192
 				}
 			}
 		}
 
 		if (startCommand != null) {
-			req.start_param = startCommand
+			req.startParam = startCommand
 			req.flags = req.flags or 8
 		}
 
 		if (replyToMsgId != 0) {
-			req.reply_to_msg_id = replyToMsgId
+			req.replyToMsgId = replyToMsgId
 			req.flags = req.flags or 1
 		}
 
@@ -506,8 +506,8 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 			jsonObject.put("link_color", ResourcesCompat.getColor(resources, R.color.brand, null))
 			jsonObject.put("button_color", ResourcesCompat.getColor(resources, R.color.brand, null))
 			jsonObject.put("button_text_color", ResourcesCompat.getColor(resources, R.color.white, null))
-			req.theme_params = TL_dataJSON()
-			req.theme_params.data = jsonObject.toString()
+			req.themeParams = TLDataJSON()
+			req.themeParams?.data = jsonObject.toString()
 			req.flags = req.flags or 4
 		}
 		catch (e: Exception) {
@@ -516,8 +516,8 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TL_webViewResultUrl) {
-					queryId = response.query_id
+				if (response is TLWebViewResult) {
+					queryId = response.queryId
 					webViewContainer.loadUrl(currentAccount, response.url)
 					swipeContainer.setWebView(webViewContainer.webView)
 					AndroidUtilities.runOnUIThread(pollRunnable)
@@ -655,7 +655,7 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 	}
 
 	open class WebViewSwipeContainer(context: Context) : FrameLayout(context) {
-		private val gestureDetector: GestureDetectorCompat
+		private val gestureDetector: GestureDetector
 
 		var isSwipeInProgress = false
 			private set
@@ -680,7 +680,7 @@ class ChatAttachAlertBotWebViewLayout(alert: ChatAttachAlert, context: Context) 
 		init {
 			val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
-			gestureDetector = GestureDetectorCompat(context, object : SimpleOnGestureListener() {
+			gestureDetector = GestureDetector(context, object : SimpleOnGestureListener() {
 				override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
 					if (isSwipeDisallowed) {
 						return false

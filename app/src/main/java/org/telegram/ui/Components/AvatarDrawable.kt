@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -21,16 +21,18 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.BuildConfig
 import org.telegram.messenger.FileLog
 import org.telegram.messenger.R
 import org.telegram.messenger.UserObject
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.tlrpc.ChatInvite
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.ChatInvite
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.Theme
 import kotlin.math.abs
 
@@ -60,7 +62,7 @@ class AvatarDrawable() : Drawable() {
 	constructor(user: User?) : this() {
 		drawDeleted = UserObject.isDeleted(user)
 		updateLocalImageState(user, null)
-		setInfo(user?.first_name, user?.last_name, null)
+		setInfo(user?.firstName, user?.lastName, null)
 	}
 
 	constructor(chat: Chat?) : this() {
@@ -71,7 +73,7 @@ class AvatarDrawable() : Drawable() {
 	fun setInfo(user: User?) {
 		drawDeleted = UserObject.isDeleted(user)
 		updateLocalImageState(user, null)
-		setInfo(user?.first_name, user?.last_name, null)
+		setInfo(user?.firstName, user?.lastName, null)
 	}
 
 	private fun updateLocalImageState(user: User?, chat: Chat?) {
@@ -217,151 +219,147 @@ class AvatarDrawable() : Drawable() {
 		namePaint.color = ColorUtils.setAlphaComponent(Color.WHITE, innerAlpha)
 
 		if (avatarType == AVATAR_TYPE_SAVED || avatarType == AVATAR_TYPE_REPLIES) {
-			val colors = intArrayOf(
-					ApplicationLoader.applicationContext.getColor(R.color.avatar_blue),
-					ApplicationLoader.applicationContext.getColor(R.color.avatar_light_blue)
-			)
+			val colors = intArrayOf(ApplicationLoader.applicationContext.getColor(R.color.avatar_blue), ApplicationLoader.applicationContext.getColor(R.color.avatar_light_blue))
 			val positions = floatArrayOf(0.312f, 0.76f)
 
 			Theme.avatar_backgroundPaint.shader = LinearGradient(0f, 0f, bounds.height().toFloat(), 0f, colors, positions, Shader.TileMode.CLAMP)
-		} else {
+		}
+		else {
 			Theme.avatar_backgroundPaint.shader = null
 			Theme.avatar_backgroundPaint.color = ColorUtils.setAlphaComponent(if (drawLocal) ApplicationLoader.applicationContext.getColor(R.color.background) else color, innerAlpha)
 		}
 
-		canvas.save()
-		canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
+		canvas.withTranslation(bounds.left.toFloat(), bounds.top.toFloat()) {
+			if (shouldDrawPlaceholder) {
+				val radius = size.toFloat() * 0.45f
 
-		if (shouldDrawPlaceholder) {
-			val radius = size.toFloat() * 0.45f
-			canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, Theme.avatar_backgroundPaint)
-			if (shouldDrawStroke) {
-				canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, strokePaint)
-			}
-		}
+				drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, Theme.avatar_backgroundPaint)
 
-		val localImage = localImage
-
-		if (avatarType == AVATAR_TYPE_ARCHIVED) {
-			if (archivedAvatarProgress != 0f) {
-				Theme.avatar_backgroundPaint.color = ColorUtils.setAlphaComponent(color, innerAlpha)
-
-				canvas.drawCircle(size / 2.0f, size / 2.0f, size / 2.0f * archivedAvatarProgress, Theme.avatar_backgroundPaint)
 				if (shouldDrawStroke) {
-					canvas.drawCircle(size / 2.0f, size / 2.0f, size / 2.0f * archivedAvatarProgress, strokePaint)
-				}
-
-				if (Theme.dialogs_archiveAvatarDrawableRecolored) {
-					Theme.dialogs_archiveAvatarDrawable.beginApplyLayerColors()
-					Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow1.**", Theme.getNonAnimatedColor(Theme.key_avatar_backgroundArchived))
-					Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow2.**", Theme.getNonAnimatedColor(Theme.key_avatar_backgroundArchived))
-					Theme.dialogs_archiveAvatarDrawable.commitApplyLayerColors()
-					Theme.dialogs_archiveAvatarDrawableRecolored = false
-				}
-			}
-			else {
-				if (!Theme.dialogs_archiveAvatarDrawableRecolored) {
-					Theme.dialogs_archiveAvatarDrawable.beginApplyLayerColors()
-					Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow1.**", color)
-					Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow2.**", color)
-					Theme.dialogs_archiveAvatarDrawable.commitApplyLayerColors()
-					Theme.dialogs_archiveAvatarDrawableRecolored = true
+					drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, strokePaint)
 				}
 			}
 
-			val w = Theme.dialogs_archiveAvatarDrawable.intrinsicWidth
-			val h = Theme.dialogs_archiveAvatarDrawable.intrinsicHeight
-			val x = (size - w) / 2
-			val y = (size - h) / 2
+			val localImage = localImage
 
-			canvas.save()
+			if (avatarType == AVATAR_TYPE_ARCHIVED) {
+				if (archivedAvatarProgress != 0f) {
+					Theme.avatar_backgroundPaint.color = ColorUtils.setAlphaComponent(color, innerAlpha)
 
-			Theme.dialogs_archiveAvatarDrawable.setBounds(x, y, x + w, y + h)
-			Theme.dialogs_archiveAvatarDrawable.draw(canvas)
+					drawCircle(size / 2.0f, size / 2.0f, size / 2.0f * archivedAvatarProgress, Theme.avatar_backgroundPaint)
+					if (shouldDrawStroke) {
+						drawCircle(size / 2.0f, size / 2.0f, size / 2.0f * archivedAvatarProgress, strokePaint)
+					}
 
-			canvas.restore()
-		}
-		else if (avatarType != AVATAR_TYPE_NORMAL) {
-			val drawable = when (avatarType) {
-				AVATAR_TYPE_REPLIES -> Theme.avatarDrawables[11]
-				AVATAR_TYPE_SAVED -> Theme.avatarDrawables[0]
-				AVATAR_TYPE_SHARES -> Theme.avatarDrawables[10]
-				AVATAR_TYPE_FILTER_CONTACTS -> Theme.avatarDrawables[2]
-				AVATAR_TYPE_FILTER_NON_CONTACTS -> Theme.avatarDrawables[3]
-				AVATAR_TYPE_FILTER_GROUPS -> Theme.avatarDrawables[4]
-				AVATAR_TYPE_FILTER_CHANNELS -> Theme.avatarDrawables[5]
-				AVATAR_TYPE_FILTER_BOTS -> Theme.avatarDrawables[6]
-				AVATAR_TYPE_FILTER_MUTED -> Theme.avatarDrawables[7]
-				AVATAR_TYPE_FILTER_READ -> Theme.avatarDrawables[8]
-				else -> Theme.avatarDrawables[9]
+					if (Theme.dialogs_archiveAvatarDrawableRecolored) {
+						Theme.dialogs_archiveAvatarDrawable.beginApplyLayerColors()
+						Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow1.**", Theme.getNonAnimatedColor(Theme.key_avatar_backgroundArchived))
+						Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow2.**", Theme.getNonAnimatedColor(Theme.key_avatar_backgroundArchived))
+						Theme.dialogs_archiveAvatarDrawable.commitApplyLayerColors()
+						Theme.dialogs_archiveAvatarDrawableRecolored = false
+					}
+				}
+				else {
+					if (!Theme.dialogs_archiveAvatarDrawableRecolored) {
+						Theme.dialogs_archiveAvatarDrawable.beginApplyLayerColors()
+						Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow1.**", color)
+						Theme.dialogs_archiveAvatarDrawable.setLayerColor("Arrow2.**", color)
+						Theme.dialogs_archiveAvatarDrawable.commitApplyLayerColors()
+						Theme.dialogs_archiveAvatarDrawableRecolored = true
+					}
+				}
+
+				val w = Theme.dialogs_archiveAvatarDrawable.intrinsicWidth
+				val h = Theme.dialogs_archiveAvatarDrawable.intrinsicHeight
+				val x = (size - w) / 2
+				val y = (size - h) / 2
+
+				withSave {
+					Theme.dialogs_archiveAvatarDrawable.setBounds(x, y, x + w, y + h)
+					Theme.dialogs_archiveAvatarDrawable.draw(this)
+				}
 			}
+			else if (avatarType != AVATAR_TYPE_NORMAL) {
+				val drawable = when (avatarType) {
+					AVATAR_TYPE_REPLIES -> Theme.avatarDrawables[11]
+					AVATAR_TYPE_SAVED -> Theme.avatarDrawables[0]
+					AVATAR_TYPE_SHARES -> Theme.avatarDrawables[10]
+					AVATAR_TYPE_FILTER_CONTACTS -> Theme.avatarDrawables[2]
+					AVATAR_TYPE_FILTER_NON_CONTACTS -> Theme.avatarDrawables[3]
+					AVATAR_TYPE_FILTER_GROUPS -> Theme.avatarDrawables[4]
+					AVATAR_TYPE_FILTER_CHANNELS -> Theme.avatarDrawables[5]
+					AVATAR_TYPE_FILTER_BOTS -> Theme.avatarDrawables[6]
+					AVATAR_TYPE_FILTER_MUTED -> Theme.avatarDrawables[7]
+					AVATAR_TYPE_FILTER_READ -> Theme.avatarDrawables[8]
+					else -> Theme.avatarDrawables[9]
+				}
 
-			if (drawable != null) {
-				var w = drawable.intrinsicWidth
-				var h = drawable.intrinsicHeight
+				if (drawable != null) {
+					var w = drawable.intrinsicWidth
+					var h = drawable.intrinsicHeight
 
-				if (smallSize) {
-					w = (w.toFloat() * 0.8f).toInt()
-					h = (h.toFloat() * 0.8f).toInt()
+					if (smallSize) {
+						w = (w.toFloat() * 0.8f).toInt()
+						h = (h.toFloat() * 0.8f).toInt()
+					}
+
+					val x = (size - w) / 2
+					val y = (size - h) / 2
+
+					drawable.setBounds(x, y, x + w, y + h)
+
+					if (innerAlpha != 255) {
+						drawable.alpha = innerAlpha
+						drawable.draw(this)
+						drawable.alpha = 255
+					}
+					else {
+						drawable.draw(this)
+					}
+				}
+			}
+			else if (drawDeleted && Theme.avatarDrawables[1] != null) {
+				var w = Theme.avatarDrawables[1].intrinsicWidth
+				var h = Theme.avatarDrawables[1].intrinsicHeight
+
+				if (w > size - AndroidUtilities.dp(6f) || h > size - AndroidUtilities.dp(6f)) {
+					val scale = size / AndroidUtilities.dp(50f).toFloat()
+					w = (w.toFloat() * scale).toInt()
+					h = (h.toFloat() * scale).toInt()
 				}
 
 				val x = (size - w) / 2
 				val y = (size - h) / 2
 
-				drawable.setBounds(x, y, x + w, y + h)
+				Theme.avatarDrawables[1].setBounds(x, y, x + w, y + h)
+				Theme.avatarDrawables[1].draw(this)
+			}
+			else if (drawLocal && localImage != null) {
+				var w = localImage.intrinsicWidth
+				var h = localImage.intrinsicHeight
 
-				if (innerAlpha != 255) {
-					drawable.alpha = innerAlpha
-					drawable.draw(canvas)
-					drawable.alpha = 255
+				if (w > size - AndroidUtilities.dp(6f) || h > size - AndroidUtilities.dp(6f)) {
+					val scale = size / AndroidUtilities.dp(50f).toFloat()
+					w = (w.toFloat() * scale).toInt()
+					h = (h.toFloat() * scale).toInt()
 				}
-				else {
-					drawable.draw(canvas)
+
+				val x = (size - w) / 2
+				val y = (size - h) / 2
+
+				localImage.setBounds(x, y, x + w, y + h)
+				localImage.draw(this)
+			}
+			else {
+				if (shouldDrawPlaceholder && textLayout != null) {
+					val scale = size / AndroidUtilities.dp(50f).toFloat()
+					scale(scale, scale, size / 2f, size / 2f)
+					translate((size - textWidth) / 2 - textLeft, (size - textHeight) / 2)
+					textLayout?.draw(this)
 				}
 			}
+
 		}
-		else if (drawDeleted && Theme.avatarDrawables[1] != null) {
-			var w = Theme.avatarDrawables[1].intrinsicWidth
-			var h = Theme.avatarDrawables[1].intrinsicHeight
-
-			if (w > size - AndroidUtilities.dp(6f) || h > size - AndroidUtilities.dp(6f)) {
-				val scale = size / AndroidUtilities.dp(50f).toFloat()
-				w = (w.toFloat() * scale).toInt()
-				h = (h.toFloat() * scale).toInt()
-			}
-
-			val x = (size - w) / 2
-			val y = (size - h) / 2
-
-			Theme.avatarDrawables[1].setBounds(x, y, x + w, y + h)
-			Theme.avatarDrawables[1].draw(canvas)
-		}
-		else if (drawLocal && localImage != null) {
-			var w = localImage.intrinsicWidth
-			var h = localImage.intrinsicHeight
-
-			if (w > size - AndroidUtilities.dp(6f) || h > size - AndroidUtilities.dp(6f)) {
-				val scale = size / AndroidUtilities.dp(50f).toFloat()
-				w = (w.toFloat() * scale).toInt()
-				h = (h.toFloat() * scale).toInt()
-			}
-
-			val x = (size - w) / 2
-			val y = (size - h) / 2
-
-			localImage.setBounds(x, y, x + w, y + h)
-			localImage.draw(canvas)
-		}
-		else {
-			if (shouldDrawPlaceholder && textLayout != null) {
-				val scale = size / AndroidUtilities.dp(50f).toFloat()
-				canvas.scale(scale, scale, size / 2f, size / 2f)
-				canvas.translate((size - textWidth) / 2 - textLeft, (size - textHeight) / 2)
-				textLayout?.draw(canvas)
-			}
-		}
-
-		canvas.restore()
 	}
 
 	override fun setAlpha(alpha: Int) {

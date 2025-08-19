@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
@@ -10,9 +18,7 @@ import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
-import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -21,9 +27,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
-
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DialogObject;
@@ -39,20 +42,20 @@ import org.telegram.ui.DialogsActivity;
 
 import java.util.ArrayList;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 public class FiltersListBottomSheet extends BottomSheet implements NotificationCenter.NotificationCenterDelegate {
-
-    private RecyclerListView listView;
-    private ListAdapter adapter;
-    private TextView titleTextView;
+    private final RecyclerListView listView;
+    private final ListAdapter adapter;
+    private final TextView titleTextView;
     private AnimatorSet shadowAnimation;
-    private View shadow;
-
+    private final View shadow;
     private int scrollOffsetY;
     private boolean ignoreLayout;
-
     private FiltersListBottomSheetDelegate delegate;
-
-    private ArrayList<MessagesController.DialogFilter> dialogFilters;
+    private final ArrayList<MessagesController.DialogFilter> dialogFilters;
 
     public interface FiltersListBottomSheetDelegate {
         void didSelectFilter(MessagesController.DialogFilter filter);
@@ -65,7 +68,7 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
 
         containerView = new FrameLayout(context) {
 
-            private RectF rect = new RectF();
+            private final RectF rect = new RectF();
             private boolean fullHeight;
 
             @Override
@@ -85,12 +88,10 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
             @Override
             protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                 int height = MeasureSpec.getSize(heightMeasureSpec);
-                if (Build.VERSION.SDK_INT >= 21) {
-                    ignoreLayout = true;
-                    setPadding(backgroundPaddingLeft, AndroidUtilities.statusBarHeight, backgroundPaddingLeft, 0);
-                    ignoreLayout = false;
-                }
-                int contentSize = AndroidUtilities.dp(48) + AndroidUtilities.dp(48) * adapter.getItemCount() + backgroundPaddingTop + AndroidUtilities.statusBarHeight;
+	            ignoreLayout = true;
+	            setPadding(backgroundPaddingLeft, AndroidUtilities.statusBarHeight, backgroundPaddingLeft, 0);
+	            ignoreLayout = false;
+	            int contentSize = AndroidUtilities.dp(48) + AndroidUtilities.dp(48) * adapter.getItemCount() + backgroundPaddingTop + AndroidUtilities.statusBarHeight;
                 int padding = contentSize < (height / 5 * 3.2) ? 0 : (height / 5 * 2);
                 if (padding != 0 && contentSize < height) {
                     padding -= (height - contentSize);
@@ -122,29 +123,27 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
             }
 
             @Override
-            protected void onDraw(Canvas canvas) {
+            protected void onDraw(@NonNull Canvas canvas) {
                 int top = scrollOffsetY - backgroundPaddingTop - AndroidUtilities.dp(8);
                 int height = getMeasuredHeight() + AndroidUtilities.dp(36) + backgroundPaddingTop;
                 int statusBarHeight = 0;
                 float radProgress = 1.0f;
-                if (Build.VERSION.SDK_INT >= 21) {
-                    top += AndroidUtilities.statusBarHeight;
-                    height -= AndroidUtilities.statusBarHeight;
+	            top += AndroidUtilities.statusBarHeight;
+	            height -= AndroidUtilities.statusBarHeight;
 
-                    if (fullHeight) {
-                        if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight * 2) {
-                            int diff = Math.min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight * 2 - top - backgroundPaddingTop);
-                            top -= diff;
-                            height += diff;
-                            radProgress = 1.0f - Math.min(1.0f, (diff * 2) / (float) AndroidUtilities.statusBarHeight);
-                        }
-                        if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight) {
-                            statusBarHeight = Math.min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight - top - backgroundPaddingTop);
-                        }
-                    }
-                }
+	            if (fullHeight) {
+	                if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight * 2) {
+	                    int diff = Math.min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight * 2 - top - backgroundPaddingTop);
+	                    top -= diff;
+	                    height += diff;
+	                    radProgress = 1.0f - Math.min(1.0f, (diff * 2) / (float) AndroidUtilities.statusBarHeight);
+	                }
+	                if (top + backgroundPaddingTop < AndroidUtilities.statusBarHeight) {
+	                    statusBarHeight = Math.min(AndroidUtilities.statusBarHeight, AndroidUtilities.statusBarHeight - top - backgroundPaddingTop);
+	                }
+	            }
 
-                shadowDrawable.setBounds(0, top, getMeasuredWidth(), height);
+	            shadowDrawable.setBounds(0, top, getMeasuredWidth(), height);
                 shadowDrawable.draw(canvas);
 
                 if (radProgress != 1.0f) {
@@ -191,7 +190,7 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
         listView.setGlowColor(Theme.getColor(Theme.key_dialogScrollGlow));
         listView.setOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
-            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 updateLayout();
             }
         });
@@ -324,7 +323,7 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
             if (DialogObject.isEncryptedDialog(did)) {
                 TLRPC.EncryptedChat encryptedChat = fragment.getMessagesController().getEncryptedChat(DialogObject.getEncryptedChatId(did));
                 if (encryptedChat != null) {
-                    did = encryptedChat.user_id;
+                    did = encryptedChat.userId;
                     if (dids.contains(did)) {
                         continue;
                     }
@@ -345,7 +344,7 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {
 
-        private Context context;
+        private final Context context;
 
         public ListAdapter(Context context) {
             this.context = context;
@@ -373,12 +372,13 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
         }
 
         @Override
-        public boolean isEnabled(RecyclerView.ViewHolder holder) {
+        public boolean isEnabled(@NonNull RecyclerView.ViewHolder holder) {
             return true;
         }
 
+        @NonNull
         @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             BottomSheet.BottomSheetCell cell = new BottomSheet.BottomSheetCell(context, 0);
             cell.setBackground(null);
             cell.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));

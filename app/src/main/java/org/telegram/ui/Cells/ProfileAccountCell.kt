@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -17,7 +17,6 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.core.view.setPadding
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ContactsController
 import org.telegram.messenger.LocaleController
@@ -25,7 +24,7 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.BackupImageView
@@ -64,7 +63,7 @@ class ProfileAccountCell(context: Context) : FrameLayout(context) {
 
 		addView(checkImageView, LayoutHelper.createFrame(15, 15f, (if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT) or Gravity.BOTTOM, if (LocaleController.isRTL) 0f else 38f, 0f, if (LocaleController.isRTL) 38f else 0f, 8f))
 
-		unreadCountLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+		unreadCountLabel.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13f)
 		unreadCountLabel.typeface = Theme.TYPEFACE_BOLD
 		unreadCountLabel.setBackgroundResource(R.drawable.unread_counter_background)
 		unreadCountLabel.minimumWidth = AndroidUtilities.dp(24f)
@@ -84,7 +83,7 @@ class ProfileAccountCell(context: Context) : FrameLayout(context) {
 
 	fun setUser(user: User) {
 		avatarDrawable.setInfo(user)
-		textView.text = ContactsController.formatName(user.first_name, user.last_name)
+		textView.text = ContactsController.formatName(user.firstName, user.lastName)
 		imageView.setForUserOrChat(user, avatarDrawable)
 	}
 
@@ -93,7 +92,7 @@ class ProfileAccountCell(context: Context) : FrameLayout(context) {
 
 		avatarDrawable.setInfo(user)
 
-		textView.text = ContactsController.formatName(user?.first_name, user?.last_name)
+		textView.text = ContactsController.formatName(user?.firstName, user?.lastName)
 
 		imageView.imageReceiver.currentAccount = account
 		imageView.setForUserOrChat(user, avatarDrawable)

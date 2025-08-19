@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
-
 package org.telegram.ui.Cells;
 
 import android.animation.Animator;
@@ -15,7 +15,6 @@ import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Typeface;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -41,6 +40,8 @@ import org.telegram.ui.Components.ProgressButton;
 import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.List;
+
+import androidx.annotation.NonNull;
 
 public class FeaturedStickerSetInfoCell extends FrameLayout {
 	private final boolean canAddRemove;
@@ -98,7 +99,7 @@ public class FeaturedStickerSetInfoCell extends FrameLayout {
 		if (canAddRemove) {
 			addButton = new ProgressButton(context);
 			addButton.setTextColor(getThemedColor(Theme.key_featuredStickers_buttonText));
-			addButton.setText(LocaleController.getString("Add", R.string.Add));
+			addButton.setText(context.getString(R.string.Add));
 			if (supportRtl) {
 				lp = LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.END, 0, 16, 14, 0);
 			}
@@ -112,7 +113,7 @@ public class FeaturedStickerSetInfoCell extends FrameLayout {
 			delButton.setTextColor(getThemedColor(Theme.key_featuredStickers_removeButtonText));
 			delButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
 			delButton.setTypeface(Theme.TYPEFACE_BOLD);
-			delButton.setText(LocaleController.getString("StickersRemove", R.string.StickersRemove));
+			delButton.setText(context.getString(R.string.StickersRemove));
 			if (supportRtl) {
 				lp = LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.END, 0, 16, 14, 0);
 			}
@@ -311,7 +312,7 @@ public class FeaturedStickerSetInfoCell extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (isUnread || unreadProgress != 0f) {
 			if (isUnread && unreadProgress != 1f) {
 				unreadProgress += 16f / 100f;

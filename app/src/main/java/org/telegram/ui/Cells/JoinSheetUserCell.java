@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -19,7 +19,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.LayoutHelper;
@@ -54,7 +54,7 @@ public class JoinSheetUserCell extends FrameLayout {
 	}
 
 	public void setUser(User user) {
-		nameTextView.setText(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+		nameTextView.setText(ContactsController.formatName(user.firstName, user.lastName));
 		avatarDrawable.setInfo(user);
 		imageView.setForUserOrChat(user, avatarDrawable);
 	}

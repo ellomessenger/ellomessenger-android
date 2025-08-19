@@ -3,7 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
+ * Copyright Shamil Afadniyev, Ello 2025.
  */
 package org.telegram.ui.profile.subscriptions
 
@@ -14,7 +15,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import org.telegram.messenger.databinding.ItemSubscriptionBinding
 import org.telegram.tgnet.ElloRpc
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLObject
 
 class CurrentSubscriptionsAdapter(private val action: ((SubscriptionItemAction) -> Unit)? = null) : ListAdapter<ElloRpc.SubscriptionItem, SubscriptionViewHolder>(CardsDiffCallBack()) {
 	override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SubscriptionViewHolder {
@@ -37,7 +38,7 @@ class CurrentSubscriptionsAdapter(private val action: ((SubscriptionItemAction) 
 	}
 
 	sealed class SubscriptionItemAction {
-		data class Cancel(val subscriptionItem: ElloRpc.SubscriptionItem, val peer: TLObject, val view: View) : SubscriptionItemAction()
-		data class Subscribe(val subscriptionItem: ElloRpc.SubscriptionItem, val peer: TLObject, val view: View) : SubscriptionItemAction()
+		data class Cancel(val subscriptionItem: ElloRpc.SubscriptionItem, val peer: TLObject? = null, val view: View, val botType: Int, val expireAt: Long) : SubscriptionItemAction()
+		data class Subscribe(val subscriptionItem: ElloRpc.SubscriptionItem, val peer: TLObject?, val view: View, val botType: Int) : SubscriptionItemAction()
 	}
 }

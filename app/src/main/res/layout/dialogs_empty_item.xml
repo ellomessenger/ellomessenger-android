@@ -1,0 +1,102 @@
+<org.telegram.ui.Components.MagicScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:fillViewport="true">
+
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:paddingHorizontal="16dp"
+		android:paddingTop="16dp"
+		android:paddingBottom="64dp">
+
+		<TextView
+			android:id="@+id/title"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_gravity="bottom"
+			android:lineSpacingMultiplier="0.9"
+			android:paddingHorizontal="12dp"
+			android:paddingTop="4dp"
+			android:paddingBottom="12dp"
+			android:textColor="@color/dark"
+			android:textSize="20sp"
+			android:gravity="center"
+			android:textStyle="bold"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			tools:text="@string/secure_and_encrypted" />
+
+		<FrameLayout
+			android:id="@+id/logo_container"
+			android:layout_width="match_parent"
+			android:layout_height="0dp"
+			android:foreground="?selectableItemBackground"
+			app:layout_constraintDimensionRatio="1:1"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@+id/title">
+
+			<ImageView
+				android:id="@+id/logo"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
+				android:contentDescription="@null"
+				android:scaleType="centerCrop"
+				tools:src="@drawable/channel_monetization" />
+
+			<com.google.android.material.textfield.TextInputLayout
+				android:id="@+id/search_input_layout"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="26dp"
+				android:layout_marginTop="16dp"
+				android:layout_marginEnd="26dp"
+				app:boxBackgroundMode="outline"
+				app:boxCornerRadiusBottomEnd="10dp"
+				app:boxCornerRadiusBottomStart="10dp"
+				app:boxCornerRadiusTopEnd="10dp"
+				app:boxCornerRadiusTopStart="10dp"
+				app:boxStrokeColor="@android:color/transparent"
+				app:endIconMode="none"
+				app:hintEnabled="false">
+
+				<com.google.android.material.textfield.TextInputEditText
+					android:id="@+id/search"
+					android:layout_width="match_parent"
+					android:layout_height="wrap_content"
+					android:drawableStart="@drawable/ic_search_menu"
+					android:drawablePadding="8dp"
+					android:drawableTint="@color/disabled_text"
+					android:ellipsize="end"
+					android:focusable="false"
+					android:hint="@string/search_hint"
+					android:inputType="text"
+					android:maxLines="1"
+					android:paddingVertical="12dp"
+					android:paddingStart="8dp"
+					android:textColor="@color/disabled_text"
+					android:textSize="16sp"
+					android:visibility="gone" />
+			</com.google.android.material.textfield.TextInputLayout>
+
+		</FrameLayout>
+
+		<TextView
+			android:id="@+id/description"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_margin="12dp"
+			android:textColor="@color/disabled_text"
+			android:textSize="14sp"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toBottomOf="@+id/logo_container"
+			tools:text="@string/ello_messenger_cloud_based" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+</org.telegram.ui.Components.MagicScrollView>

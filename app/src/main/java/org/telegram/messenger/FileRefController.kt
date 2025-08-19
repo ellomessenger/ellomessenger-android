@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger
 
@@ -13,84 +13,94 @@ import org.telegram.messenger.FileLoadOperation.RequestInfo
 import org.telegram.messenger.SendMessagesHelper.DelayedMessage
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.RequestDelegate
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.BotInfo
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.FileLocation
 import org.telegram.tgnet.TLRPC.InputFileLocation
 import org.telegram.tgnet.TLRPC.InputPeer
 import org.telegram.tgnet.TLRPC.InputStickerSet
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.MessagesMessages
 import org.telegram.tgnet.TLRPC.PhotoSize
+import org.telegram.tgnet.TLRPC.PhotosPhotos
 import org.telegram.tgnet.TLRPC.StickerSetCovered
-import org.telegram.tgnet.TLRPC.TL_account_getTheme
-import org.telegram.tgnet.TLRPC.TL_account_getWallPaper
-import org.telegram.tgnet.TLRPC.TL_account_getWallPapers
-import org.telegram.tgnet.TLRPC.TL_account_wallPapers
-import org.telegram.tgnet.TLRPC.TL_attachMenuBot
-import org.telegram.tgnet.TLRPC.TL_attachMenuBotsBot
-import org.telegram.tgnet.TLRPC.TL_channel
-import org.telegram.tgnet.TLRPC.TL_channels_getChannels
-import org.telegram.tgnet.TLRPC.TL_channels_getMessages
-import org.telegram.tgnet.TLRPC.TL_chat
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.TLRPC.TL_help_appUpdate
-import org.telegram.tgnet.TLRPC.TL_help_getAppUpdate
-import org.telegram.tgnet.TLRPC.TL_inputDocumentFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputMediaDocument
-import org.telegram.tgnet.TLRPC.TL_inputMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_inputMessagesFilterChatPhotos
-import org.telegram.tgnet.TLRPC.TL_inputPeerChannel
-import org.telegram.tgnet.TLRPC.TL_inputPeerChat
-import org.telegram.tgnet.TLRPC.TL_inputPeerPhotoFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputPeerUser
-import org.telegram.tgnet.TLRPC.TL_inputPhotoFileLocation
-import org.telegram.tgnet.TLRPC.TL_inputSingleMedia
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetID
-import org.telegram.tgnet.TLRPC.TL_inputStickeredMediaDocument
-import org.telegram.tgnet.TLRPC.TL_inputStickeredMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_inputTheme
-import org.telegram.tgnet.TLRPC.TL_inputWallPaper
-import org.telegram.tgnet.TLRPC.TL_messageActionChatEditPhoto
-import org.telegram.tgnet.TLRPC.TL_messages_availableReactions
-import org.telegram.tgnet.TLRPC.TL_messages_chats
-import org.telegram.tgnet.tlrpc.TL_messages_editMessage
-import org.telegram.tgnet.TLRPC.TL_messages_faveSticker
-import org.telegram.tgnet.TLRPC.TL_messages_favedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getAttachMenuBot
-import org.telegram.tgnet.TLRPC.TL_messages_getAttachedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getAvailableReactions
-import org.telegram.tgnet.TLRPC.TL_messages_getChats
-import org.telegram.tgnet.TLRPC.TL_messages_getFavedStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getMessages
-import org.telegram.tgnet.TLRPC.TL_messages_getRecentStickers
-import org.telegram.tgnet.TLRPC.TL_messages_getSavedGifs
-import org.telegram.tgnet.TLRPC.TL_messages_getScheduledMessages
-import org.telegram.tgnet.TLRPC.TL_messages_getStickerSet
-import org.telegram.tgnet.TLRPC.TL_messages_getWebPage
-import org.telegram.tgnet.TLRPC.TL_messages_recentStickers
-import org.telegram.tgnet.TLRPC.TL_messages_saveGif
-import org.telegram.tgnet.TLRPC.TL_messages_saveRecentSticker
-import org.telegram.tgnet.TLRPC.TL_messages_savedGifs
-import org.telegram.tgnet.TLRPC.TL_messages_search
-import org.telegram.tgnet.TLRPC.TL_messages_sendMedia
-import org.telegram.tgnet.TLRPC.TL_messages_sendMultiMedia
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
-import org.telegram.tgnet.TLRPC.TL_photos_getUserPhotos
-import org.telegram.tgnet.TLRPC.TL_theme
-import org.telegram.tgnet.TLRPC.TL_users_getFullUser
-import org.telegram.tgnet.TLRPC.TL_users_getUsers
-import org.telegram.tgnet.TLRPC.TL_wallPaper
-import org.telegram.tgnet.TLRPC.WallPaper
+import org.telegram.tgnet.TLRPC.TLAccountGetTheme
+import org.telegram.tgnet.TLRPC.TLAccountGetWallPaper
+import org.telegram.tgnet.TLRPC.TLAccountGetWallPapers
+import org.telegram.tgnet.TLRPC.TLAccountWallPapers
+import org.telegram.tgnet.TLRPC.TLAttachMenuBot
+import org.telegram.tgnet.TLRPC.TLAttachMenuBotsBot
+import org.telegram.tgnet.TLRPC.TLAvailableReaction
+import org.telegram.tgnet.TLRPC.TLBotInfo
+import org.telegram.tgnet.TLRPC.TLChannel
+import org.telegram.tgnet.TLRPC.TLChannelsGetChannels
+import org.telegram.tgnet.TLRPC.TLChannelsGetMessages
+import org.telegram.tgnet.TLRPC.TLChat
+import org.telegram.tgnet.TLRPC.TLError
+import org.telegram.tgnet.TLRPC.TLHelpAppUpdate
+import org.telegram.tgnet.TLRPC.TLHelpGetAppUpdate
+import org.telegram.tgnet.TLRPC.TLInputDocumentFileLocation
+import org.telegram.tgnet.TLRPC.TLInputFileLocation
+import org.telegram.tgnet.TLRPC.TLInputMediaDocument
+import org.telegram.tgnet.TLRPC.TLInputMediaPhoto
+import org.telegram.tgnet.TLRPC.TLInputMessagesFilterChatPhotos
+import org.telegram.tgnet.TLRPC.TLInputPeerChannel
+import org.telegram.tgnet.TLRPC.TLInputPeerChat
+import org.telegram.tgnet.TLRPC.TLInputPeerPhotoFileLocation
+import org.telegram.tgnet.TLRPC.TLInputPeerUser
+import org.telegram.tgnet.TLRPC.TLInputPhotoFileLocation
+import org.telegram.tgnet.TLRPC.TLInputSingleMedia
+import org.telegram.tgnet.TLRPC.TLInputStickerSetID
+import org.telegram.tgnet.TLRPC.TLInputStickeredMediaDocument
+import org.telegram.tgnet.TLRPC.TLInputStickeredMediaPhoto
+import org.telegram.tgnet.TLRPC.TLInputTheme
+import org.telegram.tgnet.TLRPC.TLInputWallPaper
+import org.telegram.tgnet.TLRPC.TLMessageActionChatEditPhoto
+import org.telegram.tgnet.TLRPC.TLMessagesAvailableReactions
+import org.telegram.tgnet.TLRPC.TLMessagesChats
+import org.telegram.tgnet.TLRPC.TLMessagesEditMessage
+import org.telegram.tgnet.TLRPC.TLMessagesFaveSticker
+import org.telegram.tgnet.TLRPC.TLMessagesFavedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetAttachMenuBot
+import org.telegram.tgnet.TLRPC.TLMessagesGetAttachedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetAvailableReactions
+import org.telegram.tgnet.TLRPC.TLMessagesGetChats
+import org.telegram.tgnet.TLRPC.TLMessagesGetFavedStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetMessages
+import org.telegram.tgnet.TLRPC.TLMessagesGetRecentStickers
+import org.telegram.tgnet.TLRPC.TLMessagesGetSavedGifs
+import org.telegram.tgnet.TLRPC.TLMessagesGetScheduledMessages
+import org.telegram.tgnet.TLRPC.TLMessagesGetStickerSet
+import org.telegram.tgnet.TLRPC.TLMessagesGetWebPage
+import org.telegram.tgnet.TLRPC.TLMessagesRecentStickers
+import org.telegram.tgnet.TLRPC.TLMessagesSaveGif
+import org.telegram.tgnet.TLRPC.TLMessagesSaveRecentSticker
+import org.telegram.tgnet.TLRPC.TLMessagesSavedGifs
+import org.telegram.tgnet.TLRPC.TLMessagesSearch
+import org.telegram.tgnet.TLRPC.TLMessagesSendMedia
+import org.telegram.tgnet.TLRPC.TLMessagesSendMultiMedia
+import org.telegram.tgnet.TLRPC.TLMessagesStickerSet
+import org.telegram.tgnet.TLRPC.TLPhotosGetUserPhotos
+import org.telegram.tgnet.TLRPC.TLTheme
+import org.telegram.tgnet.TLRPC.TLUsersGetFullUser
+import org.telegram.tgnet.TLRPC.TLUsersGetUsers
+import org.telegram.tgnet.TLRPC.TLUsersUserFull
+import org.telegram.tgnet.TLRPC.TLWallPaper
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.tgnet.TLRPC.WebPage
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_availableReaction
-import org.telegram.tgnet.tlrpc.TL_users_userFull
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.Vector
-import org.telegram.tgnet.tlrpc.messages_Messages
-import org.telegram.tgnet.tlrpc.photos_Photos
+import org.telegram.tgnet.Vector
+import org.telegram.tgnet.action
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.document
+import org.telegram.tgnet.fileReference
+import org.telegram.tgnet.game
+import org.telegram.tgnet.id
+import org.telegram.tgnet.media
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoBig
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.webpage
 import org.telegram.ui.ActionBar.Theme
 import kotlin.math.abs
 
@@ -113,7 +123,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 	private val locationRequester = mutableMapOf<String, ArrayList<Requester>>()
 	private val parentRequester = mutableMapOf<String, ArrayList<Requester>>()
 	private val responseCache = mutableMapOf<String, CachedResult>()
-	private val multiMediaCache = mutableMapOf<TL_messages_sendMultiMedia, Array<Any>>()
+	private val multiMediaCache = mutableMapOf<TLMessagesSendMultiMedia, Array<Any>>()
 	private var lastCleanupTime = SystemClock.elapsedRealtime()
 	private val wallpaperWaiters = mutableListOf<Waiter>()
 	private val savedGifsWaiters = mutableListOf<Waiter>()
@@ -130,22 +140,22 @@ class FileRefController(instance: Int) : BaseController(instance) {
 		}
 
 		when (val firstArgument = args[0]) {
-			is TL_inputSingleMedia -> {
+			is TLInputSingleMedia -> {
 				when (firstArgument.media) {
-					is TL_inputMediaDocument -> {
-						val mediaDocument = firstArgument.media as TL_inputMediaDocument
+					is TLInputMediaDocument -> {
+						val mediaDocument = firstArgument.media as TLInputMediaDocument
 
-						locationKey = "file_" + mediaDocument.id.id
-						location = TL_inputDocumentFileLocation()
-						location.id = mediaDocument.id.id
+						locationKey = "file_" + mediaDocument.id?.id
+						location = TLInputDocumentFileLocation()
+						location.id = mediaDocument.id?.id ?: 0
 					}
 
-					is TL_inputMediaPhoto -> {
-						val mediaPhoto = firstArgument.media as TL_inputMediaPhoto
+					is TLInputMediaPhoto -> {
+						val mediaPhoto = firstArgument.media as TLInputMediaPhoto
 
-						locationKey = "photo_" + mediaPhoto.id.id
-						location = TL_inputPhotoFileLocation()
-						location.id = mediaPhoto.id.id
+						locationKey = "photo_" + mediaPhoto.id?.id
+						location = TLInputPhotoFileLocation()
+						location.id = mediaPhoto.id?.id ?: 0
 					}
 
 					else -> {
@@ -155,16 +165,16 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is TL_messages_sendMultiMedia -> {
+			is TLMessagesSendMultiMedia -> {
 				val parentObjects = parentObject as? List<Any>
 
 				multiMediaCache[firstArgument] = args.toList().filterNotNull().toTypedArray()
 
 				var a = 0
-				val size = firstArgument.multi_media.size
+				val size = firstArgument.multiMedia.size
 
 				while (a < size) {
-					val media = firstArgument.multi_media[a]
+					val media = firstArgument.multiMedia[a]
 
 					parentObject = parentObjects?.getOrNull(a)
 
@@ -181,22 +191,22 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				return
 			}
 
-			is TL_messages_sendMedia -> {
+			is TLMessagesSendMedia -> {
 				when (firstArgument.media) {
-					is TL_inputMediaDocument -> {
-						val mediaDocument = firstArgument.media as TL_inputMediaDocument
+					is TLInputMediaDocument -> {
+						val mediaDocument = firstArgument.media as TLInputMediaDocument
 
-						locationKey = "file_" + mediaDocument.id.id
-						location = TL_inputDocumentFileLocation()
-						location.id = mediaDocument.id.id
+						locationKey = "file_" + mediaDocument.id?.id
+						location = TLInputDocumentFileLocation()
+						location.id = mediaDocument.id?.id ?: 0
 					}
 
-					is TL_inputMediaPhoto -> {
-						val mediaPhoto = firstArgument.media as TL_inputMediaPhoto
+					is TLInputMediaPhoto -> {
+						val mediaPhoto = firstArgument.media as TLInputMediaPhoto
 
-						locationKey = "photo_" + mediaPhoto.id.id
-						location = TL_inputPhotoFileLocation()
-						location.id = mediaPhoto.id.id
+						locationKey = "photo_" + mediaPhoto.id?.id
+						location = TLInputPhotoFileLocation()
+						location.id = mediaPhoto.id?.id ?: 0
 					}
 
 					else -> {
@@ -206,22 +216,22 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is TL_messages_editMessage -> {
+			is TLMessagesEditMessage -> {
 				when (firstArgument.media) {
-					is TL_inputMediaDocument -> {
-						val mediaDocument = firstArgument.media as TL_inputMediaDocument
+					is TLInputMediaDocument -> {
+						val mediaDocument = firstArgument.media as TLInputMediaDocument
 
-						locationKey = "file_" + mediaDocument.id.id
-						location = TL_inputDocumentFileLocation()
-						location.id = mediaDocument.id.id
+						locationKey = "file_" + mediaDocument.id?.id
+						location = TLInputDocumentFileLocation()
+						location.id = mediaDocument.id?.id ?: 0
 					}
 
-					is TL_inputMediaPhoto -> {
-						val mediaPhoto = firstArgument.media as TL_inputMediaPhoto
+					is TLInputMediaPhoto -> {
+						val mediaPhoto = firstArgument.media as TLInputMediaPhoto
 
-						locationKey = "photo_" + mediaPhoto.id.id
-						location = TL_inputPhotoFileLocation()
-						location.id = mediaPhoto.id.id
+						locationKey = "photo_" + mediaPhoto.id?.id
+						location = TLInputPhotoFileLocation()
+						location.id = mediaPhoto.id?.id ?: 0
 					}
 
 					else -> {
@@ -231,40 +241,40 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is TL_messages_saveGif -> {
-				locationKey = "file_" + firstArgument.id.id
-				location = TL_inputDocumentFileLocation()
-				location.id = firstArgument.id.id
+			is TLMessagesSaveGif -> {
+				locationKey = "file_" + firstArgument.id?.id
+				location = TLInputDocumentFileLocation()
+				location.id = firstArgument.id?.id ?: 0
 			}
 
-			is TL_messages_saveRecentSticker -> {
-				locationKey = "file_" + firstArgument.id.id
-				location = TL_inputDocumentFileLocation()
-				location.id = firstArgument.id.id
+			is TLMessagesSaveRecentSticker -> {
+				locationKey = "file_" + firstArgument.id?.id
+				location = TLInputDocumentFileLocation()
+				location.id = firstArgument.id?.id ?: 0
 			}
 
-			is TL_messages_faveSticker -> {
-				locationKey = "file_" + firstArgument.id.id
-				location = TL_inputDocumentFileLocation()
-				location.id = firstArgument.id.id
+			is TLMessagesFaveSticker -> {
+				locationKey = "file_" + firstArgument.id?.id
+				location = TLInputDocumentFileLocation()
+				location.id = firstArgument.id?.id ?: 0
 			}
 
-			is TL_messages_getAttachedStickers -> {
+			is TLMessagesGetAttachedStickers -> {
 				when (firstArgument.media) {
-					is TL_inputStickeredMediaDocument -> {
-						val mediaDocument = firstArgument.media as TL_inputStickeredMediaDocument
+					is TLInputStickeredMediaDocument -> {
+						val mediaDocument = firstArgument.media as TLInputStickeredMediaDocument
 
-						locationKey = "file_" + mediaDocument.id.id
-						location = TL_inputDocumentFileLocation()
-						location.id = mediaDocument.id.id
+						locationKey = "file_" + mediaDocument.id?.id
+						location = TLInputDocumentFileLocation()
+						location.id = mediaDocument.id?.id ?: 0
 					}
 
-					is TL_inputStickeredMediaPhoto -> {
-						val mediaPhoto = firstArgument.media as TL_inputStickeredMediaPhoto
+					is TLInputStickeredMediaPhoto -> {
+						val mediaPhoto = firstArgument.media as TLInputStickeredMediaPhoto
 
-						locationKey = "photo_" + mediaPhoto.id.id
-						location = TL_inputPhotoFileLocation()
-						location.id = mediaPhoto.id.id
+						locationKey = "photo_" + mediaPhoto.id?.id
+						location = TLInputPhotoFileLocation()
+						location.id = mediaPhoto.id?.id ?: 0
 					}
 
 					else -> {
@@ -274,22 +284,22 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is TL_inputFileLocation -> {
+			is TLInputFileLocation -> {
 				location = firstArgument
-				locationKey = "loc_" + location.local_id + "_" + location.volume_id
+				locationKey = "loc_" + location.localId + "_" + location.volumeId
 			}
 
-			is TL_inputDocumentFileLocation -> {
+			is TLInputDocumentFileLocation -> {
 				location = firstArgument
 				locationKey = "file_" + location.id
 			}
 
-			is TL_inputPhotoFileLocation -> {
+			is TLInputPhotoFileLocation -> {
 				location = firstArgument
 				locationKey = "photo_" + location.id
 			}
 
-			is TL_inputPeerPhotoFileLocation -> {
+			is TLInputPeerPhotoFileLocation -> {
 				location = firstArgument
 				locationKey = "avatar_" + location.id
 			}
@@ -410,8 +420,8 @@ class FileRefController(instance: Int) : BaseController(instance) {
 
 	private fun requestReferenceFromServer(parentObject: Any?, locationKey: String, parentKey: String, args: Array<Any?>?) {
 		when (parentObject) {
-			is TL_availableReaction -> {
-				val req = TL_messages_getAvailableReactions()
+			is TLAvailableReaction -> {
+				val req = TLMessagesGetAvailableReactions()
 				req.hash = 0
 
 				connectionsManager.sendRequest(req) { response, _ ->
@@ -419,18 +429,18 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is BotInfo -> {
-				val req = TL_users_getFullUser()
-				req.id = messagesController.getInputUser(parentObject.user_id)
+			is TLBotInfo -> {
+				val req = TLUsersGetFullUser()
+				req.id = messagesController.getInputUser(parentObject.userId)
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
 				}
 			}
 
-			is TL_attachMenuBot -> {
-				val req = TL_messages_getAttachMenuBot()
-				req.bot = messagesController.getInputUser(parentObject.bot_id)
+			is TLAttachMenuBot -> {
+				val req = TLMessagesGetAttachMenuBot()
+				req.bot = messagesController.getInputUser(parentObject.botId)
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
@@ -441,7 +451,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				val channelId = parentObject.channelId
 
 				if (parentObject.scheduled) {
-					val req = TL_messages_getScheduledMessages()
+					val req = TLMessagesGetScheduledMessages()
 					req.peer = messagesController.getInputPeer(parentObject.dialogId)
 					req.id.add(parentObject.realId)
 
@@ -450,17 +460,17 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 				else if (channelId != 0L) {
-					val req = TL_channels_getMessages()
+					val req = TLChannelsGetMessages()
 					req.channel = messagesController.getInputChannel(channelId)
-					req.id.add(parentObject.realId)
+					req.id.add(TLRPC.TLInputMessageID().also { it.id = parentObject.realId })
 
 					connectionsManager.sendRequest(req) { response, _ ->
 						onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
 					}
 				}
 				else {
-					val req = TL_messages_getMessages()
-					req.id.add(parentObject.realId)
+					val req = TLMessagesGetMessages()
+					req.id.add(TLRPC.TLInputMessageID().also { it.id = parentObject.realId })
 
 					connectionsManager.sendRequest(req) { response, _ ->
 						onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
@@ -468,12 +478,12 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is TL_wallPaper -> {
-				val req = TL_account_getWallPaper()
+			is TLWallPaper -> {
+				val req = TLAccountGetWallPaper()
 
-				val inputWallPaper = TL_inputWallPaper()
+				val inputWallPaper = TLInputWallPaper()
 				inputWallPaper.id = parentObject.id
-				inputWallPaper.access_hash = parentObject.access_hash
+				inputWallPaper.accessHash = parentObject.accessHash
 
 				req.wallpaper = inputWallPaper
 
@@ -482,12 +492,12 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is TL_theme -> {
-				val req = TL_account_getTheme()
+			is TLTheme -> {
+				val req = TLAccountGetTheme()
 
-				val inputTheme = TL_inputTheme()
+				val inputTheme = TLInputTheme()
 				inputTheme.id = parentObject.id
-				inputTheme.access_hash = parentObject.access_hash
+				inputTheme.accessHash = parentObject.accessHash
 
 				req.theme = inputTheme
 				req.format = "android"
@@ -498,7 +508,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			}
 
 			is WebPage -> {
-				val req = TL_messages_getWebPage()
+				val req = TLMessagesGetWebPage()
 				req.url = parentObject.url
 				req.hash = 0
 
@@ -508,7 +518,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			}
 
 			is User -> {
-				val req = TL_users_getUsers()
+				val req = TLUsersGetUsers()
 				req.id.add(messagesController.getInputUser(parentObject))
 
 				connectionsManager.sendRequest(req) { response, _ ->
@@ -517,16 +527,16 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			}
 
 			is Chat -> {
-				if (parentObject is TL_chat) {
-					val req = TL_messages_getChats()
+				if (parentObject is TLChat) {
+					val req = TLMessagesGetChats()
 					req.id.add(parentObject.id)
 
 					connectionsManager.sendRequest(req) { response, _ ->
 						onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
 					}
 				}
-				else if (parentObject is TL_channel) {
-					val req = TL_channels_getChannels()
+				else if (parentObject is TLChannel) {
+					val req = TLChannelsGetChannels()
 					req.id.add(MessagesController.getInputChannel(parentObject))
 
 					connectionsManager.sendRequest(req) { response, _ ->
@@ -538,7 +548,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			is String -> {
 				if ("wallpaper" == parentObject) {
 					if (wallpaperWaiters.isEmpty()) {
-						val req = TL_account_getWallPapers()
+						val req = TLAccountGetWallPapers()
 
 						connectionsManager.sendRequest(req) { response, _ ->
 							broadcastWaitersData(wallpaperWaiters, response)
@@ -549,7 +559,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 				else if (parentObject.startsWith("gif")) {
 					if (savedGifsWaiters.isEmpty()) {
-						val req = TL_messages_getSavedGifs()
+						val req = TLMessagesGetSavedGifs()
 
 						connectionsManager.sendRequest(req) { response, _ ->
 							broadcastWaitersData(savedGifsWaiters, response)
@@ -560,7 +570,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 				else if ("recent" == parentObject) {
 					if (recentStickersWaiter.isEmpty()) {
-						val req = TL_messages_getRecentStickers()
+						val req = TLMessagesGetRecentStickers()
 
 						connectionsManager.sendRequest(req) { response, _ ->
 							broadcastWaitersData(recentStickersWaiter, response)
@@ -571,7 +581,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 				else if ("fav" == parentObject) {
 					if (favStickersWaiter.isEmpty()) {
-						val req = TL_messages_getFavedStickers()
+						val req = TLMessagesGetFavedStickers()
 
 						connectionsManager.sendRequest(req) { response, _ ->
 							broadcastWaitersData(favStickersWaiter, response)
@@ -581,7 +591,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					favStickersWaiter.add(Waiter(locationKey, parentKey))
 				}
 				else if ("update" == parentObject) {
-					val req = TL_help_getAppUpdate()
+					val req = TLHelpGetAppUpdate()
 
 					runCatching {
 						req.source = ApplicationLoader.applicationContext.packageManager.getInstallerPackageName(ApplicationLoader.applicationContext.packageName)
@@ -599,21 +609,21 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					val id = Utilities.parseLong(parentObject)
 
 					if (id > 0) {
-						val req = TL_photos_getUserPhotos()
+						val req = TLPhotosGetUserPhotos()
 						req.limit = 80
 						req.offset = 0
-						req.max_id = 0
-						req.user_id = messagesController.getInputUser(id)
+						req.maxId = 0
+						req.userId = messagesController.getInputUser(id)
 
 						connectionsManager.sendRequest(req) { response, _ ->
 							onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
 						}
 					}
 					else {
-						val req = TL_messages_search()
-						req.filter = TL_inputMessagesFilterChatPhotos()
+						val req = TLMessagesSearch()
+						req.filter = TLInputMessagesFilterChatPhotos()
 						req.limit = 80
-						req.offset_id = 0
+						req.offsetId = 0
 						req.q = ""
 						req.peer = messagesController.getInputPeer(id)
 
@@ -629,17 +639,17 @@ class FileRefController(instance: Int) : BaseController(instance) {
 						val channelId = Utilities.parseLong(params[1])
 
 						if (channelId != 0L) {
-							val req = TL_channels_getMessages()
+							val req = TLChannelsGetMessages()
 							req.channel = messagesController.getInputChannel(channelId)
-							req.id.add(Utilities.parseInt(params[2]))
+							req.id.add(TLRPC.TLInputMessageID().also { it.id = Utilities.parseInt(params[2]) })
 
 							connectionsManager.sendRequest(req) { response, _ ->
 								onRequestComplete(locationKey, parentKey, response, cache = false, fromCache = false)
 							}
 						}
 						else {
-							val req = TL_messages_getMessages()
-							req.id.add(Utilities.parseInt(params[2]))
+							val req = TLMessagesGetMessages()
+							req.id.add(TLRPC.TLInputMessageID().also { it.id = Utilities.parseInt(params[2]) })
 
 							connectionsManager.sendRequest(req) { response, _ ->
 								onRequestComplete(locationKey, parentKey, response, cache = false, fromCache = false)
@@ -655,11 +665,13 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			is TL_messages_stickerSet -> {
-				val req = TL_messages_getStickerSet()
-				req.stickerset = TL_inputStickerSetID()
-				req.stickerset.id = parentObject.set.id
-				req.stickerset.access_hash = parentObject.set.access_hash
+			is TLMessagesStickerSet -> {
+				val req = TLMessagesGetStickerSet()
+
+				req.stickerset = TLInputStickerSetID().also {
+					it.id = parentObject.set?.id ?: 0
+					it.accessHash = parentObject.set?.accessHash ?: 0
+				}
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
@@ -667,10 +679,12 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			}
 
 			is StickerSetCovered -> {
-				val req = TL_messages_getStickerSet()
-				req.stickerset = TL_inputStickerSetID()
-				req.stickerset.id = parentObject.set.id
-				req.stickerset.access_hash = parentObject.set.access_hash
+				val req = TLMessagesGetStickerSet()
+
+				req.stickerset = TLInputStickerSetID().also {
+					it.id = parentObject.set?.id ?: 0
+					it.accessHash = parentObject.set?.accessHash ?: 0
+				}
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					onRequestComplete(locationKey, parentKey, response, cache = true, fromCache = false)
@@ -678,7 +692,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			}
 
 			is InputStickerSet -> {
-				val req = TL_messages_getStickerSet()
+				val req = TLMessagesGetStickerSet()
 				req.stickerset = parentObject
 
 				connectionsManager.sendRequest(req) { response, _ ->
@@ -692,7 +706,11 @@ class FileRefController(instance: Int) : BaseController(instance) {
 		}
 	}
 
-	private fun isSameReference(oldRef: ByteArray, newRef: ByteArray): Boolean {
+	private fun isSameReference(oldRef: ByteArray?, newRef: ByteArray?): Boolean {
+		if (oldRef == null || newRef == null) {
+			return false
+		}
+
 		return oldRef.contentEquals(newRef)
 	}
 
@@ -703,30 +721,30 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			FileLog.d("fileref updated for " + firstArgument + " " + requester.locationKey)
 		}
 
-		if (firstArgument is TL_inputSingleMedia) {
-			val multiMedia = requester.args?.get(1) as TL_messages_sendMultiMedia
+		if (firstArgument is TLInputSingleMedia) {
+			val multiMedia = requester.args?.get(1) as TLMessagesSendMultiMedia
 			val objects = multiMediaCache[multiMedia] ?: return true
 
-			if (firstArgument.media is TL_inputMediaDocument) {
-				val mediaDocument = firstArgument.media as TL_inputMediaDocument
+			if (firstArgument.media is TLInputMediaDocument) {
+				val mediaDocument = firstArgument.media as TLInputMediaDocument
 
-				if (fromCache && isSameReference(mediaDocument.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaDocument.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaDocument.id.file_reference = fileReference
+				mediaDocument.id?.fileReference = fileReference
 			}
-			else if (firstArgument.media is TL_inputMediaPhoto) {
-				val mediaPhoto = firstArgument.media as TL_inputMediaPhoto
+			else if (firstArgument.media is TLInputMediaPhoto) {
+				val mediaPhoto = firstArgument.media as TLInputMediaPhoto
 
-				if (fromCache && isSameReference(mediaPhoto.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaPhoto.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaPhoto.id.file_reference = fileReference
+				mediaPhoto.id?.fileReference = fileReference
 			}
 
-			val index = multiMedia.multi_media.indexOf(firstArgument)
+			val index = multiMedia.multiMedia.indexOf(firstArgument)
 
 			if (index < 0) {
 				return true
@@ -754,99 +772,99 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 		}
-		else if (firstArgument is TL_messages_sendMedia) {
-			if (firstArgument.media is TL_inputMediaDocument) {
-				val mediaDocument = firstArgument.media as TL_inputMediaDocument
+		else if (firstArgument is TLMessagesSendMedia) {
+			if (firstArgument.media is TLInputMediaDocument) {
+				val mediaDocument = firstArgument.media as TLInputMediaDocument
 
-				if (fromCache && isSameReference(mediaDocument.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaDocument.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaDocument.id.file_reference = fileReference
+				mediaDocument.id?.fileReference = fileReference
 			}
-			else if (firstArgument.media is TL_inputMediaPhoto) {
-				val mediaPhoto = firstArgument.media as TL_inputMediaPhoto
+			else if (firstArgument.media is TLInputMediaPhoto) {
+				val mediaPhoto = firstArgument.media as TLInputMediaPhoto
 
-				if (fromCache && isSameReference(mediaPhoto.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaPhoto.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaPhoto.id.file_reference = fileReference
+				mediaPhoto.id?.fileReference = fileReference
 			}
 
 			AndroidUtilities.runOnUIThread {
 				sendMessagesHelper.performSendMessageRequest(firstArgument as TLObject, requester.args?.get(1) as MessageObject, requester.args?.get(2) as String, requester.args?.get(3) as DelayedMessage, (requester.args?.get(4) as Boolean), requester.args?.get(5) as DelayedMessage, null, (requester.args?.get(6) as Boolean))
 			}
 		}
-		else if (firstArgument is TL_messages_editMessage) {
-			if (firstArgument.media is TL_inputMediaDocument) {
-				val mediaDocument = firstArgument.media as TL_inputMediaDocument
+		else if (firstArgument is TLMessagesEditMessage) {
+			if (firstArgument.media is TLInputMediaDocument) {
+				val mediaDocument = firstArgument.media as TLInputMediaDocument
 
-				if (fromCache && isSameReference(mediaDocument.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaDocument.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaDocument.id.file_reference = fileReference
+				mediaDocument.id?.fileReference = fileReference
 			}
-			else if (firstArgument.media is TL_inputMediaPhoto) {
-				val mediaPhoto = firstArgument.media as TL_inputMediaPhoto
+			else if (firstArgument.media is TLInputMediaPhoto) {
+				val mediaPhoto = firstArgument.media as TLInputMediaPhoto
 
-				if (fromCache && isSameReference(mediaPhoto.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaPhoto.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaPhoto.id.file_reference = fileReference
+				mediaPhoto.id?.fileReference = fileReference
 			}
 
 			AndroidUtilities.runOnUIThread {
 				sendMessagesHelper.performSendMessageRequest(firstArgument as TLObject, requester.args!![1] as MessageObject, requester.args!![2] as String, requester.args!![3] as DelayedMessage, (requester.args!![4] as Boolean), requester.args!![5] as DelayedMessage, null, (requester.args!![6] as Boolean))
 			}
 		}
-		else if (firstArgument is TL_messages_saveGif) {
-			if (fromCache && isSameReference(firstArgument.id.file_reference, fileReference)) {
+		else if (firstArgument is TLMessagesSaveGif) {
+			if (fromCache && isSameReference(firstArgument.id?.fileReference, fileReference)) {
 				return false
 			}
 
-			firstArgument.id.file_reference = fileReference
+			firstArgument.id?.fileReference = fileReference
 
 			connectionsManager.sendRequest(firstArgument)
 		}
-		else if (firstArgument is TL_messages_saveRecentSticker) {
-			if (fromCache && isSameReference(firstArgument.id.file_reference, fileReference)) {
+		else if (firstArgument is TLMessagesSaveRecentSticker) {
+			if (fromCache && isSameReference(firstArgument.id?.fileReference, fileReference)) {
 				return false
 			}
 
-			firstArgument.id.file_reference = fileReference
+			firstArgument.id?.fileReference = fileReference
 
 			connectionsManager.sendRequest(firstArgument)
 		}
-		else if (firstArgument is TL_messages_faveSticker) {
-			if (fromCache && isSameReference(firstArgument.id.file_reference, fileReference)) {
+		else if (firstArgument is TLMessagesFaveSticker) {
+			if (fromCache && isSameReference(firstArgument.id?.fileReference, fileReference)) {
 				return false
 			}
 
-			firstArgument.id.file_reference = fileReference
+			firstArgument.id?.fileReference = fileReference
 
 			connectionsManager.sendRequest(firstArgument)
 		}
-		else if (firstArgument is TL_messages_getAttachedStickers) {
-			if (firstArgument.media is TL_inputStickeredMediaDocument) {
-				val mediaDocument = firstArgument.media as TL_inputStickeredMediaDocument
+		else if (firstArgument is TLMessagesGetAttachedStickers) {
+			if (firstArgument.media is TLInputStickeredMediaDocument) {
+				val mediaDocument = firstArgument.media as TLInputStickeredMediaDocument
 
-				if (fromCache && isSameReference(mediaDocument.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaDocument.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaDocument.id.file_reference = fileReference
+				mediaDocument.id?.fileReference = fileReference
 			}
-			else if (firstArgument.media is TL_inputStickeredMediaPhoto) {
-				val mediaPhoto = firstArgument.media as TL_inputStickeredMediaPhoto
+			else if (firstArgument.media is TLInputStickeredMediaPhoto) {
+				val mediaPhoto = firstArgument.media as TLInputStickeredMediaPhoto
 
-				if (fromCache && isSameReference(mediaPhoto.id.file_reference, fileReference)) {
+				if (fromCache && isSameReference(mediaPhoto.id?.fileReference, fileReference)) {
 					return false
 				}
 
-				mediaPhoto.id.file_reference = fileReference
+				mediaPhoto.id?.fileReference = fileReference
 			}
 
 			connectionsManager.sendRequest(firstArgument, requester.args!![1] as RequestDelegate)
@@ -855,18 +873,18 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			val fileLoadOperation = requester.args!![1] as FileLoadOperation
 
 			if (locationReplacement != null) {
-				if (fromCache && isSameReference(fileLoadOperation.location!!.file_reference, locationReplacement.file_reference)) {
+				if (fromCache && isSameReference(fileLoadOperation.location!!.fileReference, locationReplacement.fileReference)) {
 					return false
 				}
 
 				fileLoadOperation.location = locationReplacement
 			}
 			else {
-				if (fromCache && isSameReference(requester.location!!.file_reference, fileReference)) {
+				if (fromCache && isSameReference(requester.location!!.fileReference, fileReference)) {
 					return false
 				}
 
-				requester.location!!.file_reference = fileReference
+				requester.location!!.fileReference = fileReference
 			}
 
 			fileLoadOperation.requestingReference = false
@@ -881,8 +899,8 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			return
 		}
 
-		if (args[0] is TL_inputSingleMedia) {
-			val req = args[1] as TL_messages_sendMultiMedia
+		if (args[0] is TLInputSingleMedia) {
+			val req = args[1] as TLMessagesSendMultiMedia
 			val objects = multiMediaCache[req]
 
 			if (objects != null) {
@@ -893,30 +911,30 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 		}
-		else if (args[0] is TL_messages_sendMedia || args[0] is TL_messages_editMessage) {
+		else if (args[0] is TLMessagesSendMedia || args[0] is TLMessagesEditMessage) {
 			AndroidUtilities.runOnUIThread {
 				sendMessagesHelper.performSendMessageRequest(args[0] as TLObject, args[1] as MessageObject, args[2] as String, args[3] as DelayedMessage, (args[4] as Boolean), args[5] as DelayedMessage, null, (args[6] as Boolean))
 			}
 		}
-		else if (args[0] is TL_messages_saveGif) {
-			// val req = args[0] as TL_messages_saveGif
+		else if (args[0] is TLMessagesSaveGif) {
+			// val req = args[0] as TLMessagesSaveGif
 			// do nothing
 		}
-		else if (args[0] is TL_messages_saveRecentSticker) {
-			// val req = args[0] as TL_messages_saveRecentSticker
+		else if (args[0] is TLMessagesSaveRecentSticker) {
+			// val req = args[0] as TLMessagesSaveRecentSticker
 			// do nothing
 		}
-		else if (args[0] is TL_messages_faveSticker) {
-			// val req = args[0] as TL_messages_faveSticker
+		else if (args[0] is TLMessagesFaveSticker) {
+			// val req = args[0] as TLMessagesFaveSticker
 			// do nothing
 		}
-		else if (args[0] is TL_messages_getAttachedStickers) {
-			val req = args[0] as TL_messages_getAttachedStickers
+		else if (args[0] is TLMessagesGetAttachedStickers) {
+			val req = args[0] as TLMessagesGetAttachedStickers
 			connectionsManager.sendRequest(req, args[1] as RequestDelegate)
 		}
 		else {
 			if (reason == 0) {
-				val error = TL_error()
+				val error = TLError()
 				error.text = "not found parent object to request reference"
 				error.code = 400
 
@@ -941,10 +959,10 @@ class FileRefController(instance: Int) : BaseController(instance) {
 		var cacheKey = parentKey
 
 		when (response) {
-			is TL_account_wallPapers -> cacheKey = "wallpaper"
-			is TL_messages_savedGifs -> cacheKey = "gif"
-			is TL_messages_recentStickers -> cacheKey = "recent"
-			is TL_messages_favedStickers -> cacheKey = "fav"
+			is TLAccountWallPapers -> cacheKey = "wallpaper"
+			is TLMessagesSavedGifs -> cacheKey = "gif"
+			is TLMessagesRecentStickers -> cacheKey = "recent"
+			is TLMessagesFavedStickers -> cacheKey = "fav"
 		}
 
 		if (parentKey != null) {
@@ -983,7 +1001,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				continue
 			}
 
-			if (requester.location is TL_inputFileLocation || requester.location is TL_inputPeerPhotoFileLocation) {
+			if (requester.location is TLInputFileLocation || requester.location is TLInputPeerPhotoFileLocation) {
 				locationReplacement = arrayOfNulls(1)
 				needReplacement = BooleanArray(1)
 			}
@@ -991,7 +1009,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			requester.completed = true
 
 			when (response) {
-				is messages_Messages -> {
+				is MessagesMessages -> {
 					if (response.messages.isNotEmpty()) {
 						var i = 0
 						val size3 = response.messages.size
@@ -1004,10 +1022,10 @@ class FileRefController(instance: Int) : BaseController(instance) {
 									result = getFileReference(message.media!!.document, requester.location, needReplacement, locationReplacement)
 								}
 								else if (message.media!!.game != null) {
-									result = getFileReference(message.media!!.game.document, requester.location, needReplacement, locationReplacement)
+									result = getFileReference(message.media!!.game?.document, requester.location, needReplacement, locationReplacement)
 
 									if (result == null) {
-										result = getFileReference(message.media!!.game.photo, requester.location, needReplacement, locationReplacement)
+										result = getFileReference(message.media!!.game?.photo, requester.location, needReplacement, locationReplacement)
 									}
 								}
 								else if (message.media!!.photo != null) {
@@ -1017,7 +1035,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 									result = getFileReference(message.media!!.webpage, requester.location, needReplacement, locationReplacement)
 								}
 							}
-							else if (message.action is TL_messageActionChatEditPhoto) {
+							else if (message.action is TLMessageActionChatEditPhoto) {
 								result = getFileReference(message.action!!.photo, requester.location, needReplacement, locationReplacement)
 							}
 
@@ -1042,47 +1060,47 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_messages_availableReactions -> {
+				is TLMessagesAvailableReactions -> {
 					mediaDataController.processLoadedReactions(response.reactions, response.hash, (System.currentTimeMillis() / 1000).toInt(), false)
 
 					for (reaction in response.reactions) {
-						result = getFileReference(reaction.static_icon, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(reaction.staticIcon, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
 						}
 
-						result = getFileReference(reaction.appear_animation, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(reaction.appearAnimation, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
 						}
 
-						result = getFileReference(reaction.select_animation, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(reaction.selectAnimation, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
 						}
 
-						result = getFileReference(reaction.activate_animation, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(reaction.activateAnimation, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
 						}
 
-						result = getFileReference(reaction.effect_animation, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(reaction.effectAnimation, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
 						}
 
-						result = getFileReference(reaction.around_animation, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(reaction.aroundAnimation, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
 						}
 
-						result = getFileReference(reaction.center_icon, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(reaction.centerIcon, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
@@ -1090,57 +1108,60 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_users_userFull -> {
+				is TLUsersUserFull -> {
 					messagesController.putUsers(response.users, false)
 					messagesController.putChats(response.chats, false)
 
 					val userFull = response.fullUser
-					val botInfo = userFull?.bot_info
+					val botInfo = userFull?.botInfo
 
 					if (botInfo != null) {
 						messagesStorage.updateUserInfo(userFull, true)
 
-						result = getFileReference(botInfo.description_document, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(botInfo.descriptionDocument, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							continue
 						}
 
-						result = getFileReference(botInfo.description_photo, requester.location, needReplacement, locationReplacement)
+						result = getFileReference(botInfo.descriptionPhoto, requester.location, needReplacement, locationReplacement)
 					}
 				}
 
-				is TL_attachMenuBotsBot -> {
+				is TLAttachMenuBotsBot -> {
 					val bot = response.bot
 
-					for (icon in bot.icons) {
-						result = getFileReference(icon.icon, requester.location, needReplacement, locationReplacement)
+					if (bot != null) {
+						for (icon in bot.icons) {
+							result = getFileReference(icon.icon, requester.location, needReplacement, locationReplacement)
 
-						if (result != null) {
-							break
-						}
-					}
-
-					if (cache) {
-						val bots = mediaDataController.attachMenuBots
-						val newBotsList = ArrayList(bots.bots)
-
-						for (i in newBotsList.indices) {
-							val wasBot = newBotsList[i]
-
-							if (wasBot.bot_id == bot.bot_id) {
-								newBotsList[i] = bot
+							if (result != null) {
 								break
 							}
 						}
 
-						bots.bots = newBotsList
+						if (cache) {
+							val bots = mediaDataController.attachMenuBots
+							val newBotsList = bots.bots.toMutableList()
 
-						mediaDataController.processLoadedMenuBots(bots, bots.hash, (System.currentTimeMillis() / 1000).toInt(), false)
+							for (i in newBotsList.indices) {
+								val wasBot = newBotsList[i]
+
+								if (wasBot.botId == bot.botId) {
+									newBotsList[i] = bot
+									break
+								}
+							}
+
+							bots.bots.clear()
+							bots.bots.addAll(newBotsList)
+
+							mediaDataController.processLoadedMenuBots(bots, bots.hash, (System.currentTimeMillis() / 1000).toInt(), false)
+						}
 					}
 				}
 
-				is TL_help_appUpdate -> {
+				is TLHelpAppUpdate -> {
 					result = getFileReference(response.document, requester.location, needReplacement, locationReplacement)
 
 					if (result == null) {
@@ -1152,12 +1173,12 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					result = getFileReference(response, requester.location, needReplacement, locationReplacement)
 				}
 
-				is TL_account_wallPapers -> {
+				is TLAccountWallPapers -> {
 					var i = 0
 					val size10 = response.wallpapers.size
 
 					while (i < size10) {
-						result = getFileReference((response.wallpapers[i] as WallPaper).document, requester.location, needReplacement, locationReplacement)
+						result = getFileReference((response.wallpapers[i] as? TLWallPaper)?.document, requester.location, needReplacement, locationReplacement)
 
 						if (result != null) {
 							break
@@ -1171,7 +1192,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_wallPaper -> {
+				is TLWallPaper -> {
 					result = getFileReference(response.document, requester.location, needReplacement, locationReplacement)
 
 					if (result != null && cache) {
@@ -1179,7 +1200,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_theme -> {
+				is TLTheme -> {
 					result = getFileReference(response.document, requester.location, needReplacement, locationReplacement)
 
 					if (result != null && cache) {
@@ -1229,7 +1250,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_messages_chats -> {
+				is TLMessagesChats -> {
 					if (response.chats.isNotEmpty()) {
 						var i = 0
 						val size10 = response.chats.size
@@ -1256,7 +1277,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_messages_savedGifs -> {
+				is TLMessagesSavedGifs -> {
 					var b = 0
 					val size2 = response.gifs.size
 
@@ -1275,7 +1296,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_messages_stickerSet -> {
+				is TLMessagesStickerSet -> {
 					if (result == null) {
 						var b = 0
 						val size2 = response.documents.size
@@ -1298,7 +1319,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_messages_recentStickers -> {
+				is TLMessagesRecentStickers -> {
 					var b = 0
 					val size2 = response.stickers.size
 
@@ -1317,7 +1338,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_messages_favedStickers -> {
+				is TLMessagesFavedStickers -> {
 					var b = 0
 					val size2 = response.stickers.size
 
@@ -1336,7 +1357,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is photos_Photos -> {
+				is PhotosPhotos -> {
 					var b = 0
 					val size = response.photos.size
 
@@ -1424,13 +1445,13 @@ class FileRefController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun getFileReference(document: TLRPC.Document?, location: InputFileLocation?, needReplacement: BooleanArray?, replacement: Array<InputFileLocation?>?): ByteArray? {
-		if (document == null || location == null) {
+		if (document == null || location == null || document !is TLRPC.TLDocument) {
 			return null
 		}
 
-		if (location is TL_inputDocumentFileLocation) {
+		if (location is TLInputDocumentFileLocation) {
 			if (document.id == location.id) {
-				return document.file_reference
+				return document.fileReference
 			}
 		}
 		else {
@@ -1442,18 +1463,18 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				val result = getFileReference(photoSize, location, needReplacement)
 
 				if (needReplacement != null && needReplacement[0]) {
-					TL_inputDocumentFileLocation().apply {
+					TLInputDocumentFileLocation().apply {
 						id = document.id
-						volume_id = location.volume_id
-						local_id = location.local_id
-						access_hash = document.access_hash
-						file_reference = document.file_reference
-						thumb_size = photoSize.type
+						volumeId = location.volumeId
+						localId = location.localId
+						accessHash = document.accessHash
+						fileReference = document.fileReference
+						thumbSize = photoSize.type
 					}.let {
 						replacement?.set(0, it)
 					}
 
-					return document.file_reference
+					return document.fileReference
 				}
 
 				if (result != null) {
@@ -1469,37 +1490,41 @@ class FileRefController(instance: Int) : BaseController(instance) {
 
 	private fun getPeerReferenceReplacement(user: User?, chat: Chat?, big: Boolean, location: InputFileLocation, replacement: Array<InputFileLocation?>?, needReplacement: BooleanArray?): Boolean {
 		if (needReplacement != null && needReplacement[0]) {
-			val inputPeerPhotoFileLocation = TL_inputPeerPhotoFileLocation()
-			inputPeerPhotoFileLocation.id = location.volume_id
-			inputPeerPhotoFileLocation.volume_id = location.volume_id
-			inputPeerPhotoFileLocation.local_id = location.local_id
+			val inputPeerPhotoFileLocation = TLInputPeerPhotoFileLocation()
+			inputPeerPhotoFileLocation.id = location.volumeId
+			inputPeerPhotoFileLocation.volumeId = location.volumeId
+			inputPeerPhotoFileLocation.localId = location.localId
 			inputPeerPhotoFileLocation.big = big
 
 			val peer: InputPeer
 
 			if (user != null) {
-				val inputPeerUser = TL_inputPeerUser()
-				inputPeerUser.user_id = user.id
-				inputPeerUser.access_hash = user.access_hash
-				inputPeerPhotoFileLocation.photo_id = user.photo!!.photo_id
+				if (user !is TLRPC.TLUser) {
+					return false
+				}
+
+				val inputPeerUser = TLInputPeerUser()
+				inputPeerUser.userId = user.id
+				inputPeerUser.accessHash = user.accessHash
+				inputPeerPhotoFileLocation.photoId = user.photo?.photoId ?: 0
 
 				peer = inputPeerUser
 			}
 			else {
 				if (ChatObject.isChannel(chat)) {
-					val inputPeerChannel = TL_inputPeerChannel()
-					inputPeerChannel.channel_id = chat.id
-					inputPeerChannel.access_hash = chat.access_hash
+					val inputPeerChannel = TLInputPeerChannel()
+					inputPeerChannel.channelId = chat.id
+					inputPeerChannel.accessHash = chat.accessHash
 
 					peer = inputPeerChannel
 				}
 				else {
-					val inputPeerChat = TL_inputPeerChat()
-					inputPeerChat.chat_id = chat?.id ?: 0
+					val inputPeerChat = TLInputPeerChat()
+					inputPeerChat.chatId = chat?.id ?: 0
 					peer = inputPeerChat
 				}
 
-				inputPeerPhotoFileLocation.photo_id = chat?.photo?.photo_id ?: 0
+				inputPeerPhotoFileLocation.photoId = (chat?.photo as? TLRPC.TLChatPhoto)?.photoId ?: 0
 			}
 
 			inputPeerPhotoFileLocation.peer = peer
@@ -1513,20 +1538,20 @@ class FileRefController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun getFileReference(user: User?, location: InputFileLocation?, needReplacement: BooleanArray?, replacement: Array<InputFileLocation?>?): ByteArray? {
-		val userPhoto = user?.photo
+		val userPhoto = (user as? TLRPC.TLUser)?.photo
 
-		if (userPhoto == null || location !is TL_inputFileLocation) {
+		if (userPhoto == null || location !is TLInputFileLocation) {
 			return null
 		}
 
-		var result = getFileReference(userPhoto.photo_small, location, needReplacement)
+		var result = getFileReference(userPhoto.photoSmall, location, needReplacement)
 
 		if (getPeerReferenceReplacement(user, null, false, location, replacement, needReplacement)) {
 			return ByteArray(0)
 		}
 
 		if (result == null) {
-			result = getFileReference(userPhoto.photo_big, location, needReplacement)
+			result = getFileReference(userPhoto.photoBig, location, needReplacement)
 
 			if (getPeerReferenceReplacement(user, null, true, location, replacement, needReplacement)) {
 				return ByteArray(0)
@@ -1537,11 +1562,11 @@ class FileRefController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun getFileReference(chat: Chat?, location: InputFileLocation?, needReplacement: BooleanArray?, replacement: Array<InputFileLocation?>?): ByteArray? {
-		if (chat?.photo == null || location !is TL_inputFileLocation && location !is TL_inputPeerPhotoFileLocation) {
+		if (chat?.photo == null || location !is TLInputFileLocation && location !is TLInputPeerPhotoFileLocation) {
 			return null
 		}
 
-		if (location is TL_inputPeerPhotoFileLocation) {
+		if (location is TLInputPeerPhotoFileLocation) {
 			needReplacement!![0] = true
 
 			if (getPeerReferenceReplacement(null, chat, false, location, replacement, needReplacement)) {
@@ -1550,14 +1575,14 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			return null
 		}
 		else {
-			var result = getFileReference(chat.photo.photo_small, location, needReplacement)
+			var result = getFileReference(chat.photo?.photoSmall, location, needReplacement)
 
 			if (getPeerReferenceReplacement(null, chat, false, location, replacement, needReplacement)) {
 				return ByteArray(0)
 			}
 
 			if (result == null) {
-				result = getFileReference(chat.photo.photo_big, location, needReplacement)
+				result = getFileReference(chat.photo?.photoBig, location, needReplacement)
 
 				if (getPeerReferenceReplacement(null, chat, true, location, replacement, needReplacement)) {
 					return ByteArray(0)
@@ -1569,14 +1594,14 @@ class FileRefController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun getFileReference(photo: TLRPC.Photo?, location: InputFileLocation?, needReplacement: BooleanArray?, replacement: Array<InputFileLocation?>?): ByteArray? {
-		if (photo == null) {
+		if (photo !is TLRPC.TLPhoto) {
 			return null
 		}
 
-		if (location is TL_inputPhotoFileLocation) {
-			return if (photo.id == location.id) photo.file_reference else null
+		if (location is TLInputPhotoFileLocation) {
+			return if (photo.id == location.id) photo.fileReference else null
 		}
-		else if (location is TL_inputFileLocation) {
+		else if (location is TLInputFileLocation) {
 			var a = 0
 			val size = photo.sizes.size
 
@@ -1585,18 +1610,18 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				val result = getFileReference(photoSize, location, needReplacement)
 
 				if (needReplacement != null && needReplacement[0]) {
-					TL_inputPhotoFileLocation().apply {
+					TLInputPhotoFileLocation().apply {
 						id = photo.id
-						volume_id = location.volume_id
-						local_id = location.local_id
-						access_hash = photo.access_hash
-						file_reference = photo.file_reference
-						thumb_size = photoSize.type
+						volumeId = location.volumeId
+						localId = location.localId
+						accessHash = photo.accessHash
+						fileReference = photo.fileReference
+						thumbSize = photoSize.type
 					}.let {
 						replacement?.set(0, it)
 					}
 
-					return photo.file_reference
+					return photo.fileReference
 				}
 
 				if (result != null) {
@@ -1611,7 +1636,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun getFileReference(photoSize: PhotoSize?, location: InputFileLocation, needReplacement: BooleanArray?): ByteArray? {
-		if (photoSize == null || location !is TL_inputFileLocation) {
+		if (photoSize == null || location !is TLInputFileLocation) {
 			return null
 		}
 
@@ -1619,22 +1644,27 @@ class FileRefController(instance: Int) : BaseController(instance) {
 	}
 
 	private fun getFileReference(fileLocation: FileLocation?, location: InputFileLocation, needReplacement: BooleanArray?): ByteArray? {
-		if (fileLocation == null || location !is TL_inputFileLocation) {
+		if (fileLocation == null || location !is TLInputFileLocation) {
 			return null
 		}
 
-		if (fileLocation.local_id == location.local_id && fileLocation.volume_id == location.volume_id) {
-			if (fileLocation.file_reference == null && needReplacement != null) {
+		if (fileLocation.localId == location.localId && fileLocation.volumeId == location.volumeId) {
+			// if (fileLocation.fileReference == null && needReplacement != null) {
+			if (needReplacement != null) {
 				needReplacement[0] = true
 			}
 
-			return fileLocation.file_reference
+			// return fileLocation.fileReference
 		}
 
 		return null
 	}
 
-	private fun getFileReference(webpage: WebPage, location: InputFileLocation?, needReplacement: BooleanArray?, replacement: Array<InputFileLocation?>?): ByteArray? {
+	private fun getFileReference(webpage: WebPage?, location: InputFileLocation?, needReplacement: BooleanArray?, replacement: Array<InputFileLocation?>?): ByteArray? {
+		if (webpage !is TLRPC.TLWebPage) {
+			return null
+		}
+
 		var result = getFileReference(webpage.document, location, needReplacement, replacement)
 
 		if (result != null) {
@@ -1659,8 +1689,8 @@ class FileRefController(instance: Int) : BaseController(instance) {
 			}
 		}
 
-		if (webpage.cached_page != null) {
-			for (document in webpage.cached_page.documents) {
+		if (webpage.cachedPage != null) {
+			for (document in webpage.cachedPage!!.documents) {
 				result = getFileReference(document, location, needReplacement, replacement)
 
 				if (result != null) {
@@ -1668,7 +1698,7 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			for (photo in webpage.cached_page.photos) {
+			for (photo in webpage.cachedPage!!.photos) {
 				result = getFileReference(photo, location, needReplacement, replacement)
 
 				if (result != null) {
@@ -1704,16 +1734,16 @@ class FileRefController(instance: Int) : BaseController(instance) {
 		@JvmStatic
 		fun getKeyForParentObject(parentObject: Any?): String? {
 			when (parentObject) {
-				is TL_availableReaction -> {
+				is TLAvailableReaction -> {
 					return "available_reaction_" + parentObject.reaction
 				}
 
-				is BotInfo -> {
-					return "bot_info_" + parentObject.user_id
+				is TLBotInfo -> {
+					return "bot_info_" + parentObject.userId
 				}
 
-				is TL_attachMenuBot -> {
-					val botId = parentObject.bot_id
+				is TLAttachMenuBot -> {
+					val botId = parentObject.botId
 					return "attach_menu_bot_$botId"
 				}
 
@@ -1723,8 +1753,8 @@ class FileRefController(instance: Int) : BaseController(instance) {
 				}
 
 				is Message -> {
-					val channelId = parentObject.peer_id?.channel_id ?: 0
-					return "message" + parentObject.id + "_" + channelId + "_" + parentObject.from_scheduled
+					val channelId = parentObject.peerId?.channelId ?: 0
+					return "message" + parentObject.id + "_" + channelId + "_" + (parentObject as? TLRPC.TLMessage)?.fromScheduled
 				}
 
 				is WebPage -> {
@@ -1743,23 +1773,23 @@ class FileRefController(instance: Int) : BaseController(instance) {
 					return "str$parentObject"
 				}
 
-				is TL_messages_stickerSet -> {
-					return "set" + parentObject.set.id
+				is TLMessagesStickerSet -> {
+					return "set" + parentObject.set?.id
 				}
 
 				is StickerSetCovered -> {
-					return "set" + parentObject.set.id
+					return "set" + parentObject.set?.id
 				}
 
-				is InputStickerSet -> {
+				is TLInputStickerSetID -> {
 					return "set" + parentObject.id
 				}
 
-				is TL_wallPaper -> {
+				is TLWallPaper -> {
 					return "wallpaper" + parentObject.id
 				}
 
-				is TL_theme -> {
+				is TLTheme -> {
 					return "theme" + parentObject.id
 				}
 

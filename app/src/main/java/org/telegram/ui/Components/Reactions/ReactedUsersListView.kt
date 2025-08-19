@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Reactions
 
@@ -13,7 +13,6 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.text.TextUtils
@@ -27,6 +26,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.toDrawable
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AndroidUtilities
@@ -41,16 +41,11 @@ import org.telegram.messenger.UserObject
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.utils.gone
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.InputStickerSet
-import org.telegram.tgnet.TLRPC.MessagePeerReaction
-import org.telegram.tgnet.tlrpc.Reaction
-import org.telegram.tgnet.tlrpc.ReactionCount
-import org.telegram.tgnet.TLRPC.TL_messagePeerReaction
-import org.telegram.tgnet.TLRPC.TL_messages_getMessageReactionsList
-import org.telegram.tgnet.TLRPC.TL_messages_messageReactionsList
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.tlrpc.TL_reactionCustomEmoji
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.strippedBitmap
+import org.telegram.tgnet.thumbs
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedEmojiDrawable
 import org.telegram.ui.Components.AvatarDrawable
@@ -63,14 +58,14 @@ import org.telegram.ui.Components.Reactions.VisibleReaction.Companion.fromTLReac
 import org.telegram.ui.Components.RecyclerListView
 import kotlin.math.min
 
-class ReactedUsersListView(context: Context, private val currentAccount: Int, private val message: MessageObject, reactionCount: ReactionCount?, addPadding: Boolean) : FrameLayout(context) {
+class ReactedUsersListView(context: Context, private val currentAccount: Int, private val message: MessageObject, reactionCount: TLRPC.TLReactionCount?, addPadding: Boolean) : FrameLayout(context) {
 	private var predictiveCount: Int
-	private val filter: Reaction?
+	private val filter = reactionCount?.reaction
 	var listView: RecyclerListView
 	private var adapter: RecyclerView.Adapter<RecyclerView.ViewHolder>? = null
 	private val loadingView: FlickerLoadingView
-	private val userReactions: MutableList<MessagePeerReaction> = ArrayList()
-	private val peerReactionMap = LongSparseArray<ArrayList<MessagePeerReaction>>()
+	private val userReactions = mutableListOf<TLRPC.TLMessagePeerReaction>()
+	private val peerReactionMap = LongSparseArray<ArrayList<TLRPC.TLMessagePeerReaction>>()
 	private var offset: String? = null
 	var isLoading = false
 
@@ -88,7 +83,6 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 	var messageContainsEmojiButton: MessageContainsEmojiButton? = null
 
 	init {
-		filter = reactionCount?.reaction
 
 		predictiveCount = reactionCount?.count ?: VISIBLE_ITEMS
 
@@ -110,7 +104,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 		}
 
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-			listView.verticalScrollbarThumbDrawable = ColorDrawable(context.getColor(R.color.light_background))
+			listView.verticalScrollbarThumbDrawable = context.getColor(R.color.light_background).toDrawable()
 		}
 
 		listView.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -186,7 +180,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 			val itemViewType = adapter?.getItemViewType(position)
 
 			if (itemViewType == USER_VIEW_TYPE) {
-				onProfileSelectedListener?.onProfileSelected(this, MessageObject.getPeerId(userReactions[position].peer_id), userReactions[position])
+				onProfileSelectedListener?.onProfileSelected(this, MessageObject.getPeerId(userReactions[position].peerId), userReactions[position])
 			}
 			else if (itemViewType == CUSTOM_EMOJI_VIEW_TYPE) {
 				onCustomEmojiSelectedListener?.showCustomEmojiAlert(this, customEmojiStickerSets)
@@ -216,7 +210,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 
 		addView(loadingView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 
-		if (!addPadding && filter != null && filter is TL_reactionCustomEmoji && !MessagesController.getInstance(currentAccount).premiumLocked) {
+		if (!addPadding && filter != null && filter is TLRPC.TLReactionCustomEmoji && !MessagesController.getInstance(currentAccount).premiumLocked) {
 			customReactionsEmoji.clear()
 			customReactionsEmoji.add(fromTLReaction(filter))
 			updateCustomReactionsButton()
@@ -226,8 +220,8 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 	}
 
 	@SuppressLint("NotifyDataSetChanged")
-	fun setSeenUsers(users: List<User>): ReactedUsersListView {
-		val nr: MutableList<TL_messagePeerReaction> = ArrayList(users.size)
+	fun setSeenUsers(users: List<TLRPC.User>): ReactedUsersListView {
+		val nr: MutableList<TLRPC.TLMessagePeerReaction> = ArrayList(users.size)
 
 		for (u in users) {
 			var userReactions = peerReactionMap[u.id]
@@ -236,15 +230,17 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 				continue
 			}
 
-			val r = TL_messagePeerReaction()
+			val r = TLRPC.TLMessagePeerReaction()
 			r.reaction = null
-			r.peer_id = TL_peerUser()
-			r.peer_id.user_id = u.id
+
+			r.peerId = TLRPC.TLPeerUser().also {
+				it.userId = u.id
+			}
 
 			userReactions = ArrayList()
 			userReactions.add(r)
 
-			peerReactionMap.put(MessageObject.getPeerId(r.peer_id), userReactions)
+			peerReactionMap.put(MessageObject.getPeerId(r.peerId), userReactions)
 
 			nr.add(r)
 		}
@@ -280,7 +276,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 
 		val ctrl = MessagesController.getInstance(currentAccount)
 
-		val getList = TL_messages_getMessageReactionsList()
+		val getList = TLRPC.TLMessagesGetMessageReactionsList()
 		getList.peer = ctrl.getInputPeer(message.dialogId)
 		getList.id = message.id
 		getList.limit = loadCount
@@ -297,7 +293,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 		ConnectionsManager.getInstance(currentAccount).sendRequest(getList, { response, _ ->
 			AndroidUtilities.runOnUIThread {
 				NotificationCenter.getInstance(currentAccount).doOnIdle {
-					if (response is TL_messages_messageReactionsList) {
+					if (response is TLRPC.TLMessagesMessageReactionsList) {
 						for (u in response.users) {
 							MessagesController.getInstance(currentAccount).putUser(u, false)
 						}
@@ -307,7 +303,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 						for (i in response.reactions.indices) {
 							userReactions.add(response.reactions[i])
 
-							val peerId = MessageObject.getPeerId(response.reactions[i].peer_id)
+							val peerId = MessageObject.getPeerId(response.reactions[i].peerId)
 							var currentUserReactions = peerReactionMap[peerId]
 
 							if (currentUserReactions == null) {
@@ -369,7 +365,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 							isLoaded = true
 						}
 
-						offset = response.next_offset
+						offset = response.nextOffset
 
 						if (offset == null) {
 							canLoadMore = false
@@ -394,9 +390,13 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 		for (i in customReactionsEmoji.indices) {
 			val stickerSet = MessageObject.getInputStickerSet(AnimatedEmojiDrawable.findDocument(currentAccount, customReactionsEmoji[i].documentId))
 
-			if (stickerSet != null && !setIds.contains(stickerSet.id)) {
-				sets.add(stickerSet)
-				setIds.add(stickerSet.id)
+			if (stickerSet != null) {
+				val id = (stickerSet as? TLRPC.TLInputStickerSetID)?.id
+
+				if (id != null && !setIds.contains(id)) {
+					sets.add(stickerSet)
+					setIds.add(id)
+				}
 			}
 		}
 
@@ -467,8 +467,8 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 			addView(overlaySelectorView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 		}
 
-		fun setUserReaction(reaction: MessagePeerReaction) {
-			val u = MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(reaction.peer_id)) ?: return
+		fun setUserReaction(reaction: TLRPC.TLMessagePeerReaction) {
+			val u = MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(reaction.peerId)) ?: return
 
 			avatarDrawable.setInfo(u)
 
@@ -489,8 +489,8 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 					val r = MediaDataController.getInstance(currentAccount).reactionsMap[visibleReaction.emojicon]
 
 					if (r != null) {
-						val svgThumb = getSvgThumb(r.static_icon?.thumbs, ResourcesCompat.getColor(context.resources, R.color.light_background, null), 1.0f)
-						reactView.setImage(ImageLocation.getForDocument(r.center_icon), "40_40_lastframe", "webp", svgThumb, r)
+						val svgThumb = getSvgThumb(r.staticIcon?.thumbs, ResourcesCompat.getColor(context.resources, R.color.light_background, null), 1.0f)
+						reactView.setImage(ImageLocation.getForDocument(r.centerIcon), "40_40_lastframe", "webp", svgThumb, r)
 					}
 					else {
 						reactView.setImageDrawable(null)
@@ -533,7 +533,7 @@ class ReactedUsersListView(context: Context, private val currentAccount: Int, pr
 	}
 
 	fun interface OnProfileSelectedListener {
-		fun onProfileSelected(view: ReactedUsersListView?, userId: Long, messagePeerReaction: MessagePeerReaction?)
+		fun onProfileSelected(view: ReactedUsersListView?, userId: Long, messagePeerReaction: TLRPC.TLMessagePeerReaction?)
 	}
 
 	fun interface OnCustomEmojiSelectedListener {

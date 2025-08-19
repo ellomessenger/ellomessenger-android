@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-205.
  */
 package org.telegram.ui.Components
 
@@ -41,6 +41,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.net.toUri
 import androidx.core.widget.NestedScrollView
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.AndroidUtilities.VcardItem
@@ -53,9 +54,11 @@ import org.telegram.messenger.R
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
-import org.telegram.tgnet.TLRPC.TL_restrictionReason
-import org.telegram.tgnet.TLRPC.TL_userContact_old2
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.restrictionReason
+import org.telegram.tgnet.status
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -164,7 +167,7 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 			textView.setTextColor(ResourcesCompat.getColor(resources, R.color.text, null))
 			textView.isSingleLine = true
 			textView.ellipsize = TextUtils.TruncateAt.END
-			textView.text = formatName(currentUser.first_name, currentUser.last_name)
+			textView.text = formatName(currentUser.firstName, currentUser.lastName)
 
 			addView(textView, createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 10, 10, 10, if (status != null) 0 else 27))
 
@@ -182,14 +185,13 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 	}
 
 	inner class TextCheckBoxCell(context: Context) : FrameLayout(context) {
-		private val textView: TextView
+		private val textView = TextView(context)
 		private val valueTextView: TextView
 		private val imageView: ImageView
 		private var checkBox: Switch? = null
 		private var needDivider = false
 
 		init {
-			textView = TextView(context)
 			textView.setTextColor(ResourcesCompat.getColor(resources, R.color.text, null))
 			textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f)
 			textView.isSingleLine = false
@@ -281,9 +283,9 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 		@Suppress("NAME_SHADOWING") var lastName = lastName
 
 		val name = formatName(firstName, lastName)
-		var result: ArrayList<User>? = null
-		val items = ArrayList<VcardItem>()
-		var vcard: ArrayList<TL_restrictionReason>? = null
+		var result: List<User>? = null
+		val items = mutableListOf<VcardItem>()
+		var vcard: List<TLRPC.TLRestrictionReason>? = null
 
 		if (uri != null) {
 			result = AndroidUtilities.loadVCardFromStream(uri, currentAccount, false, items, name)
@@ -316,33 +318,34 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 
 			if (result.isNotEmpty()) {
 				val u = result[0]
-				vcard = u.restriction_reason
+				vcard = u.restrictionReason
 
 				if (firstName.isNullOrEmpty()) {
-					firstName = u.first_name
-					lastName = u.last_name
+					firstName = u.firstName
+					lastName = u.lastName
 				}
 			}
 		}
 
-		currentUser = TL_userContact_old2()
+		currentUser = TLRPC.TLUser()
 
-		if (user != null) {
+		if (user is TLRPC.TLUser) {
 			currentUser.id = user.id
-			currentUser.access_hash = user.access_hash
+			currentUser.accessHash = user.accessHash
 			currentUser.photo = user.photo
 			currentUser.status = user.status
-			currentUser.first_name = user.first_name
-			currentUser.last_name = user.last_name
+			currentUser.firstName = user.firstName
+			currentUser.lastName = user.lastName
 			currentUser.username = user.username
 
 			if (vcard != null) {
-				currentUser.restriction_reason = vcard
+				currentUser.restrictionReason.clear()
+				currentUser.restrictionReason.addAll(vcard)
 			}
 		}
 		else {
-			currentUser.first_name = firstName
-			currentUser.last_name = lastName
+			currentUser.firstName = firstName
+			currentUser.lastName = lastName
 		}
 
 		val context = parentFragment.parentActivity!!
@@ -504,7 +507,7 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 						when (item.type) {
 							0 -> {
 								try {
-									val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + item.getValue(false)))
+									val intent = Intent(Intent.ACTION_DIAL, ("tel:" + item.getValue(false)).toUri())
 									intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 									parentFragment.parentActivity!!.startActivityForResult(intent, 500)
 								}
@@ -667,10 +670,11 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 		privateUserWarningText.setTypeface(privateUserWarningText.typeface, Typeface.BOLD)
 		privateUserWarningText.text = context.getString(R.string.private_user_warning_text)
 
-		if (user?.is_public == true){
+		if ((user as? TLRPC.TLUser)?.isPublic == true) {
 			buttonTextView.visible()
 			privateUserWarningText.gone()
-		} else {
+		}
+		else {
 			buttonTextView.gone()
 			privateUserWarningText.visible()
 		}
@@ -786,7 +790,7 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 							}
 						}
 
-						intent.putExtra(ContactsContract.Intents.Insert.NAME, formatName(currentUser.first_name, currentUser.last_name))
+						intent.putExtra(ContactsContract.Intents.Insert.NAME, formatName(currentUser.firstName, currentUser.lastName))
 
 						val data = ArrayList<ContentValues>()
 
@@ -999,11 +1003,11 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 				builder.show()
 			}
 			else {
-				val builder = if (currentUser.restriction_reason.isNotEmpty()) {
-					StringBuilder(currentUser.restriction_reason[0].text)
+				val builder = if (currentUser.restrictionReason.isNotEmpty()) {
+					StringBuilder(currentUser.restrictionReason[0].text ?: "")
 				}
 				else {
-					StringBuilder(String.format(Locale.US, "BEGIN:VCARD\nVERSION:3.0\nFN:%1\$s\nEND:VCARD", formatName(currentUser.first_name, currentUser.last_name)))
+					StringBuilder(String.format(Locale.US, "BEGIN:VCARD\nVERSION:3.0\nFN:%1\$s\nEND:VCARD", formatName(currentUser.firstName, currentUser.lastName)))
 				}
 
 				val idx = builder.lastIndexOf("END:VCARD")
@@ -1021,14 +1025,14 @@ class PhonebookShareAlert @JvmOverloads constructor(private val parentFragment: 
 						}
 					}
 
-					currentUser.restriction_reason.clear()
+					currentUser.restrictionReason.clear()
 
-					val reason = TL_restrictionReason()
+					val reason = TLRPC.TLRestrictionReason()
 					reason.text = builder.toString()
 					reason.reason = ""
 					reason.platform = ""
 
-					currentUser.restriction_reason.add(reason)
+					currentUser.restrictionReason.add(reason)
 				}
 
 				if (parentFragment is ChatActivity && parentFragment.isInScheduleMode) {

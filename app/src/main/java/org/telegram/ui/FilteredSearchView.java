@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -44,10 +44,10 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
-import org.telegram.tgnet.tlrpc.messages_Messages;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
@@ -161,8 +161,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 				View view = listView.getChildAt(a);
 				int[] coords = new int[2];
 				ImageReceiver imageReceiver = null;
-				if (view instanceof SharedPhotoVideoCell) {
-					SharedPhotoVideoCell cell = (SharedPhotoVideoCell)view;
+				if (view instanceof SharedPhotoVideoCell cell) {
 					for (int i = 0; i < 6; i++) {
 						MessageObject message = cell.getMessageObject(i);
 						if (message == null) {
@@ -175,8 +174,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 						}
 					}
 				}
-				else if (view instanceof SharedDocumentCell) {
-					SharedDocumentCell cell = (SharedDocumentCell)view;
+				else if (view instanceof SharedDocumentCell cell) {
 					MessageObject message = cell.getMessage();
 					if (message.getId() == messageObject.getId()) {
 						BackupImageView imageView = cell.getImageView();
@@ -184,8 +182,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 						imageView.getLocationInWindow(coords);
 					}
 				}
-				else if (view instanceof ContextLinkCell) {
-					ContextLinkCell cell = (ContextLinkCell)view;
+				else if (view instanceof ContextLinkCell cell) {
 					MessageObject message = (MessageObject)cell.getParentObject();
 					if (message != null && message.getId() == messageObject.getId()) {
 						imageReceiver = cell.getPhotoImage();
@@ -387,8 +384,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 					}
 					RecyclerListView.ViewHolder holder = recyclerView.findViewHolderForAdapterPosition(firstVisibleItem);
 					if (holder != null && holder.getItemViewType() == 0) {
-						if (holder.itemView instanceof SharedPhotoVideoCell) {
-							SharedPhotoVideoCell cell = (SharedPhotoVideoCell)holder.itemView;
+						if (holder.itemView instanceof SharedPhotoVideoCell cell) {
 							MessageObject messageObject = cell.getMessageObject(0);
 							if (messageObject != null) {
 								floatingDateView.setCustomDate(messageObject.messageOwner.date, false, true);
@@ -419,28 +415,35 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 		emptyView.setVisibility(View.GONE);
 	}
 
+	@NonNull
 	public static CharSequence createFromInfoString(MessageObject messageObject) {
 		if (arrowSpan == null) {
 			arrowSpan = new SpannableStringBuilder("-");
 			arrowSpan.setSpan(new ColoredImageSpan(ContextCompat.getDrawable(ApplicationLoader.applicationContext, R.drawable.search_arrow).mutate()), 0, 1, 0);
 		}
 		CharSequence fromName = null;
-		User user = messageObject.messageOwner.from_id.user_id != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getUser(messageObject.messageOwner.from_id.user_id) : null;
-		TLRPC.Chat chatFrom = messageObject.messageOwner.from_id.chat_id != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(messageObject.messageOwner.peer_id.chat_id) : null;
+
+		var fromId = messageObject.messageOwner.fromId;
+		var userId = TLRPCExtensions.getUserId(fromId);
+		var chatId = TLRPCExtensions.getChatId(fromId);
+		var channelId = TLRPCExtensions.getChannelId(fromId);
+
+		User user = userId != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId) : null;
+		TLRPC.Chat chatFrom = chatId != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(TLRPCExtensions.getChatId(messageObject.messageOwner.peerId)) : null;
 		if (chatFrom == null) {
-			chatFrom = messageObject.messageOwner.from_id.channel_id != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(messageObject.messageOwner.peer_id.channel_id) : null;
+			chatFrom = channelId != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(TLRPCExtensions.getChannelId(messageObject.messageOwner.peerId)) : null;
 		}
-		TLRPC.Chat chatTo = messageObject.messageOwner.peer_id.channel_id != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(messageObject.messageOwner.peer_id.channel_id) : null;
+		TLRPC.Chat chatTo = TLRPCExtensions.getChannelId(messageObject.messageOwner.peerId) != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(TLRPCExtensions.getChannelId(messageObject.messageOwner.peerId)) : null;
 		if (chatTo == null) {
-			chatTo = messageObject.messageOwner.peer_id.chat_id != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(messageObject.messageOwner.peer_id.chat_id) : null;
+			chatTo = TLRPCExtensions.getChatId(messageObject.messageOwner.peerId) != 0 ? MessagesController.getInstance(UserConfig.selectedAccount).getChat(TLRPCExtensions.getChatId(messageObject.messageOwner.peerId)) : null;
 		}
 		if (user != null && chatTo != null) {
 			SpannableStringBuilder spannableStringBuilder = new SpannableStringBuilder();
-			spannableStringBuilder.append(ContactsController.formatName(user.getFirst_name(), user.getLast_name())).append(' ').append(arrowSpan).append(' ').append(chatTo.title);
+			spannableStringBuilder.append(ContactsController.formatName(user.firstName, user.lastName)).append(' ').append(arrowSpan).append(' ').append(chatTo.title);
 			fromName = spannableStringBuilder;
 		}
 		else if (user != null) {
-			fromName = ContactsController.formatName(user.getFirst_name(), user.getLast_name());
+			fromName = ContactsController.formatName(user.firstName, user.lastName);
 		}
 		else if (chatFrom != null) {
 			fromName = chatFrom.title;
@@ -514,23 +517,23 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 
 			ArrayList<Object> resultArray = null;
 			if (dialogId != 0) {
-				final TLRPC.TL_messages_search req = new TLRPC.TL_messages_search();
+				final var req = new TLRPC.TLMessagesSearch();
 				req.q = query;
 				req.limit = 20;
-				req.filter = currentSearchFilter == null ? new TLRPC.TL_inputMessagesFilterEmpty() : currentSearchFilter.filter;
+				req.filter = currentSearchFilter == null ? new TLRPC.TLInputMessagesFilterEmpty() : currentSearchFilter.filter;
 				req.peer = AccountInstance.getInstance(currentAccount).getMessagesController().getInputPeer(dialogId);
 				if (minDate > 0) {
-					req.min_date = (int)(minDate / 1000);
+					req.minDate = (int)(minDate / 1000);
 				}
 				if (maxDate > 0) {
-					req.max_date = (int)(maxDate / 1000);
+					req.maxDate = (int)(maxDate / 1000);
 				}
 				if (filterAndQueryIsSame && query.equals(lastMessagesSearchString) && !messages.isEmpty()) {
 					MessageObject lastMessage = messages.get(messages.size() - 1);
-					req.offset_id = lastMessage.getId();
+					req.offsetId = lastMessage.getId();
 				}
 				else {
-					req.offset_id = 0;
+					req.offsetId = 0;
 				}
 				request = req;
 			}
@@ -542,30 +545,30 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 					MessagesStorage.getInstance(currentAccount).localSearch(0, query, resultArray, resultArrayNames, encUsers, includeFolder ? 1 : 0);
 				}
 
-				final TLRPC.TL_messages_searchGlobal req = new TLRPC.TL_messages_searchGlobal();
+				final TLRPC.TLMessagesSearchGlobal req = new TLRPC.TLMessagesSearchGlobal();
 				req.limit = 20;
 				req.q = query;
-				req.filter = currentSearchFilter == null ? new TLRPC.TL_inputMessagesFilterEmpty() : currentSearchFilter.filter;
+				req.filter = currentSearchFilter == null ? new TLRPC.TLInputMessagesFilterEmpty() : currentSearchFilter.filter;
 				if (minDate > 0) {
-					req.min_date = (int)(minDate / 1000);
+					req.minDate = (int)(minDate / 1000);
 				}
 				if (maxDate > 0) {
-					req.max_date = (int)(maxDate / 1000);
+					req.maxDate = (int)(maxDate / 1000);
 				}
 				if (filterAndQueryIsSame && query.equals(lastMessagesSearchString) && !messages.isEmpty()) {
 					MessageObject lastMessage = messages.get(messages.size() - 1);
-					req.offset_id = lastMessage.getId();
-					req.offset_rate = nextSearchRate;
-					long id = MessageObject.getPeerId(lastMessage.messageOwner.peer_id);
-					req.offset_peer = MessagesController.getInstance(currentAccount).getInputPeer(id);
+					req.offsetId = lastMessage.getId();
+					req.offsetRate = nextSearchRate;
+					long id = MessageObject.getPeerId(lastMessage.messageOwner.peerId);
+					req.offsetPeer = MessagesController.getInstance(currentAccount).getInputPeer(id);
 				}
 				else {
-					req.offset_rate = 0;
-					req.offset_id = 0;
-					req.offset_peer = new TLRPC.TL_inputPeerEmpty();
+					req.offsetRate = 0;
+					req.offsetId = 0;
+					req.offsetPeer = new TLRPC.TLInputPeerEmpty();
 				}
 				req.flags |= 1;
-				req.folder_id = includeFolder ? 1 : 0;
+				req.folderId = includeFolder ? 1 : 0;
 				request = req;
 			}
 
@@ -578,7 +581,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 			ConnectionsManager.getInstance(currentAccount).sendRequest(request, (response, error) -> {
 				ArrayList<MessageObject> messageObjects = new ArrayList<>();
 				if (error == null) {
-					messages_Messages res = (messages_Messages)response;
+					var res = (TLRPC.MessagesMessages)response;
 					int n = res.messages.size();
 					for (int i = 0; i < n; i++) {
 						MessageObject messageObject = new MessageObject(currentAccount, res.messages.get(i), false, true);
@@ -602,8 +605,12 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 
 					emptyView.showProgress(false);
 
-					messages_Messages res = (messages_Messages)response;
-					nextSearchRate = res.next_rate;
+					var res = (TLRPC.MessagesMessages)response;
+
+					if (res instanceof TLRPC.TLMessagesMessagesSlice slice) {
+						nextSearchRate = slice.nextRate;
+					}
+
 					MessagesStorage.getInstance(currentAccount).putUsersAndChats(res.users, res.chats, true, true);
 					MessagesController.getInstance(currentAccount).putUsers(res.users, false);
 					MessagesController.getInstance(currentAccount).putChats(res.chats, false);
@@ -1010,8 +1017,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 			}
 		}
 		else if (currentSearchFilter.filterType == FiltersView.FILTER_TYPE_FILES) {
-			if (view instanceof SharedDocumentCell) {
-				SharedDocumentCell cell = (SharedDocumentCell)view;
+			if (view instanceof SharedDocumentCell cell) {
 				TLRPC.Document document = message.getDocument();
 				if (cell.isLoaded()) {
 					if (message.canPreviewDocument()) {
@@ -1046,15 +1052,16 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 		}
 		else if (currentSearchFilter.filterType == FiltersView.FILTER_TYPE_LINKS) {
 			try {
-				TLRPC.WebPage webPage = message.messageOwner.media != null ? message.messageOwner.media.webpage : null;
+				var webPage = TLRPCExtensions.getWebpage(TLRPCExtensions.getMedia(message.messageOwner));
+
 				String link = null;
-				if (webPage != null && !(webPage instanceof TLRPC.TL_webPageEmpty)) {
-					if (webPage.cached_page != null) {
+				if (webPage != null && !(webPage instanceof TLRPC.TLWebPageEmpty)) {
+					if (webPage instanceof TLRPC.TLWebPage tlWebPage && tlWebPage.cachedPage != null) {
 						ArticleViewer.getInstance().setParentActivity(parentActivity, parentFragment);
 						ArticleViewer.getInstance().open(message);
 						return;
 					}
-					else if (webPage.embed_url != null && webPage.embed_url.length() != 0) {
+					else if (webPage instanceof TLRPC.TLWebPage tlWebPage && tlWebPage.embedUrl != null && tlWebPage.embedUrl.length() != 0) {
 						openWebView(webPage, message);
 						return;
 					}
@@ -1082,7 +1089,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 		private final SharedLinkCell.SharedLinkCellDelegate sharedLinkCellDelegate = new SharedLinkCell.SharedLinkCellDelegate() {
 
 			@Override
-			public void needOpenWebView(TLRPC.WebPage webPage, MessageObject message) {
+			public void needOpenWebView(@NonNull TLRPC.WebPage webPage, @NonNull MessageObject message) {
 				openWebView(webPage, message);
 			}
 
@@ -1092,7 +1099,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 			}
 
 			@Override
-			public void onLinkPress(String urlFinal, boolean longPress) {
+			public void onLinkPress(@NonNull String urlFinal, boolean longPress) {
 				if (longPress) {
 					BottomSheet.Builder builder = new BottomSheet.Builder(parentActivity);
 					builder.setTitle(urlFinal);
@@ -1341,7 +1348,7 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 				default:
 					view = new SharedAudioCell(mContext, SharedAudioCell.VIEW_TYPE_GLOBAL_SEARCH) {
 						@Override
-						public boolean needPlayMessage(MessageObject messageObject) {
+						public boolean needPlayMessage(@NonNull MessageObject messageObject) {
 							if (messageObject.isVoice() || messageObject.isRoundVideo()) {
 								boolean result = MediaController.getInstance().playMessage(messageObject);
 								MediaController.getInstance().setVoiceMessagesPlaylist(result ? messages : null, false);
@@ -1468,7 +1475,21 @@ public class FilteredSearchView extends FrameLayout implements NotificationCente
 	}
 
 	private void openWebView(TLRPC.WebPage webPage, MessageObject message) {
-		EmbedBottomSheet.show(parentFragment, message, provider, webPage.site_name, webPage.description, webPage.url, webPage.embed_url, webPage.embed_width, webPage.embed_height, false);
+		String siteName = null;
+		String description = null;
+		String embedUrl = null;
+		int embedWidth = 0;
+		int embedHeight = 0;
+
+		if (webPage instanceof TLRPC.TLWebPage tlWebPage) {
+			siteName = tlWebPage.siteName;
+			description = tlWebPage.description;
+			embedUrl = tlWebPage.embedUrl;
+			embedWidth = tlWebPage.embedWidth;
+			embedHeight = tlWebPage.embedHeight;
+		}
+
+		EmbedBottomSheet.show(parentFragment, message, provider, siteName, description, webPage.url, embedUrl, embedWidth, embedHeight, false);
 	}
 
 	int lastAccount;

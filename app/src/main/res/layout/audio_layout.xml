@@ -12,16 +12,30 @@
 	android:paddingEnd="8dp"
 	android:paddingBottom="4dp">
 
-	<ImageButton
-		android:id="@+id/audio_play_button"
-		android:layout_width="wrap_content"
-		android:layout_height="wrap_content"
-		android:background="?selectableItemBackgroundBorderless"
-		android:contentDescription="@string/AccActionPlay"
-		android:src="@drawable/feed_play_button"
+	<FrameLayout
+		android:id="@+id/audio_image_container"
+		android:layout_width="35dp"
+		android:layout_height="35dp"
 		app:layout_constraintBottom_toBottomOf="parent"
 		app:layout_constraintStart_toStartOf="parent"
-		app:layout_constraintTop_toTopOf="parent" />
+		app:layout_constraintTop_toTopOf="parent">
+
+		<ImageView
+			android:id="@+id/audio_image"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:importantForAccessibility="no" />
+
+		<ImageButton
+			android:id="@+id/audio_play_button"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:background="@color/brand"
+			android:contentDescription="@string/AccActionPlay"
+			android:foreground="?selectableItemBackgroundBorderless"
+			android:src="@drawable/feed_play_button" />
+
+	</FrameLayout>
 
 	<TextView
 		android:id="@+id/track_label"
@@ -38,8 +52,9 @@
 		app:layout_constraintEnd_toStartOf="@id/artist_year_label"
 		app:layout_constraintHorizontal_bias="0"
 		app:layout_constraintHorizontal_chainStyle="packed"
-		app:layout_constraintStart_toEndOf="@id/audio_play_button"
+		app:layout_constraintStart_toEndOf="@id/audio_image_container"
 		app:layout_constraintTop_toTopOf="parent"
+		app:layout_constraintVertical_bias="0.3"
 		tools:text="The Beatles" />
 
 	<TextView
@@ -55,6 +70,7 @@
 		app:layout_constraintHorizontal_bias="0"
 		app:layout_constraintStart_toEndOf="@id/track_label"
 		app:layout_constraintTop_toTopOf="parent"
+		app:layout_constraintVertical_bias="0.3"
 		app:layout_constraintWidth="wrap_content"
 		tools:text="Gunna • 2022" />
 
@@ -63,7 +79,7 @@
 		android:layout_width="0dp"
 		android:layout_height="wrap_content"
 		android:layout_marginStart="6dp"
-		android:layout_marginTop="-3.5dp"
+		android:layout_marginTop="-2.5dp"
 		android:layout_marginEnd="-6dp"
 		android:maxHeight="5dp"
 		android:min="0"
@@ -73,9 +89,10 @@
 		android:progressDrawable="@drawable/feed_audio_seekbar"
 		android:thumbTint="@color/brand"
 		android:visibility="gone"
+		app:layout_constraintBottom_toBottomOf="parent"
 		app:layout_constraintEnd_toEndOf="parent"
-		app:layout_constraintStart_toEndOf="@id/audio_play_button"
-		app:layout_constraintTop_toTopOf="@id/audio_play_button"
+		app:layout_constraintStart_toEndOf="@id/audio_image_container"
+		app:layout_constraintTop_toTopOf="@id/audio_image_container"
 		tools:visibility="visible" />
 
 	<TextView
@@ -86,7 +103,7 @@
 		android:textColor="@color/disabled_text"
 		android:textSize="12sp"
 		android:visibility="gone"
-		app:layout_constraintStart_toEndOf="@id/audio_play_button"
+		app:layout_constraintStart_toEndOf="@id/audio_image_container"
 		app:layout_constraintTop_toBottomOf="@id/seekbar"
 		tools:text="00:58"
 		tools:visibility="visible" />

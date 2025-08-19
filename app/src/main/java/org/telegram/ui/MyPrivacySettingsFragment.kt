@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -15,7 +15,6 @@ import android.widget.FrameLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.telegram.messenger.AccountInstance
-import org.telegram.messenger.ContactsController
 import org.telegram.messenger.ContactsController.Companion.PRIVACY_RULES_TYPE_CALLS
 import org.telegram.messenger.ContactsController.Companion.PRIVACY_RULES_TYPE_FORWARDS
 import org.telegram.messenger.ContactsController.Companion.PRIVACY_RULES_TYPE_INVITE
@@ -26,12 +25,12 @@ import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.NotificationCenter.NotificationCenterDelegate
 import org.telegram.messenger.R
 import org.telegram.messenger.utils.reload
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowAll
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_privacyValueAllowUsers
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowAll
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowChatParticipants
-import org.telegram.tgnet.TLRPC.TL_privacyValueDisallowUsers
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowAll
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowChatParticipants
+import org.telegram.tgnet.TLRPC.TLPrivacyValueAllowUsers
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowAll
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowChatParticipants
+import org.telegram.tgnet.TLRPC.TLPrivacyValueDisallowUsers
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.Cells.HeaderCell
@@ -40,6 +39,7 @@ import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.LayoutHelper.createFrame
 import org.telegram.ui.Components.RecyclerListView
 import org.telegram.ui.Components.RecyclerListView.SelectionAdapter
+import java.util.Locale
 
 class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 	private var listAdapter: ListAdapter? = null
@@ -119,18 +119,23 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 				blockedRow -> {
 					presentFragment(PrivacyUsersActivity())
 				}
+
 				lastSeenRow -> {
 					presentFragment(MyPrivacyControlFragment(PRIVACY_RULES_TYPE_LAST_SEEN))
 				}
+
 				groupsRow -> {
 					presentFragment(MyPrivacyControlFragment(PRIVACY_RULES_TYPE_INVITE))
 				}
+
 				callsRow -> {
 					presentFragment(MyPrivacyControlFragment(PRIVACY_RULES_TYPE_CALLS))
 				}
+
 				profilePhotoRow -> {
 					presentFragment(MyPrivacyControlFragment(PRIVACY_RULES_TYPE_PHOTO))
 				}
+
 				forwardsRow -> {
 					presentFragment(MyPrivacyControlFragment(PRIVACY_RULES_TYPE_FORWARDS))
 				}
@@ -145,6 +150,7 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 			NotificationCenter.privacyRulesUpdated -> {
 				listAdapter?.reload(0, listAdapter?.itemCount ?: 0, listAdapter?.itemCount ?: 0)
 			}
+
 			NotificationCenter.blockedUsersDidLoad -> {
 				listAdapter?.notifyItemChanged(blockedRow)
 			}
@@ -160,7 +166,8 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 		groupsRow = rowCount++
 		callsRow = rowCount++
 		profilePhotoRow = rowCount++
-		forwardsRow = rowCount++
+		//MARK: uncomment to show forwarded messages
+//		forwardsRow = rowCount++
 
 		if (notify) {
 			listAdapter?.reload(0, listAdapter?.itemCount ?: 0, listAdapter?.itemCount ?: 0)
@@ -189,11 +196,13 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 						it.setBackgroundResource(R.color.background)
 					}
 				}
+
 				2 -> {
 					HeaderCell(mContext).also {
 						it.setBackgroundResource(R.color.light_background)
 					}
 				}
+
 				else -> {
 					throw IllegalArgumentException("Wrong viewType: $viewType")
 				}
@@ -224,7 +233,7 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 							textCell.setTextAndValueAndIcon(LocaleController.getString("BlockedUsers", R.string.BlockedUsers), LocaleController.getString("BlockedEmpty", R.string.BlockedEmpty), R.drawable.right_arrow_2, animated = false, divider = true)
 						}
 						else if (totalCount > 0) {
-							textCell.setTextAndValueAndIcon(LocaleController.getString("BlockedUsers", R.string.BlockedUsers), String.format("%d", totalCount), R.drawable.right_arrow_2, animated = false, divider = true)
+							textCell.setTextAndValueAndIcon(LocaleController.getString("BlockedUsers", R.string.BlockedUsers), String.format(Locale.getDefault(), "%d", totalCount), R.drawable.right_arrow_2, animated = false, divider = true)
 						}
 						else {
 							showLoading = true
@@ -290,6 +299,7 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 
 					textCell.setDrawLoading(showLoading, loadingLen, animated)
 				}
+
 				2 -> {
 					val headerCell = holder.itemView as HeaderCell
 
@@ -315,7 +325,7 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 		fun formatRulesString(accountInstance: AccountInstance, rulesType: Int): String {
 			val privacyRules = accountInstance.contactsController.getPrivacyRules(rulesType)
 
-			if (privacyRules == null || privacyRules.size == 0) {
+			if (privacyRules.isNullOrEmpty()) {
 				return if (rulesType == 3) {
 					LocaleController.getString("P2PNobody", R.string.P2PNobody)
 				}
@@ -331,7 +341,7 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 			for (a in privacyRules.indices) {
 				val rule = privacyRules[a]
 
-				if (rule is TL_privacyValueAllowChatParticipants) {
+				if (rule is TLPrivacyValueAllowChatParticipants) {
 					var b = 0
 					val n = rule.chats.size
 
@@ -343,12 +353,12 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 							continue
 						}
 
-						plus += chat.participants_count
+						plus += chat.participantsCount
 
 						b++
 					}
 				}
-				else if (rule is TL_privacyValueDisallowChatParticipants) {
+				else if (rule is TLPrivacyValueDisallowChatParticipants) {
 					var b = 0
 					val n = rule.chats.size
 
@@ -360,25 +370,27 @@ class MyPrivacySettingsFragment : BaseFragment(), NotificationCenterDelegate {
 							continue
 						}
 
-						minus += chat.participants_count
+						minus += chat.participantsCount
 
 						b++
 					}
 				}
-				else if (rule is TL_privacyValueAllowUsers) {
+				else if (rule is TLPrivacyValueAllowUsers) {
 					plus += rule.users.size
 				}
-				else if (rule is TL_privacyValueDisallowUsers) {
+				else if (rule is TLPrivacyValueDisallowUsers) {
 					minus += rule.users.size
 				}
 				else if (type == -1) {
 					type = when (rule) {
-						is TL_privacyValueAllowAll -> {
+						is TLPrivacyValueAllowAll -> {
 							0
 						}
-						is TL_privacyValueDisallowAll -> {
+
+						is TLPrivacyValueDisallowAll -> {
 							1
 						}
+
 						else -> {
 							2
 						}

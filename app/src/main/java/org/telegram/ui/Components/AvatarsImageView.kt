@@ -4,14 +4,14 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
 import android.content.Context
 import android.graphics.Canvas
 import android.view.View
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLObject
 
 open class AvatarsImageView(context: Context, inCall: Boolean) : View(context) {
 	@JvmField

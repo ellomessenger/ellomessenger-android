@@ -4,15 +4,15 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger.messageobject
 
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.FileLoader
-import org.telegram.tgnet.TLRPC.TL_messageMediaGame
-import org.telegram.tgnet.TLRPC.TL_messageMediaInvoice
-import org.telegram.tgnet.TLRPC.TL_peerUser
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -66,10 +66,6 @@ class GroupedMessages {
 			return
 		}
 
-		if (messages.any { it.isMediaSale }) {
-			messages.sortByDescending { it.messageOwner?.media != null }
-		}
-
 		var firstSpanAdditionalSize = 200
 		val maxSizeHeight = 814.0f
 		val proportions = StringBuilder()
@@ -87,7 +83,10 @@ class GroupedMessages {
 
 			if (a == 0) {
 				isOut = messageObject.isOutOwner
-				needShare = !isOut && (messageObject.messageOwner?.fwd_from != null && messageObject.messageOwner?.fwd_from?.saved_from_peer != null || messageObject.messageOwner?.from_id is TL_peerUser && (messageObject.messageOwner?.peer_id?.channel_id != 0L || messageObject.messageOwner?.peer_id?.chat_id != 0L || MessageObject.getMedia(messageObject.messageOwner) is TL_messageMediaGame || MessageObject.getMedia(messageObject.messageOwner) is TL_messageMediaInvoice))
+
+				val fwdFrom = (messageObject.messageOwner as? TLRPC.TLMessage)?.fwdFrom
+
+				needShare = !isOut && (fwdFrom?.savedFromPeer != null || messageObject.messageOwner?.fromId is TLRPC.TLPeerUser && (messageObject.messageOwner?.peerId?.channelId != 0L || messageObject.messageOwner?.peerId?.chatId != 0L || MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaGame || MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaInvoice))
 
 				if (messageObject.isMusic || messageObject.isDocument()) {
 					isDocuments = true

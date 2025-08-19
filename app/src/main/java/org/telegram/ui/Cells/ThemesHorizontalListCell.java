@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Cells;
 
 import android.animation.ArgbEvaluator;
@@ -19,7 +27,6 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
-import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextPaint;
 import android.text.TextUtils;
@@ -59,20 +66,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 public class ThemesHorizontalListCell extends RecyclerListView implements NotificationCenter.NotificationCenterDelegate {
-
 	public static byte[] bytes = new byte[1024];
-
 	private boolean drawDivider;
 	private final LinearLayoutManager horizontalLayoutManager;
 	private final HashMap<String, Theme.ThemeInfo> loadingThemes = new HashMap<>();
 	private final HashMap<Theme.ThemeInfo, String> loadingWallpapers = new HashMap<>();
 	private Theme.ThemeInfo prevThemeInfo;
 	private final ThemesListAdapter adapter;
-
 	private final ArrayList<Theme.ThemeInfo> customThemes;
 	private final ArrayList<Theme.ThemeInfo> defaultThemes;
 	private final int currentType;
@@ -87,12 +92,13 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
 		}
 
 		@Override
-		public boolean isEnabled(RecyclerView.ViewHolder holder) {
+		public boolean isEnabled(@NonNull RecyclerView.ViewHolder holder) {
 			return false;
 		}
 
+		@NonNull
 		@Override
-		public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 			return new RecyclerListView.Holder(new InnerThemeView(mContext));
 		}
 
@@ -238,8 +244,8 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
 									mode = mode.toLowerCase();
 									String[] modes = mode.split(" ");
 									if (modes != null && modes.length > 0) {
-										for (int b = 0; b < modes.length; b++) {
-											if ("blur".equals(modes[b])) {
+										for (String s : modes) {
+											if ("blur".equals(s)) {
 												themeInfo.isBlured = true;
 												break;
 											}
@@ -348,13 +354,12 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
 				if (!file.exists()) {
 					if (!loadingWallpapers.containsKey(themeInfo)) {
 						loadingWallpapers.put(themeInfo, themeInfo.slug);
-						TLRPC.TL_account_getWallPaper req = new TLRPC.TL_account_getWallPaper();
-						TLRPC.TL_inputWallPaperSlug inputWallPaperSlug = new TLRPC.TL_inputWallPaperSlug();
+						var req = new TLRPC.TLAccountGetWallPaper();
+						var inputWallPaperSlug = new TLRPC.TLInputWallPaperSlug();
 						inputWallPaperSlug.slug = themeInfo.slug;
 						req.wallpaper = inputWallPaperSlug;
 						ConnectionsManager.getInstance(themeInfo.account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-							if (response instanceof TLRPC.TL_wallPaper) {
-								TLRPC.WallPaper wallPaper = (TLRPC.WallPaper)response;
+							if (response instanceof TLRPC.TLWallPaper wallPaper) {
 								String name = FileLoader.getAttachFileName(wallPaper.document);
 								if (!loadingThemes.containsKey(name)) {
 									loadingThemes.put(name, themeInfo);
@@ -543,7 +548,7 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
 		}
 
 		@Override
-		protected void onDraw(Canvas canvas) {
+		protected void onDraw(@NonNull Canvas canvas) {
 			if (accentId != themeInfo.currentAccentId) {
 				updateColors(true);
 			}
@@ -702,10 +707,8 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
 			info.setChecked(button.isChecked());
 			info.setCheckable(true);
 			info.setEnabled(true);
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-				info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
-				info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, LocaleController.getString("AccDescrMoreOptions", R.string.AccDescrMoreOptions)));
-			}
+			info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+			info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, LocaleController.getString("AccDescrMoreOptions", R.string.AccDescrMoreOptions)));
 		}
 	}
 
@@ -811,7 +814,7 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
 	}
 
 	@Override
-	public boolean onInterceptTouchEvent(MotionEvent e) {
+	public boolean onInterceptTouchEvent(@NonNull MotionEvent e) {
 		if (getParent() != null && getParent().getParent() != null) {
 			getParent().getParent().requestDisallowInterceptTouchEvent(canScrollHorizontally(-1));
 		}
@@ -879,8 +882,7 @@ public class ThemesHorizontalListCell extends RecyclerListView implements Notifi
 		int count = getChildCount();
 		for (int a = 0; a < count; a++) {
 			View child = getChildAt(a);
-			if (child instanceof InnerThemeView) {
-				InnerThemeView view = (InnerThemeView)child;
+			if (child instanceof InnerThemeView view) {
 				if (view.themeInfo == info) {
 					if (view.parseTheme()) {
 						view.themeInfo.themeLoaded = true;

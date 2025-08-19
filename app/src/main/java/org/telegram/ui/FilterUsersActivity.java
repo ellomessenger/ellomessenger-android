@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -51,9 +51,11 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TLObject;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.Chat;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -261,7 +263,7 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 
 		public void addSpan(final GroupCreateSpan span, boolean animated) {
 			allSpans.add(span);
-			long uid = span.getUid();
+			long uid = span.uid;
 			if (uid > Integer.MIN_VALUE + 7) {
 				selectedCount++;
 			}
@@ -296,7 +298,7 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 
 		public void removeSpan(final GroupCreateSpan span) {
 			ignoreScrollEvent = true;
-			long uid = span.getUid();
+			long uid = span.uid;
 			if (uid > Integer.MIN_VALUE + 7) {
 				selectedCount--;
 			}
@@ -362,28 +364,28 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 		if (span.isDeleting()) {
 			currentDeletingSpan = null;
 			spansContainer.removeSpan(span);
-			if (span.getUid() == Integer.MIN_VALUE) {
+			if (span.uid == Integer.MIN_VALUE) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_CONTACTS;
 			}
-			else if (span.getUid() == Integer.MIN_VALUE + 1) {
+			else if (span.uid == Integer.MIN_VALUE + 1) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_NON_CONTACTS;
 			}
-			else if (span.getUid() == Integer.MIN_VALUE + 2) {
+			else if (span.uid == Integer.MIN_VALUE + 2) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_GROUPS;
 			}
-			else if (span.getUid() == Integer.MIN_VALUE + 3) {
+			else if (span.uid == Integer.MIN_VALUE + 3) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_CHANNELS;
 			}
-			else if (span.getUid() == Integer.MIN_VALUE + 4) {
+			else if (span.uid == Integer.MIN_VALUE + 4) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_BOTS;
 			}
-			else if (span.getUid() == Integer.MIN_VALUE + 5) {
+			else if (span.uid == Integer.MIN_VALUE + 5) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED;
 			}
-			else if (span.getUid() == Integer.MIN_VALUE + 6) {
+			else if (span.uid == Integer.MIN_VALUE + 6) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_READ;
 			}
-			else if (span.getUid() == Integer.MIN_VALUE + 7) {
+			else if (span.uid == Integer.MIN_VALUE + 7) {
 				filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED;
 			}
 			updateHint();
@@ -463,7 +465,7 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 			}
 
 			@Override
-			protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+			protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 				boolean result = super.drawChild(canvas, child, drawingTime);
 				if (child == listView || child == emptyView) {
 					parentLayout.drawHeaderShadow(canvas, scrollView.getMeasuredHeight());
@@ -562,28 +564,28 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 					else if (event.getAction() == KeyEvent.ACTION_UP && wasEmpty && !allSpans.isEmpty()) {
 						GroupCreateSpan span = allSpans.get(allSpans.size() - 1);
 						spansContainer.removeSpan(span);
-						if (span.getUid() == Integer.MIN_VALUE) {
+						if (span.uid == Integer.MIN_VALUE) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_CONTACTS;
 						}
-						else if (span.getUid() == Integer.MIN_VALUE + 1) {
+						else if (span.uid == Integer.MIN_VALUE + 1) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_NON_CONTACTS;
 						}
-						else if (span.getUid() == Integer.MIN_VALUE + 2) {
+						else if (span.uid == Integer.MIN_VALUE + 2) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_GROUPS;
 						}
-						else if (span.getUid() == Integer.MIN_VALUE + 3) {
+						else if (span.uid == Integer.MIN_VALUE + 3) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_CHANNELS;
 						}
-						else if (span.getUid() == Integer.MIN_VALUE + 4) {
+						else if (span.uid == Integer.MIN_VALUE + 4) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_BOTS;
 						}
-						else if (span.getUid() == Integer.MIN_VALUE + 5) {
+						else if (span.uid == Integer.MIN_VALUE + 5) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_MUTED;
 						}
-						else if (span.getUid() == Integer.MIN_VALUE + 6) {
+						else if (span.uid == Integer.MIN_VALUE + 6) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_READ;
 						}
-						else if (span.getUid() == Integer.MIN_VALUE + 7) {
+						else if (span.uid == Integer.MIN_VALUE + 7) {
 							filterFlags &= ~MessagesController.DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED;
 						}
 						updateHint();
@@ -648,8 +650,7 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 		listView.addItemDecoration(new ItemDecoration());
 		frameLayout.addView(listView);
 		listView.setOnItemClickListener((view, position) -> {
-			if (view instanceof GroupCreateUserCell) {
-				GroupCreateUserCell cell = (GroupCreateUserCell)view;
+			if (view instanceof GroupCreateUserCell cell) {
 				Object object = cell.getObject();
 				long id;
 				if (object instanceof String) {
@@ -720,12 +721,10 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 						showDialog(limitReachedBottomSheet);
 						return;
 					}
-					if (object instanceof User) {
-						User user = (User)object;
+					if (object instanceof User user) {
 						MessagesController.getInstance(currentAccount).putUser(user, !searching);
 					}
-					else if (object instanceof TLRPC.Chat) {
-						TLRPC.Chat chat = (TLRPC.Chat)object;
+					else if (object instanceof Chat chat) {
 						MessagesController.getInstance(currentAccount).putChat(chat, !searching);
 					}
 					GroupCreateSpan span = new GroupCreateSpan(editText.getContext(), object);
@@ -902,39 +901,20 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 		int count = listView.getChildCount();
 		for (int a = 0; a < count; a++) {
 			View child = listView.getChildAt(a);
-			if (child instanceof GroupCreateUserCell) {
-				GroupCreateUserCell cell = (GroupCreateUserCell)child;
+			if (child instanceof GroupCreateUserCell cell) {
 				Object object = cell.getObject();
 				long id;
-				if (object instanceof String) {
-					String str = (String)object;
-					switch (str) {
-						case "contacts":
-							id = Integer.MIN_VALUE;
-							break;
-						case "non_contacts":
-							id = Integer.MIN_VALUE + 1;
-							break;
-						case "groups":
-							id = Integer.MIN_VALUE + 2;
-							break;
-						case "channels":
-							id = Integer.MIN_VALUE + 3;
-							break;
-						case "bots":
-							id = Integer.MIN_VALUE + 4;
-							break;
-						case "muted":
-							id = Integer.MIN_VALUE + 5;
-							break;
-						case "read":
-							id = Integer.MIN_VALUE + 6;
-							break;
-						case "archived":
-						default:
-							id = Integer.MIN_VALUE + 7;
-							break;
-					}
+				if (object instanceof String str) {
+					id = switch (str) {
+						case "contacts" -> Integer.MIN_VALUE;
+						case "non_contacts" -> Integer.MIN_VALUE + 1;
+						case "groups" -> Integer.MIN_VALUE + 2;
+						case "channels" -> Integer.MIN_VALUE + 3;
+						case "bots" -> Integer.MIN_VALUE + 4;
+						case "muted" -> Integer.MIN_VALUE + 5;
+						case "read" -> Integer.MIN_VALUE + 6;
+						default -> Integer.MIN_VALUE + 7;
+					};
 				}
 				else if (object instanceof User) {
 					id = ((User)object).id;
@@ -1055,7 +1035,7 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 
 				@Nullable
 				@Override
-				public LongSparseArray<TLRPC.TL_groupCallParticipant> getExcludeCallParticipants() {
+				public LongSparseArray<TLRPC.TLGroupCallParticipant> getExcludeCallParticipants() {
 					return null;
 				}
 
@@ -1118,16 +1098,10 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 		@NonNull
 		@Override
 		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-			View view;
-			switch (viewType) {
-				case 1:
-					view = new GroupCreateUserCell(context, 1, 0, true);
-					break;
-				case 2:
-				default:
-					view = new GraySectionCell(context);
-					break;
-			}
+			View view = switch (viewType) {
+				case 1 -> new GroupCreateUserCell(context, 1, 0, true);
+				default -> new GraySectionCell(context);
+			};
 			return new RecyclerListView.Holder(view);
 		}
 
@@ -1377,14 +1351,13 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 							String username;
 							final String[] names = new String[3];
 
-							if (object instanceof User) {
-								User user = (User)object;
-								names[0] = ContactsController.formatName(user.getFirst_name(), user.getLast_name()).toLowerCase();
+							if (object instanceof User user) {
+								names[0] = ContactsController.formatName(user.firstName, user.lastName).toLowerCase();
 								username = user.username;
 								if (UserObject.isReplyUser(user)) {
 									names[2] = context.getString(R.string.RepliesTitle).toLowerCase();
 								}
-								else if (user.self) {
+								else if (TLRPCExtensions.isSelf(user)) {
 									names[2] = context.getString(R.string.SavedMessages).toLowerCase();
 								}
 							}
@@ -1412,9 +1385,8 @@ public class FilterUsersActivity extends BaseFragment implements NotificationCen
 
 								if (found != 0) {
 									if (found == 1) {
-										if (object instanceof User) {
-											User user = (User)object;
-											resultArrayNames.add(AndroidUtilities.generateSearchName(user.getFirst_name(), user.getLast_name(), q));
+										if (object instanceof User user) {
+											resultArrayNames.add(AndroidUtilities.generateSearchName(user.firstName, user.lastName, q));
 										}
 										else {
 											TLRPC.Chat chat = (TLRPC.Chat)object;

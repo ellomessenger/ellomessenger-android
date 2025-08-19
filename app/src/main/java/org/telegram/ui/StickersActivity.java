@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui;
 
@@ -39,7 +39,8 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.TL_availableReaction;
+import org.telegram.tgnet.TLRPC.TLAvailableReaction;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -139,9 +140,9 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 	private int rowCount;
 
 	private boolean isListeningForFeaturedUpdate;
-	ArrayList<TLRPC.TL_messages_stickerSet> frozenEmojiPacks;
+	List<TLRPC.TLMessagesStickerSet> frozenEmojiPacks;
 
-	private ArrayList<TLRPC.TL_messages_stickerSet> emojiPacks;
+	private ArrayList<TLRPC.TLMessagesStickerSet> emojiPacks;
 
 	private List<TLRPC.StickerSetCovered> getFeaturedSets() {
 		final MediaDataController mediaDataController = MediaDataController.getInstance(currentAccount);
@@ -212,7 +213,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	public StickersActivity(int type, ArrayList<TLRPC.TL_messages_stickerSet> frozenEmojiPacks) {
+	public StickersActivity(int type, List<TLRPC.TLMessagesStickerSet> frozenEmojiPacks) {
 		super();
 		currentType = type;
 		this.frozenEmojiPacks = frozenEmojiPacks;
@@ -300,7 +301,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 		}
 		deleteMenuItem = actionMode.addItemWithWidth(MENU_DELETE, R.drawable.msg_delete, AndroidUtilities.dp(54));
 
-		ArrayList<TLRPC.TL_messages_stickerSet> sets;
+		List<TLRPC.TLMessagesStickerSet> sets;
 		if (currentType == MediaDataController.TYPE_EMOJIPACKS && frozenEmojiPacks != null) {
 			sets = frozenEmojiPacks;
 		}
@@ -344,9 +345,9 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 		listView.setOnItemClickListener((view, position) -> {
 			if (position >= featuredStickersStartRow && position < featuredStickersEndRow && getParentActivity() != null) {
 				TLRPC.StickerSetCovered setCovered = listAdapter.featuredStickerSets.get(position - featuredStickersStartRow);
-				TLRPC.TL_inputStickerSetID inputStickerSetID = new TLRPC.TL_inputStickerSetID();
+				var inputStickerSetID = new TLRPC.TLInputStickerSetID();
 				inputStickerSetID.id = setCovered.set.id;
-				inputStickerSetID.access_hash = setCovered.set.access_hash;
+				inputStickerSetID.accessHash = setCovered.set.accessHash;
 				if (currentType == MediaDataController.TYPE_EMOJIPACKS) {
 					ArrayList<TLRPC.InputStickerSet> inputStickerSets = new ArrayList<>(1);
 					inputStickerSets.add(inputStickerSetID);
@@ -364,9 +365,9 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 						for (int i = 0; featuredStickerSets != null && i < featuredStickerSets.size(); ++i) {
 							TLRPC.StickerSetCovered set = featuredStickerSets.get(i);
 							if (set != null && set.set != null) {
-								TLRPC.TL_inputStickerSetID inputStickerSet = new TLRPC.TL_inputStickerSetID();
+								TLRPC.TLInputStickerSetID inputStickerSet = new TLRPC.TLInputStickerSetID();
 								inputStickerSet.id = set.set.id;
-								inputStickerSet.access_hash = set.set.access_hash;
+								inputStickerSet.accessHash = set.set.accessHash;
 								inputStickerSets.add(inputStickerSet);
 							}
 						}
@@ -392,16 +393,16 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 			}
 			else if (position >= stickersStartRow && position < stickersEndRow && getParentActivity() != null) {
 				if (!listAdapter.hasSelected()) {
-					TLRPC.TL_messages_stickerSet stickerSet = listAdapter.stickerSets.get(position - stickersStartRow);
-					ArrayList<TLRPC.Document> stickers = stickerSet.documents;
+					TLRPC.TLMessagesStickerSet stickerSet = listAdapter.stickerSets.get(position - stickersStartRow);
+					List<TLRPC.Document> stickers = stickerSet.documents;
 					if (stickers == null || stickers.isEmpty()) {
 						return;
 					}
 					if (stickerSet.set != null && stickerSet.set.emojis) {
 						ArrayList<TLRPC.InputStickerSet> inputs = new ArrayList<>();
-						TLRPC.TL_inputStickerSetID inputId = new TLRPC.TL_inputStickerSetID();
+						var inputId = new TLRPC.TLInputStickerSetID();
 						inputId.id = stickerSet.set.id;
-						inputId.access_hash = stickerSet.set.access_hash;
+						inputId.accessHash = stickerSet.set.accessHash;
 						inputs.add(inputId);
 						showDialog(new EmojiPacksAlert(StickersActivity.this, getParentActivity(), inputs));
 					}
@@ -520,7 +521,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 		MediaDataController.getInstance(currentAccount).calcNewHash(currentType);
 		needReorder = false;
 		activeReorderingRequests++;
-		TLRPC.TL_messages_reorderStickerSets req = new TLRPC.TL_messages_reorderStickerSets();
+		var req = new TLRPC.TLMessagesReorderStickerSets();
 		req.masks = currentType == MediaDataController.TYPE_MASK;
 		req.emojis = currentType == MediaDataController.TYPE_EMOJIPACKS;
 		for (int a = 0; a < listAdapter.stickerSets.size(); a++) {
@@ -532,7 +533,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 
 	private void updateRows(boolean updateEmojipacks) {
 		MediaDataController mediaDataController = MediaDataController.getInstance(currentAccount);
-		List<TLRPC.TL_messages_stickerSet> newList;
+		List<TLRPC.TLMessagesStickerSet> newList;
 		if (currentType == MediaDataController.TYPE_EMOJIPACKS) {
 			if (updateEmojipacks || frozenEmojiPacks == null) {
 				frozenEmojiPacks = new ArrayList<>(MessagesController.getInstance(currentAccount).filterPremiumStickers(mediaDataController.getStickerSets(currentType)));
@@ -580,7 +581,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 			if (!isPaused) {
 				diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
 
-					final List<TLRPC.TL_messages_stickerSet> oldList = listAdapter.stickerSets;
+					final List<TLRPC.TLMessagesStickerSet> oldList = listAdapter.stickerSets;
 
 					@Override
 					public int getOldListSize() {
@@ -599,8 +600,8 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 
 					@Override
 					public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-						TLRPC.StickerSet oldSet = oldList.get(oldItemPosition).set;
-						TLRPC.StickerSet newSet = newList.get(newItemPosition).set;
+						TLRPC.TLStickerSet oldSet = oldList.get(oldItemPosition).set;
+						TLRPC.TLStickerSet newSet = newList.get(newItemPosition).set;
 						return TextUtils.equals(oldSet.title, newSet.title) && oldSet.count == newSet.count;
 					}
 				});
@@ -624,9 +625,9 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 
 					@Override
 					public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-						TLRPC.StickerSet oldSet = oldList.get(oldItemPosition).set;
-						TLRPC.StickerSet newSet = featuredStickersList.get(newItemPosition).set;
-						return TextUtils.equals(oldSet.title, newSet.title) && oldSet.count == newSet.count && oldSet.installed == newSet.installed;
+						TLRPC.TLStickerSet oldSet = oldList.get(oldItemPosition).set;
+						TLRPC.TLStickerSet newSet = featuredStickersList.get(newItemPosition).set;
+						return TextUtils.equals(oldSet.title, newSet.title) && oldSet.count == newSet.count;
 					}
 				});
 			}
@@ -845,13 +846,13 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 		public static final int UPDATE_FEATURED_ANIMATED = 4;
 
 		private final LongSparseArray<Boolean> selectedItems = new LongSparseArray<>();
-		private final List<TLRPC.TL_messages_stickerSet> stickerSets = new ArrayList<>();
+		private final List<TLRPC.TLMessagesStickerSet> stickerSets = new ArrayList<>();
 		private final List<TLRPC.StickerSetCovered> featuredStickerSets = new ArrayList<>();
 		private final List<Long> loadingFeaturedStickerSets = new ArrayList<>();
 
 		private final Context mContext;
 
-		public ListAdapter(Context context, List<TLRPC.TL_messages_stickerSet> stickerSets, List<TLRPC.StickerSetCovered> featuredStickerSets) {
+		public ListAdapter(Context context, List<TLRPC.TLMessagesStickerSet> stickerSets, List<TLRPC.StickerSetCovered> featuredStickerSets) {
 			mContext = context;
 			setStickerSets(stickerSets);
 			if (featuredStickerSets.size() > 3) {
@@ -872,7 +873,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 			}
 		}
 
-		public void setStickerSets(List<TLRPC.TL_messages_stickerSet> stickerSets) {
+		public void setStickerSets(List<TLRPC.TLMessagesStickerSet> stickerSets) {
 			this.stickerSets.clear();
 			this.stickerSets.addAll(stickerSets);
 		}
@@ -902,7 +903,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 			if (which == MENU_SHARE) {
 				StringBuilder stringBuilder = new StringBuilder();
 				for (int i = 0, size = stickerSets.size(); i < size; i++) {
-					TLRPC.TL_messages_stickerSet stickerSet = stickerSets.get(i);
+					TLRPC.TLMessagesStickerSet stickerSet = stickerSets.get(i);
 					if (selectedItems.get(stickerSet.set.id, false)) {
 						if (stringBuilder.length() != 0) {
 							stringBuilder.append("\n");
@@ -927,10 +928,10 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 				shareAlert.show();
 			}
 			else if (which == MENU_ARCHIVE || which == MENU_DELETE) {
-				ArrayList<TLRPC.StickerSet> stickerSetList = new ArrayList<>(selectedItems.size());
+				ArrayList<TLRPC.TLStickerSet> stickerSetList = new ArrayList<>(selectedItems.size());
 
 				for (int i = 0, size = stickerSets.size(); i < size; i++) {
-					TLRPC.StickerSet stickerSet = stickerSets.get(i).set;
+					TLRPC.TLStickerSet stickerSet = stickerSets.get(i).set;
 					if (selectedItems.get(stickerSet.id, false)) {
 						stickerSetList.add(stickerSet);
 					}
@@ -943,7 +944,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 						break;
 					case 1:
 						for (int i = 0, size = stickerSets.size(); i < size; i++) {
-							TLRPC.TL_messages_stickerSet stickerSet = stickerSets.get(i);
+							TLRPC.TLMessagesStickerSet stickerSet = stickerSets.get(i);
 							if (selectedItems.get(stickerSet.set.id, false)) {
 								processSelectionOption(which, stickerSet);
 								break;
@@ -984,7 +985,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 			}
 		}
 
-		private void processSelectionOption(int which, TLRPC.TL_messages_stickerSet stickerSet) {
+		private void processSelectionOption(int which, TLRPC.TLMessagesStickerSet stickerSet) {
 			if (which == MENU_ARCHIVE) {
 				MediaDataController.getInstance(currentAccount).toggleStickerSet(getParentActivity(), stickerSet, !stickerSet.set.archived ? 1 : 2, StickersActivity.this, true, true);
 			}
@@ -1004,7 +1005,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 			}
 			else if (which == 3) {
 				try {
-					String link = String.format(Locale.US, "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + (stickerSet.set.emojis ? "addemoji" : "addstickers") + "/%s", stickerSet.set.short_name);
+					String link = String.format(Locale.US, "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + (stickerSet.set.emojis ? "addemoji" : "addstickers") + "/%s", stickerSet.set.shortName);
 					android.content.ClipboardManager clipboard = (android.content.ClipboardManager)ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
 					android.content.ClipData clip = android.content.ClipData.newPlainText("label", link);
 					clipboard.setPrimaryClip(clip);
@@ -1066,7 +1067,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 				case TYPE_STICKER_SET:
 					StickerSetCell stickerSetCell = (StickerSetCell)holder.itemView;
 					int row = position - stickersStartRow;
-					TLRPC.TL_messages_stickerSet set = stickerSets.get(row);
+					TLRPC.TLMessagesStickerSet set = stickerSets.get(row);
 					boolean sameSet = (stickerSetCell.getStickersSet() == null && set == null) || (stickerSetCell.getStickersSet() != null && set != null && stickerSetCell.getStickersSet().set.id == set.set.id);
 					stickerSetCell.setStickersSet(set, row != stickerSets.size() - 1);
 					stickerSetCell.setChecked(selectedItems.get(getItemId(position), false), false);
@@ -1207,10 +1208,10 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 							}
 						}
 						else {
-							TL_availableReaction availableReaction = MediaDataController.getInstance(currentAccount).reactionsMap.get(reaction);
+							TLAvailableReaction availableReaction = MediaDataController.getInstance(currentAccount).reactionsMap.get(reaction);
 							if (availableReaction != null) {
-								SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(availableReaction.static_icon.thumbs, ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), 1.0f);
-								settingsCell.getValueBackupImageView().imageReceiver.setImage(ImageLocation.getForDocument(availableReaction.center_icon), "100_100_lastframe", svgThumb, "webp", availableReaction, 1);
+								SvgHelper.SvgDrawable svgThumb = DocumentObject.getSvgThumb(TLRPCExtensions.getThumbs(availableReaction.staticIcon), ResourcesCompat.getColor(getContext().getResources(), R.color.light_background, null), 1.0f);
+								settingsCell.getValueBackupImageView().imageReceiver.setImage(ImageLocation.getForDocument(availableReaction.centerIcon), "100_100_lastframe", svgThumb, "webp", availableReaction, 1);
 							}
 						}
 					}
@@ -1285,7 +1286,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 
 						@Override
 						protected void onAddButtonClick() {
-							TLRPC.TL_messages_stickerSet set = getStickersSet();
+							TLRPC.TLMessagesStickerSet set = getStickersSet();
 							if (set == null || set.set == null) {
 								return;
 							}
@@ -1323,7 +1324,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 					});
 					stickerSetCell.setOnOptionsClick(v -> {
 						StickerSetCell cell = (StickerSetCell)v.getParent();
-						TLRPC.TL_messages_stickerSet stickerSet = cell.getStickersSet();
+						TLRPC.TLMessagesStickerSet stickerSet = cell.getStickersSet();
 						AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
 						builder.setTitle(stickerSet.set.title);
 						int[] options;
@@ -1435,8 +1436,8 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 			}
 		}
 
-		private void swapListElements(List<TLRPC.TL_messages_stickerSet> list, int index1, int index2) {
-			TLRPC.TL_messages_stickerSet set1 = list.get(index1);
+		private void swapListElements(List<TLRPC.TLMessagesStickerSet> list, int index1, int index2) {
+			TLRPC.TLMessagesStickerSet set1 = list.get(index1);
 			list.set(index1, list.get(index2));
 			list.set(index2, set1);
 		}
@@ -1536,7 +1537,7 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	private void checkPack(TLRPC.TL_messages_stickerSet set) {
+	private void checkPack(TLRPC.TLMessagesStickerSet set) {
 		if (set == null) {
 			return;
 		}
@@ -1578,24 +1579,26 @@ public class StickersActivity extends BaseFragment implements NotificationCenter
 		}
 	}
 
-	private TLRPC.TL_messages_stickerSet convertFeatured(TLRPC.StickerSetCovered covered) {
+	private TLRPC.TLMessagesStickerSet convertFeatured(TLRPC.StickerSetCovered covered) {
 		if (covered == null) {
 			return null;
 		}
-		TLRPC.TL_messages_stickerSet stickerSet = new TLRPC.TL_messages_stickerSet();
+		TLRPC.TLMessagesStickerSet stickerSet = new TLRPC.TLMessagesStickerSet();
 		stickerSet.set = covered.set;
-		if (covered instanceof TLRPC.TL_stickerSetFullCovered) {
-			stickerSet.documents = ((TLRPC.TL_stickerSetFullCovered)covered).documents;
-			stickerSet.packs = ((TLRPC.TL_stickerSetFullCovered)covered).packs;
+
+		if (covered instanceof TLRPC.TLStickerSetFullCovered fullCovered) {
+			stickerSet.documents.addAll(fullCovered.documents);
+			stickerSet.packs.addAll(fullCovered.packs);
 		}
-		else {
-			stickerSet.documents = covered.covers;
+		else if (covered instanceof TLRPC.TLStickerSetMultiCovered multiCovered) {
+			stickerSet.documents.addAll(multiCovered.covers);
 		}
+
 		return stickerSet;
 	}
 
-	private String getLinkForSet(TLRPC.TL_messages_stickerSet stickerSet) {
-		return String.format(Locale.US, "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + (stickerSet.set.emojis ? "addemoji" : "addstickers") + "/%s", stickerSet.set.short_name);
+	private String getLinkForSet(TLRPC.TLMessagesStickerSet stickerSet) {
+		return String.format(Locale.US, "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + (stickerSet.set.emojis ? "addemoji" : "addstickers") + "/%s", stickerSet.set.shortName);
 	}
 
 	@Override

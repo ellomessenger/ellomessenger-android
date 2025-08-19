@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Ello for Android.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Shamil Afandiyev, Ello 2025.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.information
 
 import android.content.Context
@@ -8,16 +16,11 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
 import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.databinding.FragmentInformationBinding
-import org.telegram.tgnet.tlrpc.UserFull
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.BaseFragment
 
 class InformationFragment : BaseFragment() {
-
 	private var binding: FragmentInformationBinding? = null
-
-	private var userId: Long = 0
-	private var userInfo: UserFull? = null
 
 	override fun createView(context: Context): View? {
 		initActionBar(context)
@@ -51,22 +54,19 @@ class InformationFragment : BaseFragment() {
 	}
 
 	private fun getUserData() {
-		userId = UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId()
+		val userId = UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId()
 
 		if (userId != 0L) {
-			userInfo = messagesController.getUserFull(userId)
+			val user = messagesController.getUser(userId)
+			val userFull = messagesController.getUserFull(userId)
 
-			val userId = userId.toString()
-			val username = userInfo?.user?.username
-			val userEmail = userInfo?.email
-
-			binding?.tvUserName?.text = username
-			binding?.tvUserId?.text = userId
-			binding?.tvUserEmail?.text = userEmail
+			binding?.tvUserName?.text = user?.username
+			binding?.tvUserId?.text = userId.toString()
+			binding?.tvUserEmail?.text = userFull?.email
 		}
 	}
 
-	private fun initListeners () {
+	private fun initListeners() {
 		binding?.privacyPolicyContainer?.setOnClickListener {
 			Browser.openUrl(context, PRIVACY_POLICY_URL)
 		}
@@ -90,5 +90,4 @@ class InformationFragment : BaseFragment() {
 		const val TERMS_AND_CONDITIONS_URL = "https://ellomessenger.com/terms"
 		const val AI_POLICY_URL = "https://ellomessenger.com/ai-terms"
 	}
-
 }

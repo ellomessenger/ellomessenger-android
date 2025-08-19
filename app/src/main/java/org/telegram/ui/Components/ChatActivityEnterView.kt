@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
@@ -85,6 +85,7 @@ import androidx.annotation.Keep
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.collection.LongSparseArray
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.math.MathUtils
@@ -139,20 +140,19 @@ import org.telegram.messenger.utils.dp
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.vibrate
 import org.telegram.messenger.utils.visible
-import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TL_inputMessageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_message
-import org.telegram.tgnet.tlrpc.TL_messageEntityBold
-import org.telegram.tgnet.tlrpc.TL_messageEntityCode
-import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_messageEntityItalic
-import org.telegram.tgnet.tlrpc.TL_messageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_messageEntityPre
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.TL_messageEntityStrike
-import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
-import org.telegram.tgnet.tlrpc.TL_messageEntityUnderline
+import org.telegram.tgnet.*
+import org.telegram.tgnet.TLRPC.TLInputMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLMessage
+import org.telegram.tgnet.TLRPC.TLMessageEntityBold
+import org.telegram.tgnet.TLRPC.TLMessageEntityCode
+import org.telegram.tgnet.TLRPC.TLMessageEntityCustomEmoji
+import org.telegram.tgnet.TLRPC.TLMessageEntityItalic
+import org.telegram.tgnet.TLRPC.TLMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLMessageEntityPre
+import org.telegram.tgnet.TLRPC.TLMessageEntitySpoiler
+import org.telegram.tgnet.TLRPC.TLMessageEntityStrike
+import org.telegram.tgnet.TLRPC.TLMessageEntityTextUrl
+import org.telegram.tgnet.TLRPC.TLMessageEntityUnderline
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
@@ -182,7 +182,7 @@ import org.telegram.ui.PhotoViewer.EmptyPhotoViewerProvider
 import org.telegram.ui.PremiumPreviewFragment
 import org.telegram.ui.ProfileActivity
 import org.telegram.ui.StickersActivity
-import org.telegram.ui.aibot.AiSubscriptionPlansFragment
+import org.telegram.ui.aibot.AiPurchaseFragment
 import org.telegram.ui.group.GroupStickersActivity
 import org.telegram.ui.sales.CreateMediaSaleFragment
 import java.io.File
@@ -192,6 +192,9 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withSave
 
 @SuppressLint("ClickableViewAccessibility", "ViewConstructor")
 open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLayout?, fragment: ChatActivity?, isChat: Boolean, val isBot: Boolean) : BlurredFrameLayout(context, fragment?.contentView), NotificationCenterDelegate, SizeNotifierFrameLayoutDelegate, StickersAlertDelegate {
@@ -511,10 +514,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				val description = inputContentInfo.description
 
 				if (description.hasMimeType("image/gif")) {
-					SendMessagesHelper.prepareSendingDocument(accountInstance, null, null, inputContentInfo.contentUri, null, "image/gif", dialog_id, replyingMessageObject, threadMessage, inputContentInfo, null, notify, 0, false, null)
+					SendMessagesHelper.prepareSendingDocument(accountInstance, null, null, inputContentInfo.contentUri, null, "image/gif", dialog_id, replyingMessageObject, threadMessage, inputContentInfo, null, notify, 0)
 				}
 				else {
-					SendMessagesHelper.prepareSendingPhoto(accountInstance, null, inputContentInfo.contentUri, dialog_id, replyingMessageObject, threadMessage, null, null, null, inputContentInfo, 0, null, notify, 0, false, null)
+					SendMessagesHelper.prepareSendingPhoto(accountInstance, null, inputContentInfo.contentUri, dialog_id, replyingMessageObject, threadMessage, null, null, null, inputContentInfo, 0, null, notify, 0)
 				}
 
 				this@ChatActivityEnterView.delegate?.onMessageSend(null, true, scheduleDate)
@@ -732,7 +735,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 						val updateStickersOrder = SendMessagesHelper.checkUpdateStickersOrder(info.caption)
 
-						SendMessagesHelper.prepareSendingMedia(accountInstance, photos, dialog_id, replyingMessageObject, threadMessage, null, forceDocument = false, groupMedia = false, editingMessageObject = editingMessageObject, notify = notify, scheduleDate = scheduleDate, updateStickersOrder = updateStickersOrder, false, null)
+						SendMessagesHelper.prepareSendingMedia(accountInstance, photos, dialog_id, replyingMessageObject, threadMessage, null, forceDocument = false, groupMedia = false, editingMessageObject = editingMessageObject, notify = notify, scheduleDate = scheduleDate, updateStickersOrder = updateStickersOrder)
 
 						this@ChatActivityEnterView.delegate?.onMessageSend(null, true, scheduleDate)
 					}
@@ -870,7 +873,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	private var recordIsCanceled = false
 	private var showKeyboardOnResume = false
 	private var botButtonsMessageObject: MessageObject? = null
-	private var botReplyMarkup: TLRPC.TL_replyKeyboardMarkup? = null
+	private var botReplyMarkup: TLRPC.TLReplyKeyboardMarkup? = null
 	private var botCount = 0
 	private var hasBotCommands = false
 	private var wakeLock: PowerManager.WakeLock? = null
@@ -920,7 +923,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	var trendingStickersAlert: TrendingStickersAlert? = null
 		private set
 
-	private var audioToSend: TLRPC.TL_document? = null
+	private var audioToSend: TLRPC.TLDocument? = null
 	private var audioToSendPath: String? = null
 	private var audioToSendMessageObject: MessageObject? = null
 	private var videoToSendMessageObject: VideoEditedInfo? = null
@@ -1139,7 +1142,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		textFieldContainer = object : FrameLayout(context) {
 			override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-				return if (botWebViewButton.visibility == VISIBLE) {
+				return if (botWebViewButton.isVisible) {
 					botWebViewButton.dispatchTouchEvent(ev)
 				}
 				else {
@@ -1172,7 +1175,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				super.onLayout(changed, left, top, right, bottom)
 
 				scheduledButton?.let { scheduledButton ->
-					val x = measuredWidth - AndroidUtilities.dp(if (botButton?.visibility == VISIBLE) 96f else 48f) - AndroidUtilities.dp(48f)
+					val x = measuredWidth - AndroidUtilities.dp(if (botButton?.isVisible == true) 96f else 48f) - AndroidUtilities.dp(48f)
 					scheduledButton.layout(x, scheduledButton.top, x + scheduledButton.measuredWidth, scheduledButton.bottom)
 				}
 
@@ -1275,7 +1278,9 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 					if (keyEvent.action == 1) {
 						if (currentPopupContentType == POPUP_CONTENT_BOT_KEYBOARD && botButtonsMessageObject != null) {
-							MessagesController.getMainSettings(currentAccount).edit().putInt("hidekeyboard_$dialog_id", botButtonsMessageObject!!.id).commit()
+							MessagesController.getMainSettings(currentAccount).edit {
+								putInt("hidekeyboard_$dialog_id", botButtonsMessageObject!!.id)
+							}
 						}
 
 						if (searchingType != 0) {
@@ -1451,7 +1456,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 						beforeLimit = -9999
 					}
 
-					captionLimitView.setNumber(beforeLimit, captionLimitView.visibility == VISIBLE)
+					captionLimitView.setNumber(beforeLimit, captionLimitView.isVisible)
 
 					if (captionLimitView.visibility != VISIBLE) {
 						captionLimitView.visibility = VISIBLE
@@ -1674,7 +1679,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 					if (isInScheduleMode) {
 						AlertsCreator.createScheduleDatePickerDialog(parentActivity, dialog_id) { notify: Boolean, scheduleDate: Int ->
-							SendMessagesHelper.getInstance(currentAccount).sendMessage(command, dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, notify, scheduleDate, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+							SendMessagesHelper.getInstance(currentAccount).sendMessage(command, dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, notify, scheduleDate, null, updateStickersOrder = false)
 
 							fieldText = ""
 
@@ -1686,7 +1691,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 							return@setOnItemClickListener
 						}
 
-						SendMessagesHelper.getInstance(currentAccount).sendMessage(command, dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+						SendMessagesHelper.getInstance(currentAccount).sendMessage(command, dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 
 						fieldText = ""
 
@@ -1808,7 +1813,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 				notifyButton?.setImageDrawable(notifySilentDrawable)
 
-				MessagesController.getNotificationsSettings(currentAccount).edit().putBoolean("silent_$dialog_id", silent).commit()
+				MessagesController.getNotificationsSettings(currentAccount).edit { putBoolean("silent_$dialog_id", silent) }
 
 				NotificationsController.getInstance(currentAccount).updateServerNotificationsSettings(dialog_id)
 
@@ -1840,12 +1845,14 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			if (isBot) {
 				botSettingsButton = ImageView(context)
 				botSettingsButton?.colorFilter = PorterDuffColorFilter(ResourcesCompat.getColor(resources, R.color.disabled_text, null), PorterDuff.Mode.SRC_IN)
-				botSettingsButton?.setImageResource(R.drawable.ic_settings_menu)
+				botSettingsButton?.setImageResource(R.drawable.ic_bot_wallet)
 				botSettingsButton?.scaleType = ImageView.ScaleType.CENTER
 				botSettingsButton?.background = Theme.createSelectorDrawable(context.getColor(R.color.light_background))
 
 				botSettingsButton?.setOnClickListener {
-					parentFragment?.presentFragment(AiSubscriptionPlansFragment())
+					val args = Bundle()
+					args.putSerializable("subs_info", parentFragment?.chatBotController?.lastSubscriptionInfo)
+					parentFragment?.presentFragment(AiPurchaseFragment(args))
 				}
 
 				attachLayout?.addView(botSettingsButton, createLinear(48, 48))
@@ -1904,10 +1911,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 						return@OnSelectCallback
 					}
 
-					chatFull.default_send_as = peer
+					chatFull.defaultSendAs = peer
 					updateSendAsButton()
 
-					parentFragment?.messagesController?.setDefaultSendAs(dialog_id, if (peer.user_id != 0L) peer.user_id else -peer.channel_id)
+					parentFragment?.messagesController?.setDefaultSendAs(dialog_id, if (peer.userId != 0L) peer.userId else -peer.channelId)
 
 					val loc = IntArray(2)
 					val wasSelected = senderView.avatar.isSelected
@@ -1917,15 +1924,15 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 					val avatar = SimpleAvatarView(getContext())
 
-					if (peer.channel_id != 0L) {
-						val chat = controller.getChat(peer.channel_id)
+					if (peer.channelId != 0L) {
+						val chat = controller.getChat(peer.channelId)
 
 						if (chat != null) {
 							avatar.setAvatar(chat)
 						}
 					}
-					else if (peer.user_id != 0L) {
-						val user = controller.getUser(peer.user_id)
+					else if (peer.userId != 0L) {
+						val user = controller.getUser(peer.userId)
 
 						if (user != null) {
 							avatar.setAvatar(user)
@@ -2343,7 +2350,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					val chat = parentFragment.currentChat
 					val userFull = parentFragment.currentUserInfo
 
-					if (chat != null && !ChatObject.canSendMedia(chat) || userFull != null && userFull.voice_messages_forbidden) {
+					if (chat != null && !ChatObject.canSendMedia(chat) || userFull != null && userFull.voiceMessagesForbidden) {
 						delegate?.needShowMediaBanHint()
 						return@setOnTouchListener true
 					}
@@ -2383,7 +2390,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					return@setOnTouchListener false
 				}
 
-				if (recordCircle.isSendButtonVisible || recordedAudioPanel.visibility == VISIBLE) {
+				if (recordCircle.isSendButtonVisible || recordedAudioPanel.isVisible) {
 					if (recordAudioVideoRunnableStarted) {
 						AndroidUtilities.cancelRunOnUIThread(recordAudioVideoRunnable)
 					}
@@ -2784,7 +2791,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		get() {
 			var t = top
 
-			if (topView?.visibility == VISIBLE) {
+			if (topView?.isVisible == true) {
 				t += ChatActivityEnterTopView.heightDp
 			}
 
@@ -2800,7 +2807,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			if (child === textFieldContainer) {
 				var top = (animatedTop + AndroidUtilities.dp(2f) + chatSearchExpandOffset).toInt()
 
-				if (topView != null && topView!!.visibility == VISIBLE) {
+				if (topView?.isVisible == true) {
 					top += topView!!.height
 				}
 
@@ -2881,7 +2888,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 						sendPopupWindow?.dismiss()
 					}
 
-					AlertsCreator.createScheduleDatePickerDialog(parentActivity, parentFragment.dialogId) { notify, scheduleDate ->
+					AlertsCreator.createScheduleDatePickerDialog(parentActivity, parentFragment?.dialogId ?: 0) { notify, scheduleDate ->
 						sendMessageInternal(notify, scheduleDate)
 					}
 				}
@@ -2931,7 +2938,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		view.getLocationInWindow(location)
 
-		val y = if (isKeyboardVisible && this@ChatActivityEnterView.measuredHeight > AndroidUtilities.dp(if (topView?.visibility == VISIBLE) 48f + 58f else 58f)) {
+		val y = if (isKeyboardVisible && this@ChatActivityEnterView.measuredHeight > AndroidUtilities.dp(if (topView?.isVisible == true) 48f + 58f else 58f)) {
 			location[1] + view.measuredHeight
 		}
 		else {
@@ -2954,7 +2961,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	}
 
 	val isSendButtonVisible: Boolean
-		get() = sendButton.visibility == VISIBLE
+		get() = sendButton.isVisible
 
 	private fun setRecordVideoButtonVisible(visible: Boolean, animated: Boolean) {
 		isInVideoMode = visible
@@ -2968,7 +2975,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 			}
 
-			preferences.edit().putBoolean(if (isChannel) "currentModeVideoChannel" else "currentModeVideo", visible).commit()
+			preferences.edit { putBoolean(if (isChannel) "currentModeVideoChannel" else "currentModeVideo", visible) }
 		}
 
 		audioVideoSendButton.setState(if (isInVideoMode) ChatActivityEnterViewAnimatedIconView.State.VIDEO else ChatActivityEnterViewAnimatedIconView.State.VOICE, animated)
@@ -3029,11 +3036,11 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		val currentTime: Int
 		var isUploading = false
 
-		if (info != null && info!!.slowmode_seconds != 0 && info!!.slowmode_next_send_date <= serverTime && (SendMessagesHelper.getInstance(currentAccount).isUploadingMessageIdDialog(dialog_id).also { isUploading = it } || SendMessagesHelper.getInstance(currentAccount).isSendingMessageIdDialog(dialog_id))) {
+		if (info != null && info!!.slowmodeSeconds != 0 && info!!.slowmodeNextSendDate <= serverTime && (SendMessagesHelper.getInstance(currentAccount).isUploadingMessageIdDialog(dialog_id).also { isUploading = it } || SendMessagesHelper.getInstance(currentAccount).isSendingMessageIdDialog(dialog_id))) {
 			val chat = accountInstance.messagesController.getChat(info!!.id)
 
 			if (!ChatObject.hasAdminRights(chat)) {
-				currentTime = info!!.slowmode_seconds
+				currentTime = info!!.slowmodeSeconds
 				slowModeTimer = if (isUploading) Int.MAX_VALUE else Int.MAX_VALUE - 1
 			}
 			else {
@@ -3340,7 +3347,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	}
 
 	val isTopViewVisible: Boolean
-		get() = topView?.visibility == VISIBLE
+		get() = topView?.isVisible == true
 
 	fun onAdjustPanTransitionUpdate(y: Float) {
 		botWebViewMenuContainer?.translationY = y
@@ -3495,7 +3502,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			emojiView?.setStickersBanned(!ChatObject.canSendStickers(chat), chat.id)
 		}
 		else if (userFull != null) {
-			audioVideoButtonContainer.alpha = if (userFull.voice_messages_forbidden) 0.5f else 1.0f
+			audioVideoButtonContainer.alpha = if (userFull.voiceMessagesForbidden) 0.5f else 1.0f
 		}
 	}
 
@@ -3627,7 +3634,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	fun setChatInfo(chatInfo: TLRPC.ChatFull) {
 		info = chatInfo
 		emojiView?.setChatInfo(info)
-		setSlowModeTimer(chatInfo.slowmode_next_send_date)
+		setSlowModeTimer(chatInfo.slowmodeNextSendDate)
 	}
 
 	fun checkRoundVideo() {
@@ -3650,7 +3657,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 			isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 
-			if (isChannel && !chat!!.creator && (chat.admin_rights == null || !chat.admin_rights.post_messages)) {
+			if (isChannel && !chat!!.creator && (chat.adminRights == null || chat.adminRights?.postMessages != true)) {
 				hasRecordVideo = false
 			}
 		}
@@ -3707,14 +3714,14 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	}
 
 	fun updateFieldHint(animated: Boolean) {
-		if (replyingMessageObject != null && replyingMessageObject?.messageOwner?.reply_markup != null && !replyingMessageObject?.messageOwner?.reply_markup?.placeholder.isNullOrEmpty()) {
-			editField.setHintText(replyingMessageObject?.messageOwner?.reply_markup?.placeholder, animated)
+		if (replyingMessageObject != null && replyingMessageObject?.messageOwner?.replyMarkup != null && !replyingMessageObject?.messageOwner?.replyMarkup?.placeholder.isNullOrEmpty()) {
+			editField.setHintText(replyingMessageObject?.messageOwner?.replyMarkup?.placeholder, animated)
 		}
 		else if (editingMessageObject != null) {
 			editField.setHintText(if (isEditingCaption) context.getString(R.string.Caption) else context.getString(R.string.TypeMessage))
 		}
-		else if (botKeyboardViewVisible && botButtonsMessageObject != null && botButtonsMessageObject?.messageOwner?.reply_markup != null && !botButtonsMessageObject?.messageOwner?.reply_markup?.placeholder.isNullOrEmpty()) {
-			editField.setHintText(botButtonsMessageObject?.messageOwner?.reply_markup?.placeholder, animated)
+		else if (botKeyboardViewVisible && botButtonsMessageObject != null && botButtonsMessageObject?.messageOwner?.replyMarkup != null && !botButtonsMessageObject?.messageOwner?.replyMarkup?.placeholder.isNullOrEmpty()) {
+			editField.setHintText(botButtonsMessageObject?.messageOwner?.replyMarkup?.placeholder, animated)
 		}
 		else {
 			var isChannel = false
@@ -3726,7 +3733,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				val chatFull = accountInstance.messagesController.getChatFull(-dialog_id)
 				isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 				anonymously = ChatObject.getSendAsPeerId(chat, chatFull) == chat?.id
-				isOnlineCourse = ChatObject.isOnlineCourse(chat) && chat?.megagroup == false
+				isOnlineCourse = ChatObject.isMasterclass(chat) && chat?.megagroup == false
 			}
 
 			if (anonymously) {
@@ -3745,7 +3752,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				else if (isChannel) {
 					if (isOnlineCourse) {
 						editField.setHintText(context.getString(R.string.ChannelBroadcast))
-					} else {
+					}
+					else {
 						editField.setHintText(context.getString(R.string.ChannelPublication))
 					}
 
@@ -3768,6 +3776,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		}
 
 		if (dialog_id == BuildConfig.SUPPORT_BOT_ID) {
+			botCommandsMenuButton?.setMenuBackgroundColor(R.color.avatar_light_blue)
 			botSettingsButton?.gone()
 		}
 	}
@@ -4012,7 +4021,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				MediaController.getInstance().cleanupPlayer(true, true)
 			}
 
-			SendMessagesHelper.getInstance(currentAccount).sendMessage(audioToSend, null, audioToSendPath, dialog_id, replyingMessageObject, threadMessage, null, null, null, null, notify, scheduleDate, 0, null, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+			SendMessagesHelper.getInstance(currentAccount).sendMessage(audioToSend, null, audioToSendPath, dialog_id, replyingMessageObject, threadMessage, null, null, null, null, notify, scheduleDate, 0, null, null, updateStickersOrder = false)
 
 			delegate?.onMessageSend(null, notify, scheduleDate)
 
@@ -4027,7 +4036,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		if (parentFragment != null) {
 			val chat = parentFragment.currentChat
 
-			if (chat != null && chat.slowmode_enabled && !ChatObject.hasAdminRights(chat)) {
+			if (chat != null && chat.slowmodeEnabled && !ChatObject.hasAdminRights(chat)) {
 				if (message.length > accountInstance.messagesController.maxMessageLength) {
 					AlertsCreator.showSimpleAlert(parentFragment, context.getString(R.string.Slowmode), context.getString(R.string.SlowmodeSendErrorTooLong))
 					return
@@ -4105,7 +4114,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		val entities = MediaDataController.getInstance(currentAccount).getEntities(arrayOf(text), supportsSendingNewEntities())
 
-		if (!TextUtils.equals(text, editingMessageObject?.messageText) || !entities.isNullOrEmpty() || (entities.isNullOrEmpty() && !editingMessageObject?.messageOwner?.entities.isNullOrEmpty()) || editingMessageObject?.messageOwner?.media is TLRPC.TL_messageMediaWebPage) {
+		if (!TextUtils.equals(text, editingMessageObject?.messageText) || !entities.isNullOrEmpty() || (entities.isNullOrEmpty() && !editingMessageObject?.messageOwner?.entities.isNullOrEmpty()) || editingMessageObject?.messageOwner?.media is TLRPC.TLMessageMediaWebPage) {
 			editingMessageObject?.editingMessage = text
 			editingMessageObject?.editingMessageEntities = entities
 			editingMessageObject?.editingMessageSearchWebPage = isMessageWebPageSearchEnabled
@@ -4210,7 +4219,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 				val updateStickersOrder = SendMessagesHelper.checkUpdateStickersOrder(text)
 
-				SendMessagesHelper.getInstance(currentAccount).sendMessage(message[0].toString(), dialog_id, replyingMessageObject, threadMessage, messageWebPage, isMessageWebPageSearchEnabled, entities, null, null, notify, scheduleDate, sendAnimationData, updateStickersOrder, false, null)
+				SendMessagesHelper.getInstance(currentAccount).sendMessage(message[0].toString(), dialog_id, replyingMessageObject, threadMessage, messageWebPage, isMessageWebPageSearchEnabled, entities, null, null, notify, scheduleDate, sendAnimationData, updateStickersOrder)
 
 				start = end + 1
 			} while (end != text.length)
@@ -4285,12 +4294,12 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 								scheduledButton?.tag = 1
 								scheduledButton?.pivotX = AndroidUtilities.dp(48f).toFloat()
 
-								animators.add(ObjectAnimator.ofFloat(scheduledButton, TRANSLATION_X, AndroidUtilities.dp(if (botButton?.visibility == VISIBLE) 96f else 48f).toFloat()))
+								animators.add(ObjectAnimator.ofFloat(scheduledButton, TRANSLATION_X, AndroidUtilities.dp(if (botButton?.isVisible == true) 96f else 48f).toFloat()))
 								animators.add(ObjectAnimator.ofFloat(scheduledButton, ALPHA, 1.0f))
 								animators.add(ObjectAnimator.ofFloat(scheduledButton, SCALE_X, 1.0f))
 							}
 							else {
-								scheduledButton?.translationX = AndroidUtilities.dp(if (botButton?.visibility == VISIBLE) 96f else 48f).toFloat()
+								scheduledButton?.translationX = AndroidUtilities.dp(if (botButton?.isVisible == true) 96f else 48f).toFloat()
 								scheduledButton?.alpha = 1.0f
 								scheduledButton?.scaleX = 1.0f
 							}
@@ -4328,25 +4337,25 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 					val animators = mutableListOf<Animator>()
 
-					if (audioVideoButtonContainer.visibility == VISIBLE) {
+					if (audioVideoButtonContainer.isVisible) {
 						animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, SCALE_X, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, SCALE_Y, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, ALPHA, 0.0f))
 					}
 
-					if (expandStickersButton.visibility == VISIBLE) {
+					if (expandStickersButton.isVisible) {
 						animators.add(ObjectAnimator.ofFloat(expandStickersButton, SCALE_X, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(expandStickersButton, SCALE_Y, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(expandStickersButton, ALPHA, 0.0f))
 					}
 
-					if (sendButton.visibility == VISIBLE) {
+					if (sendButton.isVisible) {
 						animators.add(ObjectAnimator.ofFloat(sendButton, SCALE_X, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(sendButton, SCALE_Y, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(sendButton, ALPHA, 0.0f))
 					}
 
-					if (cancelBotButton.visibility == VISIBLE) {
+					if (cancelBotButton.isVisible) {
 						animators.add(ObjectAnimator.ofFloat(cancelBotButton, SCALE_X, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(cancelBotButton, SCALE_Y, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(cancelBotButton, ALPHA, 0.0f))
@@ -4404,7 +4413,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					cancelBotButton.alpha = 0.0f
 					cancelBotButton.visibility = GONE
 
-					if (expandStickersButton.visibility == VISIBLE) {
+					if (expandStickersButton.isVisible) {
 						expandStickersButton.scaleX = 0.1f
 						expandStickersButton.scaleY = 0.1f
 						expandStickersButton.alpha = 0.0f
@@ -4431,7 +4440,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 							scheduledButton?.tag = 1
 						}
 
-						scheduledButton?.translationX = AndroidUtilities.dp(if (botButton?.visibility == VISIBLE) 96f else 48f).toFloat()
+						scheduledButton?.translationX = AndroidUtilities.dp(if (botButton?.isVisible == true) 96f else 48f).toFloat()
 						scheduledButton?.alpha = 1.0f
 						scheduledButton?.scaleX = 1.0f
 						scheduledButton?.scaleY = 1.0f
@@ -4441,8 +4450,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		}
 		else if (message.isNotEmpty() || forceShowSendButton || audioToSend != null || videoToSendMessageObject != null || slowModeTimer == Int.MAX_VALUE && !isInScheduleMode) {
 			val caption = editField.caption
-			val showBotButton = caption != null && (sendButton.visibility == VISIBLE || expandStickersButton.visibility == VISIBLE)
-			val showSendButton = caption == null && (cancelBotButton.visibility == VISIBLE || expandStickersButton.visibility == VISIBLE)
+			val showBotButton = caption != null && (sendButton.isVisible || expandStickersButton.isVisible)
+			val showSendButton = caption == null && (cancelBotButton.isVisible || expandStickersButton.isVisible)
 
 			val color = if (slowModeTimer == Int.MAX_VALUE && !isInScheduleMode) {
 				context.getColor(R.color.dark_gray)
@@ -4453,7 +4462,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 			Theme.setSelectorDrawableColor(sendButton.background, Color.argb(24, Color.red(color), Color.green(color), Color.blue(color)), true)
 
-			if (audioVideoButtonContainer.visibility == VISIBLE || slowModeButton.visibility == VISIBLE || showBotButton || showSendButton) {
+			if (audioVideoButtonContainer.isVisible || slowModeButton.isVisible || showBotButton || showSendButton) {
 				if (animated) {
 					if (runningAnimationType == 1 && editField.caption == null || runningAnimationType == 3 && caption != null) {
 						return
@@ -4529,19 +4538,19 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 					val animators = mutableListOf<Animator>()
 
-					if (audioVideoButtonContainer.visibility == VISIBLE) {
+					if (audioVideoButtonContainer.isVisible) {
 						animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, SCALE_X, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, SCALE_Y, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, ALPHA, 0.0f))
 					}
 
-					if (expandStickersButton.visibility == VISIBLE) {
+					if (expandStickersButton.isVisible) {
 						animators.add(ObjectAnimator.ofFloat(expandStickersButton, SCALE_X, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(expandStickersButton, SCALE_Y, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(expandStickersButton, ALPHA, 0.0f))
 					}
 
-					if (slowModeButton.visibility == VISIBLE) {
+					if (slowModeButton.isVisible) {
 						animators.add(ObjectAnimator.ofFloat(slowModeButton, SCALE_X, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(slowModeButton, SCALE_Y, 0.1f))
 						animators.add(ObjectAnimator.ofFloat(slowModeButton, ALPHA, 0.0f))
@@ -4617,7 +4626,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					audioVideoButtonContainer.alpha = 0.0f
 					audioVideoButtonContainer.visibility = GONE
 
-					if (slowModeButton.visibility == VISIBLE) {
+					if (slowModeButton.isVisible) {
 						slowModeButton.scaleX = 0.1f
 						slowModeButton.scaleY = 0.1f
 						slowModeButton.alpha = 0.0f
@@ -4649,7 +4658,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 						cancelBotButton.visibility = GONE
 					}
 
-					if (expandStickersButton.visibility == VISIBLE) {
+					if (expandStickersButton.isVisible) {
 						expandStickersButton.scaleX = 0.1f
 						expandStickersButton.scaleY = 0.1f
 						expandStickersButton.alpha = 0.0f
@@ -4766,17 +4775,17 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				animators.add(ObjectAnimator.ofFloat(expandStickersButton, SCALE_Y, 1.0f))
 				animators.add(ObjectAnimator.ofFloat(expandStickersButton, ALPHA, 1.0f))
 
-				if (cancelBotButton.visibility == VISIBLE) {
+				if (cancelBotButton.isVisible) {
 					animators.add(ObjectAnimator.ofFloat(cancelBotButton, SCALE_X, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(cancelBotButton, SCALE_Y, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(cancelBotButton, ALPHA, 0.0f))
 				}
-				else if (audioVideoButtonContainer.visibility == VISIBLE) {
+				else if (audioVideoButtonContainer.isVisible) {
 					animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, SCALE_X, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, SCALE_Y, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, ALPHA, 0.0f))
 				}
-				else if (slowModeButton.visibility == VISIBLE) {
+				else if (slowModeButton.isVisible) {
 					animators.add(ObjectAnimator.ofFloat(slowModeButton, SCALE_X, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(slowModeButton, SCALE_Y, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(slowModeButton, ALPHA, 0.0f))
@@ -4867,7 +4876,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				}
 			}
 		}
-		else if (sendButton.visibility == VISIBLE || cancelBotButton.visibility == VISIBLE || expandStickersButton.visibility == VISIBLE || slowModeButton.visibility == VISIBLE) {
+		else if (sendButton.isVisible || cancelBotButton.isVisible || expandStickersButton.isVisible || slowModeButton.isVisible) {
 			if (animated) {
 				if (runningAnimationType == 2) {
 					return
@@ -4959,22 +4968,22 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					alpha = if (ChatObject.canSendMedia(chat)) 1.0f else 0.5f
 				}
 				else if (userFull != null) {
-					alpha = if (userFull.voice_messages_forbidden) 0.5f else 1.0f
+					alpha = if (userFull.voiceMessagesForbidden) 0.5f else 1.0f
 				}
 
 				animators.add(ObjectAnimator.ofFloat(audioVideoButtonContainer, ALPHA, alpha))
 
-				if (cancelBotButton.visibility == VISIBLE) {
+				if (cancelBotButton.isVisible) {
 					animators.add(ObjectAnimator.ofFloat(cancelBotButton, SCALE_X, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(cancelBotButton, SCALE_Y, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(cancelBotButton, ALPHA, 0.0f))
 				}
-				else if (expandStickersButton.visibility == VISIBLE) {
+				else if (expandStickersButton.isVisible) {
 					animators.add(ObjectAnimator.ofFloat(expandStickersButton, SCALE_X, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(expandStickersButton, SCALE_Y, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(expandStickersButton, ALPHA, 0.0f))
 				}
-				else if (slowModeButton.visibility == VISIBLE) {
+				else if (slowModeButton.isVisible) {
 					animators.add(ObjectAnimator.ofFloat(slowModeButton, SCALE_X, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(slowModeButton, SCALE_Y, 0.1f))
 					animators.add(ObjectAnimator.ofFloat(slowModeButton, ALPHA, 0.0f))
@@ -5071,8 +5080,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		val padding = if (visible) AndroidUtilities.dp(16f) else 0
 		val emojiButtonPaddingIncrease = AndroidUtilities.dp(48f)
-		val notifyButtonPaddingIncrease = if (notifyButton?.visibility == VISIBLE) AndroidUtilities.dp(48f) else 0
-		val createMediaButtonPaddingIncrease = if (createMediaButton.visibility == VISIBLE) AndroidUtilities.dp(48f) else 0
+		val notifyButtonPaddingIncrease = if (notifyButton?.isVisible == true) AndroidUtilities.dp(48f) else 0
+		val createMediaButtonPaddingIncrease = if (createMediaButton.isVisible) AndroidUtilities.dp(48f) else 0
 
 		editField.setPadding(AndroidUtilities.dp(0f), AndroidUtilities.dp(11f), padding + emojiButtonPaddingIncrease + notifyButtonPaddingIncrease + createMediaButtonPaddingIncrease, AndroidUtilities.dp(12f))
 	}
@@ -5085,10 +5094,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		editField.updateLayoutParams<LayoutParams> {
 			when (attachVisible) {
 				1 -> {
-					rightMargin = if (botButton != null && botButton?.visibility == VISIBLE && scheduledButton != null && scheduledButton?.visibility == VISIBLE && attachLayout != null && attachLayout?.visibility == VISIBLE) {
+					rightMargin = if (botButton != null && botButton?.isVisible == true && scheduledButton != null && scheduledButton?.isVisible == true && attachLayout != null && attachLayout?.isVisible == true) {
 						AndroidUtilities.dp(146f)
 					}
-					else if ((botButton != null && botButton?.visibility == VISIBLE) || scheduledButton != null && scheduledButton?.tag != null) {
+					else if ((botButton != null && botButton?.isVisible == true) || scheduledButton != null && scheduledButton?.tag != null) {
 						AndroidUtilities.dp(98f)
 					}
 					else {
@@ -5098,10 +5107,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 				2 -> {
 					if (rightMargin != AndroidUtilities.dp(2f)) {
-						rightMargin = if (botButton != null && botButton?.visibility == VISIBLE && scheduledButton != null && scheduledButton?.visibility == VISIBLE && attachLayout != null && attachLayout?.visibility == VISIBLE) {
+						rightMargin = if (botButton != null && botButton?.isVisible == true && scheduledButton != null && scheduledButton?.isVisible == true && attachLayout != null && attachLayout?.isVisible == true) {
 							AndroidUtilities.dp(146f)
 						}
-						else if ((botButton != null && botButton?.visibility == VISIBLE) || scheduledButton != null && scheduledButton?.tag != null) {
+						else if ((botButton != null && botButton?.isVisible == true) || scheduledButton != null && scheduledButton?.tag != null) {
 							AndroidUtilities.dp(98f)
 						}
 						else {
@@ -5569,12 +5578,12 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					audioVideoButtonContainer.scaleX = 0f
 					audioVideoButtonContainer.scaleY = 0f
 
-					if (attachButton?.visibility == VISIBLE) {
+					if (attachButton?.isVisible == true) {
 						attachButton?.scaleX = 0f
 						attachButton?.scaleY = 0f
 					}
 
-					if (botButton?.visibility == VISIBLE) {
+					if (botButton?.isVisible == true) {
 						botButton?.scaleX = 0f
 						botButton?.scaleY = 0f
 					}
@@ -5777,7 +5786,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		if (longPress) {
 			var text = editField.text.toString()
-			val user = if (messageObject != null && DialogObject.isChatDialog(dialog_id)) accountInstance.messagesController.getUser(messageObject.messageOwner?.from_id?.user_id) else null
+			val user = if (messageObject != null && DialogObject.isChatDialog(dialog_id)) accountInstance.messagesController.getUser(messageObject.messageOwner?.fromId?.userId) else null
 
 			text = if ((botCount != 1 || username) && user != null && user.bot && !command.contains("@")) {
 				String.format(Locale.US, "%s@%s", command, user.username) + " " + text.replaceFirst("^/[a-zA-Z@\\d_]{1,255}(\\s|$)".toRegex(), "")
@@ -5805,13 +5814,13 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				return
 			}
 
-			val user = if (messageObject != null && DialogObject.isChatDialog(dialog_id)) accountInstance.messagesController.getUser(messageObject.messageOwner?.from_id?.user_id) else null
+			val user = if (messageObject != null && DialogObject.isChatDialog(dialog_id)) accountInstance.messagesController.getUser(messageObject.messageOwner?.fromId?.userId) else null
 
 			if ((botCount != 1 || username) && user != null && user.bot && !command.contains("@")) {
-				SendMessagesHelper.getInstance(currentAccount).sendMessage(String.format(Locale.US, "%s@%s", command, user.username), dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+				SendMessagesHelper.getInstance(currentAccount).sendMessage(String.format(Locale.US, "%s@%s", command, user.username), dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 			}
 			else {
-				SendMessagesHelper.getInstance(currentAccount).sendMessage(command, dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+				SendMessagesHelper.getInstance(currentAccount).sendMessage(command, dialog_id, replyingMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 			}
 		}
 	}
@@ -5872,15 +5881,15 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 							}
 
 							when (entity) {
-								is TL_inputMessageEntityMentionName -> {
+								is TLInputMessageEntityMentionName -> {
 									if (entity.offset + entity.length < stringBuilder.length && stringBuilder[entity.offset + entity.length] == ' ') {
 										entity.length++
 									}
 
-									stringBuilder.setSpan(URLSpanUserMention("" + entity.userId?.user_id, 3), entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+									stringBuilder.setSpan(URLSpanUserMention("" + entity.userId?.userId, 3), entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 								}
 
-								is TL_messageEntityMentionName -> {
+								is TLMessageEntityMentionName -> {
 									if (entity.offset + entity.length < stringBuilder.length && stringBuilder[entity.offset + entity.length] == ' ') {
 										entity.length++
 									}
@@ -5888,54 +5897,48 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 									stringBuilder.setSpan(URLSpanUserMention("" + entity.userId, 3), entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 								}
 
-								is TL_messageEntityCode, is TL_messageEntityPre -> {
+								is TLMessageEntityCode, is TLMessageEntityPre -> {
 									val run = TextStyleRun()
 									run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_MONO
 									MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 								}
 
-								is TL_messageEntityBold -> {
+								is TLMessageEntityBold -> {
 									val run = TextStyleRun()
 									run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_BOLD
 									MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 								}
 
-								is TL_messageEntityItalic -> {
+								is TLMessageEntityItalic -> {
 									val run = TextStyleRun()
 									run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_ITALIC
 									MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 								}
 
-								is TL_messageEntityStrike -> {
+								is TLMessageEntityStrike -> {
 									val run = TextStyleRun()
 									run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_STRIKE
 									MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 								}
 
-								is TL_messageEntityUnderline -> {
+								is TLMessageEntityUnderline -> {
 									val run = TextStyleRun()
 									run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_UNDERLINE
 									MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 								}
 
-								is TL_messageEntityTextUrl -> {
+								is TLMessageEntityTextUrl -> {
 									stringBuilder.setSpan(URLSpanReplacement(entity.url), entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 								}
 
-								is TL_messageEntitySpoiler -> {
+								is TLMessageEntitySpoiler -> {
 									val run = TextStyleRun()
 									run.styleFlags = run.styleFlags or TextStyleSpan.FLAG_STYLE_SPOILER
 									MediaDataController.addStyleToText(TextStyleSpan(run), entity.offset, entity.offset + entity.length, stringBuilder, true)
 								}
 
-								is TL_messageEntityCustomEmoji -> {
-									val span = if (entity.document != null) {
-										AnimatedEmojiSpan(entity.document!!, editField.paint.fontMetricsInt)
-									}
-									else {
-										AnimatedEmojiSpan(entity.documentId, editField.paint.fontMetricsInt)
-									}
-
+								is TLMessageEntityCustomEmoji -> {
+									val span = AnimatedEmojiSpan(entity.documentId, editField.paint.fontMetricsInt)
 									stringBuilder.setSpan(span, entity.offset, entity.offset + entity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 								}
 							}
@@ -5959,7 +5962,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				draftSearchWebpage = isMessageWebPageSearchEnabled
 			}
 
-			isMessageWebPageSearchEnabled = editingMessageObject?.messageOwner?.media is TLRPC.TL_messageMediaWebPage
+			isMessageWebPageSearchEnabled = editingMessageObject?.messageOwner?.media is TLRPC.TLMessageMediaWebPage
 
 			if (!isKeyboardVisible) {
 				AndroidUtilities.runOnUIThread(Runnable {
@@ -5991,6 +5994,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 			cancelBotButton.gone()
 			audioVideoButtonContainer.gone()
+			notifyButton?.gone()
 			attachLayout?.gone()
 			sendButtonContainer.gone()
 			scheduledButton?.gone()
@@ -6071,6 +6075,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				audioVideoButtonContainer.visibility = VISIBLE
 			}
 
+			notifyButton?.visible()
+
 			if (scheduledButton?.tag != null) {
 				scheduledButton?.scaleX = 1.0f
 				scheduledButton?.scaleY = 1.0f
@@ -6098,7 +6104,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	}
 
 	fun getSendButton(): View {
-		return if (sendButton.visibility == VISIBLE) sendButton else audioVideoButtonContainer
+		return if (sendButton.isVisible) sendButton else audioVideoButtonContainer
 	}
 
 	fun getAudioVideoButtonContainer(): View {
@@ -6283,7 +6289,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			val currentChat = accountInstance.messagesController.getChat(-dialog_id)
 
 			silent = MessagesController.getNotificationsSettings(currentAccount).getBoolean("silent_$dialog_id", false)
-			canWriteToChannel = ChatObject.isChannel(currentChat) && (currentChat.creator || currentChat.admin_rights != null && currentChat.admin_rights.post_messages) && !currentChat.megagroup
+			canWriteToChannel = ChatObject.isChannel(currentChat) && (currentChat.creator || currentChat.adminRights != null && currentChat.adminRights?.postMessages == true) && !currentChat.megagroup
 
 			if (notifyButton != null) {
 				notifyVisible = canWriteToChannel
@@ -6297,7 +6303,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			}
 
 			if (attachLayout != null) {
-				updateFieldRight(if (attachLayout?.visibility == VISIBLE) 1 else 0)
+				updateFieldRight(if (attachLayout?.isVisible == true) 1 else 0)
 			}
 		}
 
@@ -6376,22 +6382,22 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		val full = parentFragment.messagesController.getChatFull(-dialog_id)
 
-		var defPeer = full?.default_send_as
+		var defPeer = full?.defaultSendAs
 
 		if (defPeer == null && delegate?.sendAsPeers != null && !delegate?.sendAsPeers?.peers.isNullOrEmpty()) {
 			defPeer = delegate?.sendAsPeers?.peers?.firstOrNull()?.peer
 		}
 
 		if (defPeer != null) {
-			if (defPeer.channel_id != 0L) {
-				val ch = MessagesController.getInstance(currentAccount).getChat(defPeer.channel_id)
+			if (defPeer.channelId != 0L) {
+				val ch = MessagesController.getInstance(currentAccount).getChat(defPeer.channelId)
 
 				if (ch != null) {
 					senderSelectView.setAvatar(ch)
 				}
 			}
 			else {
-				val user = MessagesController.getInstance(currentAccount).getUser(defPeer.user_id)
+				val user = MessagesController.getInstance(currentAccount).getUser(defPeer.userId)
 
 				if (user != null) {
 					senderSelectView.setAvatar(user)
@@ -6399,7 +6405,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			}
 		}
 
-		val wasVisible = senderSelectView.visibility == VISIBLE
+		val wasVisible = senderSelectView.isVisible
 		val isVisible = defPeer != null && (delegate!!.sendAsPeers == null || delegate!!.sendAsPeers!!.peers.size > 1) && !isEditingMessage && !isRecordingAudioVideo() && recordedAudioPanel.visibility != VISIBLE
 		val pad = AndroidUtilities.dp(2f)
 		val params = senderSelectView.layoutParams as MarginLayoutParams
@@ -6510,7 +6516,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		val hasBotWebView = hasBotWebView()
 		val canShowBotsMenu = botMenuButtonType != BotMenuButtonType.NO_BUTTON && dialog_id > 0
-		val wasVisible = botButton?.visibility == VISIBLE
+		val wasVisible = botButton?.isVisible
 
 		if (hasBotWebView || hasBotCommands || botReplyMarkup != null) {
 			if (botReplyMarkup != null) {
@@ -6551,11 +6557,11 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		AndroidUtilities.updateViewVisibilityAnimated(botCommandsMenuButton, canShowBotsMenu, 0.5f, animated)
 
-		val changed = botButton?.visibility == VISIBLE != wasVisible || textChanged || wasWebView != botCommandsMenuButton!!.isWebView
+		val changed = botButton?.isVisible != wasVisible || textChanged || wasWebView != botCommandsMenuButton!!.isWebView
 
 		if (changed && animated) {
 			beginDelayedTransition()
-			val show = botButton?.visibility == VISIBLE
+			val show = botButton?.isVisible == true
 
 			if (show != wasVisible) {
 				botButton?.visibility = VISIBLE
@@ -6631,7 +6637,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					openKeyboardInternal()
 					setButtons(botMessageObject, false)
 				}
-				else if (botButtonsMessageObject?.messageOwner?.reply_markup?.single_use == true) {
+				else if (botButtonsMessageObject?.messageOwner?.replyMarkup?.singleUse == true) {
 					if (open) {
 						openKeyboardInternal()
 					}
@@ -6651,7 +6657,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 		botButtonsMessageObject = messageObject
 
-		botReplyMarkup = messageObject?.messageOwner?.reply_markup as? TLRPC.TL_replyKeyboardMarkup
+		botReplyMarkup = messageObject?.messageOwner?.replyMarkup as? TLRPC.TLReplyKeyboardMarkup
 
 		botKeyboardView?.setPanelHeight(if (AndroidUtilities.displaySize.x > AndroidUtilities.displaySize.y) keyboardHeightLand else keyboardHeight)
 
@@ -6659,7 +6665,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			val preferences = MessagesController.getMainSettings(currentAccount)
 			var showPopup = true
 
-			if (botButtonsMessageObject !== replyingMessageObject && botReplyMarkup?.single_use == true) {
+			if (botButtonsMessageObject !== replyingMessageObject && botReplyMarkup?.singleUse == true) {
 				if (preferences.getInt("answered_$dialog_id", 0) == messageObject?.id) {
 					showPopup = false
 				}
@@ -6687,27 +6693,29 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	}
 
 	fun didPressedBotButton(button: TLRPC.KeyboardButton?, replyMessageObject: MessageObject?, messageObject: MessageObject?): Boolean {
-		if (parentFragment?.isAiPromptsDepleted() == true) {
-			return false
-		}
 		if (button == null || messageObject == null) {
 			return false
 		}
-		if (button is TLRPC.TL_keyboardButton) {
-			SendMessagesHelper.getInstance(currentAccount).sendMessage(button.text, dialog_id, replyMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+		if (parentFragment?.isAiPromptsDepleted(button.text) == true) {
+			return false
 		}
-		else if (button is TLRPC.TL_keyboardButtonUrl) {
-			AlertsCreator.showOpenUrlAlert(parentFragment, button.url, punycode = false, ask = true)
+		if (button is TLRPC.TLKeyboardButton) {
+			SendMessagesHelper.getInstance(currentAccount).sendMessage(button.text, dialog_id, replyMessageObject, threadMessage, null, false, null, null, null, true, 0, null, updateStickersOrder = false)
 		}
-		else if (button is TLRPC.TL_keyboardButtonRequestPhone) {
+		else if (button is TLRPC.TLKeyboardButtonUrl) {
+			button.url?.let {
+				AlertsCreator.showOpenUrlAlert(parentFragment, it, punycode = false, ask = true)
+			}
+		}
+		else if (button is TLRPC.TLKeyboardButtonRequestPhone) {
 			parentFragment?.shareMyContact(2, messageObject)
 		}
-		else if (button is TLRPC.TL_keyboardButtonRequestPoll) {
+		else if (button is TLRPC.TLKeyboardButtonRequestPoll) {
 			parentFragment?.openPollCreate(if (button.flags and 1 != 0) button.quiz else null)
 			return false
 		}
-		else if (button is TLRPC.TL_keyboardButtonWebView || button is TLRPC.TL_keyboardButtonSimpleWebView) {
-			val botId = if (messageObject.messageOwner?.via_bot_id != 0L) messageObject.messageOwner?.via_bot_id else (messageObject.messageOwner?.from_id?.user_id ?: 0L)
+		else if (button is TLRPC.TLKeyboardButtonWebView || button is TLRPC.TLKeyboardButtonSimpleWebView) {
+			val botId = if (messageObject.messageOwner?.viaBotId != 0L) messageObject.messageOwner?.viaBotId else (messageObject.messageOwner?.fromId?.userId ?: 0L)
 			val user = MessagesController.getInstance(currentAccount).getUser(botId)
 
 			val onRequestWebView: Runnable = object : Runnable {
@@ -6720,7 +6728,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 					val webViewSheet = BotWebViewSheet(context, null)
 					webViewSheet.setParentActivity(parentActivity)
-					webViewSheet.requestWebView(currentAccount, messageObject.messageOwner?.dialog_id ?: 0, botId ?: 0, button.text, button.url, if (button is TLRPC.TL_keyboardButtonSimpleWebView) BotWebViewSheet.TYPE_SIMPLE_WEB_VIEW_BUTTON else BotWebViewSheet.TYPE_WEB_VIEW_BUTTON, replyMessageObject?.messageOwner?.id ?: 0, false)
+					webViewSheet.requestWebView(currentAccount, messageObject.messageOwner?.dialogId ?: 0, botId ?: 0, button.text, button.url, if (button is TLRPC.TLKeyboardButtonSimpleWebView) BotWebViewSheet.TYPE_SIMPLE_WEB_VIEW_BUTTON else BotWebViewSheet.TYPE_WEB_VIEW_BUTTON, replyMessageObject?.messageOwner?.id ?: 0, false)
 					webViewSheet.show()
 				}
 			}
@@ -6737,7 +6745,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				}
 			}
 		}
-		else if (button is TLRPC.TL_keyboardButtonRequestGeoLocation) {
+		else if (button is TLRPC.TLKeyboardButtonRequestGeoLocation) {
 			val builder = AlertDialog.Builder(parentActivity)
 			builder.setTitle(context.getString(R.string.ShareYouLocationTitle))
 			builder.setMessage(context.getString(R.string.ShareYouLocationInfo))
@@ -6757,19 +6765,19 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 			parentFragment?.showDialog(builder.create())
 		}
-		else if (button is TLRPC.TL_keyboardButtonCallback || button is TLRPC.TL_keyboardButtonGame || button is TLRPC.TL_keyboardButtonBuy || button is TLRPC.TL_keyboardButtonUrlAuth) {
+		else if (button is TLRPC.TLKeyboardButtonCallback || button is TLRPC.TLKeyboardButtonGame || button is TLRPC.TLKeyboardButtonBuy || button is TLRPC.TLKeyboardButtonUrlAuth) {
 			SendMessagesHelper.getInstance(currentAccount).sendCallback(true, messageObject, button, parentFragment)
 		}
-		else if (button is TLRPC.TL_keyboardButtonSwitchInline) {
+		else if (button is TLRPC.TLKeyboardButtonSwitchInline) {
 			if (parentFragment?.processSwitchButton(button) == true) {
 				return true
 			}
 
-			if (button.same_peer) {
-				var uid = messageObject.messageOwner?.from_id?.user_id ?: 0L
+			if (button.samePeer) {
+				var uid = messageObject.messageOwner?.fromId?.userId ?: 0L
 
-				if (messageObject.messageOwner?.via_bot_id != 0L) {
-					uid = messageObject.messageOwner?.via_bot_id ?: 0L
+				if (messageObject.messageOwner?.viaBotId != 0L) {
+					uid = messageObject.messageOwner?.viaBotId ?: 0L
 				}
 
 				val user = accountInstance.messagesController.getUser(uid) ?: return true
@@ -6784,10 +6792,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				val fragment = DialogsActivity(args)
 
 				fragment.setDelegate { fragment1, dids, _, _ ->
-					var uid = messageObject.messageOwner?.from_id?.user_id ?: 0L
+					var uid = messageObject.messageOwner?.fromId?.userId ?: 0L
 
-					if (messageObject.messageOwner?.via_bot_id != 0L) {
-						uid = messageObject.messageOwner?.via_bot_id ?: 0L
+					if (messageObject.messageOwner?.viaBotId != 0L) {
+						uid = messageObject.messageOwner?.viaBotId ?: 0L
 					}
 
 					val user = accountInstance.messagesController.getUser(uid)
@@ -6839,10 +6847,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				parentFragment?.presentFragment(fragment)
 			}
 		}
-		else if (button is TLRPC.TL_keyboardButtonUserProfile) {
-			if (MessagesController.getInstance(currentAccount).getUser(button.user_id) != null) {
+		else if (button is TLRPC.TLKeyboardButtonUserProfile) {
+			if (MessagesController.getInstance(currentAccount).getUser(button.userId) != null) {
 				val args = Bundle()
-				args.putLong("user_id", button.user_id)
+				args.putLong("user_id", button.userId)
 				val fragment = ProfileActivity(args)
 				parentFragment?.presentFragment(fragment)
 			}
@@ -7002,7 +7010,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				parentFragment?.presentFragment(StickersActivity(MediaDataController.TYPE_IMAGE, null))
 			}
 
-			override fun onEmojiSettingsClick(frozenEmojiPacks: ArrayList<TLRPC.TL_messages_stickerSet>) {
+			override fun onEmojiSettingsClick(frozenEmojiPacks: List<TLRPC.TLMessagesStickerSet>) {
 				parentFragment?.presentFragment(StickersActivity(MediaDataController.TYPE_EMOJIPACKS, frozenEmojiPacks))
 			}
 
@@ -7040,8 +7048,8 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 						}
 
 						val params = HashMap<String, String>()
-						params["id"] = gif.id
-						params["query_id"] = "" + gif.query_id
+						params["id"] = gif.id ?: ""
+						// params["query_id"] = "" + gif.queryId
 						params["force_gif"] = "1"
 
 						SendMessagesHelper.prepareSendingBotContextResult(parentFragment, accountInstance, gif, params, dialog_id, replyingMessageObject, threadMessage, notify, scheduleDate)
@@ -7076,7 +7084,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				parentFragment.showDialog(builder.create())
 			}
 
-			override fun onShowStickerSet(stickerSet: TLRPC.StickerSet?, inputStickerSet: TLRPC.InputStickerSet) {
+			override fun onShowStickerSet(stickerSet: TLRPC.TLStickerSet?, inputStickerSet: TLRPC.InputStickerSet) {
 				@Suppress("NAME_SHADOWING") var inputStickerSet = inputStickerSet
 
 				if (trendingStickersAlert?.isDismissed == false) {
@@ -7089,9 +7097,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				}
 
 				if (stickerSet != null) {
-					inputStickerSet = TLRPC.TL_inputStickerSetID()
-					inputStickerSet.access_hash = stickerSet.access_hash
-					inputStickerSet.id = stickerSet.id
+					inputStickerSet = TLRPC.TLInputStickerSetID().also {
+						it.accessHash = stickerSet.accessHash
+						it.id = stickerSet.id
+					}
 				}
 
 				parentFragment.showDialog(StickersAlert(parentActivity, parentFragment, inputStickerSet, null, this@ChatActivityEnterView))
@@ -7290,7 +7299,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 			setStickersExpanded(expanded = false, animated = true, byDrag = false)
 
-			SendMessagesHelper.getInstance(currentAccount).sendSticker(sticker, query, dialog_id, replyingMessageObject, threadMessage, parent, sendAnimationData, notify, scheduleDate, parent is TLRPC.TL_messages_stickerSet)
+			SendMessagesHelper.getInstance(currentAccount).sendSticker(sticker, query, dialog_id, replyingMessageObject, threadMessage, parent, sendAnimationData, notify, scheduleDate, parent is TLRPC.TLMessagesStickerSet)
 
 			delegate?.onMessageSend(null, true, scheduleDate)
 
@@ -7501,7 +7510,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				emojiViewVisible = false
 			}
 
-			if (botKeyboardView != null && botKeyboardView!!.visibility == VISIBLE) {
+			if (botKeyboardView != null && botKeyboardView!!.isVisible) {
 				if (show != 2 || AndroidUtilities.usingHardwareInput || AndroidUtilities.isInMultiwindow) {
 					if (smoothKeyboard && !isKeyboardVisible) {
 						if (botKeyboardViewVisible) {
@@ -7570,7 +7579,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	private fun setEmojiButtonImage(animated: Boolean) {
 		// @Suppress("NAME_SHADOWING") var animated = animated
 
-		val showingRecordInterface = recordInterfaceState == 1 && recordedAudioPanel.visibility == VISIBLE
+		val showingRecordInterface = recordInterfaceState == 1 && recordedAudioPanel.isVisible
 
 		if (showingRecordInterface) {
 			emojiButton.scaleX = 0f
@@ -8012,21 +8021,21 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				checkSendButton(false)
 			}
 			else {
-				audioToSend = args[1] as? TLRPC.TL_document
+				audioToSend = args[1] as? TLRPC.TLDocument
 				audioToSendPath = args[2] as? String
 
 				if (audioToSend != null) {
-					val message = TL_message()
+					val message = TLMessage()
 					message.out = true
 					message.id = 0
-					message.peer_id = TLRPC.TL_peerUser()
-					message.from_id = TLRPC.TL_peerUser()
-					message.from_id?.user_id = getInstance(currentAccount).getClientUserId()
-					message.peer_id?.user_id = message.from_id?.user_id ?: 0L
+					message.peerId = TLRPC.TLPeerUser()
+					message.fromId = TLRPC.TLPeerUser()
+					message.fromId?.userId = getInstance(currentAccount).getClientUserId()
+					message.peerId?.userId = message.fromId?.userId ?: 0L
 					message.date = (System.currentTimeMillis() / 1000).toInt()
 					message.message = ""
 					message.attachPath = audioToSendPath
-					message.media = TLRPC.TL_messageMediaDocument()
+					message.media = TLRPC.TLMessageMediaDocument()
 					message.media?.flags = message.media!!.flags or 3
 					message.media?.document = audioToSend
 					message.flags = message.flags or (TLRPC.MESSAGE_FLAG_HAS_MEDIA or TLRPC.MESSAGE_FLAG_HAS_FROM_ID)
@@ -8041,10 +8050,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					recordDeleteImageView.scaleY = 0f
 					recordDeleteImageView.scaleX = 0f
 
-					val duration = audioToSend?.attributes?.firstOrNull { it is TLRPC.TL_documentAttributeAudio }?.duration ?: 0
+					val duration = audioToSend?.attributes?.firstOrNull { it is TLRPC.TLDocumentAttributeAudio }?.duration ?: 0
 
-					audioToSend?.attributes?.firstOrNull { it is TLRPC.TL_documentAttributeAudio }?.let {
-						if (it.waveform == null || it.waveform.isEmpty()) {
+					(audioToSend?.attributes?.firstOrNull { it is TLRPC.TLDocumentAttributeAudio } as? TLRPC.TLDocumentAttributeAudio)?.let {
+						if (it.waveform == null || it.waveform?.isEmpty() == true) {
 							it.waveform = MediaController.getInstance().getWaveform(audioToSendPath)
 						}
 
@@ -8097,13 +8106,13 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 
 			val did = args[3] as Long
 
-			if (did == dialog_id && info != null && info!!.slowmode_seconds != 0) {
+			if (did == dialog_id && info != null && info!!.slowmodeSeconds != 0) {
 				val chat = accountInstance.messagesController.getChat(info!!.id)
 
 				if (chat != null && !ChatObject.hasAdminRights(chat)) {
-					info?.slowmode_next_send_date = ConnectionsManager.getInstance(currentAccount).currentTime + info!!.slowmode_seconds
+					info?.slowmodeNextSendDate = ConnectionsManager.getInstance(currentAccount).currentTime + info!!.slowmodeSeconds
 					info?.flags = info!!.flags or 262144
-					setSlowModeTimer(info!!.slowmode_next_send_date)
+					setSlowModeTimer(info!!.slowmodeNextSendDate)
 				}
 			}
 		}
@@ -8120,7 +8129,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			val botMenuButton = args[1] as TLRPC.BotMenuButton
 
 			if (botId == dialog_id) {
-				if (botMenuButton is TLRPC.TL_botMenuButton) {
+				if (botMenuButton is TLRPC.TLBotMenuButton) {
 					botMenuWebViewTitle = botMenuButton.text
 					botMenuWebViewUrl = botMenuButton.url
 					botMenuButtonType = BotMenuButtonType.WEB_VIEW
@@ -8383,7 +8392,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			return false
 		}
 
-		return if (isInVideoMode && recordedAudioPanel.visibility == VISIBLE) {
+		return if (isInVideoMode && recordedAudioPanel.isVisible) {
 			false
 		}
 		else {
@@ -8395,7 +8404,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		get() {
 			var h = measuredHeight
 
-			if (topView != null && topView!!.visibility == VISIBLE) {
+			if (topView != null && topView!!.isVisible) {
 				h -= ((1f - topViewEnterProgress) * ChatActivityEnterTopView.heightDp).toInt()
 			}
 
@@ -8427,7 +8436,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			botCommandsMenuButton?.measure(widthMeasureSpec, heightMeasureSpec)
 			(editField.layoutParams as MarginLayoutParams).leftMargin = botCommandsMenuButton!!.measuredWidth + AndroidUtilities.dp(20f)
 		}
-		else if (senderSelectView.visibility == VISIBLE) {
+		else if (senderSelectView.isVisible) {
 			val width = senderSelectView.layoutParams.width
 			val height = senderSelectView.layoutParams.height
 			senderSelectView.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
@@ -8448,7 +8457,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			if (botCommandsMenuContainer?.listView?.paddingTop != padding) {
 				botCommandsMenuContainer?.listView?.topGlowOffset = padding
 
-				if (botCommandLastPosition == -1 && botCommandsMenuContainer?.visibility == VISIBLE && botCommandsMenuContainer?.listView?.layoutManager != null) {
+				if (botCommandLastPosition == -1 && botCommandsMenuContainer?.isVisible == true && botCommandsMenuContainer?.listView?.layoutManager != null) {
 					val layoutManager = botCommandsMenuContainer?.listView?.layoutManager as? LinearLayoutManager
 					val p = layoutManager?.findFirstVisibleItemPosition() ?: -1
 
@@ -8500,16 +8509,16 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		animationParamsX[editField] = editField.x
 	}
 
-	fun setBotInfo(botInfo: LongSparseArray<TLRPC.BotInfo>) {
+	fun setBotInfo(botInfo: LongSparseArray<TLRPC.TLBotInfo>) {
 		setBotInfo(botInfo, true)
 	}
 
-	fun setBotInfo(botInfo: LongSparseArray<TLRPC.BotInfo>, animate: Boolean) {
-		if (botInfo.size() == 1 && botInfo.valueAt(0).user_id == dialog_id) {
+	fun setBotInfo(botInfo: LongSparseArray<TLRPC.TLBotInfo>, animate: Boolean) {
+		if (botInfo.size() == 1 && botInfo.valueAt(0).userId == dialog_id) {
 			val info = botInfo.valueAt(0)
-			val menuButton = info.menu_button
+			val menuButton = info.menuButton
 
-			if (menuButton is TLRPC.TL_botMenuButton) {
+			if (menuButton is TLRPC.TLBotMenuButton) {
 				botMenuWebViewTitle = menuButton.text
 				botMenuWebViewUrl = menuButton.url
 				botMenuButtonType = BotMenuButtonType.WEB_VIEW
@@ -8546,7 +8555,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 	}
 
 	val topViewHeight: Float
-		get() = if (topView?.visibility == VISIBLE) {
+		get() = if (topView?.isVisible == true) {
 			ChatActivityEnterTopView.heightDp.toFloat()
 		}
 		else {
@@ -8563,11 +8572,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			super.dispatchDraw(canvas)
 		}
 		else {
-			canvas.save()
-			canvas.clipRect(0, AndroidUtilities.dp(2f), measuredWidth, measuredHeight)
-			canvas.translate(0f, -(emojiView?.stickersExpandOffset ?: 0f))
-			super.dispatchDraw(canvas)
-			canvas.restore()
+			canvas.withClip(0, AndroidUtilities.dp(2f), measuredWidth, measuredHeight) {
+    			translate(0f, -(emojiView?.stickersExpandOffset ?: 0f))
+    			super.dispatchDraw(this)
+			}
 		}
 	}
 
@@ -8636,7 +8644,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 		/**
 		 * @return A list of available peers to send messages as
 		 */
-		val sendAsPeers: TLRPC.TL_channels_sendAsPeers?
+		val sendAsPeers: TLRPC.TLChannelsSendAsPeers?
 			get() = null
 	}
 
@@ -9301,10 +9309,10 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					bigWaveDrawable.draw((cx + slideDelta).toFloat(), cy.toFloat(), canvas, bigWaveDrawable.paint)
 					canvas.restore()
 					s = scale * (1f - progressToSeekbarStep1) * slideToCancelProgress1 * enter * (BlobDrawable.SCALE_SMALL_MIN + 1.4f * tinyWaveDrawable.amplitude)
-					canvas.save()
-					canvas.scale(s, s, (cx + slideDelta).toFloat(), cy.toFloat())
-					tinyWaveDrawable.draw((cx + slideDelta).toFloat(), cy.toFloat(), canvas, tinyWaveDrawable.paint)
-					canvas.restore()
+
+					canvas.withScale(s, s, (cx + slideDelta).toFloat(), cy.toFloat()) {
+    					tinyWaveDrawable.draw((cx + slideDelta).toFloat(), cy.toFloat(), this, tinyWaveDrawable.paint)
+					}
 				}
 			}
 
@@ -9350,12 +9358,11 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 						canvas.drawCircle((cx + slideDelta).toFloat(), cy.toFloat(), radius, paint)
 					}
 
-					canvas.save()
-
-					val a = 1f - exitProgress2
-					canvas.translate(slideDelta.toFloat(), 0f)
-					drawIconInternal(canvas, drawable, replaceDrawable, progressToSendButton, ((1f - progressToSeekbarStep2) * a * 255).toInt())
-					canvas.restore()
+					canvas.withSave() {
+    					val a = 1f - exitProgress2
+    					translate(slideDelta.toFloat(), 0f)
+    					drawIconInternal(this, drawable, replaceDrawable, progressToSendButton, ((1f - progressToSeekbarStep2) * a * 255).toInt())
+					}
 				}
 			}
 			if (this.isSendButtonVisible) {
@@ -9426,10 +9433,11 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 					p.strokeWidth = AndroidUtilities.dpf2(1.5f)
 					canvas.drawPath(path, p)
 					canvas.restore()
-					canvas.save()
-					tooltipBackgroundArrow?.setBounds(cx - tooltipBackgroundArrow.intrinsicWidth / 2, (tooltipLayout!!.height + AndroidUtilities.dpf2(20f)).toInt(), cx + tooltipBackgroundArrow.intrinsicWidth / 2, (tooltipLayout!!.height + AndroidUtilities.dpf2(20f)).toInt() + tooltipBackgroundArrow.intrinsicHeight)
-					tooltipBackgroundArrow?.draw(canvas)
-					canvas.restore()
+
+					canvas.withSave() {
+    					tooltipBackgroundArrow?.setBounds(cx - tooltipBackgroundArrow.intrinsicWidth / 2, (tooltipLayout!!.height + AndroidUtilities.dpf2(20f)).toInt(), cx + tooltipBackgroundArrow.intrinsicWidth / 2, (tooltipLayout!!.height + AndroidUtilities.dpf2(20f)).toInt() + tooltipBackgroundArrow.intrinsicHeight)
+    					tooltipBackgroundArrow?.draw(this)
+					}
 				}
 			}
 
@@ -9507,18 +9515,17 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 			if (transformToPauseProgress != 1f) {
 				rectF.set(0f, 0f, AndroidUtilities.dpf2(8f), AndroidUtilities.dpf2(8f))
 
-				canvas.save()
-				canvas.clipRect(0f, 0f, measuredWidth.toFloat(), dy + lockBottom + AndroidUtilities.dpf2(2f) * (1f - moveProgress))
-				canvas.translate(cx - AndroidUtilities.dpf2(4f), lockTopY - AndroidUtilities.dpf2(1.5f) * (1f - idleProgress) * moveProgress - AndroidUtilities.dpf2(2f) * (1f - moveProgress) + AndroidUtilities.dpf2(12f) * transformToPauseProgress + AndroidUtilities.dpf2(2f) * snapAnimationProgress)
+				canvas.withClip(0f, 0f, measuredWidth.toFloat(), dy + lockBottom + AndroidUtilities.dpf2(2f) * (1f - moveProgress)) {
+    				translate(cx - AndroidUtilities.dpf2(4f), lockTopY - AndroidUtilities.dpf2(1.5f) * (1f - idleProgress) * moveProgress - AndroidUtilities.dpf2(2f) * (1f - moveProgress) + AndroidUtilities.dpf2(12f) * transformToPauseProgress + AndroidUtilities.dpf2(2f) * snapAnimationProgress)
 
-				if (lockRotation > 0) {
-					canvas.rotate(lockRotation, AndroidUtilities.dp(8f).toFloat(), AndroidUtilities.dp(8f).toFloat())
+    				if (lockRotation > 0) {
+    					rotate(lockRotation, AndroidUtilities.dp(8f).toFloat(), AndroidUtilities.dp(8f).toFloat())
+					}
+
+					drawLine(AndroidUtilities.dpf2(8f), AndroidUtilities.dpf2(4f), AndroidUtilities.dpf2(8f), AndroidUtilities.dpf2(6f) + AndroidUtilities.dpf2(4f) * (1f - transformToPauseProgress), lockOutlinePaint)
+					drawArc(rectF, 0f, -180f, false, lockOutlinePaint)
+					drawLine(0f, AndroidUtilities.dpf2(4f), 0f, AndroidUtilities.dpf2(4f) + AndroidUtilities.dpf2(4f) * idleProgress * moveProgress * if (this@ChatActivityEnterView.isSendButtonVisible) 0f else 1f + AndroidUtilities.dpf2(4f) * snapAnimationProgress * (1f - moveProgress), lockOutlinePaint)
 				}
-
-				canvas.drawLine(AndroidUtilities.dpf2(8f), AndroidUtilities.dpf2(4f), AndroidUtilities.dpf2(8f), AndroidUtilities.dpf2(6f) + AndroidUtilities.dpf2(4f) * (1f - transformToPauseProgress), lockOutlinePaint)
-				canvas.drawArc(rectF, 0f, -180f, false, lockOutlinePaint)
-				canvas.drawLine(0f, AndroidUtilities.dpf2(4f), 0f, AndroidUtilities.dpf2(4f) + AndroidUtilities.dpf2(4f) * idleProgress * moveProgress * if (this.isSendButtonVisible) 0f else 1f + AndroidUtilities.dpf2(4f) * snapAnimationProgress * (1f - moveProgress), lockOutlinePaint)
-				canvas.restore()
 			}
 
 			canvas.restore()
@@ -10202,7 +10209,7 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				replaceTransition = 1f
 			}
 			else {
-				val replaceStable = replaceStable ?: SpannableStringBuilder(newString).also { this.replaceStable = it}
+				val replaceStable = replaceStable ?: SpannableStringBuilder(newString).also { this.replaceStable = it }
 
 				if (replaceStable.isEmpty() || replaceStable.length != newString.length) {
 					replaceStable.clear()
@@ -10252,15 +10259,11 @@ open class ChatActivityEnterView(context: Activity, parent: SizeNotifierFrameLay
 				}
 
 				if (outLayout != null) {
-					canvas.save()
-
-					textPaint.alpha = (255 * replaceTransition).toInt()
-
-					canvas.translate(x, y - outLayout!!.height / 2f + replaceDistance * (1f - replaceTransition))
-
-
-					outLayout?.draw(canvas)
-					canvas.restore()
+					canvas.withSave {
+    					textPaint.alpha = (255 * replaceTransition).toInt()
+    					translate(x, y - outLayout!!.height / 2f + replaceDistance * (1f - replaceTransition))
+    					outLayout?.draw(this)
+					}
 				}
 
 				canvas.save()

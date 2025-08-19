@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -29,6 +29,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.Paint.Views.EditTextOutline;
 
@@ -195,7 +196,7 @@ public class PaintingOverlay extends FrameLayout {
 							});
 						}
 					}
-					TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(entity.document.thumbs, 90);
+					TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(TLRPCExtensions.getThumbs(entity.document), 90);
 					imageReceiver.setImage(ImageLocation.getForDocument(entity.document), null, ImageLocation.getForDocument(thumb, entity.document), null, "webp", entity.parentObject, 1);
 					if ((entity.subType & 2) != 0) {
 						imageView.setScaleX(-1);

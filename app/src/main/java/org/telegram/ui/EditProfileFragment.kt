@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Mykhailo Mykytyn, Ello 2023.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -47,8 +47,12 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.CountriesDataSource
 import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.TL_photos_photo
-import org.telegram.tgnet.tlrpc.TL_userProfilePhotoEmpty
+import org.telegram.tgnet.business
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoBig
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.sizes
+import org.telegram.tgnet.videoSizes
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.BaseFragment
@@ -102,6 +106,7 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 					append(context?.getString(R.string.LinkAvailable))
 				}
 			}
+
 			doneItem?.isEnabled = true
 			doneItem?.alpha = 1f
 		}
@@ -283,15 +288,15 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 
 		binding?.profileImageContainer?.addView(avatarImage, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 
-		val userInfo = messagesController.getUserFull(userId)
+		val user = messagesController.getUser(userId)
 
-		avatarDrawable.setInfo(userInfo?.user)
+		avatarDrawable.setInfo(user)
 
 		imageUpdater.setOpenWithFrontfaceCamera(true)
 		imageUpdater.parentFragment = this
 		imageUpdater.setDelegate(this)
 
-		if (userInfo == null) {
+		if (user == null) {
 			binding?.progressBar?.visible()
 			binding?.root?.setUserInteractionsEnabled(false)
 		}
@@ -301,10 +306,10 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 
 		notificationCenter.addObserver(this, NotificationCenter.userInfoDidLoad)
 
-		messagesController.loadFullUser(messagesController.getUser(userId), classGuid, true)
+		messagesController.loadFullUser(user, classGuid, true)
 		messagesController.loadUserInfo(userConfig.getCurrentUser(), true, classGuid)
 
-		if (messagesController.getUser(userId)?.is_business == true) {
+		if (messagesController.getUser(userId)?.business == true) {
 			binding?.firstNameLabel?.text = context.getString(R.string.business_name)
 			binding?.firstNameView?.hint = context.getString(R.string.business_name)
 			binding?.description?.hint = context.getString(R.string.BioOptionalPlaceholder)
@@ -372,10 +377,10 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 
 		val countryCode = country?.code
 
-		if (countryCode.isNullOrEmpty()) {
-			binding?.countrySpinnerLayout?.error = context.getString(R.string.country_is_empty)
-			return
-		}
+//		if (countryCode.isNullOrEmpty()) {
+//			binding?.countrySpinnerLayout?.error = context.getString(R.string.country_is_empty)
+//			return
+//		}
 
 		val birthday = binding?.birthdayField?.text?.toString()?.takeIf { it.isNotEmpty() }?.parseBirthday()
 
@@ -383,10 +388,11 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 			context.getString(R.string.female) -> ElloRpc.Gender.WOMAN
 			context.getString(R.string.male) -> ElloRpc.Gender.MAN
 			context.getString(R.string.non_binary) -> ElloRpc.Gender.NON_BINARY
-			else -> ElloRpc.Gender.OTHER
+			context.getString(R.string.other) -> ElloRpc.Gender.OTHER
+			else -> ""
 		}
 
-		updateProfile(bio = bio, firstName = firstName, lastName = lastName, username = username, birthday = birthday, gender = gender, country = countryCode)
+		updateProfile(bio = bio, firstName = firstName, lastName = lastName, username = username, birthday = birthday, gender = gender, country = countryCode ?: "")
 	}
 
 	private fun updateProfile(bio: String, firstName: String, lastName: String, username: String, birthday: Date?, gender: String?, country: String) {
@@ -407,11 +413,11 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 
 					if (userFull != null) {
 						userFull.about = bio
-						userFull.user?.first_name = firstName
-						userFull.user?.last_name = lastName
-						userFull.user?.username = username
+						// userFull.user?.firstName = firstName
+						// userFull.user?.lastName = lastName // FIXME: check if everything works properly without these fields
+						// userFull.user?.username = username
 						userFull.gender = gender
-						userFull.date_of_birth = ((birthday?.time ?: 0L) / 1000L).toInt()
+						userFull.date = ((birthday?.time ?: 0L) / 1000L).toInt() // FIXME: check if this field is proper
 						userFull.country = country
 
 						notificationCenter.postNotificationName(NotificationCenter.userInfoDidLoad, userFull.id, userFull)
@@ -453,7 +459,7 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 			return
 		}
 
-		imageUpdater.openMenu(user.photo?.photo_big != null && user.photo !is TL_userProfilePhotoEmpty, {
+		imageUpdater.openMenu(user.photo?.photoBig != null && user.photo !is TLRPC.TLUserProfilePhotoEmpty, {
 			messagesController.deleteUserPhoto(null)
 		}) {
 			// unused
@@ -461,28 +467,39 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 	}
 
 	private fun reloadScreen() {
+		val user = messagesController.getUser(userId) ?: return
 		val userInfo = messagesController.getUserFull(userId) ?: return
 		val context = context ?: return
 
 		if (!infoLoaded) {
 			infoLoaded = true
 
-			binding?.firstNameView?.setText(userInfo.user?.first_name)
-			binding?.lastNameView?.setText(userInfo.user?.last_name)
-			binding?.usernameView?.setText(userInfo.user?.username)
+			binding?.firstNameView?.setText(user.firstName)
+			binding?.lastNameView?.setText(user.lastName)
+			binding?.usernameView?.setText(user.username)
 			binding?.description?.setText(userInfo.about)
-			binding?.birthdayField?.setText(Date(userInfo.date_of_birth.toLong() * 1000L).formatBirthday())
 
-			binding?.genderSpinner?.setText(when (userInfo.gender) {
+			val dob = userInfo.date.toLong()
+
+			if (dob > 0) {
+				binding?.birthdayField?.setText(Date(dob * 1000L).formatBirthday())
+			}
+			else {
+				binding?.birthdayField?.setText("")
+			}
+
+			val genderText = when (userInfo.gender) {
 				ElloRpc.Gender.WOMAN -> context.getString(R.string.female)
 				ElloRpc.Gender.MAN -> context.getString(R.string.male)
 				ElloRpc.Gender.NON_BINARY -> context.getString(R.string.non_binary)
 				ElloRpc.Gender.OTHER -> context.getString(R.string.other)
-				else -> context.getString(R.string.male)
-			}, false)
-		}
+				else -> null
+			}
 
-		val user = messagesController.getUser(userId) ?: return
+			if (genderText != null) {
+				binding?.genderSpinner?.setText(genderText, false)
+			}
+		}
 
 		avatarDrawable.setInfo(user)
 
@@ -539,14 +556,14 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 	override fun didUploadPhoto(photo: TLRPC.InputFile?, video: TLRPC.InputFile?, videoStartTimestamp: Double, videoPath: String?, bigSize: TLRPC.PhotoSize?, smallSize: TLRPC.PhotoSize?) {
 		AndroidUtilities.runOnUIThread top@{
 			if (photo != null) {
-				val req = TLRPC.TL_photos_uploadProfilePhoto()
+				val req = TLRPC.TLPhotosUploadProfilePhoto()
 				req.file = photo
 				req.flags = req.flags or 1
 
 				connectionsManager.sendRequest(req) { response, error ->
 					AndroidUtilities.runOnUIThread {
 						if (error == null) {
-							var user = messagesController.getUser(userConfig.getClientUserId())
+							var user = messagesController.getUser(userConfig.getClientUserId()) as? TLRPC.TLUser
 
 							if (user == null) {
 								user = userConfig.getCurrentUser()
@@ -561,29 +578,30 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 								userConfig.setCurrentUser(user)
 							}
 
-							val photosPhoto = response as TL_photos_photo
+							val photosPhoto = response as TLRPC.TLPhotosPhoto
 							val sizes = photosPhoto.photo?.sizes
 							val small = FileLoader.getClosestPhotoSizeWithSize(sizes, 150)
 							val big = FileLoader.getClosestPhotoSizeWithSize(sizes, 800)
-							val videoSize = photosPhoto.photo?.video_sizes?.firstOrNull()
+							val videoSize = photosPhoto.photo?.videoSizes?.firstOrNull()
 
-							user.photo = TLRPC.TL_userProfilePhoto()
-							user.photo?.photo_id = photosPhoto.photo?.id ?: 0L
+							user.photo = TLRPC.TLUserProfilePhoto().also {
+								it.photoId = photosPhoto.photo?.id ?: 0L
+							}
 
 							if (small != null) {
-								user.photo?.photo_small = small.location
+								user.photo?.photoSmall = small.location
 							}
 
 							if (big != null) {
-								user.photo?.photo_big = big.location
+								user.photo?.photoBig = big.location
 							}
 
 							if (small != null && avatar != null) {
 								val destFile = fileLoader.getPathToAttach(small, true)
 								val src = fileLoader.getPathToAttach(avatar, true)
 								src.renameTo(destFile)
-								val oldKey = avatar?.volume_id?.toString() + "_" + avatar?.local_id + "@50_50"
-								val newKey = small.location.volume_id.toString() + "_" + small.location.local_id + "@50_50"
+								val oldKey = avatar?.volumeId?.toString() + "_" + avatar?.localId + "@50_50"
+								val newKey = small.location?.volumeId?.toString() + "_" + small.location?.localId + "@50_50"
 
 								ImageLocation.getForUserOrChat(user, ImageLocation.TYPE_SMALL)?.let {
 									ImageLoader.getInstance().replaceImageInCache(oldKey, newKey, it, false)
@@ -604,7 +622,7 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 
 							messagesStorage.clearUserPhotos(user.id)
 
-							messagesStorage.putUsersAndChats(arrayListOf(user), null, false, true)
+							messagesStorage.putUsersAndChats(listOf(user), null, false, true)
 						}
 
 						avatar = null
@@ -656,8 +674,7 @@ class EditProfileFragment(args: Bundle?) : BaseFragment(args), ImageUpdater.Imag
 		saveSelfArgs(arguments)
 	}
 
-	interface ChangeBigAvatarCallback {
+	fun interface ChangeBigAvatarCallback {
 		fun changeBigAvatar()
 	}
-
 }

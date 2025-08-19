@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2020.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
@@ -48,7 +48,9 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.Keep
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.scale
 import androidx.core.view.children
+import androidx.core.view.isVisible
 import androidx.exifinterface.media.ExifInterface
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup
@@ -1885,7 +1887,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 			animators.add(ObjectAnimator.ofFloat(cameraPhotoRecyclerView, ALPHA, 1.0f))
 
 			for (a in 0..1) {
-				if (flashModeButton[a]!!.visibility == VISIBLE) {
+				if (flashModeButton[a]?.isVisible == true) {
 					animators.add(ObjectAnimator.ofFloat(flashModeButton[a], ALPHA, 1.0f))
 					break
 				}
@@ -1923,8 +1925,8 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 			cameraPhotoRecyclerView.alpha = 1.0f
 
 			for (a in 0..1) {
-				if (flashModeButton[a]!!.visibility == VISIBLE) {
-					flashModeButton[a]!!.alpha = 1.0f
+				if (flashModeButton[a]?.isVisible == true) {
+					flashModeButton[a]?.alpha = 1.0f
 					break
 				}
 			}
@@ -2141,21 +2143,19 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 
 			bitmap = newBitmap
 
-			val lastBitmap = Bitmap.createScaledBitmap(bitmap, 80, (bitmap.height / (bitmap.width / 80.0f)).toInt(), true)
+			val lastBitmap = bitmap.scale(80, (bitmap.height / (bitmap.width / 80.0f)).toInt())
 
-			if (lastBitmap != null) {
-				if (lastBitmap != bitmap) {
-					bitmap.recycle()
-				}
+			if (lastBitmap != bitmap) {
+				bitmap.recycle()
+			}
 
-				Utilities.blurBitmap(lastBitmap, 7, 1, lastBitmap.width, lastBitmap.height, lastBitmap.rowBytes)
+			Utilities.blurBitmap(lastBitmap, 7, 1, lastBitmap.width, lastBitmap.height, lastBitmap.rowBytes)
 
-				val file = File(ApplicationLoader.filesDirFixed, "cthumb.jpg")
+			val file = File(ApplicationLoader.filesDirFixed, "cthumb.jpg")
 
-				FileOutputStream(file).use {
-					lastBitmap.compress(Bitmap.CompressFormat.JPEG, 87, it)
-					lastBitmap.recycle()
-				}
+			FileOutputStream(file).use {
+				lastBitmap.compress(Bitmap.CompressFormat.JPEG, 87, it)
+				lastBitmap.recycle()
 			}
 		}
 	}
@@ -2711,7 +2711,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 				val chatActivity = parentAlert.baseFragment
 				val chat = chatActivity.currentChat
 
-				if (chat != null && !hasAdminRights(chat) && chat.slowmode_enabled) {
+				if (chat != null && !hasAdminRights(chat) && chat.slowmodeEnabled) {
 					AlertsCreator.createSimpleAlert(context, context.getString(R.string.Slowmode), context.getString(R.string.SlowmodeSendError))?.show()
 					return
 				}
@@ -2990,11 +2990,11 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 				if (isActionBannedByDefault(chat, ChatObject.ACTION_SEND_MEDIA)) {
 					progressView.setText(context.getString(R.string.GlobalAttachMediaRestricted))
 				}
-				else if (AndroidUtilities.isBannedForever(chat?.banned_rights)) {
+				else if (AndroidUtilities.isBannedForever(chat?.bannedRights)) {
 					progressView.setText(LocaleController.formatString("AttachMediaRestrictedForever", R.string.AttachMediaRestrictedForever))
 				}
 				else {
-					progressView.setText(LocaleController.formatString("AttachMediaRestricted", R.string.AttachMediaRestricted, LocaleController.formatDateForBan(chat?.banned_rights?.until_date?.toLong())))
+					progressView.setText(LocaleController.formatString("AttachMediaRestricted", R.string.AttachMediaRestricted, LocaleController.formatDateForBan(chat?.bannedRights?.untilDate?.toLong())))
 				}
 			}
 		}
@@ -3408,7 +3408,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 
 		if (view === cameraPanel) {
 			if (isPortrait) {
-				if (cameraPhotoRecyclerView.visibility == VISIBLE) {
+				if (cameraPhotoRecyclerView.isVisible) {
 					cameraPanel.layout(0, bottom - AndroidUtilities.dp((126 + 96).toFloat()), width, bottom - AndroidUtilities.dp(96f))
 				}
 				else {
@@ -3416,7 +3416,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 				}
 			}
 			else {
-				if (cameraPhotoRecyclerView.visibility == VISIBLE) {
+				if (cameraPhotoRecyclerView.isVisible) {
 					cameraPanel.layout(right - AndroidUtilities.dp((126 + 96).toFloat()), 0, right - AndroidUtilities.dp(96f), height)
 				}
 				else {
@@ -3428,7 +3428,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 		}
 		else if (view === zoomControlView) {
 			if (isPortrait) {
-				if (cameraPhotoRecyclerView.visibility == VISIBLE) {
+				if (cameraPhotoRecyclerView.isVisible) {
 					zoomControlView.layout(0, bottom - AndroidUtilities.dp((126 + 96 + 38 + 50).toFloat()), width, bottom - AndroidUtilities.dp((126 + 96 + 38).toFloat()))
 				}
 				else {
@@ -3436,7 +3436,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 				}
 			}
 			else {
-				if (cameraPhotoRecyclerView.visibility == VISIBLE) {
+				if (cameraPhotoRecyclerView.isVisible) {
 					zoomControlView.layout(right - AndroidUtilities.dp((126 + 96 + 38 + 50).toFloat()), 0, right - AndroidUtilities.dp((126 + 96 + 38).toFloat()), height)
 				}
 				else {
@@ -3456,7 +3456,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 
 				counterTextView.rotation = 0f
 
-				if (cameraPhotoRecyclerView.visibility == VISIBLE) {
+				if (cameraPhotoRecyclerView.isVisible) {
 					cy -= AndroidUtilities.dp(96f)
 				}
 			}
@@ -3466,7 +3466,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 
 				counterTextView.rotation = -90f
 
-				if (cameraPhotoRecyclerView.visibility == VISIBLE) {
+				if (cameraPhotoRecyclerView.isVisible) {
 					cx -= AndroidUtilities.dp(96f)
 				}
 			}
@@ -3690,7 +3690,7 @@ class ChatAttachAlertPhotoLayout(alert: ChatAttachAlert, context: Context, priva
 						val chatActivity = parentAlert.baseFragment
 						val chat = chatActivity.currentChat
 
-						if (chat != null && !hasAdminRights(chat) && chat.slowmode_enabled) {
+						if (chat != null && !hasAdminRights(chat) && chat.slowmodeEnabled) {
 							if (alertOnlyOnce != 2) {
 								AlertsCreator.createSimpleAlert(context, context.getString(R.string.Slowmode), context.getString(R.string.SlowmodeSelectSendError))?.show()
 

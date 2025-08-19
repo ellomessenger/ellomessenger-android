@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger
 
@@ -14,18 +14,20 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.util.SparseArray
 import android.util.SparseIntArray
+import androidx.core.content.edit
+import androidx.core.util.size
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.NativeByteBuffer
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC.InputEncryptedFile
 import org.telegram.tgnet.TLRPC.InputFile
-import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.TLRPC.TL_inputEncryptedFileBigUploaded
-import org.telegram.tgnet.TLRPC.TL_inputEncryptedFileUploaded
-import org.telegram.tgnet.TLRPC.TL_inputFile
-import org.telegram.tgnet.TLRPC.TL_inputFileBig
-import org.telegram.tgnet.TLRPC.TL_upload_saveBigFilePart
-import org.telegram.tgnet.TLRPC.TL_upload_saveFilePart
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLRPC.TLBoolTrue
+import org.telegram.tgnet.TLRPC.TLInputEncryptedFileBigUploaded
+import org.telegram.tgnet.TLRPC.TLInputEncryptedFileUploaded
+import org.telegram.tgnet.TLRPC.TLInputFile
+import org.telegram.tgnet.TLRPC.TLInputFileBig
+import org.telegram.tgnet.TLRPC.TLUploadSaveBigFilePart
+import org.telegram.tgnet.TLRPC.TLUploadSaveFilePart
 import java.io.File
 import java.io.FileDescriptor
 import java.io.RandomAccessFile
@@ -120,7 +122,7 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 					FileLog.d("network changed to slow = $slowNetwork")
 				}
 
-				for (a in 0 until requestTokens.size()) {
+				for (a in 0 until requestTokens.size) {
 					ConnectionsManager.getInstance(currentAccount).cancelRequest(requestTokens.valueAt(a), true)
 				}
 
@@ -164,7 +166,7 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 		state = 2
 
 		Utilities.stageQueue.postRunnable {
-			for (a in 0 until requestTokens.size()) {
+			for (a in 0 until requestTokens.size) {
 				ConnectionsManager.getInstance(currentAccount).cancelRequest(requestTokens.valueAt(a), true)
 			}
 		}
@@ -179,7 +181,15 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 			preferences = ApplicationLoader.applicationContext.getSharedPreferences("uploadinfo", Activity.MODE_PRIVATE)
 		}
 
-		preferences?.edit()?.remove(fileKey + "_time")?.remove(fileKey + "_size")?.remove(fileKey + "_uploaded")?.remove(fileKey + "_id")?.remove(fileKey + "_iv")?.remove(fileKey + "_key")?.remove(fileKey + "_ivc")?.commit()
+		preferences?.edit {
+			remove(fileKey + "_time")
+			remove(fileKey + "_size")
+			remove(fileKey + "_uploaded")
+			remove(fileKey + "_id")
+			remove(fileKey + "_iv")
+			remove(fileKey + "_key")
+			remove(fileKey + "_ivc")
+		}
 
 		try {
 			stream?.close()
@@ -212,19 +222,18 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 	}
 
 	private fun storeFileUploadInfo() {
-		val editor = preferences?.edit() ?: return
-		editor.putInt(fileKey + "_time", uploadStartTime)
-		editor.putLong(fileKey + "_size", totalFileSize)
-		editor.putLong(fileKey + "_id", currentFileId)
-		editor.remove(fileKey + "_uploaded")
+		preferences?.edit {
+			putInt(fileKey + "_time", uploadStartTime)
+			putLong(fileKey + "_size", totalFileSize)
+			putLong(fileKey + "_id", currentFileId)
+			remove(fileKey + "_uploaded")
 
-		if (isEncrypted) {
-			editor.putString(fileKey + "_iv", Utilities.bytesToHex(iv))
-			editor.putString(fileKey + "_ivc", Utilities.bytesToHex(ivChange))
-			editor.putString(fileKey + "_key", Utilities.bytesToHex(key))
+			if (isEncrypted) {
+				putString(fileKey + "_iv", Utilities.bytesToHex(iv))
+				putString(fileKey + "_ivc", Utilities.bytesToHex(ivChange))
+				putString(fileKey + "_key", Utilities.bytesToHex(key))
+			}
 		}
-
-		editor.commit()
 	}
 
 	private fun calcTotalPartsCount() {
@@ -561,18 +570,18 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 			}
 
 			if (isBigFile) {
-				val req = TL_upload_saveBigFilePart()
+				val req = TLUploadSaveBigFilePart()
 
 				currentRequestPartNum = currentPartNum
 
-				req.file_part = currentRequestPartNum
-				req.file_id = currentFileId
+				req.filePart = currentRequestPartNum
+				req.fileId = currentFileId
 
 				if (estimatedSize != 0L) {
-					req.file_total_parts = -1
+					req.fileTotalParts = -1
 				}
 				else {
-					req.file_total_parts = totalPartsCount
+					req.fileTotalParts = totalPartsCount
 				}
 
 				req.bytes = sendBuffer
@@ -580,12 +589,12 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 				finalRequest = req
 			}
 			else {
-				val req = TL_upload_saveFilePart()
+				val req = TLUploadSaveFilePart()
 
 				currentRequestPartNum = currentPartNum
 
-				req.file_part = currentRequestPartNum
-				req.file_id = currentFileId
+				req.filePart = currentRequestPartNum
+				req.fileId = currentFileId
 				req.bytes = sendBuffer
 
 				finalRequest = req
@@ -654,7 +663,7 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 
 			requestTokens.delete(requestNumFinal)
 
-			if (response is TL_boolTrue) {
+			if (response is TLBoolTrue) {
 				if (state != 1) {
 					return@sendRequest
 				}
@@ -679,11 +688,10 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 						val result: InputFile
 
 						if (isBigFile) {
-							result = TL_inputFileBig()
+							result = TLInputFileBig()
 						}
 						else {
-							result = TL_inputFile()
-							result.md5_checksum = ""
+							result = TLInputFile().also { it.md5Checksum = "" }
 						}
 
 						result.parts = currentPartNum
@@ -698,16 +706,15 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 						val result: InputEncryptedFile
 
 						if (isBigFile) {
-							result = TL_inputEncryptedFileBigUploaded()
+							result = TLInputEncryptedFileBigUploaded()
 						}
 						else {
-							result = TL_inputEncryptedFileUploaded()
-							result.md5_checksum = ""
+							result = TLInputEncryptedFileUploaded().also { it.md5Checksum = "" }
 						}
 
 						result.parts = currentPartNum
 						result.id = currentFileId
-						result.key_fingerprint = fingerprint
+						result.keyFingerprint = fingerprint
 
 						delegate?.didFinishUploadingFile(this@FileUploadOperation, null, result, key, iv)
 
@@ -753,14 +760,13 @@ class FileUploadOperation(private val currentAccount: Int, private val uploading
 							}
 
 							if (isBigFile && offsetToSave % (1024 * 1024) == 0L || !isBigFile && saveInfoTimes == 0) {
-								val editor = preferences?.edit()
-								editor?.putLong(fileKey + "_uploaded", offsetToSave)
+								preferences?.edit {
+									putLong(fileKey + "_uploaded", offsetToSave)
 
-								if (isEncrypted) {
-									editor?.putString(fileKey + "_ivc", Utilities.bytesToHex(ivToSave))
+									if (isEncrypted) {
+										putString(fileKey + "_ivc", Utilities.bytesToHex(ivToSave))
+									}
 								}
-
-								editor?.commit()
 							}
 						}
 						else {

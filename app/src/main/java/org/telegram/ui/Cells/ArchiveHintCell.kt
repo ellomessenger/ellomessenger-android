@@ -4,13 +4,11 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
 import android.content.Context
-import android.database.DataSetObserver
-import android.os.Parcelable
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -27,21 +25,20 @@ import org.telegram.ui.Components.LayoutHelper.createFrame
 
 class ArchiveHintCell(context: Context) : FrameLayout(context) {
 	private lateinit var bottomPages: BottomPagesView
-	val viewPager: ViewPager
 
-	init {
-		viewPager = object : ViewPager(context) {
-			override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-				parent?.requestDisallowInterceptTouchEvent(true)
-				return super.onInterceptTouchEvent(ev)
-			}
-
-			override fun onAttachedToWindow() {
-				super.onAttachedToWindow()
-				requestLayout()
-			}
+	val viewPager = object : ViewPager(context) {
+		override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+			parent?.requestDisallowInterceptTouchEvent(true)
+			return super.onInterceptTouchEvent(ev)
 		}
 
+		override fun onAttachedToWindow() {
+			super.onAttachedToWindow()
+			requestLayout()
+		}
+	}
+
+	init {
 		AndroidUtilities.setViewPagerEdgeEffectColor(viewPager, context.getColor(R.color.medium_gray))
 
 		viewPager.setAdapter(Adapter())

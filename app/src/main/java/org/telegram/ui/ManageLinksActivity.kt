@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -36,6 +36,7 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withSave
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -52,24 +53,14 @@ import org.telegram.messenger.MessagesController
 import org.telegram.messenger.NotificationCenter
 import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.ChatFull
 import org.telegram.tgnet.TLRPC.ExportedChatInvite
-import org.telegram.tgnet.TLRPC.TL_chatAdminWithInvites
-import org.telegram.tgnet.TLRPC.TL_chatInviteExported
-import org.telegram.tgnet.TLRPC.TL_messages_chatAdminsWithInvites
-import org.telegram.tgnet.TLRPC.TL_messages_deleteExportedChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_deleteRevokedExportedChatInvites
-import org.telegram.tgnet.TLRPC.TL_messages_editExportedChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_exportChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_exportedChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_exportedChatInviteReplaced
-import org.telegram.tgnet.TLRPC.TL_messages_exportedChatInvites
-import org.telegram.tgnet.TLRPC.TL_messages_getAdminsWithInvites
-import org.telegram.tgnet.TLRPC.TL_messages_getExportedChatInvites
-import org.telegram.tgnet.tlrpc.UserFull
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.TLUserFull
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick
 import org.telegram.ui.ActionBar.AlertDialog
@@ -98,9 +89,9 @@ import kotlin.math.min
 @SuppressLint("NotifyDataSetChanged")
 class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, adminId: Long, private val invitesCount: Int, private val isUser: Boolean = false) : BaseFragment() {
 	private val adminId: Long
-	private val admins = mutableListOf<TL_chatAdminWithInvites>()
-	private val invites = mutableListOf<TL_chatInviteExported>()
-	private val revokedInvites = mutableListOf<TL_chatInviteExported>()
+	private val admins = mutableListOf<TLRPC.TLChatAdminWithInvites>()
+	private val invites = mutableListOf<TLRPC.TLChatInviteExported>()
+	private val revokedInvites = mutableListOf<TLRPC.TLChatInviteExported>()
 	private val users = HashMap<Long, User>()
 	private var adminsDividerRow = 0
 	private var adminsEndRow = 0
@@ -118,7 +109,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 	private var dividerRow = 0
 	private var helpRow = 0
 	private var info: ChatFull? = null
-	private var invite: TL_chatInviteExported? = null
+	private var invite: TLRPC.TLChatInviteExported? = null
 	private var inviteLinkBottomSheet: InviteLinkBottomSheet? = null
 	private var isChannel = false
 	private var isOpened = false
@@ -142,7 +133,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 	private var revokedLinksEndRow = 0
 	private var revokedLinksStartRow = 0
 	private var rowCount = 0
-	private var userInfo: UserFull? = null
+	private var userInfo: TLUserFull? = null
 	var hasMore = false
 	var linkIcon: Drawable? = null
 	var linkIconRevoked: Drawable? = null
@@ -195,7 +186,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		if (loadAdmins && !adminsLoaded) {
 			linksLoading = true
 
-			val req = TL_messages_getAdminsWithInvites()
+			val req = TLRPC.TLMessagesGetAdminsWithInvites()
 			req.peer = messagesController.getInputPeer(-peerId)
 
 			val reqId = connectionsManager.sendRequest(req) { response, error ->
@@ -203,14 +194,14 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 					notificationCenter.doOnIdle {
 						linksLoading = false
 
-						if (error == null && response is TL_messages_chatAdminsWithInvites) {
-							response.admins?.forEach {
-								if (it.admin_id != accountInstance.userConfig.clientUserId) {
+						if (error == null && response is TLRPC.TLMessagesChatAdminsWithInvites) {
+							response.admins.forEach {
+								if (it.adminId != accountInstance.userConfig.clientUserId) {
 									admins.add(it)
 								}
 							}
 
-							response.users?.forEach {
+							response.users.forEach {
 								users[it.id] = it
 							}
 						}
@@ -244,14 +235,14 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 			connectionsManager.bindRequestToGuid(reqId, getClassGuid())
 		}
 		else {
-			val req = TL_messages_getExportedChatInvites()
+			val req = TLRPC.TLMessagesGetExportedChatInvites()
 			req.peer = messagesController.getInputPeer(if (isUser) peerId else -peerId)
 
 			if (adminId == userConfig.getClientUserId()) {
-				req.admin_id = messagesController.getInputUser(userConfig.getCurrentUser())
+				req.adminId = messagesController.getInputUser(userConfig.getCurrentUser())
 			}
 			else {
-				req.admin_id = messagesController.getInputUser(adminId)
+				req.adminId = messagesController.getInputUser(adminId)
 			}
 
 			val revoked = loadRevoked
@@ -261,15 +252,15 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 				if (revokedInvites.isNotEmpty()) {
 					req.flags = req.flags or 4
-					req.offset_link = revokedInvites.last().link
-					req.offset_date = revokedInvites.last().date
+					req.offsetLink = revokedInvites.last().link
+					req.offsetDate = revokedInvites.last().date
 				}
 			}
 			else {
 				if (invites.isNotEmpty()) {
 					req.flags = req.flags or 4
-					req.offset_link = invites.last().link
-					req.offset_date = invites.last().date
+					req.offsetLink = invites.last().link
+					req.offsetDate = invites.last().date
 				}
 			}
 
@@ -278,13 +269,13 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 			val inviteFinal = if (isPublic) null else invite
 
 			val reqId = connectionsManager.sendRequest(req) { response, error ->
-				var permanentLink: TL_chatInviteExported? = null
+				var permanentLink: TLRPC.TLChatInviteExported? = null
 
-				if (error == null && response is TL_messages_exportedChatInvites) {
-					if (!response.invites.isNullOrEmpty() && inviteFinal != null) {
+				if (error == null && response is TLRPC.TLMessagesExportedChatInvites) {
+					if (response.invites.isNotEmpty() && inviteFinal != null) {
 						for (i in response.invites.indices) {
-							if ((response.invites[i] as TL_chatInviteExported).link == inviteFinal.link) {
-								permanentLink = response.invites.removeAt(i) as TL_chatInviteExported
+							if ((response.invites[i] as TLRPC.TLChatInviteExported).link == inviteFinal.link) {
+								permanentLink = response.invites.removeAt(i) as TLRPC.TLChatInviteExported
 								break
 							}
 						}
@@ -302,26 +293,26 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 						if (finalPermanentLink != null) {
 							invite = finalPermanentLink
-							info?.exported_invite = finalPermanentLink
+							info?.exportedInvite = finalPermanentLink
 						}
 
 						var updateByDiffUtils = false
 
-						if (error == null && response is TL_messages_exportedChatInvites) {
+						if (error == null && response is TLRPC.TLMessagesExportedChatInvites) {
 							if (revoked) {
 								for (i in response.invites.indices) {
-									val `in` = response.invites[i] as TL_chatInviteExported
+									val `in` = response.invites[i] as TLRPC.TLChatInviteExported
 									fixDate(`in`)
 									revokedInvites.add(`in`)
 								}
 							}
 							else {
 								if (adminId != accountInstance.userConfig.clientUserId && this.invites.size == 0 && response.invites.size > 0) {
-									invite = response.invites[0] as TL_chatInviteExported
+									invite = response.invites[0] as TLRPC.TLChatInviteExported
 									response.invites.removeAt(0)
 								}
 								for (i in response.invites.indices) {
-									val `in` = response.invites[i] as TL_chatInviteExported
+									val `in` = response.invites[i] as TLRPC.TLChatInviteExported
 									fixDate(`in`)
 									this.invites.add(`in`)
 								}
@@ -583,7 +574,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		listView?.setOnItemClickListener { _, position ->
 			when (position) {
 				creatorRow -> {
-					invite?.admin_id?.let { users[it] }?.let {
+					invite?.adminId?.let { users[it] }?.let {
 						val bundle = Bundle()
 						bundle.putLong("user_id", it.id)
 						MessagesController.getInstance(UserConfig.selectedAccount).putUser(it, false)
@@ -593,7 +584,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 				}
 
 				createNewLinkRow -> {
-					val linkEditActivity = LinkEditActivity(LinkEditActivity.CREATE_TYPE, if (isUser) -peerId else peerId, isUser)
+					val linkEditActivity = LinkEditActivity(LinkEditActivity.CREATE_TYPE, if (isUser) -peerId else peerId)
 					linkEditActivity.setCallback(linkEditActivityCallback)
 					presentFragment(linkEditActivity)
 				}
@@ -635,14 +626,14 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 					builder.setMessage(context.getString(R.string.DeleteAllRevokedLinkHelp))
 
 					builder.setPositiveButton(context.getString(R.string.Delete)) { _, _ ->
-						val req = TL_messages_deleteRevokedExportedChatInvites()
+						val req = TLRPC.TLMessagesDeleteRevokedExportedChatInvites()
 						req.peer = messagesController.getInputPeer(-peerId)
 
 						if (adminId == userConfig.getClientUserId()) {
-							req.admin_id = messagesController.getInputUser(userConfig.getCurrentUser())
+							req.adminId = messagesController.getInputUser(userConfig.getCurrentUser())
 						}
 						else {
-							req.admin_id = messagesController.getInputUser(adminId)
+							req.adminId = messagesController.getInputUser(adminId)
 						}
 
 						deletingRevokedLinks = true
@@ -669,11 +660,11 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 					val p = position - adminsStartRow
 					val admin = admins[p]
 
-					if (users.containsKey(admin.admin_id)) {
-						messagesController.putUser(users[admin.admin_id], false)
+					if (users.containsKey(admin.adminId)) {
+						messagesController.putUser(users[admin.adminId], false)
 					}
 
-					val fragment = ManageLinksActivity(peerId, admin.admin_id, admin.invites_count)
+					val fragment = ManageLinksActivity(peerId, admin.adminId, admin.invitesCount)
 
 					fragment.setInfo(info, null)
 
@@ -708,15 +699,15 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 	fun setInfo(chatFull: ChatFull?, invite: ExportedChatInvite?) {
 		info = chatFull
-		this.invite = invite as TL_chatInviteExported?
+		this.invite = invite as TLRPC.TLChatInviteExported?
 		isPublic = !currentChat?.username.isNullOrEmpty()
 		loadLinks(true)
 	}
 
-	fun setInfo(userFull: UserFull, invite: ExportedChatInvite?) {
-		this.invite = invite as TL_chatInviteExported?
+	fun setInfo(userFull: TLUserFull, invite: ExportedChatInvite?) {
+		this.invite = invite as TLRPC.TLChatInviteExported?
 		userInfo = userFull
-		isPublic = userFull.is_public
+		isPublic = userFull.isPublic
 		loadLinks(true)
 	}
 
@@ -914,7 +905,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 						linkActionView.hideRevokeOption(!canEdit)
 
 						if (invite != null) {
-							val inviteExported: TL_chatInviteExported = invite!!
+							val inviteExported: TLRPC.TLChatInviteExported = invite!!
 							linkActionView.setLink(inviteExported.link)
 							linkActionView.loadUsers(inviteExported, peerId)
 						}
@@ -968,7 +959,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 				}
 
 				5 -> {
-					val invite: TL_chatInviteExported?
+					val invite: TLRPC.TLChatInviteExported?
 					var drawDivider = true
 
 					if (position in linksStartRow until linksEndRow) {
@@ -1005,8 +996,8 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 					else {
 						val p = position - adminsStartRow
 						val admin = admins[p]
-						user = users[admin.admin_id]
-						count = admin.invites_count
+						user = users[admin.adminId]
+						count = admin.invitesCount
 
 						if (position == adminsEndRow - 1) {
 							drawDivider = false
@@ -1014,7 +1005,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 					}
 
 					if (user != null) {
-						userCell.setData(user, ContactsController.formatName(user.first_name, user.last_name), LocaleController.formatPluralString("InviteLinkCount", count), drawDivider)
+						userCell.setData(user, ContactsController.formatName(user.firstName, user.lastName), LocaleController.formatPluralString("InviteLinkCount", count), drawDivider)
 					}
 				}
 			}
@@ -1050,21 +1041,21 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 	private fun revokePermanent() {
 		if (adminId == accountInstance.userConfig.clientUserId) {
-			val req = TL_messages_exportChatInvite()
+			val req = TLRPC.TLMessagesExportChatInvite()
 			req.peer = messagesController.getInputPeer(-peerId)
-			req.legacy_revoke_permanent = true
+			req.legacyRevokePermanent = true
 
 			val oldInvite = invite
 
 			invite = null
 
-			info?.exported_invite = null
+			info?.exportedInvite = null
 
 			val reqId = connectionsManager.sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
 					if (error == null) {
-						invite = response as TL_chatInviteExported?
-						info?.exported_invite = invite
+						invite = response as TLRPC.TLChatInviteExported?
+						info?.exportedInvite = invite
 
 						if (parentActivity == null) {
 							return@runOnUIThread
@@ -1098,7 +1089,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		var lastDrawingState = 0
 		var titleView: TextView
 		var subtitleView: TextView
-		var invite: TL_chatInviteExported? = null
+		var invite: TLRPC.TLChatInviteExported? = null
 		var position = 0
 		var paint = Paint(Paint.ANTI_ALIAS_FLAG)
 		var paint2 = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -1218,7 +1209,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 						}
 
 						3 -> {
-							val inviteFinal: TL_chatInviteExported = invite ?: return@setItems
+							val inviteFinal: TLRPC.TLChatInviteExported = invite ?: return@setItems
 							val builder2 = AlertDialog.Builder(context)
 							builder2.setMessage(context.getString(R.string.RevokeAlert))
 
@@ -1283,21 +1274,21 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 			if (invite.expired || invite.revoked) {
 				drawState = if (invite.revoked) LINK_STATE_GRAY else LINK_STATE_RED
 			}
-			else if (invite.expire_date > 0 || invite.usage_limit > 0) {
+			else if (invite.expireDate > 0 || invite.usageLimit > 0) {
 				var usageProgress = 1f
 
-				if (invite.expire_date > 0) {
+				if (invite.expireDate > 0) {
 					val currentTime = System.currentTimeMillis() + timeDiff * 1000L
-					val expireTime = invite.expire_date * 1000L
-					val date = (if (invite.start_date <= 0) invite.date else invite.start_date) * 1000L
+					val expireTime = invite.expireDate * 1000L
+					val date = (if (invite.startDate <= 0) invite.date else invite.startDate) * 1000L
 					val from = currentTime - date
 					val to = expireTime - date
 
 					timeProgress = 1f - from / to.toFloat()
 				}
 
-				if (invite.usage_limit > 0) {
-					usageProgress = (invite.usage_limit - invite.usage) / invite.usage_limit.toFloat()
+				if (invite.usageLimit > 0) {
+					usageProgress = (invite.usageLimit - invite.usage) / invite.usageLimit.toFloat()
 				}
 
 				progress = min(timeProgress, usageProgress)
@@ -1346,7 +1337,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 			canvas.drawCircle(cX.toFloat(), cY.toFloat(), AndroidUtilities.dp(32f) / 2f, paint)
 
-			if (animateHideExpiring || !invite.expired && invite.expire_date > 0 && !invite.revoked) {
+			if (animateHideExpiring || !invite.expired && invite.expireDate > 0 && !invite.revoked) {
 				if (animateHideExpiring) {
 					timeProgress = lastDrawExpiringProgress
 				}
@@ -1356,13 +1347,13 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 				rectF.set((cX - AndroidUtilities.dp(20f)).toFloat(), (cY - AndroidUtilities.dp(20f)).toFloat(), (cX + AndroidUtilities.dp(20f)).toFloat(), (cY + AndroidUtilities.dp(20f)).toFloat())
 
 				if (animateToStateProgress != 1f && (!hasProgress(animateFromState) || animateHideExpiring)) {
-					canvas.save()
-					val a = if (animateHideExpiring) 1f - animateToStateProgress else animateToStateProgress
-					val s = (0.7 + 0.3f * a).toFloat()
-					canvas.scale(s, s, rectF.centerX(), rectF.centerY())
-					canvas.drawArc(rectF, -90f, -timeProgress * 360, false, paint2)
-					timerParticles.draw(canvas, paint2, rectF, -timeProgress * 360, a)
-					canvas.restore()
+					canvas.withSave {
+						val a = if (animateHideExpiring) 1f - animateToStateProgress else animateToStateProgress
+						val s = (0.7 + 0.3f * a).toFloat()
+						scale(s, s, rectF.centerX(), rectF.centerY())
+						drawArc(rectF, -90f, -timeProgress * 360, false, paint2)
+						timerParticles.draw(this, paint2, rectF, -timeProgress * 360, a)
+					}
 				}
 				else {
 					canvas.drawArc(rectF, -90f, -timeProgress * 360, false, paint2)
@@ -1419,7 +1410,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 			}
 		}
 
-		fun setLink(invite: TL_chatInviteExported?, position: Int) {
+		fun setLink(invite: TLRPC.TLChatInviteExported?, position: Int) {
 			timerRunning = false
 
 			if (this.invite == null || invite == null || this.invite!!.link != invite.link) {
@@ -1434,39 +1425,45 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 				return
 			}
 
+			val inviteLink = invite.link ?: ""
+
 			if (!invite.title.isNullOrEmpty()) {
 				val builder = SpannableStringBuilder(invite.title)
 				Emoji.replaceEmoji(builder, titleView.paint.fontMetricsInt, false)
 				titleView.text = builder
 			}
-			else if (invite.link.startsWith(String.format(Locale.getDefault(), "https://%s/+", ApplicationLoader.applicationContext.getString(R.string.domain)))) {
-				titleView.text = invite.link.substring(String.format(Locale.getDefault(), "https://%s/+", ApplicationLoader.applicationContext.getString(R.string.domain)).length)
+			else if (inviteLink.startsWith(String.format(Locale.getDefault(), "https://%s/+", ApplicationLoader.applicationContext.getString(R.string.domain)))) {
+				titleView.text = inviteLink.substring(String.format(Locale.getDefault(), "https://%s/+", ApplicationLoader.applicationContext.getString(R.string.domain)).length)
 			}
-			else if (invite.link.startsWith(String.format(Locale.getDefault(), "https://%s/joinchat/", ApplicationLoader.applicationContext.getString(R.string.domain)))) {
-				titleView.text = invite.link.substring(String.format(Locale.getDefault(), "https://%s/joinchat/", ApplicationLoader.applicationContext.getString(R.string.domain)).length)
+			else if (inviteLink.startsWith(String.format(Locale.getDefault(), "https://%s/joinchat/", ApplicationLoader.applicationContext.getString(R.string.domain)))) {
+				titleView.text = inviteLink.substring(String.format(Locale.getDefault(), "https://%s/joinchat/", ApplicationLoader.applicationContext.getString(R.string.domain)).length)
 			}
-			else if (invite.link.startsWith("https://")) {
-				titleView.text = invite.link.substring("https://".length)
+			else if (inviteLink.startsWith("https://")) {
+				titleView.text = inviteLink.substring("https://".length)
 			}
 			else {
-				titleView.text = invite.link
+				titleView.text = inviteLink
 			}
 
 			var joinedString = ""
 
-			if (invite.usage == 0 && invite.usage_limit == 0 && invite.requested == 0) {
+			if (invite.usage == 0 && invite.usageLimit == 0 && invite.requested == 0) {
 				joinedString = context.getString(R.string.NoOneJoinedYet)
 			}
 			else {
-				if (invite.usage_limit > 0 && invite.usage == 0 && !invite.expired && !invite.revoked) {
-					joinedString = LocaleController.formatPluralString("CanJoin", invite.usage_limit)
+				if (invite.usageLimit > 0 && invite.usage == 0 && !invite.expired && !invite.revoked) {
+					joinedString = LocaleController.formatPluralString("CanJoin", invite.usageLimit)
 				}
-				else if (invite.usage_limit > 0 && invite.expired && invite.revoked) {
-					joinedString = LocaleController.formatPluralString("PeopleJoined", invite.usage) + ", " + LocaleController.formatPluralString("PeopleJoinedRemaining", invite.usage_limit - invite.usage)
+				else if (invite.usageLimit > 0 && invite.expired && invite.revoked) {
+					joinedString = LocaleController.formatPluralString("PeopleJoined", invite.usage) + ", " + LocaleController.formatPluralString("PeopleJoinedRemaining", invite.usageLimit - invite.usage)
 				}
 				else {
 					if (invite.usage > 0) {
-						joinedString = LocaleController.formatPluralString("PeopleJoined", invite.usage)
+						joinedString = when {
+							ChatObject.isMegagroup(currentChat) -> LocaleController.formatPluralString("JoinedTheGroup", invite.usage)
+							ChatObject.isChannel(currentChat) -> LocaleController.formatPluralString("JoinedTheChannel", invite.usage)
+							else -> LocaleController.formatPluralString("PeopleJoined", invite.usage)
+						}
 					}
 					if (invite.requested > 0) {
 						if (invite.usage > 0) {
@@ -1501,7 +1498,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 				spannableStringBuilder.append("  .  ").setSpan(dotDividerSpan, spannableStringBuilder.length - 3, spannableStringBuilder.length - 2, 0)
 
-				if (!invite.revoked && invite.usage_limit > 0 && invite.usage >= invite.usage_limit) {
+				if (!invite.revoked && invite.usageLimit > 0 && invite.usage >= invite.usageLimit) {
 					spannableStringBuilder.append(context.getString(R.string.LinkLimitReached))
 				}
 				else {
@@ -1510,7 +1507,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 				subtitleView.text = spannableStringBuilder
 			}
-			else if (invite.expire_date > 0) {
+			else if (invite.expireDate > 0) {
 				val spannableStringBuilder = SpannableStringBuilder(joinedString)
 
 				val dotDividerSpan = DotDividerSpan()
@@ -1519,7 +1516,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 				spannableStringBuilder.append("  .  ").setSpan(dotDividerSpan, spannableStringBuilder.length - 3, spannableStringBuilder.length - 2, 0)
 
 				val currentTime = System.currentTimeMillis() + timeDiff * 1000L
-				val expireTime = invite.expire_date * 1000L
+				val expireTime = invite.expireDate * 1000L
 				var timeLeft = expireTime - currentTime
 
 				if (timeLeft < 0) {
@@ -1547,8 +1544,8 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		}
 	}
 
-	fun deleteLink(invite: TL_chatInviteExported) {
-		val req = TL_messages_deleteExportedChatInvite()
+	fun deleteLink(invite: TLRPC.TLChatInviteExported) {
+		val req = TLRPC.TLMessagesDeleteExportedChatInvite()
 		req.link = invite.link
 		req.peer = messagesController.getInputPeer(-peerId)
 
@@ -1561,15 +1558,15 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		}
 	}
 
-	fun editLink(invite: TL_chatInviteExported?) {
-		val activity = LinkEditActivity(LinkEditActivity.EDIT_TYPE, if (isUser) -peerId else peerId, isUser)
+	fun editLink(invite: TLRPC.TLChatInviteExported?) {
+		val activity = LinkEditActivity(LinkEditActivity.EDIT_TYPE, if (isUser) -peerId else peerId)
 		activity.setCallback(linkEditActivityCallback)
 		activity.setInviteToEdit(invite)
 		presentFragment(activity)
 	}
 
-	fun revokeLink(invite: TL_chatInviteExported?) {
-		val req = TL_messages_editExportedChatInvite()
+	fun revokeLink(invite: TLRPC.TLChatInviteExported?) {
+		val req = TLRPC.TLMessagesEditExportedChatInvite()
 		req.link = invite!!.link
 		req.revoked = true
 		req.peer = messagesController.getInputPeer(-peerId)
@@ -1577,9 +1574,9 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		connectionsManager.sendRequest(req) { response, error ->
 			AndroidUtilities.runOnUIThread {
 				if (error == null) {
-					if (response is TL_messages_exportedChatInviteReplaced) {
+					if (response is TLRPC.TLMessagesExportedChatInviteReplaced) {
 						if (!isPublic) {
-							this@ManageLinksActivity.invite = response.new_invite as TL_chatInviteExported
+							this@ManageLinksActivity.invite = response.newInvite as TLRPC.TLChatInviteExported
 						}
 
 						invite.revoked = true
@@ -1588,10 +1585,10 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 						if (isPublic && adminId == accountInstance.userConfig.getClientUserId()) {
 							invites.remove(invite)
-							invites.add(0, response.new_invite as TL_chatInviteExported)
+							invites.add(0, response.newInvite as TLRPC.TLChatInviteExported)
 						}
 						else if (this.invite != null) {
-							this.invite = response.new_invite as TL_chatInviteExported
+							this.invite = response.newInvite as TLRPC.TLChatInviteExported
 						}
 
 						revokedInvites.add(0, invite)
@@ -1622,7 +1619,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 
 	private val linkEditActivityCallback = object : LinkEditActivity.Callback {
 		override fun onLinkCreated(response: TLObject?) {
-			if (response is TL_chatInviteExported) {
+			if (response is TLRPC.TLChatInviteExported) {
 				AndroidUtilities.runOnUIThread({
 					val callback = saveListState()
 
@@ -1638,9 +1635,9 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 			}
 		}
 
-		override fun onLinkEdited(inviteToEdit: TL_chatInviteExported?, response: TLObject?) {
-			if (response is TL_messages_exportedChatInvite) {
-				val edited = response.invite as TL_chatInviteExported
+		override fun onLinkEdited(inviteToEdit: TLRPC.TLChatInviteExported?, response: TLObject?) {
+			if (response is TLRPC.TLMessagesExportedChatInvite) {
+				val edited = response.invite as TLRPC.TLChatInviteExported
 
 				fixDate(edited)
 
@@ -1663,7 +1660,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 			}
 		}
 
-		override fun onLinkRemoved(removedInvite: TL_chatInviteExported?) {
+		override fun onLinkRemoved(removedInvite: TLRPC.TLChatInviteExported?) {
 			for (i in revokedInvites.indices) {
 				if (revokedInvites[i].link == removedInvite?.link) {
 					val callback = saveListState()
@@ -1674,7 +1671,7 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 			}
 		}
 
-		override fun revokeLink(inviteFinal: TL_chatInviteExported?) {
+		override fun revokeLink(inviteFinal: TLRPC.TLChatInviteExported?) {
 			this@ManageLinksActivity.revokeLink(inviteFinal)
 		}
 	}
@@ -1704,8 +1701,8 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		var oldAdminsEndRow = 0
 		var oldPositionToItem = SparseIntArray()
 		var newPositionToItem = SparseIntArray()
-		var oldLinks = mutableListOf<TL_chatInviteExported>()
-		var oldRevokedLinks = mutableListOf<TL_chatInviteExported>()
+		var oldLinks = mutableListOf<TLRPC.TLChatInviteExported>()
+		var oldRevokedLinks = mutableListOf<TLRPC.TLChatInviteExported>()
 
 		override fun getOldListSize(): Int {
 			return oldRowCount
@@ -1802,12 +1799,12 @@ class ManageLinksActivity @JvmOverloads constructor(private val peerId: Long, ad
 		return callback
 	}
 
-	fun fixDate(edited: TL_chatInviteExported) {
-		if (edited.expire_date > 0) {
-			edited.expired = connectionsManager.currentTime >= edited.expire_date
+	fun fixDate(edited: TLRPC.TLChatInviteExported) {
+		if (edited.expireDate > 0) {
+			edited.expired = connectionsManager.currentTime >= edited.expireDate
 		}
-		else if (edited.usage_limit > 0) {
-			edited.expired = edited.usage >= edited.usage_limit
+		else if (edited.usageLimit > 0) {
+			edited.expired = edited.usage >= edited.usageLimit
 		}
 	}
 

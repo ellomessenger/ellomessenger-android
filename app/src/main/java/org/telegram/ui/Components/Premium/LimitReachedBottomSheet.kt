@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Premium
 
@@ -34,14 +34,8 @@ import org.telegram.messenger.R
 import org.telegram.messenger.UserConfig.Companion.activatedAccountsCount
 import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.TLRPC.TL_channels_getAdminedPublicChannels
-import org.telegram.tgnet.TLRPC.TL_channels_getInactiveChannels
-import org.telegram.tgnet.TLRPC.TL_channels_updateUsername
-import org.telegram.tgnet.TLRPC.TL_dialogFolder
-import org.telegram.tgnet.TLRPC.TL_messages_chats
-import org.telegram.tgnet.TLRPC.TL_messages_inactiveChats
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
@@ -481,7 +475,7 @@ class LimitReachedBottomSheet(parentFragment: BaseFragment?, private val type: I
 				val dialogs = MessagesController.getInstance(currentAccount).getDialogs(0)
 
 				for (dialog in dialogs) {
-					if (dialog is TL_dialogFolder) {
+					if (dialog is TLRPC.TLDialogFolder) {
 						continue
 					}
 
@@ -585,14 +579,14 @@ class LimitReachedBottomSheet(parentFragment: BaseFragment?, private val type: I
 
 		updateRows()
 
-		val req = TL_channels_getAdminedPublicChannels()
+		val req = TLRPC.TLChannelsGetAdminedPublicChannels()
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
 				loadingAdministeredChannels = false
 
 				if (response != null) {
-					val res = response as TL_messages_chats
+					val res = response as TLRPC.TLMessagesChats
 
 					chats.clear()
 					chats.addAll(res.chats)
@@ -687,14 +681,14 @@ class LimitReachedBottomSheet(parentFragment: BaseFragment?, private val type: I
 			dismiss()
 
 			for (i in channels.indices) {
-				val req1 = TL_channels_updateUsername()
+				val req1 = TLRPC.TLChannelsUpdateUsername()
 				val channel = channels[i]
 
 				req1.channel = MessagesController.getInputChannel(channel)
 				req1.username = ""
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req1, { response1, _ ->
-					if (response1 is TL_boolTrue) {
+					if (response1 is TLRPC.TLBoolTrue) {
 						AndroidUtilities.runOnUIThread(onSuccessRunnable)
 					}
 				}, ConnectionsManager.RequestFlagInvokeAfter)
@@ -713,10 +707,10 @@ class LimitReachedBottomSheet(parentFragment: BaseFragment?, private val type: I
 
 		updateRows()
 
-		val inactiveChannelsRequest = TL_channels_getInactiveChannels()
+		val inactiveChannelsRequest = TLRPC.TLChannelsGetInactiveChannels()
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(inactiveChannelsRequest) { response, _ ->
-			val chats = response as? TL_messages_inactiveChats
+			val chats = response as? TLRPC.TLMessagesInactiveChats
 			val signatures = mutableListOf<String>()
 
 			chats?.chats?.forEachIndexed { index, chat ->
@@ -735,14 +729,14 @@ class LimitReachedBottomSheet(parentFragment: BaseFragment?, private val type: I
 				}
 
 				if (isMegagroup(chat)) {
-					val members = LocaleController.formatPluralString("Members", chat.participants_count)
+					val members = LocaleController.formatPluralString("Members", chat.participantsCount)
 					signatures.add(LocaleController.formatString("InactiveChatSignature", R.string.InactiveChatSignature, members, dateFormat))
 				}
 				else if (isChannel(chat)) {
 					signatures.add(LocaleController.formatString("InactiveChannelSignature", R.string.InactiveChannelSignature, dateFormat))
 				}
 				else {
-					val members = LocaleController.formatPluralString("Members", chat.participants_count)
+					val members = LocaleController.formatPluralString("Members", chat.participantsCount)
 					signatures.add(LocaleController.formatString("InactiveChatSignature", R.string.InactiveChatSignature, members, dateFormat))
 				}
 			}

@@ -209,7 +209,7 @@ public class InviteContactsActivity extends BaseFragment implements View.OnClick
 
 		public void addSpan(final GroupCreateSpan span) {
 			allSpans.add(span);
-			selectedContacts.put(span.getKey(), span);
+			selectedContacts.put(span.key, span);
 
 			editText.setHintVisible(false);
 			if (currentAnimation != null) {
@@ -238,7 +238,7 @@ public class InviteContactsActivity extends BaseFragment implements View.OnClick
 
 		public void removeSpan(final GroupCreateSpan span) {
 			ignoreScrollEvent = true;
-			selectedContacts.remove(span.getKey());
+			selectedContacts.remove(span.key);
 			allSpans.remove(span);
 			span.setOnClickListener(null);
 

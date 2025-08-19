@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -15,7 +15,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.os.Build;
 import android.text.Editable;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -33,9 +32,8 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.ConnectionsManager;
-import org.telegram.tgnet.tlrpc.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
@@ -43,9 +41,7 @@ import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ChatActivity;
-import org.telegram.ui.PaymentFormActivity;
 
-import java.util.Locale;
 import java.util.Objects;
 
 import androidx.annotation.NonNull;
@@ -72,50 +68,38 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 	private final BotWebViewContainer.Delegate webViewDelegate;
 	private ValueAnimator webViewScrollAnimator;
 	private boolean ignoreMeasure;
-
 	private final Paint dimPaint = new Paint();
 	private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final Paint actionBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 	private final Paint linePaint = new Paint();
-
 	private final ChatActivityEnterView parentEnterView;
 	private boolean botWebViewButtonWasVisible;
 	private SpringAnimation botWebViewButtonAnimator;
-
-	private long lastSwipeTime;
-
 	private int currentAccount;
 	private long botId;
 	private String botUrl;
-
 	private boolean isLoaded;
 	private boolean dismissed;
-
 	private Boolean wasLightStatusBar;
 	private long queryId;
-
 	private final ActionBarMenuItem botMenuItem;
 	private final ActionBar.ActionBarMenuOnItemClick actionBarOnItemClick;
 	private ActionBarMenuSubItem settingsItem;
-
 	private Editable savedEditText;
 	private MessageObject savedReplyMessageObject;
 	private MessageObject savedEditMessageObject;
-
 	private Runnable globalOnDismissListener;
-
 	private float overrideActionBarBackgroundProgress;
 	private int overrideActionBarBackground;
 	private boolean overrideBackgroundColor;
-
 	private boolean needCloseConfirmation;
 
 	private final Runnable pollRunnable = () -> {
 		if (!dismissed) {
-			TLRPC.TL_messages_prolongWebView prolongWebView = new TLRPC.TL_messages_prolongWebView();
+			var prolongWebView = new TLRPC.TLMessagesProlongWebView();
 			prolongWebView.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
 			prolongWebView.peer = MessagesController.getInstance(currentAccount).getInputPeer(botId);
-			prolongWebView.query_id = queryId;
+			prolongWebView.queryId = queryId;
 
 			ConnectionsManager.getInstance(currentAccount).sendRequest(prolongWebView, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 				if (dismissed) {
@@ -201,25 +185,6 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 					return;
 				}
 				swipeContainer.stickTo(-swipeContainer.getOffsetY() + swipeContainer.getTopActionBarOffsetY());
-			}
-
-			@Override
-			public void onWebAppOpenInvoice(String slug, TLObject response) {
-				ChatActivity parentFragment = parentEnterView.getParentFragment();
-				PaymentFormActivity paymentFormActivity = null;
-				if (response instanceof TLRPC.TL_payments_paymentForm) {
-					TLRPC.TL_payments_paymentForm form = (TLRPC.TL_payments_paymentForm)response;
-					MessagesController.getInstance(currentAccount).putUsers(form.users, false);
-					paymentFormActivity = new PaymentFormActivity(form, slug, parentFragment);
-				}
-				else if (response instanceof TLRPC.TL_payments_paymentReceipt) {
-					paymentFormActivity = new PaymentFormActivity((TLRPC.TL_payments_paymentReceipt)response);
-				}
-
-				if (paymentFormActivity != null) {
-					paymentFormActivity.setPaymentFormCallback(status -> webViewContainer.onInvoiceStatusUpdate(slug, status.name().toLowerCase(Locale.ROOT)));
-					parentFragment.presentFragment(paymentFormActivity);
-				}
 			}
 
 			@Override
@@ -314,7 +279,6 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 					}
 				}
 			}
-			lastSwipeTime = System.currentTimeMillis();
 		});
 		swipeContainer.setScrollEndListener(() -> webViewContainer.invalidateViewPortHeight(true));
 		swipeContainer.addView(webViewContainer);
@@ -390,7 +354,7 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 			String botName = null;
 			User user = MessagesController.getInstance(currentAccount).getUser(botId);
 			if (user != null) {
-				botName = ContactsController.formatName(user.getFirst_name(), user.getLast_name());
+				botName = ContactsController.formatName(user.firstName, user.lastName);
 			}
 			AlertDialog dialog = new AlertDialog.Builder(getContext()).setTitle(botName).setMessage(LocaleController.getString(R.string.BotWebViewChangesMayNotBeSaved)).setPositiveButton(LocaleController.getString(R.string.BotWebViewCloseAnyway), (dialog2, which) -> dismiss()).setNegativeButton(LocaleController.getString(R.string.Cancel), null).create();
 			dialog.show();
@@ -573,20 +537,18 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 		}
 		wasLightStatusBar = lightStatusBar;
 
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-			int flags = getSystemUiVisibility();
-			if (lightStatusBar) {
-				flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-			}
-			else {
-				flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-			}
-			setSystemUiVisibility(flags);
+		int flags = getSystemUiVisibility();
+		if (lightStatusBar) {
+			flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
 		}
+		else {
+			flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+		}
+		setSystemUiVisibility(flags);
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		super.onDraw(canvas);
 
 		if (!overrideBackgroundColor) {
@@ -617,7 +579,7 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 	}
 
 	@Override
-	public void draw(Canvas canvas) {
+	public void draw(@NonNull Canvas canvas) {
 		super.draw(canvas);
 
 		linePaint.setColor(getColor(Theme.key_sheet_scrollUp));
@@ -682,7 +644,7 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 		webViewContainer.setBotUser(MessagesController.getInstance(currentAccount).getUser(botId));
 		webViewContainer.loadFlickerAndSettingsItem(currentAccount, botId, settingsItem);
 
-		TLRPC.TL_messages_requestWebView req = new TLRPC.TL_messages_requestWebView();
+		var req = new TLRPC.TLMessagesRequestWebView();
 		req.bot = MessagesController.getInstance(currentAccount).getInputUser(botId);
 		req.peer = MessagesController.getInstance(currentAccount).getInputPeer(botId);
 		req.platform = "android";
@@ -700,21 +662,19 @@ public class BotWebViewMenuContainer extends FrameLayout implements Notification
 			jsonObject.put("button_color", getColor(Theme.key_featuredStickers_addButton));
 			jsonObject.put("button_text_color", getColor(Theme.key_featuredStickers_buttonText));
 
-			req.theme_params = new TLRPC.TL_dataJSON();
-			req.theme_params.data = jsonObject.toString();
+			req.themeParams = new TLRPC.TLDataJSON();
+			req.themeParams.data = jsonObject.toString();
 			req.flags |= 4;
 		}
 		catch (Exception e) {
 			FileLog.e(e);
 		}
-		req.from_bot_menu = true;
+		req.fromBotMenu = true;
 
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-			if (response instanceof TLRPC.TL_webViewResultUrl) {
+			if (response instanceof TLRPC.TLWebViewResult resultUrl) {
 				isLoaded = true;
-
-				TLRPC.TL_webViewResultUrl resultUrl = (TLRPC.TL_webViewResultUrl)response;
-				queryId = resultUrl.query_id;
+				queryId = resultUrl.queryId;
 				webViewContainer.loadUrl(currentAccount, resultUrl.url);
 				swipeContainer.setWebView(webViewContainer.getWebView());
 

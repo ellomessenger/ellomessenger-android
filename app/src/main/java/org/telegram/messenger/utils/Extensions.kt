@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2022-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.messenger.utils
 
@@ -35,11 +35,14 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.DimenRes
+import androidx.annotation.DrawableRes
 import androidx.annotation.MenuRes
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toDrawable
 import androidx.core.text.buildSpannedString
 import androidx.core.view.children
 import androidx.recyclerview.widget.RecyclerView
@@ -64,8 +67,12 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ConnectionsManager.ResolveHostByNameSync
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.action
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.userId
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.text.DateFormat
@@ -203,19 +210,19 @@ fun Int.largeAmountToString(context: Context): String {
 	val billions = this / 1000000000.0
 
 	if (billions > 0) {
-		return String.format("%.1f", billions) + context.getString(R.string.billions)
+		return String.format(Locale.getDefault(), "%.1f", billions) + context.getString(R.string.billions)
 	}
 
 	val millions = this / 1000000.0
 
 	if (millions > 0) {
-		return String.format("%.1f", millions) + context.getString(R.string.millions)
+		return String.format(Locale.getDefault(), "%.1f", millions) + context.getString(R.string.millions)
 	}
 
 	val thousands = this / 1000.0
 
 	if (thousands > 0) {
-		return String.format("%.1f", thousands) + context.getString(R.string.thousands)
+		return String.format(Locale.getDefault(), "%.1f", thousands) + context.getString(R.string.thousands)
 	}
 
 	return this.toString()
@@ -242,34 +249,52 @@ fun Context.vibrate(duration: Long = 200) {
 	}
 }
 
-fun Message.getChannel(): TLRPC.TL_channel? {
-	if (peer_id?.channel_id == 0L || peer_id?.channel_id == null) {
+fun Message.getChannel(): TLRPC.TLChannel? {
+	val channelId = peerId.channelId
+
+	if (channelId == 0L) {
 		return null
 	}
 
-	return MessagesController.getInstance(UserConfig.selectedAccount).getChat(peer_id?.channel_id) as? TLRPC.TL_channel
+	return MessagesController.getInstance(UserConfig.selectedAccount).getChat(channelId) as? TLRPC.TLChannel
 }
 
 fun Message.getChat(): TLRPC.Chat? {
-	if (peer_id?.channel_id != null && peer_id?.channel_id != 0L) {
-		return MessagesController.getInstance(UserConfig.selectedAccount).getChat(peer_id?.channel_id)
+	val channelId = peerId.channelId
+
+	if (channelId != 0L) {
+		return MessagesController.getInstance(UserConfig.selectedAccount).getChat(channelId)
 	}
 
-	if (peer_id?.chat_id != null && peer_id?.chat_id != 0L) {
-		return MessagesController.getInstance(UserConfig.selectedAccount).getChat(peer_id?.chat_id)
+	val chatId = peerId.chatId
+
+	if (chatId != 0L) {
+		return MessagesController.getInstance(UserConfig.selectedAccount).getChat(chatId)
 	}
 
 	return null
 }
 
 fun Message.getUser(): User? {
-	val userId = peer_id?.user_id ?: return null
+	val userId = peerId?.userId
 
 	if (userId != 0L) {
 		return MessagesController.getInstance(UserConfig.selectedAccount).getUser(userId)
 	}
 
 	return null
+}
+
+@DrawableRes
+fun Resources.getDrawableResourceByName(name: String): Int {
+	return try {
+		val resId = getIdentifier(name, "drawable", ApplicationLoader.applicationContext.packageName)
+		if (resId != 0) resId else -1
+	}
+	catch (e: Exception) {
+		FileLog.e(e)
+		-1
+	}
 }
 
 /**
@@ -342,7 +367,7 @@ fun String.getHostByNameSync(): String {
 			val resolvedDomain = ConnectionsManager.dnsCache[this@getHostByNameSync]
 
 			if (resolvedDomain != null && SystemClock.elapsedRealtime() - resolvedDomain.ttl < 5 * 60 * 1000) {
-				continuation.resume(resolvedDomain.address ?: "")
+				continuation.resume(resolvedDomain.address)
 				return@suspendCoroutine
 			}
 			else {
@@ -475,7 +500,7 @@ fun combineDrawables(height: Int, drawables: List<Drawable>, rightMargin: Int = 
 @JvmOverloads
 fun createCombinedChatPropertiesDrawable(chat: TLRPC.Chat?, context: Context, height: Float = 16f): Drawable? {
 	val drawAdult = chat?.adult == true
-	val drawCourse = ChatObject.isOnlineCourse(chat)
+	val drawCourse = ChatObject.isMasterclass(chat)
 	val drawPaid = ChatObject.isSubscriptionChannel(chat) || ChatObject.isPaidChannel(chat)
 	val drawPrivate = chat != null && chat.username.isNullOrEmpty()
 
@@ -534,7 +559,7 @@ fun String.fillElloCoinLogos(topIconPadding: Int = 0, size: Float = 12f, tintCol
 		val padding = AndroidUtilities.dp(1f)
 		val paddedBitmap = addPaddingToBitmap(bitmapDrawable.bitmap, padding)
 
-		val paddedDrawable = BitmapDrawable(ApplicationLoader.applicationContext.resources, paddedBitmap)
+		val paddedDrawable = paddedBitmap.toDrawable(ApplicationLoader.applicationContext.resources)
 		paddedDrawable.colorFilter = PorterDuffColorFilter(tintColor, PorterDuff.Mode.SRC_IN)
 		paddedDrawable.setBounds(0, topIconPadding, paddedBitmap.width, paddedBitmap.height)
 
@@ -552,15 +577,15 @@ fun String.fillElloCoinLogos(topIconPadding: Int = 0, size: Float = 12f, tintCol
 }
 
 fun Drawable.toBitmapDrawable(width: Int = this.intrinsicWidth, height: Int = this.intrinsicHeight): BitmapDrawable {
-	val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+	val bitmap = createBitmap(width, height)
 	val canvas = Canvas(bitmap)
 	this.setBounds(0, 0, canvas.width, canvas.height)
 	this.draw(canvas)
-	return BitmapDrawable(ApplicationLoader.applicationContext.resources, bitmap)
+	return bitmap.toDrawable(ApplicationLoader.applicationContext.resources)
 }
 
 fun addPaddingToBitmap(bitmap: Bitmap, padding: Int): Bitmap {
-	val paddedBitmap = Bitmap.createBitmap(bitmap.width + 2 * padding, bitmap.height + 2 * padding, Bitmap.Config.ARGB_8888)
+	val paddedBitmap = createBitmap(bitmap.width + 2 * padding, bitmap.height + 2 * padding)
 	val canvas = Canvas(paddedBitmap)
 	canvas.drawBitmap(bitmap, padding.toFloat(), padding.toFloat(), null)
 	return paddedBitmap
@@ -614,4 +639,13 @@ fun ByteArray.toHexString(): String {
 	}
 
 	return result.toString()
+}
+
+fun Int?.formatCount(): String {
+	return when {
+		this == null -> "0"
+		this >= 1000000 -> "${this / 1000000}m"
+		this >= 1000 -> "${this / 1000}k"
+		else -> this.toString()
+	}
 }

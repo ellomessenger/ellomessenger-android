@@ -46,7 +46,6 @@
 		android:required="false" />
 
 	<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-	<uses-permission android:name="android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS" />
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 	<uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -61,7 +60,6 @@
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 	<uses-permission android:name="android.permission.USE_FINGERPRINT" />
 	<uses-permission android:name="android.permission.USE_BIOMETRIC" />
-	<uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
 	<uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
 	<uses-permission android:name="com.android.launcher.permission.UNINSTALL_SHORTCUT" />
 	<uses-permission android:name="android.permission.CAMERA" />
@@ -85,7 +83,8 @@
 	<uses-permission android:name="me.everything.badger.permission.BADGE_COUNT_WRITE" />
 	<uses-permission android:name="com.android.vending.BILLING" />
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-	<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+<!--	<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />-->
+<!--	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>-->
 	<uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
 	<uses-permission android:name="com.beint.elloapp.permission.MAPS_RECEIVE" />
 	<uses-permission android:name="com.google.android.providers.gsf.permission.READ_GSERVICES" />
@@ -98,7 +97,6 @@
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
-	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
 
 	<permission
 		android:name="com.beint.elloapp.permission.MAPS_RECEIVE"
@@ -248,8 +246,8 @@
 			<intent-filter>
 				<action android:name="android.intent.action.VIEW"/>
 				<category android:name="android.intent.category.DEFAULT"/>
-				<data android:mimeType="vnd.android.cursor.item/vnd.org.telegram.messenger.android.call"/>
-				<data android:mimeType="vnd.android.cursor.item/vnd.org.telegram.messenger.android.call.video"/>
+<!--				<data android:mimeType="vnd.android.cursor.item/vnd.org.telegram.messenger.android.call"/>-->
+<!--				<data android:mimeType="vnd.android.cursor.item/vnd.org.telegram.messenger.android.call.video"/>-->
 			</intent-filter>
 		</activity-alias>
 
@@ -423,8 +421,8 @@
 		<service
 			android:name=".LocationSharingService"
 			android:enabled="true"
-			android:exported="true"
-			android:foregroundServiceType="location" />
+			android:exported="true"/>
+<!--			android:foregroundServiceType="location" />-->
 		<service
 			android:name=".voip.VoIPService"
 			android:enabled="true"

@@ -35,8 +35,8 @@ class AccountInstance(@JvmField val currentAccount: Int) {
 		get() = DownloadController.getInstance(currentAccount)
 	val sendMessagesHelper: SendMessagesHelper
 		get() = SendMessagesHelper.getInstance(currentAccount)
-	val secretChatHelper: SecretChatHelper
-		get() = SecretChatHelper.getInstance(currentAccount)
+//	val secretChatHelper: SecretChatHelper
+//		get() = SecretChatHelper.getInstance(currentAccount)
 	val statsController: StatsController
 		get() = StatsController.getInstance(currentAccount)
 	val fileLoader: FileLoader

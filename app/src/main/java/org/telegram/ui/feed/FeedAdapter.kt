@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -22,10 +22,16 @@ import org.telegram.messenger.utils.getChannel
 import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.Message
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.groupedId
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.RLottieImageView
 
+/* Yes, I know what I am doing.
+   We need to update the whole list because of the way we are displaying messages:
+   we do not want to use animation and we need to show "New messages" button
+   when new messages are added to the top of the list */
+@SuppressLint("NotifyDataSetChanged")
 class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 	private val currentAccount = UserConfig.selectedAccount
 	private var isLastPage = true
@@ -40,7 +46,6 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 	 * @param feed list of messages
 	 * @return number of newly added messages
 	 */
-	@SuppressLint("NotifyDataSetChanged")
 	fun setFeed(feed: List<Message?>?, append: Boolean, isLastPage: Boolean): List<List<MessageObject>> {
 		this.isLastPage = isLastPage
 
@@ -53,7 +58,7 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 		}
 
 		feed?.asSequence()?.filterNot {
-			it is TLRPC.TL_messageService
+			it is TLRPC.TLMessageService
 		}?.mapNotNull {
 			it?.let {
 				MessageObject(currentAccount, it, generateLayout = false, checkMediaExists = true)
@@ -65,7 +70,7 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 		val groupedFeed = completeFeed.distinctBy {
 			it.messageOwner?.id ?: 0
 		}.groupBy {
-			it.messageOwner?.groupId ?: 0L
+			it.messageOwner?.groupedId ?: 0L
 		}
 
 		val flatFeed = mutableListOf<List<MessageObject>>()
@@ -96,7 +101,7 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 		for (newMessage in flatFeed) {
 			var sameOldMessage = this.feed?.firstOrNull { old ->
 				old.any {
-					it.messageOwner?.groupId != 0L && it.messageOwner?.groupId == newMessage.firstOrNull()?.messageOwner?.groupId
+					it.messageOwner?.groupedId != 0L && it.messageOwner?.groupedId == newMessage.firstOrNull()?.messageOwner?.groupedId
 				}
 			}
 
@@ -120,7 +125,7 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
 		for (oldMessage in this.feed.orEmpty()) {
 			var sameNewMessage = flatFeed.firstOrNull { new ->
-				new.any { it.messageOwner?.groupId == oldMessage.firstOrNull()?.messageOwner?.groupId }
+				new.any { it.messageOwner?.groupedId == oldMessage.firstOrNull()?.messageOwner?.groupedId }
 			}
 
 			if (sameNewMessage == null) {
@@ -138,13 +143,26 @@ class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
 		this.feed = flatFeed
 
-		/* Yes, I know what I am doing.
-		We need to update the whole list because of the way we are displaying messages:
-		we do not want to use animation and we need to show "New messages" button
-		when new messages are added to the top of the list */
 		notifyDataSetChanged()
 
 		return newMessages.toList()
+	}
+
+	fun updateMessages(messages: List<Message>) {
+		val updatedMessages = messages.map {
+			MessageObject(currentAccount, it, generateLayout = false, checkMediaExists = true)
+		}
+
+		val updatedFeed = feed?.map { messageList ->
+			messageList.map { message ->
+				val updatedMessage = updatedMessages.firstOrNull { it.messageOwner?.id == message.messageOwner?.id }
+				updatedMessage ?: message
+			}
+		}
+
+		feed = updatedFeed
+
+		notifyDataSetChanged()
 	}
 
 	override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {

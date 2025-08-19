@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -15,6 +15,9 @@ import android.text.TextUtils
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
+import androidx.annotation.ColorInt
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject.isChannel
 import org.telegram.messenger.LocaleController
@@ -26,10 +29,16 @@ import org.telegram.messenger.utils.gone
 import org.telegram.messenger.utils.invisible
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.FileLocation
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.botChatHistory
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.status
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.Components.AvatarDrawable
 import org.telegram.ui.Components.BackupImageView
@@ -38,13 +47,13 @@ import org.telegram.ui.Components.CheckBoxSquare
 import org.telegram.ui.Components.LayoutHelper
 
 class UserCell2(context: Context, padding: Int, checkbox: Int) : FrameLayout(context) {
-	private val avatarImageView: BackupImageView
+	private val avatarImageView = BackupImageView(context)
 	private val nameTextView: SimpleTextView
 	private val statusTextView: SimpleTextView
 	private val imageView: ImageView
 	private var checkBox: CheckBox? = null
 	private var checkBoxBig: CheckBoxSquare? = null
-	private val avatarDrawable: AvatarDrawable
+	private val avatarDrawable = AvatarDrawable()
 	private var currentObject: TLObject? = null
 	private var currentName: CharSequence? = null
 	private var currentStatus: CharSequence? = null
@@ -53,16 +62,14 @@ class UserCell2(context: Context, padding: Int, checkbox: Int) : FrameLayout(con
 	private var lastStatus = 0
 	private var lastAvatar: FileLocation? = null
 	private val currentAccount = UserConfig.selectedAccount
-	private var statusColor: Int
-	private var statusOnlineColor: Int
+
+	@ColorInt
+	private var statusColor = context.getColor(R.color.dark_gray)
+
+	@ColorInt
+	private var statusOnlineColor = context.getColor(R.color.brand)
 
 	init {
-		statusColor = context.getColor(R.color.dark_gray)
-		statusOnlineColor = context.getColor(R.color.brand)
-
-		avatarDrawable = AvatarDrawable()
-
-		avatarImageView = BackupImageView(context)
 		avatarImageView.setRoundRadius(AndroidUtilities.dp(24f))
 
 		addView(avatarImageView, LayoutHelper.createFrame(48, 48f, (if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT) or Gravity.TOP, (if (LocaleController.isRTL) 0 else 7 + padding).toFloat(), 11f, (if (LocaleController.isRTL) 7 + padding else 0).toFloat(), 0f))
@@ -153,18 +160,18 @@ class UserCell2(context: Context, padding: Int, checkbox: Int) : FrameLayout(con
 
 		if (currentObject is User) {
 			currentUser = currentObject as? User
-			photo = currentUser?.photo?.photo_small
+			photo = currentUser?.photo?.photoSmall
 		}
 		else if (currentObject is Chat) {
 			currentChat = currentObject as? Chat
-			photo = currentChat?.photo?.photo_small
+			photo = currentChat?.photo?.photoSmall
 		}
 
 		if (mask != 0) {
 			var continueUpdate = false
 
 			if (mask and MessagesController.UPDATE_MASK_AVATAR != 0) {
-				if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar?.volume_id != photo.volume_id || lastAvatar?.local_id != photo.local_id)) {
+				if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar?.volumeId != photo.volumeId || lastAvatar?.localId != photo.localId)) {
 					continueUpdate = true
 				}
 			}
@@ -236,7 +243,7 @@ class UserCell2(context: Context, padding: Int, checkbox: Int) : FrameLayout(con
 			if (currentUser.bot) {
 				statusTextView.textColor = statusColor
 
-				if (currentUser.bot_chat_history) {
+				if (currentUser.botChatHistory) {
 					statusTextView.setText(context.getString(R.string.BotStatusRead))
 				}
 				else {
@@ -260,8 +267,8 @@ class UserCell2(context: Context, padding: Int, checkbox: Int) : FrameLayout(con
 			statusTextView.textColor = statusColor
 
 			if (isChannel(currentChat) && !currentChat.megagroup) {
-				if (currentChat.participants_count != 0) {
-					statusTextView.setText(LocaleController.formatPluralString("Subscribers", currentChat.participants_count))
+				if (currentChat.participantsCount != 0) {
+					statusTextView.setText(LocaleController.formatPluralString("Subscribers", currentChat.participantsCount))
 				}
 				else if (TextUtils.isEmpty(currentChat.username)) {
 					statusTextView.setText(context.getString(R.string.ChannelPrivate))
@@ -271,10 +278,10 @@ class UserCell2(context: Context, padding: Int, checkbox: Int) : FrameLayout(con
 				}
 			}
 			else {
-				if (currentChat.participants_count != 0) {
-					statusTextView.setText(LocaleController.formatPluralString("Members", currentChat.participants_count))
+				if (currentChat.participantsCount != 0) {
+					statusTextView.setText(LocaleController.formatPluralString("Members", currentChat.participantsCount))
 				}
-				else if (currentChat.has_geo) {
+				else if (currentChat.hasGeo) {
 					statusTextView.setText(context.getString(R.string.MegaLocation))
 				}
 				else if (TextUtils.isEmpty(currentChat.username)) {
@@ -291,7 +298,7 @@ class UserCell2(context: Context, padding: Int, checkbox: Int) : FrameLayout(con
 			avatarImageView.setImageDrawable(avatarDrawable)
 		}
 
-		if (imageView.visibility == VISIBLE && currentDrawable == 0 || imageView.visibility == GONE && currentDrawable != 0) {
+		if (imageView.isVisible && currentDrawable == 0 || imageView.isGone && currentDrawable != 0) {
 			imageView.visibility = if (currentDrawable == 0) GONE else VISIBLE
 			imageView.setImageResource(currentDrawable)
 		}

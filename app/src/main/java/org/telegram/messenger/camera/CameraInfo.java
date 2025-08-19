@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.messenger.camera;
 
 import android.hardware.Camera;
@@ -17,40 +17,39 @@ import android.hardware.camera2.CaptureRequest;
 import java.util.ArrayList;
 
 public class CameraInfo {
+	protected int cameraId;
+	protected Camera camera;
+	protected ArrayList<Size> pictureSizes = new ArrayList<>();
+	protected ArrayList<Size> previewSizes = new ArrayList<>();
+	protected final int frontCamera;
 
-    protected int cameraId;
-    protected Camera camera;
-    protected ArrayList<Size> pictureSizes = new ArrayList<>();
-    protected ArrayList<Size> previewSizes = new ArrayList<>();
-    protected final int frontCamera;
+	protected CameraDevice cameraDevice;
+	CameraCharacteristics cameraCharacteristics;
+	CaptureRequest.Builder captureRequestBuilder;
+	public CameraCaptureSession cameraCaptureSession;
 
-    protected CameraDevice cameraDevice;
-    CameraCharacteristics cameraCharacteristics;
-    CaptureRequest.Builder captureRequestBuilder;
-    public CameraCaptureSession cameraCaptureSession;
+	public CameraInfo(int id, int frontFace) {
+		cameraId = id;
+		frontCamera = frontFace;
+	}
 
-    public CameraInfo(int id, int frontFace) {
-        cameraId = id;
-        frontCamera = frontFace;
-    }
+	public int getCameraId() {
+		return cameraId;
+	}
 
-    public int getCameraId() {
-        return cameraId;
-    }
+	private Camera getCamera() {
+		return camera;
+	}
 
-    private Camera getCamera() {
-        return camera;
-    }
+	public ArrayList<Size> getPreviewSizes() {
+		return previewSizes;
+	}
 
-    public ArrayList<Size> getPreviewSizes() {
-        return previewSizes;
-    }
+	public ArrayList<Size> getPictureSizes() {
+		return pictureSizes;
+	}
 
-    public ArrayList<Size> getPictureSizes() {
-        return pictureSizes;
-    }
-
-    public boolean isFrontface() {
-        return frontCamera != 0;
-    }
+	public boolean isFrontface() {
+		return frontCamera != 0;
+	}
 }

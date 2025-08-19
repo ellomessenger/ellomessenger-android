@@ -5,7 +5,6 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 
 class LatinLettersFilter : InputFilter {
-
 	override fun filter(source: CharSequence, start: Int, end: Int, dest: Spanned, dstart: Int, dend: Int): CharSequence? {
 		var modification: SpannableStringBuilder? = null
 		var modoff = 0
@@ -33,5 +32,4 @@ class LatinLettersFilter : InputFilter {
 	private fun isLatinLetter(c: Char): Boolean {
 		return (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '@' || c == '.' || c == '_' || c == '-' || c == '+')
 	}
-
 }

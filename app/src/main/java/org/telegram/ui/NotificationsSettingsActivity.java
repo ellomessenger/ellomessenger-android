@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui;
 
@@ -16,7 +16,6 @@ import android.content.SharedPreferences;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
-import android.os.Build;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.LongSparseArray;
@@ -42,7 +41,8 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -164,12 +164,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 		inappVibrateRow = rowCount++;
 		inappPreviewRow = rowCount++;
 		inchatSoundRow = rowCount++;
-		if (Build.VERSION.SDK_INT >= 21) {
-			inappPriorityRow = rowCount++;
-		}
-		else {
-			inappPriorityRow = -1;
-		}
+		inappPriorityRow = rowCount++;
 		callsSection2Row = rowCount++;
 
 		eventsSectionRow = rowCount++;
@@ -236,12 +231,12 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 								waitingForLoadExceptions.put(did, exception);
 							}
 							else {
-								User user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.user_id);
+								User user = MessagesController.getInstance(currentAccount).getUser(encryptedChat.userId);
 								if (user == null) {
-									usersToLoad.add(encryptedChat.user_id);
-									waitingForLoadExceptions.put(encryptedChat.user_id, exception);
+									usersToLoad.add(encryptedChat.userId);
+									waitingForLoadExceptions.put(encryptedChat.userId, exception);
 								}
-								else if (user.deleted) {
+								else if (TLRPCExtensions.getDeleted(user)) {
 									continue;
 								}
 							}
@@ -253,7 +248,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 								usersToLoad.add(did);
 								waitingForLoadExceptions.put(did, exception);
 							}
-							else if (user.deleted) {
+							else if (TLRPCExtensions.getDeleted(user)) {
 								continue;
 							}
 							usersResult.add(exception);
@@ -265,7 +260,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 								waitingForLoadExceptions.put(did, exception);
 								continue;
 							}
-							else if (chat.left || chat.kicked || chat.migrated_to != null) {
+							else if (chat.left || TLRPCExtensions.getMigratedTo(chat) != null) {
 								continue;
 							}
 							if (ChatObject.isChannel(chat) && !chat.megagroup) {
@@ -295,7 +290,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 				}
 				for (int a = 0, size = chats.size(); a < size; a++) {
 					TLRPC.Chat chat = chats.get(a);
-					if (chat.left || chat.kicked || chat.migrated_to != null) {
+					if (chat.left || TLRPCExtensions.getMigratedTo(chat) != null) {
 						continue;
 					}
 					NotificationException exception = waitingForLoadExceptions.get(-chat.id);
@@ -312,7 +307,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 				}
 				for (int a = 0, size = users.size(); a < size; a++) {
 					User user = users.get(a);
-					if (user.deleted) {
+					if (TLRPCExtensions.getDeleted(user)) {
 						continue;
 					}
 					waitingForLoadExceptions.remove(user.id);
@@ -471,7 +466,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 							return;
 						}
 						reseting = true;
-						TLRPC.TL_account_resetNotifySettings req = new TLRPC.TL_account_resetNotifySettings();
+						var req = new TLRPC.TLAccountResetNotifySettings();
 						ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 							getMessagesController().enableJoined = true;
 							reseting = false;
@@ -540,11 +535,9 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 					MessagesController.getInstance(currentAccount).enableJoined = !enabled;
 					editor.putBoolean("EnableContactJoined", !enabled);
 					editor.commit();
-					TLRPC.TL_account_setContactSignUpNotification req = new TLRPC.TL_account_setContactSignUpNotification();
+					var req = new TLRPC.TLAccountSetContactSignUpNotification();
 					req.silent = enabled;
-					ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
-
-					});
+					ConnectionsManager.getInstance(currentAccount).sendRequest(req);
 				}
 				else if (position == pinnedMessageRow) {
 					SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
@@ -594,12 +587,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 					SharedPreferences.Editor editor = preferences.edit();
 					editor.putBoolean("pushConnection", !enabled);
 					editor.commit();
-					if (!enabled) {
-						ConnectionsManager.getInstance(currentAccount).setPushConnectionEnabled(true);
-					}
-					else {
-						ConnectionsManager.getInstance(currentAccount).setPushConnectionEnabled(false);
-					}
+					ConnectionsManager.getInstance(currentAccount).setPushConnectionEnabled(!enabled);
 				}
 				else if (position == accountsAllRow) {
 					SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
@@ -780,7 +768,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 
 	private class ListAdapter extends RecyclerListView.SelectionAdapter {
 
-		private Context mContext;
+		private final Context mContext;
 
 		public ListAdapter(Context context) {
 			mContext = context;
@@ -797,8 +785,9 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 			return rowCount;
 		}
 
+		@NonNull
 		@Override
-		public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+		public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 			View view;
 			switch (viewType) {
 				case 0:

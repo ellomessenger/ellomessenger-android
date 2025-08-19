@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -48,6 +48,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.messageobject.MessageObject;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.ActionBarPopupWindow;
 import org.telegram.ui.ActionBar.FloatingActionMode;
 import org.telegram.ui.ActionBar.FloatingToolbar;
@@ -1660,7 +1661,7 @@ public abstract class TextSelectionHelper<Cell extends TextSelectionHelper.Selec
 			boolean idChanged = oldView == null || (oldView.getMessageObject() != null && oldView.getMessageObject().getId() != newView.getMessageObject().getId());
 			selectedCellId = newView.getMessageObject().getId();
 			try {
-				selectedCellEditDate = newView.getMessageObject().messageOwner.edit_date;
+				selectedCellEditDate = TLRPCExtensions.getEditDate(newView.getMessageObject().messageOwner);
 			}
 			catch (Exception e) {
 				selectedCellEditDate = null;
@@ -1991,7 +1992,7 @@ public abstract class TextSelectionHelper<Cell extends TextSelectionHelper.Selec
 		public void checkDataChanged(MessageObject messageObject) {
 			Integer currentEditDate = null;
 			try {
-				currentEditDate = messageObject.messageOwner.edit_date;
+				currentEditDate = TLRPCExtensions.getEditDate(messageObject.messageOwner);
 			}
 			catch (Exception ignore) {
 			}

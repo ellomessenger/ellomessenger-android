@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -13,7 +13,6 @@ import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.transition.ChangeBounds;
@@ -41,6 +40,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CheckBox2;
@@ -71,24 +71,17 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 	private final CheckBox2 checkBox;
 	public TextView rightDateTextView;
 	private TextView captionTextView;
-
 	private boolean drawDownloadIcon = true;
-
 	private boolean needDivider;
-
 	private final int currentAccount = UserConfig.selectedAccount;
 	private final int TAG;
-
 	private MessageObject message;
 	private boolean loading;
 	private boolean loaded;
-
 	private final int viewType;
-
 	public final static int VIEW_TYPE_DEFAULT = 0;
 	public final static int VIEW_TYPE_PICKER = 1;
 	public final static int VIEW_TYPE_GLOBAL_SEARCH = 2;
-
 	private SpannableStringBuilder dotSpan;
 	private CharSequence caption;
 	private final RLottieDrawable statusDrawable;
@@ -402,26 +395,27 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 			downloadedSize = 0;
 		}
 
-		TLRPC.Document document = messageObject.getDocument();
-		if (document != null) {
+		TLRPC.Document doc = messageObject.getDocument();
+		if (doc instanceof TLRPC.TLDocument document) {
 			int idx;
 			String name = null;
 			if (messageObject.isMusic()) {
 				for (int a = 0; a < document.attributes.size(); a++) {
 					TLRPC.DocumentAttribute attribute = document.attributes.get(a);
-					if (attribute instanceof TLRPC.TL_documentAttributeAudio) {
-						if (attribute.performer != null && attribute.performer.length() != 0 || attribute.title != null && attribute.title.length() != 0) {
+
+					if (attribute instanceof TLRPC.TLDocumentAttributeAudio attr) {
+						if (attr.performer != null && !attr.performer.isEmpty() || attr.title != null && !attr.title.isEmpty()) {
 							name = messageObject.getMusicAuthor() + " - " + messageObject.getMusicTitle();
 						}
 					}
 				}
 			}
 			String fileName = null;
-			if (!messageObject.isVideo() && !(messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaPhoto) && !MessageObject.isGifDocument(document)) {
+			if (!messageObject.isVideo() && !(TLRPCExtensions.getMedia(messageObject.messageOwner) instanceof TLRPC.TLMessageMediaPhoto) && !MessageObject.isGifDocument(document)) {
 				fileName = FileLoader.getDocumentFileName(document);
 			}
-			if (TextUtils.isEmpty(fileName) && document.mime_type != null) {
-				if (document.mime_type.startsWith("video")) {
+			if (TextUtils.isEmpty(fileName) && document.mimeType != null) {
+				if (document.mimeType.startsWith("video")) {
 					if (MessageObject.isGifDocument(document)) {
 						fileName = LocaleController.getString("AttachGif", R.string.AttachGif);
 					}
@@ -429,7 +423,7 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 						fileName = LocaleController.getString("AttachVideo", R.string.AttachVideo);
 					}
 				}
-				else if (document.mime_type.startsWith("image")) {
+				else if (document.mimeType.startsWith("image")) {
 					if (MessageObject.isGifDocument(document)) {
 						fileName = LocaleController.getString("AttachGif", R.string.AttachGif);
 					}
@@ -437,7 +431,7 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 						fileName = LocaleController.getString("AttachPhoto", R.string.AttachPhoto);
 					}
 				}
-				else if (document.mime_type.startsWith("audio")) {
+				else if (document.mimeType.startsWith("audio")) {
 					fileName = LocaleController.getString("AttachAudio", R.string.AttachAudio);
 				}
 				else {
@@ -457,14 +451,14 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 
 			placeholderImageView.setVisibility(VISIBLE);
 			extTextView.setVisibility(VISIBLE);
-			placeholderImageView.setImageResource(AndroidUtilities.getThumbForNameOrMime(fileName, document.mime_type, false));
+			placeholderImageView.setImageResource(AndroidUtilities.getThumbForNameOrMime(fileName, document.mimeType, false));
 			extTextView.setText((idx = fileName.lastIndexOf('.')) == -1 ? "" : fileName.substring(idx + 1).toLowerCase());
 			TLRPC.PhotoSize bigthumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 320);
 			TLRPC.PhotoSize thumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 40);
 			if (thumb == bigthumb) {
 				bigthumb = null;
 			}
-			if (thumb instanceof TLRPC.TL_photoSizeEmpty || thumb == null) {
+			if (thumb instanceof TLRPC.TLPhotoSizeEmpty || thumb == null) {
 				thumbImageView.setVisibility(INVISIBLE);
 				thumbImageView.setImageBitmap(null);
 				extTextView.setAlpha(1.0f);
@@ -484,8 +478,8 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 			}
 			updateDateView();
 
-			if (messageObject.hasHighlightedWords() && !TextUtils.isEmpty(message.messageOwner.message)) {
-				String str = message.messageOwner.message.replace("\n", " ").replaceAll(" +", " ").trim();
+			if (messageObject.hasHighlightedWords() && !TextUtils.isEmpty(TLRPCExtensions.getMessage(message.messageOwner))) {
+				String str = TLRPCExtensions.getMessage(message.messageOwner).replace("\n", " ").replaceAll(" +", " ").trim();
 				caption = AndroidUtilities.highlightText(str, message.highlightedWords);
 				if (captionTextView != null) {
 					captionTextView.setVisibility(caption == null ? View.GONE : View.VISIBLE);
@@ -542,7 +536,7 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 	}
 
 	public void updateFileExistIcon(boolean animated) {
-		if (animated && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+		if (animated) {
 			TransitionSet transition = new TransitionSet();
 			ChangeBounds changeBounds = new ChangeBounds();
 			changeBounds.setDuration(150);
@@ -551,7 +545,7 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 			transition.setInterpolator(CubicBezierInterpolator.DEFAULT);
 			TransitionManager.beginDelayedTransition(this, transition);
 		}
-		if (message != null && message.messageOwner.media != null) {
+		if (message != null && TLRPCExtensions.getMedia(message.messageOwner) != null) {
 			loaded = false;
 			if (message.attachPathExists || message.mediaExists || !drawDownloadIcon) {
 				statusImageView.setVisibility(INVISIBLE);
@@ -730,7 +724,7 @@ public class SharedDocumentCell extends FrameLayout implements DownloadControlle
 	}
 
 	@Override
-	protected void dispatchDraw(Canvas canvas) {
+	protected void dispatchDraw(@NonNull Canvas canvas) {
 		if (enterAlpha != 1f && globalGradientView != null) {
 			canvas.saveLayerAlpha(0, 0, getMeasuredWidth(), getMeasuredHeight(), (int)((1f - enterAlpha) * 255), Canvas.ALL_SAVE_FLAG);
 			globalGradientView.setViewType(FlickerLoadingView.FILES_TYPE);

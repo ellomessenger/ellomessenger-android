@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -25,7 +25,8 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
@@ -34,6 +35,7 @@ import org.telegram.ui.Components.CounterView;
 import org.telegram.ui.Components.LayoutHelper;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.NonNull;
 
 public class HintDialogCell extends FrameLayout {
 	private final BackupImageView imageView;
@@ -108,10 +110,12 @@ public class HintDialogCell extends FrameLayout {
 		if (mask != 0 && (mask & MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE) == 0 && (mask & MessagesController.UPDATE_MASK_NEW_MESSAGE) == 0) {
 			return;
 		}
+
 		TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogs_dict.get(dialogId);
-		if (dialog != null && dialog.unread_count != 0) {
-			if (lastUnreadCount != dialog.unread_count) {
-				lastUnreadCount = dialog.unread_count;
+
+		if (dialog instanceof TLRPC.TLDialog tlDialog && tlDialog.unreadCount != 0) {
+			if (lastUnreadCount != tlDialog.unreadCount) {
+				lastUnreadCount = tlDialog.unreadCount;
 				counterView.setCount(lastUnreadCount, wasDraw);
 			}
 		}
@@ -183,10 +187,19 @@ public class HintDialogCell extends FrameLayout {
 	private int backgroundColor = getContext().getColor(R.color.background);
 
 	@Override
-	protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+	protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 		boolean result = super.drawChild(canvas, child, drawingTime);
+
 		if (child == imageView) {
-			boolean showOnline = currentUser != null && !currentUser.bot && (currentUser.status != null && currentUser.status.expires > ConnectionsManager.getInstance(currentAccount).getCurrentTime() || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(currentUser.id));
+			var bot = currentUser instanceof TLRPC.TLUser tlUser && tlUser.bot;
+			TLRPC.UserStatus status = null;
+
+			if (currentUser instanceof TLRPC.TLUser tlUser) {
+				status = tlUser.status;
+			}
+
+			boolean showOnline = currentUser != null && !bot && (status != null && TLRPCExtensions.getExpires(status) > ConnectionsManager.getInstance(currentAccount).getCurrentTime() || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(currentUser.id));
+
 			if (!wasDraw) {
 				showOnlineProgress = showOnline ? 1f : 0f;
 			}
@@ -221,7 +234,7 @@ public class HintDialogCell extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (drawCheckbox) {
 			int cx = imageView.getLeft() + imageView.getMeasuredWidth() / 2;
 			int cy = imageView.getTop() + imageView.getMeasuredHeight() / 2;

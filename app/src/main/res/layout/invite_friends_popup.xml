@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:layout_gravity="bottom"
+	android:backgroundTint="@android:color/transparent">
+
+	<View
+		android:layout_width="28dp"
+		android:layout_height="28dp"
+		android:layout_marginEnd="16dp"
+		android:background="@drawable/ic_button_cancel"
+		app:layout_constraintBottom_toTopOf="@+id/materialCardView2"
+		app:layout_constraintEnd_toEndOf="parent" />
+
+	<com.google.android.material.card.MaterialCardView
+		android:id="@+id/materialCardView2"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="30dp"
+		android:layout_marginBottom="30dp"
+		android:layout_marginEnd="26dp"
+		android:backgroundTint="@color/background"
+		app:cardCornerRadius="36dp"
+		android:layout_marginStart="100dp"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		app:strokeColor="@android:color/transparent">
+
+		<androidx.constraintlayout.widget.ConstraintLayout
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:orientation="horizontal"
+			android:padding="12dp">
+
+			<FrameLayout
+				android:id="@+id/invite"
+				android:layout_width="60dp"
+				android:layout_height="60dp"
+				android:layout_gravity="center"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toTopOf="parent" />
+
+			<TextView
+				android:layout_width="0dp"
+				android:layout_height="0dp"
+				android:layout_gravity="center"
+				android:gravity="center"
+				android:text="@string/tap_settings_to_invite_friends"
+				android:textColor="@color/dark"
+				android:textSize="16sp"
+				android:textStyle="bold"
+				app:layout_constraintBottom_toBottomOf="parent"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toEndOf="@+id/invite"
+				app:layout_constraintTop_toTopOf="parent" />
+
+		</androidx.constraintlayout.widget.ConstraintLayout>
+
+	</com.google.android.material.card.MaterialCardView>
+
+	<View
+		android:layout_width="6dp"
+		android:layout_height="6dp"
+		android:background="@drawable/bg_bubble"
+		android:layout_marginEnd="26dp"
+		android:backgroundTint="@color/background"
+		app:layout_constraintTop_toBottomOf="@+id/view"
+		app:layout_constraintEnd_toEndOf="parent" />
+
+	<View
+		android:id="@+id/view"
+		android:layout_width="18dp"
+		android:layout_height="18dp"
+		android:layout_marginEnd="28dp"
+		android:layout_marginBottom="28dp"
+		android:background="@drawable/bg_bubble"
+		android:backgroundTint="@color/background"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

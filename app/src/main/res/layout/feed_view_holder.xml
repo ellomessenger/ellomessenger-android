@@ -79,7 +79,7 @@
 				android:id="@+id/course_icon"
 				android:layout_width="wrap_content"
 				android:layout_height="wrap_content"
-				android:contentDescription="@string/online_course"
+				android:contentDescription="@string/masterclass"
 				android:paddingEnd="4dp"
 				android:src="@drawable/online_course"
 				android:visibility="gone"
@@ -438,7 +438,8 @@
 			android:id="@+id/controls_container"
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
-			android:layout_marginTop="15dp">
+			android:layout_marginTop="15dp"
+			android:layout_marginBottom="8dp">
 
 			<LinearLayout
 				android:id="@+id/likes_button"

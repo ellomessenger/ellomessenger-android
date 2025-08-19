@@ -3,15 +3,17 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
@@ -49,8 +51,20 @@ import org.telegram.messenger.utils.lastActiveDateToString
 import org.telegram.messenger.utils.visible
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.entities
+import org.telegram.tgnet.firstName
+import org.telegram.tgnet.isLiked
+import org.telegram.tgnet.lastName
+import org.telegram.tgnet.likes
+import org.telegram.tgnet.media
+import org.telegram.tgnet.message
+import org.telegram.tgnet.noforwards
+import org.telegram.tgnet.replies
+import org.telegram.tgnet.userId
+import org.telegram.tgnet.views
+import org.telegram.tgnet.webpage
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.AvatarImageView
 import org.telegram.ui.Components.AvatarDrawable
@@ -211,14 +225,14 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		avatarDrawable.setInfo(channel)
 		avatarImage.setForUserOrChat(channel, avatarDrawable)
 
-		if (channel?.pay_type == TLRPC.Chat.PAY_TYPE_SUBSCRIBE || channel?.pay_type == TLRPC.Chat.PAY_TYPE_BASE) {
+		if (channel?.payType == TLRPC.PAY_TYPE_SUBSCRIBE || channel?.payType == TLRPC.PAY_TYPE_BASE) {
 			binding.paidFeedIcon.visible()
 		}
 		else {
 			binding.paidFeedIcon.gone()
 		}
 
-		if (ChatObject.isOnlineCourse(channel)) {
+		if (ChatObject.isMasterclass(channel)) {
 			binding.paidFeedIcon.gone()
 			binding.courseIcon.visible()
 		}
@@ -260,7 +274,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		}
 
 		val channelId = channel?.id ?: 0
-		val noForwards = MessagesController.getInstance(UserConfig.selectedAccount).isChatNoForwards(channelId) || messages.any { it.messageOwner?.noforwards == true } || channel?.pay_type == TLRPC.Chat.PAY_TYPE_SUBSCRIBE || channel?.pay_type == TLRPC.Chat.PAY_TYPE_BASE
+		val noForwards = MessagesController.getInstance(UserConfig.selectedAccount).isChatNoForwards(channelId) || messages.any { it.messageOwner?.noforwards == true } || channel?.payType == TLRPC.PAY_TYPE_SUBSCRIBE || channel?.payType == TLRPC.PAY_TYPE_BASE
 
 		if (noForwards) {
 			binding.buttonForward.gone()
@@ -292,7 +306,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 
 			if (!entities.isNullOrEmpty()) {
 				val text = SpannableStringBuilder.valueOf(text)
-				MessageObject.addEntitiesToText(text = text, entities = entities, out = false, usernames = true, photoViewer = false, useManualParse = false, messageOwnerId = mainMessage.dialog_id)
+				MessageObject.addEntitiesToText(text = text, entities = entities, out = false, usernames = true, photoViewer = false, useManualParse = false, messageOwnerId = mainMessage.dialogId)
 				binding.messageLabel.text = text
 			}
 		}
@@ -317,9 +331,9 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		binding.likesCounterLabel.text = likesCount.toString()
 
 		val chatInfo = MessagesController.getInstance(currentAccount).getChatFull(channelId)
-		val linkedChatId = chatInfo?.linked_chat_id ?: 0
+		val linkedChatId = chatInfo?.linkedChatId ?: 0
 		val linked = messages.firstOrNull()?.isLinkedToChat(linkedChatId) == true
-		val hasDiscussion = ChatObject.isChannel(channel) && channel.has_link && !channel.megagroup
+		val hasDiscussion = ChatObject.isChannel(channel) && channel.hasLink && !channel.megagroup
 
 		if (hasDiscussion && linked) {
 			binding.commentsContainerPlaceholder.gone()
@@ -328,7 +342,8 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 			val numberOfComments = messageWithComments?.repliesCount ?: 0
 
 			binding.commentsLabel.text = binding.root.context.resources.getQuantityString(R.plurals.comments, numberOfComments, numberOfComments)
-			binding.commentsContainer.visible()
+			//MARK: make binding.commandsContainer.visible() to return comments
+			binding.commentsContainer.gone()
 
 			binding.commentsContainer.setOnClickListener {
 				delegate?.onOpenComments(messages)
@@ -339,8 +354,8 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 
 				val messagesController = MessagesController.getInstance(UserConfig.selectedAccount)
 
-				messageWithComments?.messageOwner?.replies?.recent_repliers?.take(3)?.forEachIndexed { index, peer ->
-					val info = messagesController.getUser(peer.user_id)
+				messageWithComments?.messageOwner?.replies?.recentRepliers?.take(3)?.forEachIndexed { index, peer ->
+					val info = messagesController.getUser(peer.userId)
 
 					val avatarImage = AvatarImageView(binding.root.context)
 					avatarImage.setRoundRadius(AndroidUtilities.dp(24f))
@@ -372,7 +387,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		binding.likesButton.setOnClickListener {
 			val message = messages.firstOrNull()?.messageOwner ?: return@setOnClickListener
 
-			if (message.is_liked) {
+			if (message.isLiked) {
 				dislike(message)
 			}
 			else {
@@ -393,7 +408,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 	private fun reloadLikeButton() {
 		val message = messages?.firstOrNull()?.messageOwner ?: return
 
-		if (message.is_liked) {
+		if (message.isLiked) {
 			binding.likesButton.setBackgroundResource(R.drawable.likes_button_selected_background)
 			binding.likesCounterLabel.setTextColor(Color.WHITE)
 		}
@@ -467,7 +482,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		binding.audioContainer.removeAllViews()
 	}
 
-	private fun setupPhotoVideo(messages: List<MessageObject>, channel: TLRPC.TL_channel?) {
+	private fun setupPhotoVideo(messages: List<MessageObject>, channel: TLRPC.TLChannel?) {
 		photoVideoAttachmentsAdapter = PhotoVideoAttachmentsAdapter(channel = channel, messages = messages, contentWidth = contentWidth, onClickListener = {
 			binding.root.performClick()
 		})
@@ -646,11 +661,12 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 			type == MEDIA_TYPE_CONTACT
 		} ?: return
 
-		val contactInfo = MessagesController.getInstance(UserConfig.selectedAccount).getUser(message.messageOwner?.media?.user_id)
+		val contactInfo = MessagesController.getInstance(UserConfig.selectedAccount).getUser(message.messageOwner?.media?.userId)
 
 		if (contactInfo != null) {
 			binding.contactContainer.visible()
-		} else {
+		}
+		else {
 			binding.contactContainer.gone()
 		}
 
@@ -660,8 +676,8 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		avatarImage.setRoundRadius(AndroidUtilities.dp(35f))
 		binding.userAvatarContainer.addView(avatarImage, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT.toFloat()))
 
-		val firstName = message.messageOwner?.media?.first_name ?: ""
-		val lastName = message.messageOwner?.media?.last_name ?: ""
+		val firstName = message.messageOwner?.media?.firstName ?: ""
+		val lastName = message.messageOwner?.media?.lastName ?: ""
 		val username = contactInfo?.username ?: ""
 
 		binding.userFullName.text = itemView.context.getString(R.string.full_name_template, firstName, lastName)
@@ -692,10 +708,12 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 			type == MEDIA_TYPE_WEBPAGE
 		} ?: return
 
-		val url = message.messageOwner?.media?.webpage?.display_url
-		val title = message.messageOwner?.media?.webpage?.title
-		val description = message.messageOwner?.media?.webpage?.description
-		val image = message.messageOwner?.media?.webpage?.photo
+		val webpage = message.messageOwner?.media?.webpage
+
+		val url = (webpage as? TLRPC.TLWebPage)?.displayUrl
+		val title = (webpage as? TLRPC.TLWebPage)?.title
+		val description = (webpage as? TLRPC.TLWebPage)?.description
+		val image = (webpage as? TLRPC.TLWebPage)?.photo
 
 		if (url.isNullOrEmpty() && title.isNullOrEmpty() && description.isNullOrEmpty() && image == null) {
 			binding.webPreviewContainer.gone()
@@ -747,8 +765,17 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 			webPreviewImageReceiver?.setImage(ImageLocation.getForObject(currentPhotoObject, message.photoThumbsObject), null, null, null, 0L, null, null, 1)
 		}
 
-		binding.messageLabel.gone()
 		binding.translateButton.gone()
+
+		if (message.isYouTubeVideo) {
+			binding.messageLabel.text = SpannableString(url).also { AndroidUtilities.addLinks(it, Linkify.WEB_URLS) }
+			binding.messageLabel.visible()
+
+			binding.webPreviewUrl.text = itemView.context.getString(R.string.youtube)
+		}
+		else {
+			binding.messageLabel.gone()
+		}
 
 		binding.webPreviewContainer.setOnClickListener {
 			Browser.openUrl(it.context, url)
@@ -781,7 +808,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		binding.audioContainer.visible()
 	}
 
-	private fun setupAdapter(messages: List<MessageObject>?, channel: TLRPC.TL_channel?) {
+	private fun setupAdapter(messages: List<MessageObject>?, channel: TLRPC.TLChannel?) {
 		clearAudio()
 
 		binding.webPreviewContainer.gone()
@@ -848,11 +875,11 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 		val media = MessageObject.getMedia(messageObject.messageOwner) ?: return MEDIA_TYPE_UNSUPPORTED
 
 		return when {
-			media is TLRPC.TL_messageMediaPhoto -> {
+			media is TLRPC.TLMessageMediaPhoto -> {
 				MEDIA_TYPE_PHOTO
 			}
 
-			messageObject.isVideo || media is TLRPC.TL_messageMediaDocument && messageObject.document is TLRPC.TL_documentEmpty && media.ttl_seconds != 0 -> {
+			messageObject.isVideo || media is TLRPC.TLMessageMediaDocument && messageObject.document is TLRPC.TLDocumentEmpty && media.ttlSeconds != 0 -> {
 				MEDIA_TYPE_VIDEO
 			}
 
@@ -864,19 +891,19 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 				MEDIA_TYPE_ROUND_VIDEO
 			}
 
-			media is TLRPC.TL_messageMediaGeo || media is TLRPC.TL_messageMediaVenue -> {
+			media is TLRPC.TLMessageMediaGeo || media is TLRPC.TLMessageMediaVenue -> {
 				MEDIA_TYPE_GEO
 			}
 
-			media is TLRPC.TL_messageMediaGeoLive -> {
+			media is TLRPC.TLMessageMediaGeoLive -> {
 				MEDIA_TYPE_LIVE_GEO
 			}
 
-			media is TLRPC.TL_messageMediaContact -> {
+			media is TLRPC.TLMessageMediaContact -> {
 				MEDIA_TYPE_CONTACT
 			}
 
-			media is TLRPC.TL_messageMediaDocument -> {
+			media is TLRPC.TLMessageMediaDocument -> {
 				if (messageObject.isSticker || MessageObject.isAnimatedStickerDocument(messageObject.document, true)) {
 					MEDIA_TYPE_STICKER
 				}
@@ -891,7 +918,7 @@ class FeedViewHolder(val binding: FeedViewHolderBinding) : RecyclerView.ViewHold
 				}
 			}
 
-			media is TLRPC.TL_messageMediaWebPage -> {
+			media is TLRPC.TLMessageMediaWebPage -> {
 				MEDIA_TYPE_WEBPAGE
 			}
 

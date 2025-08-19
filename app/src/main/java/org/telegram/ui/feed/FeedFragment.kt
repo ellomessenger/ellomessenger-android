@@ -3,8 +3,8 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.feed
 
@@ -25,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.edit
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.setPadding
 import androidx.recyclerview.widget.GridLayoutManager
@@ -68,13 +69,16 @@ import org.telegram.tgnet.ElloRpc
 import org.telegram.tgnet.ElloRpc.readData
 import org.telegram.tgnet.ElloRpc.unsubscribeRequest
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TL_contacts_found
-import org.telegram.tgnet.tlrpc.TL_contacts_search
-import org.telegram.tgnet.tlrpc.TL_feeds_historyMessages
-import org.telegram.tgnet.tlrpc.TL_feeds_readHistory
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.messages_Messages
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.fwdFrom
+import org.telegram.tgnet.media
+import org.telegram.tgnet.reactions
+import org.telegram.tgnet.replies
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBar
 import org.telegram.ui.ActionBar.ActionBarMenuItem
 import org.telegram.ui.ActionBar.AlertDialog
@@ -104,7 +108,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 	private val exploreAdapter = ExploreAdapter()
 	private var settingsItem: ActionBarMenuItem? = null
 	private var searchItem: ActionBarMenuItem? = null
-	private var lastReadId = 0
+	private var lastReadTimestamp = 0L
 	private var commentRequestId = -1
 	private var commentMessagesRequestId = -1
 	private var unregisterFlagSecure: Runnable? = null
@@ -153,18 +157,18 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				val view = layoutManager.findViewByPosition(position)
 				val offset = view?.top ?: 0
 				val viewHolder = view?.run { recyclerView.findContainingViewHolder(this) } as? FeedViewHolder
-				val lastReadId = viewHolder?.getMessages()?.firstOrNull()?.id
+				val lastReadTimestamp = viewHolder?.getMessages()?.firstOrNull()?.messageOwner?.date?.toLong()?.let { it * 1000L } // ms
 
-				MessagesController.getMainSettings(currentAccount).edit().run {
-					if (lastReadId != null && lastReadId >= this@FeedFragment.lastReadId) {
-						this@FeedFragment.lastReadId = lastReadId
-						putInt(LAST_READ_ID, lastReadId)
+				MessagesController.getMainSettings(currentAccount).edit {
+					if (lastReadTimestamp != null && lastReadTimestamp >= this@FeedFragment.lastReadTimestamp) {
+						this@FeedFragment.lastReadTimestamp = lastReadTimestamp
+						putLong(LAST_READ_TIMESTAMP, lastReadTimestamp)
 					}
 
 					putInt(FEED_POSITION, position)
 					putInt(FEED_OFFSET, offset)
 					putInt(CURRENT_PAGE, currentFeedPage)
-				}.apply()
+				}
 			}
 		}
 	}
@@ -349,7 +353,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 					}
 
 					2 -> {
-						holder.text = context.getString(R.string.course)
+						holder.text = context.getString(R.string.masterclass)
 						holder.isDropDown = false
 						holder.itemView.isSelected = recommendationsFilter.course
 
@@ -545,7 +549,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 	}
 
 	override fun onFragmentCreate(): Boolean {
-		lastReadId = MessagesController.getMainSettings(currentAccount).getInt(LAST_READ_ID, 0)
+		lastReadTimestamp = MessagesController.getMainSettings(currentAccount).getLong(LAST_READ_TIMESTAMP, 0L)
 
 		notificationCenter.let {
 			it.addObserver(this, NotificationCenter.messagePlayingDidReset)
@@ -646,9 +650,9 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 		val feed = messagesStorage.feed.mapNotNull {
 			val message = it.id.toLong()
-			val channel = -it.channel_id.toLong()
+			val channel = -it.channelId.toLong()
 
-			if (it.pinned_channel) {
+			if (it.pinnedChannel) {
 				pinnedChannels.add(-channel)
 			}
 
@@ -678,7 +682,11 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		withContext(mainScope.coroutineContext) {
 			if (feed.isEmpty()) {
 				binding?.swipeRefreshLayout?.gone()
-				binding?.emptyFeedContainer?.visible()
+				if (forYouTab == FOR_YOU_TAB) {
+					binding?.emptyFeedContainer?.gone()
+				} else {
+					binding?.emptyFeedContainer?.visible()
+				}
 			}
 			else {
 				binding?.swipeRefreshLayout?.visible()
@@ -689,7 +697,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 	private suspend fun loadNewMessages() {
 		runCatching {
-			val newestMessage = feedAdapter.feed?.flatten()?.maxByOrNull { it.id }?.messageOwner
+			val newestMessage = feedAdapter.feed?.flatten()?.maxByOrNull { it.messageOwner?.date ?: 0 }?.messageOwner
 
 			if (newestMessage == null) {
 				loadFeedData(true)
@@ -699,13 +707,13 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			val newMessages = mutableListOf<Message>()
 			var page = 0
 
-			while (!newMessages.contains(newestMessage)) {
-				val req = TL_feeds_readHistory()
+			while (newMessages.find { it.peerId?.channelId == newestMessage.peerId?.channelId && it.id == newestMessage.id } == null) {
+				val req = TLRPC.TLFeedsReadHistory()
 				req.page = page
 				req.limit = limit
 
 				when (val res = connectionsManager.performRequest(req)) {
-					is TL_feeds_historyMessages -> {
+					is TLRPC.TLFeedsHistoryMessages -> {
 						page += 1
 
 						val messages = res.messages
@@ -749,7 +757,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			loadSettings()
 		}
 
-		val req = TL_feeds_readHistory()
+		val req = TLRPC.TLFeedsReadHistory()
 
 		if (force) {
 			currentFeedPage = 0
@@ -760,7 +768,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		req.limit = limit
 
 		when (val res = connectionsManager.performRequest(req)) {
-			is TL_feeds_historyMessages -> {
+			is TLRPC.TLFeedsHistoryMessages -> {
 				currentFeedPage += 1
 
 				val messages = res.messages
@@ -829,8 +837,8 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				}
 
 				if (newMessages.isNotEmpty()) {
-					if (lastReadId != 0) {
-						val unreadMessages = feedAdapter.feed?.takeWhile { messageObjects -> messageObjects.any { msg -> msg.id > lastReadId } }
+					if (lastReadTimestamp != 0L) {
+						val unreadMessages = feedAdapter.feed?.takeWhile { messageObjects -> messageObjects.any { msg -> (msg.messageOwner?.date?.let { it * 1000L } ?: 0L) > lastReadTimestamp } }
 
 						if (!unreadMessages.isNullOrEmpty()) {
 							withContext(mainScope.coroutineContext) {
@@ -861,7 +869,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 	private suspend fun fetchContactsForFeed(messages: List<Message>?) {
 		messages?.forEach {
-			val uid = it.media?.user_id ?: 0L
+			val uid = it.media?.userId ?: 0L
 
 			if (uid != 0L) {
 				val contactsInfo = MessagesController.getInstance(currentAccount).getUser(uid)
@@ -880,7 +888,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		val firstNewMessagePosition = (newMessages.size - 1).coerceAtLeast(0)
 		val allNewMessages = newMessages.flatten().distinctBy { it.id }
 
-		if ((allNewMessages.maxOfOrNull { it.id } ?: 0) <= lastReadId) {
+		if ((allNewMessages.maxOfOrNull { it.messageOwner?.date ?: 0 } ?: 0) * 1000L <= lastReadTimestamp) {
 			return
 		}
 
@@ -927,7 +935,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 	private suspend fun loadSettings() {
 		val response = connectionsManager.performRequest(ElloRpc.feedSettingsRequest())
 
-		if (response is TLRPC.TL_biz_dataRaw) {
+		if (response is TLRPC.TLBizDataRaw) {
 			val data = response.readData<ElloRpc.FeedSettingsResponse>()
 			val pinnedChannels = data?.pinnedChannels?.toLongArray()
 
@@ -953,7 +961,8 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 					binding?.recyclerView?.removeItemDecoration(exploreSpaceItemDecoration)
 				}
 
-				binding?.scrollToTopButton?.visible()
+				//MARK: make it binding?.scrollToTopButton?.visible() to return the button
+				binding?.scrollToTopButton?.gone()
 				binding?.searchParamsRecyclerView?.gone()
 				binding?.chatBackground?.visible()
 				binding?.exploreProgressBar?.gone()
@@ -1137,7 +1146,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 	private fun hideChannel(channelId: Long) {
 		connectionsManager.sendRequest(ElloRpc.feedSettingsRequest(), { response, error ->
-			if (error == null && response is TLRPC.TL_biz_dataRaw) {
+			if (error == null && response is TLRPC.TLBizDataRaw) {
 				val data = response.readData<ElloRpc.FeedSettingsResponse>() ?: return@sendRequest
 
 				val hiddenChannels = data.hiddenChannels?.toMutableSet() ?: mutableSetOf()
@@ -1148,7 +1157,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				val req = ElloRpc.saveFeedSettingsRequest(hidden = hiddenChannels.toSet().toLongArray(), pinned = pinnedChannels, showRecommended = data.showRecommended, showSubscriptionsOnly = data.showSubscriptionsOnly, showAdult = data.showAdult)
 
 				connectionsManager.sendRequest(req, { response1, error1 ->
-					if (error1 == null && response1 is TLRPC.TL_biz_dataRaw) {
+					if (error1 == null && response1 is TLRPC.TLBizDataRaw) {
 						if (feedLoadingJob?.isActive != true) {
 							feedLoadingJob = ioScope.launch {
 								delay(500)
@@ -1205,8 +1214,8 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		val linkedChatId: Long
 
 		if (message.messageOwner?.replies != null) {
-			maxReadId = message.messageOwner?.replies?.read_max_id ?: 0
-			linkedChatId = message.messageOwner?.replies?.channel_id ?: 0
+			maxReadId = message.messageOwner?.replies?.readMaxId ?: 0
+			linkedChatId = message.messageOwner?.replies?.channelId ?: 0
 		}
 		else {
 			maxReadId = -1
@@ -1219,9 +1228,9 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 	private fun openDiscussionMessageChat(chatId: Long, originalMessage: MessageObject, messageId: Int, maxReadId: Int, highlightMsgId: Int, fallbackMessage: MessageObject?) {
 		val chat = messagesController.getChat(chatId) ?: return
 
-		val req = TLRPC.TL_messages_getDiscussionMessage()
+		val req = TLRPC.TLMessagesGetDiscussionMessage()
 		req.peer = MessagesController.getInputPeer(chat)
-		req.msg_id = messageId
+		req.msgId = messageId
 
 		FileLog.d("getDiscussionMessage chat = " + chat.id + " msg_id = " + messageId)
 
@@ -1236,37 +1245,37 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		commentRequestId = connectionsManager.sendRequest(req) { response, _ ->
 			commentRequestId = -1
 
-			if (response is TLRPC.TL_messages_discussionMessage) {
-				var savedHistory: messages_Messages? = null
+			if (response is TLRPC.TLMessagesDiscussionMessage) {
+				var savedHistory: TLRPC.MessagesMessages? = null
 
 				messagesController.putUsers(response.users, false)
 				messagesController.putChats(response.chats, false)
 
-				val msgs = response.messages?.mapNotNull { if (it !is TLRPC.TL_messageEmpty) it else null }
+				val msgs = response.messages.mapNotNull { if (it !is TLRPC.TLMessageEmpty) it else null }
 
-				if (!msgs.isNullOrEmpty()) {
+				if (msgs.isNotEmpty()) {
 					val message = msgs[0]
 
-					val getReplies = TLRPC.TL_messages_getReplies()
-					getReplies.peer = messagesController.getInputPeer(message.peer_id!!)
-					getReplies.msg_id = message.id
-					getReplies.offset_date = 0
+					val getReplies = TLRPC.TLMessagesGetReplies()
+					getReplies.peer = messagesController.getInputPeer(message.peerId!!)
+					getReplies.msgId = message.id
+					getReplies.offsetDate = 0
 					getReplies.limit = 30
 
 					if (highlightMsgId > 0) {
-						getReplies.offset_id = highlightMsgId
-						getReplies.add_offset = -getReplies.limit / 2
+						getReplies.offsetId = highlightMsgId
+						getReplies.addOffset = -getReplies.limit / 2
 					}
 					else {
-						getReplies.offset_id = if (maxReadId == 0) 1 else maxReadId
-						getReplies.add_offset = -getReplies.limit + 10
+						getReplies.offsetId = if (maxReadId == 0) 1 else maxReadId
+						getReplies.addOffset = -getReplies.limit + 10
 					}
 
 					commentMessagesRequestId = connectionsManager.sendRequest(getReplies) inner@{ response2, error2 ->
 						commentMessagesRequestId = -1
 
 						if (response2 != null) {
-							savedHistory = response2 as messages_Messages
+							savedHistory = response2 as TLRPC.MessagesMessages
 						}
 						else {
 							if ("CHANNEL_PRIVATE" == error2?.text) {
@@ -1295,16 +1304,16 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		}
 	}
 
-	private fun processLoadedDiscussionMessage(discussionMessage: TLRPC.TL_messages_discussionMessage?, history: messages_Messages?, maxReadId: Int, fallbackMessage: MessageObject?, req: TLRPC.TL_messages_getDiscussionMessage, originalChat: TLRPC.Chat, highlightMsgId: Int, originalMessage: MessageObject?) {
-		@Suppress("NAME_SHADOWING") var history: messages_Messages? = history
+	private fun processLoadedDiscussionMessage(discussionMessage: TLRPC.TLMessagesDiscussionMessage?, history: TLRPC.MessagesMessages?, maxReadId: Int, fallbackMessage: MessageObject?, req: TLRPC.TLMessagesGetDiscussionMessage, originalChat: TLRPC.Chat, highlightMsgId: Int, originalMessage: MessageObject?) {
+		@Suppress("NAME_SHADOWING") var history: TLRPC.MessagesMessages? = history
 
 		if (history != null) {
-			if (maxReadId != 1 && maxReadId != 0 && discussionMessage != null && maxReadId != discussionMessage.read_inbox_max_id && highlightMsgId <= 0) {
+			if (maxReadId != 1 && maxReadId != 0 && discussionMessage != null && maxReadId != discussionMessage.readInboxMaxId && highlightMsgId <= 0) {
 				history = null
 			}
-			else if (history.messages.isNotEmpty() && discussionMessage != null && !discussionMessage.messages.isNullOrEmpty()) {
+			else if (history.messages.isNotEmpty() && discussionMessage != null && discussionMessage.messages.isNotEmpty()) {
 				val message = history.messages[0]
-				val replyId = (if (message.reply_to != null) (if (message.reply_to?.reply_to_top_id != 0) message.reply_to?.reply_to_top_id else message.reply_to?.reply_to_msg_id) else 0) ?: 0
+				val replyId = (if (message.replyTo != null) (if (message.replyTo?.replyToTopId != 0) message.replyTo?.replyToTopId else message.replyTo?.replyToMsgId) else 0) ?: 0
 
 				if (replyId != discussionMessage.messages[discussionMessage.messages.size - 1].id) {
 					history = null
@@ -1315,7 +1324,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		}
 
 		val arrayList = ArrayList(discussionMessage?.messages?.mapNotNull {
-			if (it is TLRPC.TL_messageEmpty) {
+			if (it is TLRPC.TLMessageEmpty) {
 				null
 			}
 			else {
@@ -1329,12 +1338,12 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				val args = Bundle()
 				val dialogId = arrayList[0].dialogId
 				args.putLong("chat_id", -dialogId)
-				args.putInt("message_id", max(1, discussionMessage.read_inbox_max_id))
-				args.putInt("unread_count", discussionMessage.unread_count)
+				args.putInt("message_id", max(1, discussionMessage.readInboxMaxId))
+				args.putInt("unread_count", discussionMessage.unreadCount)
 				args.putBoolean("historyPreloaded", history != null)
 
 				val chatActivity = ChatActivity(args)
-				chatActivity.setThreadMessages(arrayList, originalChat, req.msg_id, discussionMessage.read_inbox_max_id, discussionMessage.read_outbox_max_id)
+				chatActivity.setThreadMessages(arrayList, originalChat, req.msgId, discussionMessage.readInboxMaxId, discussionMessage.readOutboxMaxId)
 
 				if (highlightMsgId != 0) {
 					chatActivity.setHighlightMessageId(highlightMsgId)
@@ -1374,7 +1383,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 						}
 					}
 
-					val historyFinal: messages_Messages = history
+					val historyFinal: TLRPC.MessagesMessages = history
 					val fnidFinal = fnid
 					val commentsClassGuid = chatActivity.classGuid
 
@@ -1419,17 +1428,17 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 	private fun openOriginalReplyChat(messageObject: MessageObject) {
 		val args = Bundle()
 
-		messageObject.messageOwner?.fwd_from?.saved_from_peer?.channel_id?.takeIf { it != 0L }?.let {
+		messageObject.messageOwner?.fwdFrom?.savedFromPeer?.channelId?.takeIf { it != 0L }?.let {
 			args.putLong("chat_id", it)
-		} ?: messageObject.messageOwner?.fwd_from?.saved_from_peer?.chat_id?.takeIf { it != 0L }?.let {
+		} ?: messageObject.messageOwner?.fwdFrom?.savedFromPeer?.chatId?.takeIf { it != 0L }?.let {
 			args.putLong("chat_id", it)
-		} ?: messageObject.messageOwner?.fwd_from?.saved_from_peer?.user_id?.takeIf { it != 0L }?.let {
+		} ?: messageObject.messageOwner?.fwdFrom?.savedFromPeer?.userId?.takeIf { it != 0L }?.let {
 			args.putLong("user_id", it)
-		} ?: messageObject.messageOwner?.replies?.channel_id?.takeIf { it != 0L }?.let {
+		} ?: messageObject.messageOwner?.replies?.channelId?.takeIf { it != 0L }?.let {
 			args.putLong("user_id", it)
 		}
 
-		messageObject.messageOwner?.fwd_from?.saved_from_msg_id?.let {
+		messageObject.messageOwner?.fwdFrom?.savedFromMsgId?.let {
 			args.putInt("message_id", it)
 		}
 
@@ -1454,7 +1463,22 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 				}
 			}
 
-			NotificationCenter.messagesDeleted, NotificationCenter.didReceiveNewMessages, NotificationCenter.dialogsNeedReload -> {
+			NotificationCenter.dialogsNeedReload -> {
+				ioScope.launch {
+					val messages = feedAdapter.feed?.flatten()?.mapNotNull {
+						val channelId = it.messageOwner?.peerId?.channelId ?: return@mapNotNull null
+						val messageId = it.messageOwner?.id?.toLong() ?: return@mapNotNull null
+
+						messagesStorage.getMessage(-channelId, messageId)
+					} ?: return@launch
+
+					withContext(mainScope.coroutineContext) {
+						feedAdapter.updateMessages(messages)
+					}
+				}
+			}
+
+			NotificationCenter.messagesDeleted, NotificationCenter.didReceiveNewMessages -> {
 				FileLog.d("Updating feed after notification ${id}…")
 
 				if (feedLoadingJob?.isActive != true) {
@@ -1570,7 +1594,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			return
 		}
 
-		val req = TL_contacts_search()
+		val req = TLRPC.TLContactsSearch()
 
 		if (force) {
 			currentRecommendationsPage = 1
@@ -1593,7 +1617,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		}
 
 		when (val res = connectionsManager.performRequest(req)) {
-			is TL_contacts_found -> {
+			is TLRPC.TLContactsFound -> {
 				currentRecommendationsPage += 1
 
 				val chats = res.chats
@@ -1674,10 +1698,11 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 			isLastExplorePage = false
 		}
 
-		val req = TL_feeds_readHistory()
+		val req = TLRPC.TLFeedsReadHistory()
 		req.page = currentExplorePage
 		req.limit = limit
 		req.isExplore = true
+		req.isExploreOld = true
 
 		if (feedMode == FeedMode.EXPLORE && exploreAdapter.itemCount == 0) {
 			withContext(mainScope.coroutineContext) {
@@ -1687,7 +1712,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 
 		val res = connectionsManager.performRequest(req)
 
-		if (res is TL_feeds_historyMessages) {
+		if (res is TLRPC.TLFeedsHistoryMessages) {
 			currentExplorePage += 1
 
 			val messages = res.messages
@@ -1720,7 +1745,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
 				if (error == null) {
-					if (response is TLRPC.TL_biz_dataRaw) {
+					if (response is TLRPC.TLBizDataRaw) {
 						val res = response.readData<ElloRpc.ChannelCategoriesResponse>()
 
 						if (res?.categories != null) {
@@ -1738,7 +1763,7 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		connectionsManager.sendRequest(req, { response, error ->
 			AndroidUtilities.runOnUIThread {
 				if (error == null) {
-					if (response is TLRPC.TL_biz_dataRaw) {
+					if (response is TLRPC.TLBizDataRaw) {
 						val res = response.readData<ElloRpc.GenresResponse>()
 
 						if (res?.genres != null) {
@@ -1880,6 +1905,6 @@ class FeedFragment(args: Bundle?) : BaseFragment(args), FeedViewHolder.Delegate,
 		const val CURRENT_PAGE = "current_page"
 		const val FEED_OFFSET = "feed_offset"
 		const val FEED_POSITION = "feed_position"
-		const val LAST_READ_ID = "feed_last_read_id"
+		const val LAST_READ_TIMESTAMP = "feed_last_read_timestamp"
 	}
 }

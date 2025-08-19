@@ -89,7 +89,7 @@
 					android:layout_height="wrap_content"
 					android:layout_marginStart="52dp"
 					android:gravity="center_vertical"
-					android:text="@string/settings_password_email"
+					android:text="@string/settings_email"
 					android:textStyle="bold"
 					app:layout_constraintBottom_toBottomOf="parent"
 					app:layout_constraintStart_toStartOf="parent"

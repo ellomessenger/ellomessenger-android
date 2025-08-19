@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
@@ -35,6 +35,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.messageobject.MessageObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPCExtensions;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.Theme;
@@ -139,7 +140,7 @@ public class SearchDownloadsContainer extends FrameLayout implements Notificatio
 					}
 					boolean openInPhotoViewer = message.canPreviewDocument();
 					if (!openInPhotoViewer) {
-						boolean noforwards = message.messageOwner != null && message.messageOwner.noforwards;
+						boolean noforwards = message.messageOwner != null && TLRPCExtensions.getNoforwards(message.messageOwner);
 						if (message.isFromChat()) {
 							TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-message.getFromChatId());
 							if (chat != null) {
@@ -171,8 +172,7 @@ public class SearchDownloadsContainer extends FrameLayout implements Notificatio
 				}
 				update(true);
 			}
-			if (view instanceof SharedAudioCell) {
-				SharedAudioCell cell = (SharedAudioCell)view;
+			if (view instanceof SharedAudioCell cell) {
 				cell.didPressedButton();
 			}
 		});
@@ -415,8 +415,7 @@ public class SearchDownloadsContainer extends FrameLayout implements Notificatio
 					if (child instanceof GraySectionCell) {
 						adapter.onBindViewHolder(holder, p);
 					}
-					else if (child instanceof Cell) {
-						Cell cell = (Cell)child;
+					else if (child instanceof Cell cell) {
 						cell.sharedDocumentCell.updateFileExistIcon(true);
 						messageHashIdTmp.set(cell.sharedDocumentCell.getMessage().getId(), cell.sharedDocumentCell.getMessage().getDialogId());
 						cell.sharedDocumentCell.setChecked(uiCallback.isSelected(messageHashIdTmp), true);
@@ -495,7 +494,7 @@ public class SearchDownloadsContainer extends FrameLayout implements Notificatio
 			else {
 				view = new SharedAudioCell(parent.getContext()) {
 					@Override
-					public boolean needPlayMessage(MessageObject messageObject) {
+					public boolean needPlayMessage(@NonNull MessageObject messageObject) {
 						return MediaController.getInstance().playMessage(messageObject);
 					}
 				};

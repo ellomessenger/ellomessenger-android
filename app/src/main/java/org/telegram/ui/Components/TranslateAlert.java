@@ -4,13 +4,14 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -86,6 +87,7 @@ import static org.telegram.messenger.AndroidUtilities.displayMetrics;
 import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 
+@SuppressLint("AppCompatCustomView")
 public class TranslateAlert extends Dialog {
 	public static volatile DispatchQueue translateQueue = new DispatchQueue("translateQueue", false);
 	private final FrameLayout bulletinContainer;
@@ -131,10 +133,10 @@ public class TranslateAlert extends Dialog {
 		backButton.setClickable(t > .5f);
 		headerShadowView.setAlpha(scrollView.getScrollY() > 0 ? 1f : t);
 
-		headerLayout.height = (int)lerp(dp(70), dp(56), t);
+		headerLayout.height = lerp(dp(70), dp(56), t);
 		header.setLayoutParams(headerLayout);
 
-		scrollViewLayout.setMargins(scrollViewLayout.leftMargin, (int)lerp(dp(70), dp(56), t), scrollViewLayout.rightMargin, scrollViewLayout.bottomMargin);
+		scrollViewLayout.setMargins(scrollViewLayout.leftMargin, lerp(dp(70), dp(56), t), scrollViewLayout.rightMargin, scrollViewLayout.bottomMargin);
 		scrollView.setLayoutParams(scrollViewLayout);
 	}
 
@@ -297,7 +299,7 @@ public class TranslateAlert extends Dialog {
 			private final RectF containerRect = new RectF();
 
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				int w = getWidth(), h = getHeight(), r = dp(12 * (1f - containerOpenAnimationT));
 				canvas.clipRect(0, 0, w, h);
 
@@ -517,7 +519,7 @@ public class TranslateAlert extends Dialog {
 	}
 
 	private boolean scrollAtBottom() {
-		View view = (View)scrollView.getChildAt(scrollView.getChildCount() - 1);
+		View view = scrollView.getChildAt(scrollView.getChildCount() - 1);
 		int bottom = view.getBottom();
 		LoadingTextView2 lastUnloadedBlock = textsView.getFirstUnloadedBlock();
 		if (lastUnloadedBlock != null) {
@@ -634,7 +636,7 @@ public class TranslateAlert extends Dialog {
 				}
 			}
 			catch (Exception e2) {
-				e2.printStackTrace();
+				FileLog.e(e2);
 			}
 
 			scrollView.getGlobalVisibleRect(scrollRect);
@@ -644,7 +646,7 @@ public class TranslateAlert extends Dialog {
 				if (!backRect.contains((int)x, (int)y) && !buttonRect.contains((int)x, (int)y) && event.getAction() == MotionEvent.ACTION_DOWN) {
 					fromScrollRect = scrollRect.contains((int)x, (int)y) && (containerOpenAnimationT > 0 || !canExpand());
 					maybeScrolling = true;
-					scrolling = scrollRect.contains((int)x, (int)y) && textsView.getBlocksCount() > 0 && !((LoadingTextView2)textsView.getBlockAt(0)).loaded;
+					scrolling = scrollRect.contains((int)x, (int)y) && textsView.getBlocksCount() > 0 && !textsView.getBlockAt(0).loaded;
 					fromY = y;
 					fromScrollY = getScrollY();
 					fromScrollViewY = scrollView.getScrollY();
@@ -696,7 +698,7 @@ public class TranslateAlert extends Dialog {
 			return super.dispatchTouchEvent(event);
 		}
 		catch (Exception e) {
-			e.printStackTrace();
+			FileLog.e(e);
 			return super.dispatchTouchEvent(event);
 		}
 	}
@@ -959,7 +961,7 @@ public class TranslateAlert extends Dialog {
 				spannable = (Spannable)Emoji.replaceEmoji(spannable, allTextsView.getPaint().getFontMetricsInt(), false);
 			}
 			catch (Exception e) {
-				e.printStackTrace();
+				FileLog.e(e);
 			}
 
 			SpannableStringBuilder allTextsBuilder = new SpannableStringBuilder(allTexts == null ? "" : allTexts);
@@ -1086,9 +1088,10 @@ public class TranslateAlert extends Dialog {
 					Log.e("translate", "failed to translate a text " + (connection != null ? connection.getResponseCode() : null) + " " + (connection != null ? connection.getResponseMessage() : null));
 				}
 				catch (IOException ioException) {
-					ioException.printStackTrace();
+					FileLog.e(ioException);
 				}
-				e.printStackTrace();
+
+				FileLog.e(e);
 
 				if (onFail != null && !dismissed) {
 					try {
@@ -1104,22 +1107,21 @@ public class TranslateAlert extends Dialog {
 	}
 
 	private static void translateText(int currentAccount, TLRPC.InputPeer peer, int msg_id, String from_lang, String to_lang) {
-		TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
+		var req = new TLRPC.TLMessagesTranslateText();
 
 		req.peer = peer;
-		req.msg_id = msg_id;
+		req.msgId = msg_id;
 		req.flags |= 1;
 
 		if (from_lang != null) {
-			req.from_lang = from_lang;
+			req.fromLang = from_lang;
 			req.flags |= 4;
 		}
 
-		req.to_lang = to_lang;
+		req.toLang = to_lang;
 
 		try {
-			ConnectionsManager.getInstance(currentAccount).sendRequest(req, (error, res) -> {
-			});
+			ConnectionsManager.getInstance(currentAccount).sendRequest(req);
 		}
 		catch (Exception e) {
 			FileLog.e(e);
@@ -1341,7 +1343,7 @@ public class TranslateAlert extends Dialog {
 		protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 			fromTextView.measure(0, 0);
 			toTextView.measure(0, 0);
-			super.onMeasure(MeasureSpec.makeMeasureSpec((int)AndroidUtilities.lerp(fromTextView.getMeasuredWidth(), toTextView.getMeasuredWidth(), loadingT) + getPaddingLeft() + getPaddingRight(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Math.max(fromTextView.getMeasuredHeight(), toTextView.getMeasuredHeight()), MeasureSpec.EXACTLY));
+			super.onMeasure(MeasureSpec.makeMeasureSpec(AndroidUtilities.lerp(fromTextView.getMeasuredWidth(), toTextView.getMeasuredWidth(), loadingT) + getPaddingLeft() + getPaddingRight(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Math.max(fromTextView.getMeasuredHeight(), toTextView.getMeasuredHeight()), MeasureSpec.EXACTLY));
 		}
 
 		@Override
@@ -1354,7 +1356,7 @@ public class TranslateAlert extends Dialog {
 		private void updateWidth() {
 			boolean updated;
 
-			int newWidth = (int)AndroidUtilities.lerp(fromTextView.getMeasuredWidth(), toTextView.getMeasuredWidth(), loadingT) + getPaddingLeft() + getPaddingRight();
+			int newWidth = AndroidUtilities.lerp(fromTextView.getMeasuredWidth(), toTextView.getMeasuredWidth(), loadingT) + getPaddingLeft() + getPaddingRight();
 			int newHeight = Math.max(fromTextView.getMeasuredHeight(), toTextView.getMeasuredHeight());
 			LayoutParams lp = getLayoutParams();
 			if (lp == null) {
@@ -1490,7 +1492,7 @@ public class TranslateAlert extends Dialog {
 		}
 
 		@Override
-		protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+		protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 			return false;
 		}
 	}
@@ -1748,7 +1750,7 @@ public class TranslateAlert extends Dialog {
 		}
 
 		@Override
-		protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+		protected boolean drawChild(@NonNull Canvas canvas, View child, long drawingTime) {
 			return false;
 		}
 	}

@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.graphics.Canvas;
@@ -40,27 +48,20 @@ import androidx.core.graphics.ColorUtils;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 
 public class TranscribeButton {
-
 	private final static int[] pressedState = new int[]{android.R.attr.state_enabled, android.R.attr.state_pressed};
-
-	private int backgroundColor, color, iconColor, rippleColor;
+	private int color;
 	private Paint backgroundPaint, strokePaint;
 	private Path progressClipPath;
-
 	private boolean loading;
 	private final AnimatedFloat loadingFloat;
-
 	private RLottieDrawable inIconDrawable;
 	private final RLottieDrawable outIconDrawable;
-
 	private Drawable selectorDrawable;
 	private final ChatMessageCell parent;
 	private final SeekBarWaveform seekBar;
-
 	private long start;
 	private final Rect bounds;
 	private final Rect pressBounds;
-
 	private final boolean premium;
 	private boolean isOpen, shouldBeOpen;
 
@@ -148,7 +149,6 @@ public class TranscribeButton {
 	}
 
 	private boolean pressed = false;
-	private final long pressId = 0;
 
 	public boolean onTouch(int action, float x, float y) {
 		if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
@@ -210,25 +210,25 @@ public class TranscribeButton {
 //            color = ColorUtils.setAlphaComponent(color, (int) (Color.alpha(color) * .8f));
 //        }
 		boolean newColor = this.color != color;
-		this.iconColor = this.color = color;
-		this.backgroundColor = ColorUtils.setAlphaComponent(color, (int)(Color.alpha(color) * 0.156f));
-		this.rippleColor = Theme.blendOver(this.backgroundColor, ColorUtils.setAlphaComponent(color, (int)(Color.alpha(color) * (Theme.isCurrentThemeDark() ? .3f : .2f))));
+		int iconColor = this.color = color;
+		int backgroundColor = ColorUtils.setAlphaComponent(color, (int)(Color.alpha(color) * 0.156f));
+		int rippleColor = Theme.blendOver(backgroundColor, ColorUtils.setAlphaComponent(color, (int)(Color.alpha(color) * (Theme.isCurrentThemeDark() ? .3f : .2f))));
 		if (backgroundPaint == null) {
 			backgroundPaint = new Paint();
 		}
-		backgroundPaint.setColor(this.backgroundColor);
+		backgroundPaint.setColor(backgroundColor);
 		if (newColor || selectorDrawable == null) {
-			selectorDrawable = Theme.createSimpleSelectorRoundRectDrawable(AndroidUtilities.dp(8), 0, this.rippleColor);
+			selectorDrawable = Theme.createSimpleSelectorRoundRectDrawable(AndroidUtilities.dp(8), 0, rippleColor);
 			selectorDrawable.setCallback(parent);
 		}
 		if (newColor) {
 			inIconDrawable.beginApplyLayerColors();
-			inIconDrawable.setLayerColor("Artboard Outlines.**", this.iconColor);
+			inIconDrawable.setLayerColor("Artboard Outlines.**", iconColor);
 			inIconDrawable.commitApplyLayerColors();
 			inIconDrawable.setAllowDecodeSingleFrame(true);
 			inIconDrawable.updateCurrentFrame(0, false);
 			outIconDrawable.beginApplyLayerColors();
-			outIconDrawable.setLayerColor("Artboard Outlines.**", this.iconColor);
+			outIconDrawable.setLayerColor("Artboard Outlines.**", iconColor);
 			outIconDrawable.commitApplyLayerColors();
 			outIconDrawable.setAllowDecodeSingleFrame(true);
 			outIconDrawable.updateCurrentFrame(0, false);
@@ -401,7 +401,7 @@ public class TranscribeButton {
 	private static HashMap<Integer, MessageObject> transcribeOperationsByDialogPosition;
 
 	public static boolean isTranscribing(MessageObject messageObject) {
-		return ((transcribeOperationsByDialogPosition != null && (transcribeOperationsByDialogPosition.containsValue(messageObject) || transcribeOperationsByDialogPosition.containsKey((Integer)reqInfoHash(messageObject)))) || (transcribeOperationsById != null && messageObject != null && messageObject.messageOwner != null && transcribeOperationsById.containsKey(messageObject.messageOwner.voiceTranscriptionId)));
+		return ((transcribeOperationsByDialogPosition != null && (transcribeOperationsByDialogPosition.containsValue(messageObject) || transcribeOperationsByDialogPosition.containsKey(reqInfoHash(messageObject)))) || (transcribeOperationsById != null && messageObject != null && messageObject.messageOwner != null && transcribeOperationsById.containsKey(messageObject.messageOwner.voiceTranscriptionId)));
 	}
 
 	private static void transcribePressed(MessageObject messageObject, boolean open) {
@@ -410,31 +410,30 @@ public class TranscribeButton {
 		}
 		int account = messageObject.currentAccount;
 		final long start = SystemClock.elapsedRealtime(), minDuration = 350;
-		TLRPC.InputPeer peer = MessagesController.getInstance(account).getInputPeer(messageObject.messageOwner.peer_id);
+		TLRPC.InputPeer peer = MessagesController.getInstance(account).getInputPeer(messageObject.messageOwner.peerId);
 		long dialogId = DialogObject.getPeerDialogId(peer);
 		int messageId = messageObject.messageOwner.id;
 		if (open) {
 			if (messageObject.messageOwner.voiceTranscription != null && messageObject.messageOwner.voiceTranscriptionFinal) {
 				messageObject.messageOwner.voiceTranscriptionOpen = true;
 				MessagesStorage.getInstance(account).updateMessageVoiceTranscriptionOpen(dialogId, messageId, messageObject.messageOwner);
-				AndroidUtilities.runOnUIThread(() -> NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, (Boolean)true, (Boolean)true));
+				AndroidUtilities.runOnUIThread(() -> NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, true, true));
 			}
 			else {
-				TLRPC.TL_messages_transcribeAudio req = new TLRPC.TL_messages_transcribeAudio();
+				var req = new TLRPC.TLMessagesTranscribeAudio();
 				req.peer = peer;
-				req.msg_id = messageId;
+				req.msgId = messageId;
 				if (transcribeOperationsByDialogPosition == null) {
 					transcribeOperationsByDialogPosition = new HashMap<>();
 				}
-				transcribeOperationsByDialogPosition.put((Integer)reqInfoHash(messageObject), messageObject);
+				transcribeOperationsByDialogPosition.put(reqInfoHash(messageObject), messageObject);
 				ConnectionsManager.getInstance(account).sendRequest(req, (res, err) -> {
 					String text;
 					long id = 0;
 					boolean isFinal;
-					if (res instanceof TLRPC.TL_messages_transcribedAudio) {
-						TLRPC.TL_messages_transcribedAudio r = (TLRPC.TL_messages_transcribedAudio)res;
+					if (res instanceof TLRPC.TLMessagesTranscribedAudio r) {
 						text = r.text;
-						id = r.transcription_id;
+						id = r.transcriptionId;
 						isFinal = !r.pending;
 						if (TextUtils.isEmpty(text)) {
 							text = !isFinal ? null : "";
@@ -465,11 +464,11 @@ public class TranscribeButton {
 		}
 		else {
 			if (transcribeOperationsByDialogPosition != null) {
-				transcribeOperationsByDialogPosition.remove((Integer)reqInfoHash(messageObject));
+				transcribeOperationsByDialogPosition.remove(reqInfoHash(messageObject));
 			}
 			messageObject.messageOwner.voiceTranscriptionOpen = false;
 			MessagesStorage.getInstance(account).updateMessageVoiceTranscriptionOpen(dialogId, messageId, messageObject.messageOwner);
-			AndroidUtilities.runOnUIThread(() -> NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, (Boolean)false, null));
+			AndroidUtilities.runOnUIThread(() -> NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, false, null));
 		}
 	}
 
@@ -487,11 +486,11 @@ public class TranscribeButton {
 			}
 			final MessageObject finalMessageObject = messageObject;
 			if (transcribeOperationsByDialogPosition != null) {
-				transcribeOperationsByDialogPosition.remove((Integer)reqInfoHash(messageObject));
+				transcribeOperationsByDialogPosition.remove(reqInfoHash(messageObject));
 			}
 			messageObject.messageOwner.voiceTranscriptionFinal = true;
 			MessagesStorage.getInstance(messageObject.currentAccount).updateMessageVoiceTranscription(messageObject.getDialogId(), messageObject.getId(), text, messageObject.messageOwner);
-			AndroidUtilities.runOnUIThread(() -> NotificationCenter.getInstance(finalMessageObject.currentAccount).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, finalMessageObject, (Long)transcription_id, (String)text, (Boolean)true, (Boolean)true));
+			AndroidUtilities.runOnUIThread(() -> NotificationCenter.getInstance(finalMessageObject.currentAccount).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, finalMessageObject, transcription_id, text, true, true));
 			return true;
 		}
 		catch (Exception ignore) {

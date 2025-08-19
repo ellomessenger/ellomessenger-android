@@ -3,7 +3,7 @@
  * It is licensed under GNU GPL v. 2 or later.
  * You should have received a copy of the license in this archive (see LICENSE).
  *
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.profile.wallet
 
@@ -136,7 +136,7 @@ class PayPalTransferOutFragment(args: Bundle) : BaseFragment(args) {
 		reqId = connectionsManager.sendRequest(req) { response, error ->
 			val context = context ?: return@sendRequest
 
-			if (response is TLRPC.TL_biz_dataRaw) {
+			if (response is TLRPC.TLBizDataRaw) {
 				val data = response.readData<ElloRpc.WithdrawSendApproveCodeResponse>()
 
 				AndroidUtilities.runOnUIThread {

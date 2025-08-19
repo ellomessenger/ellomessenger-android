@@ -58,7 +58,7 @@ class WalletsAdapter(private val isDemo: Boolean = false) : RecyclerView.Adapter
 			}
 
 			TYPE_BUSINESS_WALLET -> {
-				(holder as EarningsWalletViewHolder).bind(walletHelper.earningsWallet, wallet as ElloRpc.Earnings)
+				(holder as EarningsWalletViewHolder).bind(walletHelper.earningsWallet)
 			}
 
 			else -> {

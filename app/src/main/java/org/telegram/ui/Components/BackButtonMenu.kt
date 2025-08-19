@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2023.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Components
 
@@ -23,10 +23,14 @@ import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ImageLocation
+import org.telegram.messenger.MessagesController
 import org.telegram.messenger.R
+import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserObject
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.strippedBitmap
 import org.telegram.ui.ActionBar.ActionBarPopupWindow
 import org.telegram.ui.ActionBar.ActionBarPopupWindow.ActionBarPopupWindowLayout
 import org.telegram.ui.ActionBar.BaseFragment
@@ -94,8 +98,8 @@ object BackButtonMenu {
 			if (chat != null) {
 				avatarDrawable.setInfo(chat)
 
-				if (chat.photo != null && chat.photo.strippedBitmap != null) {
-					thumb = chat.photo.strippedBitmap
+				if (chat.photo != null && chat.photo?.strippedBitmap != null) {
+					thumb = chat.photo?.strippedBitmap
 				}
 
 				imageView.setImage(ImageLocation.getForChat(chat, ImageLocation.TYPE_SMALL), "50_50", thumb, chat)
@@ -258,7 +262,7 @@ object BackButtonMenu {
 				val fragment = fragmentsStack[i]
 				var activity: Class<*>
 				var chat: Chat?
-				var user: User? = null
+				var user: User?
 				var dialogId: Long
 				var folderId: Int
 				var filterId: Int
@@ -279,13 +283,7 @@ object BackButtonMenu {
 				else if (fragment is ProfileActivity) {
 					activity = ProfileActivity::class.java
 					chat = fragment.currentChat
-
-					try {
-						user = fragment.userInfo!!.user
-					}
-					catch (ignore: Exception) {
-					}
-
+					user = MessagesController.getInstance(UserConfig.selectedAccount).getUser(fragment.userInfo?.id)
 					dialogId = fragment.getDialogId()
 					folderId = 0
 					filterId = 0

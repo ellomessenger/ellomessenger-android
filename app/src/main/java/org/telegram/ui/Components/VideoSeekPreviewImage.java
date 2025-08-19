@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 1.3.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.content.Context;
@@ -30,7 +38,6 @@ import androidx.annotation.NonNull;
 
 public class VideoSeekPreviewImage extends View {
 	public final static boolean IS_YOUTUBE_PREVIEWS_SUPPORTED = true;
-
 	private AnimatedFileDrawable fileDrawable;
 	private long duration;
 	private Uri videoUri;
@@ -43,20 +50,16 @@ public class VideoSeekPreviewImage extends View {
 	private Bitmap bitmapToRecycle;
 	private Bitmap bitmapToDraw;
 	private final Drawable frameDrawable;
-
 	private String frameTime;
 	private int timeWidth;
 	private final TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-
 	private BitmapShader bitmapShader;
 	private final RectF dstR = new RectF();
 	private final Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
 	private final Paint bitmapPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
 	private final RectF bitmapRect = new RectF();
 	private final Matrix matrix = new Matrix();
-
 	private final VideoSeekPreviewImageDelegate delegate;
-
 	private PhotoViewerWebView webView;
 	private int lastYoutubePosition;
 	private boolean isYoutube;
@@ -286,20 +289,20 @@ public class VideoSeekPreviewImage extends View {
 			if ("elloapp".equals(scheme)) {
 				int currentAccount = Utilities.parseInt(uri.getQueryParameter("account"));
 				Object parentObject = FileLoader.getInstance(currentAccount).getParentObject(Utilities.parseInt(uri.getQueryParameter("rid")));
-				TLRPC.TL_document document = new TLRPC.TL_document();
-				document.access_hash = Utilities.parseLong(uri.getQueryParameter("hash"));
+				var document = new TLRPC.TLDocument();
+				document.accessHash = Utilities.parseLong(uri.getQueryParameter("hash"));
 				document.id = Utilities.parseLong(uri.getQueryParameter("id"));
 				document.size = Utilities.parseLong(uri.getQueryParameter("size"));
-				document.dc_id = Utilities.parseInt(uri.getQueryParameter("dc"));
-				document.mime_type = uri.getQueryParameter("mime");
-				document.file_reference = Utilities.hexToBytes(uri.getQueryParameter("reference"));
-				TLRPC.TL_documentAttributeFilename filename = new TLRPC.TL_documentAttributeFilename();
-				filename.file_name = uri.getQueryParameter("name");
+				document.dcId = Utilities.parseInt(uri.getQueryParameter("dc"));
+				document.mimeType = uri.getQueryParameter("mime");
+				document.fileReference = Utilities.hexToBytes(uri.getQueryParameter("reference"));
+				var filename = new TLRPC.TLDocumentAttributeFilename();
+				filename.fileName = uri.getQueryParameter("name");
 				document.attributes.add(filename);
-				document.attributes.add(new TLRPC.TL_documentAttributeVideo());
+				document.attributes.add(new TLRPC.TLDocumentAttributeVideo());
 				String name = FileLoader.getAttachFileName(document);
 				if (FileLoader.getInstance(currentAccount).isLoadingFile(name)) {
-					path = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), document.dc_id + "_" + document.id + ".temp").getAbsolutePath();
+					path = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), document.dcId + "_" + document.id + ".temp").getAbsolutePath();
 				}
 				else {
 					path = FileLoader.getInstance(currentAccount).getPathToAttach(document, false).getAbsolutePath();
@@ -330,7 +333,7 @@ public class VideoSeekPreviewImage extends View {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (bitmapToRecycle != null) {
 			bitmapToRecycle.recycle();
 			bitmapToRecycle = null;

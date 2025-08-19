@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2023-2025.
+ */
 package org.telegram.ui.Adapters;
 
 import android.animation.Animator;
@@ -20,9 +28,9 @@ import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
-import org.telegram.tgnet.tlrpc.TLObject;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Components.BackupImageView;
@@ -39,6 +47,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -68,7 +77,7 @@ public class FiltersView extends RecyclerListView {
 	public final static int FILTER_INDEX_MUSIC = 3;
 	public final static int FILTER_INDEX_VOICE = 4;
 
-	public final static MediaFilterData[] filters = new MediaFilterData[]{new MediaFilterData(R.drawable.search_media_filled, LocaleController.getString("SharedMediaTab2", R.string.SharedMediaTab2), new TLRPC.TL_inputMessagesFilterPhotoVideo(), FILTER_TYPE_MEDIA), new MediaFilterData(R.drawable.search_links_filled, LocaleController.getString("SharedLinksTab2", R.string.SharedLinksTab2), new TLRPC.TL_inputMessagesFilterUrl(), FILTER_TYPE_LINKS), new MediaFilterData(R.drawable.search_files_filled, LocaleController.getString("SharedFilesTab2", R.string.SharedFilesTab2), new TLRPC.TL_inputMessagesFilterDocument(), FILTER_TYPE_FILES), new MediaFilterData(R.drawable.search_music_filled, LocaleController.getString("SharedMusicTab2", R.string.SharedMusicTab2), new TLRPC.TL_inputMessagesFilterMusic(), FILTER_TYPE_MUSIC), new MediaFilterData(R.drawable.search_voice_filled, LocaleController.getString("SharedVoiceTab2", R.string.SharedVoiceTab2), new TLRPC.TL_inputMessagesFilterRoundVoice(), FILTER_TYPE_VOICE)};
+	public final static MediaFilterData[] filters = new MediaFilterData[]{new MediaFilterData(R.drawable.search_media_filled, LocaleController.getString("SharedMediaTab2", R.string.SharedMediaTab2), new TLRPC.TLInputMessagesFilterPhotoVideo(), FILTER_TYPE_MEDIA), new MediaFilterData(R.drawable.search_links_filled, LocaleController.getString("SharedLinksTab2", R.string.SharedLinksTab2), new TLRPC.TLInputMessagesFilterUrl(), FILTER_TYPE_LINKS), new MediaFilterData(R.drawable.search_files_filled, LocaleController.getString("SharedFilesTab2", R.string.SharedFilesTab2), new TLRPC.TLInputMessagesFilterDocument(), FILTER_TYPE_FILES), new MediaFilterData(R.drawable.search_music_filled, LocaleController.getString("SharedMusicTab2", R.string.SharedMusicTab2), new TLRPC.TLInputMessagesFilterMusic(), FILTER_TYPE_MUSIC), new MediaFilterData(R.drawable.search_voice_filled, LocaleController.getString("SharedVoiceTab2", R.string.SharedVoiceTab2), new TLRPC.TLInputMessagesFilterRoundVoice(), FILTER_TYPE_VOICE)};
 	private final static int minYear = 2013;
 	private final static Pattern yearPatter = Pattern.compile("20[0-9]{1,2}");
 	private final static Pattern monthYearOrDayPatter = Pattern.compile("(\\w{3,}) ([0-9]{0,4})");
@@ -564,28 +573,26 @@ public class FiltersView extends RecyclerListView {
 		return usersFilters.get(i);
 	}
 
-	public void setUsersAndDates(ArrayList<Object> localUsers, ArrayList<DateData> dates, boolean archive) {
+	public void setUsersAndDates(List<Object> localUsers, List<DateData> dates, boolean archive) {
 		oldItems.clear();
 		oldItems.addAll(usersFilters);
 		usersFilters.clear();
 		if (localUsers != null) {
 			for (int i = 0; i < localUsers.size(); i++) {
 				Object object = localUsers.get(i);
-				if (object instanceof User) {
-					User user = (User)object;
+				if (object instanceof User user) {
 					String title;
 					if (UserConfig.getInstance(UserConfig.selectedAccount).getCurrentUser().id == user.id) {
 						title = LocaleController.getString("SavedMessages", R.string.SavedMessages);
 					}
 					else {
-						title = ContactsController.formatName(user.getFirst_name(), user.getLast_name(), 10);
+						title = ContactsController.formatName(user.firstName, user.lastName, 10);
 					}
 					MediaFilterData data = new MediaFilterData(R.drawable.search_users_filled, title, null, FILTER_TYPE_CHAT);
 					data.setUser(user);
 					usersFilters.add(data);
 				}
-				else if (object instanceof TLRPC.Chat) {
-					TLRPC.Chat chat = (TLRPC.Chat)object;
+				else if (object instanceof TLRPC.Chat chat) {
 					String title = chat.title;
 					if (chat.title.length() > 12) {
 						title = String.format("%s...", title.substring(0, 10));
@@ -720,8 +727,7 @@ public class FiltersView extends RecyclerListView {
 			Theme.setCombinedDrawableColor(thumbDrawable, getThemedColor(Theme.key_avatar_backgroundBlue), false);
 			Theme.setCombinedDrawableColor(thumbDrawable, getThemedColor(Theme.key_avatar_actionBarIconBlue), true);
 			if (data.filterType == FILTER_TYPE_CHAT) {
-				if (data.chat instanceof User) {
-					User user = (User)data.chat;
+				if (data.chat instanceof User user) {
 					if (UserConfig.getInstance(UserConfig.selectedAccount).getCurrentUser().id == user.id) {
 						CombinedDrawable combinedDrawable = Theme.createCircleDrawableWithIcon(AndroidUtilities.dp(32), R.drawable.chats_saved);
 						combinedDrawable.setIconSize(AndroidUtilities.dp(16), AndroidUtilities.dp(16));
@@ -734,8 +740,7 @@ public class FiltersView extends RecyclerListView {
 						avatarImageView.imageReceiver.setForUserOrChat(user, thumbDrawable);
 					}
 				}
-				else if (data.chat instanceof TLRPC.Chat) {
-					TLRPC.Chat chat = (TLRPC.Chat)data.chat;
+				else if (data.chat instanceof TLRPC.Chat chat) {
 					avatarImageView.imageReceiver.setRoundRadius(AndroidUtilities.dp(16));
 					avatarImageView.imageReceiver.setForUserOrChat(chat, thumbDrawable);
 				}

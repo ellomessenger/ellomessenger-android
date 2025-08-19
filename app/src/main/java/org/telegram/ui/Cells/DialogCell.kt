@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
- * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
+ * Copyright Shamil Afandiyev, Ello 2024-2025.
  */
 package org.telegram.ui.Cells
 
@@ -44,6 +44,10 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction
 import android.view.animation.OvershootInterpolator
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withTranslation
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ChatObject
 import org.telegram.messenger.ContactsController
@@ -69,24 +73,32 @@ import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.DraftMessage
 import org.telegram.tgnet.TLRPC.EncryptedChat
-import org.telegram.tgnet.TLRPC.TL_dialog
-import org.telegram.tgnet.TLRPC.TL_dialogFolder
-import org.telegram.tgnet.TLRPC.TL_documentEmpty
-import org.telegram.tgnet.TLRPC.TL_emojiStatus
-import org.telegram.tgnet.TLRPC.TL_emojiStatusUntil
-import org.telegram.tgnet.TLRPC.TL_encryptedChat
-import org.telegram.tgnet.TLRPC.TL_encryptedChatDiscarded
-import org.telegram.tgnet.TLRPC.TL_encryptedChatRequested
-import org.telegram.tgnet.TLRPC.TL_encryptedChatWaiting
-import org.telegram.tgnet.TLRPC.TL_messageActionHistoryClear
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_messageMediaGame
-import org.telegram.tgnet.TLRPC.TL_messageMediaInvoice
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messageMediaPoll
-import org.telegram.tgnet.TLRPC.TL_messageService
-import org.telegram.tgnet.TLRPC.TL_photoEmpty
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.action
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.document
+import org.telegram.tgnet.editDate
+import org.telegram.tgnet.emojiStatus
+import org.telegram.tgnet.entities
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.fake
+import org.telegram.tgnet.fwdFrom
+import org.telegram.tgnet.game
+import org.telegram.tgnet.isSelf
+import org.telegram.tgnet.media
+import org.telegram.tgnet.message
+import org.telegram.tgnet.migratedTo
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.reactions
+import org.telegram.tgnet.restrictionReason
+import org.telegram.tgnet.scam
+import org.telegram.tgnet.type
+import org.telegram.tgnet.unreadCount
+import org.telegram.tgnet.unreadMark
+import org.telegram.tgnet.unreadMentionsCount
+import org.telegram.tgnet.unreadReactionsCount
+import org.telegram.tgnet.userId
+import org.telegram.tgnet.webpage
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Adapters.DialogsAdapter.DialogsPreloader
 import org.telegram.ui.Components.AnimatedEmojiDrawable
@@ -293,16 +305,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		private set
 
 	var message: MessageObject? = null
-		private set(value) {
-			field = value
-
-			// MARK: remove this check to draw service messages
-			if (message?.messageOwner is TL_messageService) {
-				field = MessagesStorage.getInstance(currentAccount).getLastNonServiceMessage(value?.dialogId)?.let {
-					MessageObject(currentAccount, it, generateLayout = false, checkMediaExists = true)
-				}
-			}
-		}
+		private set
 
 	var messageId = 0
 		private set
@@ -345,8 +348,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		lastDialogChangedTime = System.currentTimeMillis()
 		isDialogCell = true
 
-		if (dialog is TL_dialogFolder) {
-			currentDialogFolderId = dialog.folder.id
+		if (dialog is TLRPC.TLDialogFolder) {
+			currentDialogFolderId = dialog.folder?.id ?: 0
 			archivedChatsDrawable?.setCell(this)
 		}
 		else {
@@ -386,9 +389,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 	private val isOnline: Boolean
 		get() {
-			val user = user ?: return false
+			val user = user as? TLRPC.TLUser ?: return false
 
-			if (user.self) {
+			if (user.isSelf) {
 				return false
 			}
 
@@ -402,7 +405,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		}
 
 	private fun checkGroupCall() {
-		hasCall = chat?.call_active == true && chat?.call_not_empty == true
+		hasCall = chat?.callActive == true && chat?.callNotEmpty == true
 		chatCallProgress = if (hasCall) 1.0f else 0.0f
 	}
 
@@ -421,7 +424,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		useMeForMyMessages = useMe
 		isDialogCell = false
 		lastMessageDate = date
-		currentEditDate = messageObject?.messageOwner?.edit_date ?: 0
+		currentEditDate = messageObject?.messageOwner?.editDate ?: 0
 		unreadCount = 0
 		markUnread = false
 		messageId = messageObject?.id ?: 0
@@ -430,7 +433,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		lastUnreadState = messageObject != null && messageObject.isUnread
 
 		if (message != null) {
-			lastSendState = message?.messageOwner?.send_state ?: 0
+			lastSendState = message?.messageOwner?.sendState ?: 0
 		}
 
 		update(0)
@@ -451,7 +454,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		useMeForMyMessages = useMe
 		isDialogCell = false
 		lastMessageDate = date
-		currentEditDate = messageObject?.messageOwner?.edit_date ?: 0
+		currentEditDate = messageObject?.messageOwner?.editDate ?: 0
 		unreadCount = 0
 		markUnread = false
 		messageId = messageObject?.id ?: 0
@@ -460,7 +463,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		lastUnreadState = messageObject != null && messageObject.isUnread
 
 		if (message != null) {
-			lastSendState = message?.messageOwner?.send_state ?: 0
+			lastSendState = message?.messageOwner?.sendState ?: 0
 		}
 
 		this.isSearch = isSearch
@@ -580,7 +583,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				val encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(dialog.id))
 
 				if (encryptedChat != null) {
-					currentUser = MessagesController.getInstance(currentAccount).getUser(encryptedChat.user_id)
+					currentUser = MessagesController.getInstance(currentAccount).getUser(encryptedChat.userId)
 				}
 			}
 			else {
@@ -597,7 +600,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 					context.getString(R.string.HiddenName)
 				}
 				else {
-					ContactsController.formatName(currentUser.first_name, currentUser.last_name).replace('\n', ' ')
+					ContactsController.formatName(currentUser.firstName, currentUser.lastName).replace('\n', ' ')
 				}
 			}
 			else {
@@ -614,7 +617,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 			builder.append(title)
 
-			if (dialog.unread_count > 0) {
+			if (dialog.unreadCount > 0) {
 				builder.setSpan(TypefaceSpan(Theme.TYPEFACE_BOLD, 0, context.getColor(R.color.dark_gray)), boldStart, boldEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 			}
 
@@ -778,9 +781,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 			timeString = LocaleController.stringForMessageListDate(customDialog!!.date.toLong())
 
-			if (customDialog?.unread_count != 0) {
+			if (customDialog?.unreadCount != 0) {
 				drawCount = true
-				countString = String.format(Locale.getDefault(), "%d", customDialog!!.unread_count)
+				countString = String.format(Locale.getDefault(), "%d", customDialog!!.unreadCount)
 			}
 			else {
 				drawCount = false
@@ -857,13 +860,13 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						drawPremium = MessagesController.getInstance(currentAccount).isPremiumUser(user) && UserConfig.getInstance(currentAccount).clientUserId != user!!.id && user!!.id != 0L
 
 						if (drawPremium) {
-							if (user!!.emoji_status is TL_emojiStatusUntil && (user!!.emoji_status as TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+							if (user!!.emojiStatus is TLRPC.TLEmojiStatusUntil && (user!!.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
 								nameLayoutEllipsizeByGradient = true
-								emojiStatus[(user!!.emoji_status as TL_emojiStatusUntil).document_id] = false
+								emojiStatus[(user!!.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId] = false
 							}
-							else if (user!!.emoji_status is TL_emojiStatus) {
+							else if (user!!.emojiStatus is TLRPC.TLEmojiStatus) {
 								nameLayoutEllipsizeByGradient = true
-								emojiStatus[(user!!.emoji_status as TL_emojiStatus).document_id] = false
+								emojiStatus[(user!!.emojiStatus as TLRPC.TLEmojiStatus).documentId] = false
 							}
 							else {
 								nameLayoutEllipsizeByGradient = true
@@ -883,7 +886,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			if (isDialogCell) {
 				draftMessage = MediaDataController.getInstance(currentAccount).getDraft(dialogId, 0)
 
-				if (draftMessage != null && (TextUtils.isEmpty(draftMessage!!.message) && draftMessage!!.reply_to_msg_id == 0 || lastDate > draftMessage!!.date && unreadCount != 0) || ChatObject.isChannel(chat) && !chat!!.megagroup && !chat!!.creator && (chat!!.admin_rights == null || !chat!!.admin_rights.post_messages) || chat != null && (chat!!.left || chat!!.kicked)) {
+				if (draftMessage != null && (TextUtils.isEmpty(draftMessage!!.message) && (draftMessage as? TLRPC.TLDraftMessage)?.replyToMsgId == 0 || lastDate > draftMessage!!.date && unreadCount != 0) || ChatObject.isChannel(chat) && !chat!!.megagroup && !chat!!.creator && (chat!!.adminRights == null || !chat!!.adminRights!!.postMessages) || chat != null && (chat!!.left /*|| chat!!.kicked*/)) {
 					draftMessage = null
 				}
 			}
@@ -939,9 +942,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						}
 					}
 					else {
-						var mess = draftMessage!!.message
+						var mess = draftMessage?.message
 
-						if (mess.length > 150) {
+						if (mess != null && mess.length > 150) {
 							mess = mess.substring(0, 150)
 						}
 
@@ -971,20 +974,20 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 							currentMessagePaint = Theme.dialogs_messagePrintingPaint[paintIndex]
 
 							when (encryptedChat) {
-								is TL_encryptedChatRequested -> {
+								is TLRPC.TLEncryptedChatRequested -> {
 									messageString = context.getString(R.string.EncryptionProcessing)
 								}
 
-								is TL_encryptedChatWaiting -> {
+								is TLRPC.TLEncryptedChatWaiting -> {
 									messageString = LocaleController.formatString("AwaitingEncryption", R.string.AwaitingEncryption, UserObject.getFirstName(user))
 								}
 
-								is TL_encryptedChatDiscarded -> {
+								is TLRPC.TLEncryptedChatDiscarded -> {
 									messageString = context.getString(R.string.EncryptionRejected)
 								}
 
-								is TL_encryptedChat -> {
-									messageString = if (encryptedChat?.admin_id == UserConfig.getInstance(currentAccount).getClientUserId()) {
+								is TLRPC.TLEncryptedChat -> {
+									messageString = if (encryptedChat?.adminId == UserConfig.getInstance(currentAccount).getClientUserId()) {
 										LocaleController.formatString("EncryptedChatStartedOutgoing", R.string.EncryptedChatStartedOutgoing, UserObject.getFirstName(user))
 									}
 									else {
@@ -1005,7 +1008,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						}
 					}
 					else {
-						val restrictionReason = MessagesController.getRestrictionReason(message?.messageOwner?.restriction_reason)
+						val restrictionReason = MessagesController.getRestrictionReason(message?.messageOwner?.restrictionReason)
 						var fromUser: User? = null
 						var fromChat: Chat? = null
 						val fromId = message!!.fromChatId
@@ -1024,7 +1027,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						if (dialogId > 0 && message!!.isOutOwner && !message?.messageOwner?.reactions?.recentReactions.isNullOrEmpty()) {
 							val lastReaction = message?.messageOwner?.reactions?.recentReactions?.firstOrNull()
 
-							if (lastReaction != null && lastReaction.peer_id.user_id != 0L && lastReaction.peer_id.user_id != UserConfig.getInstance(currentAccount).clientUserId) {
+							if (lastReaction != null && lastReaction.peerId.userId != 0L && lastReaction.peerId.userId != UserConfig.getInstance(currentAccount).clientUserId) {
 								lastMessageIsReaction = true
 
 								val visibleReaction = VisibleReaction.fromTLReaction(lastReaction.reaction)
@@ -1051,8 +1054,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						else if (dialogsType == 2) {
 							messageString = if (chat != null) {
 								if (ChatObject.isChannel(chat) && !chat!!.megagroup) {
-									if (chat!!.participants_count != 0) {
-										LocaleController.formatPluralStringComma("Subscribers", chat!!.participants_count)
+									if (chat!!.participantsCount != 0) {
+										LocaleController.formatPluralStringComma("Subscribers", chat!!.participantsCount)
 									}
 									else {
 										if (chat?.username.isNullOrEmpty()) {
@@ -1064,11 +1067,11 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 									}
 								}
 								else {
-									if (chat!!.participants_count != 0) {
-										LocaleController.formatPluralStringComma("Members", chat!!.participants_count)
+									if (chat!!.participantsCount != 0) {
+										LocaleController.formatPluralStringComma("Members", chat!!.participantsCount)
 									}
 									else {
-										if (chat!!.has_geo) {
+										if (chat!!.hasGeo) {
 											context.getString(R.string.MegaLocation)
 										}
 										else if (chat?.username.isNullOrEmpty()) {
@@ -1097,19 +1100,14 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 							checkMessage = false
 							messageString = formatArchivedDialogNames()
 						}
-						else if (message?.messageOwner is TL_messageService) {
-							// MARK: uncomment to show service messages in dialogs list
-//							if (ChatObject.isChannelAndNotMegaGroup(chat) && message?.messageOwner?.action is TLRPC.TL_messageActionChannelMigrateFrom) {
-//								messageString = ""
-//								showChecks = false
-//							}
-//							else {
-//								messageString = msgText
-//							}
-
-							// MARK: remove following two lines to show service messages in dialogs list
-							messageString = ""
-							showChecks = false
+						else if (message?.messageOwner is TLRPC.TLMessageService) {
+							if (ChatObject.isChannelAndNotMegaGroup(chat) && message?.messageOwner?.action is TLRPC.TLMessageActionChannelMigrateFrom) {
+								messageString = ""
+								showChecks = false
+							}
+							else {
+								messageString = msgText
+							}
 
 							// MARK: change service messages color here
 							currentMessagePaint = Theme.dialogs_messagePrintingPaint[paintIndex]
@@ -1156,8 +1154,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 								messageNameString = if (message!!.isOutOwner) {
 									context.getString(R.string.FromYou)
 								}
-								else if (message?.messageOwner?.fwd_from?.from_name != null) {
-									message?.messageOwner?.fwd_from?.from_name
+								else if (message?.messageOwner?.fwdFrom?.fromName != null) {
+									message?.messageOwner?.fwdFrom?.fromName
 								}
 								else if (fromUser != null) {
 									if (useForceThreeLines || SharedConfig.useThreeLinesLayout) {
@@ -1165,7 +1163,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 											context.getString(R.string.HiddenName)
 										}
 										else {
-											ContactsController.formatName(fromUser.first_name, fromUser.last_name).replace("\n", "")
+											ContactsController.formatName(fromUser.firstName, fromUser.lastName).replace("\n", "")
 										}
 									}
 									else {
@@ -1247,14 +1245,14 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 								else if (message!!.messageOwner?.media != null && !message!!.isMediaEmpty) {
 									currentMessagePaint = Theme.dialogs_messagePrintingPaint[paintIndex]
 
-									var innerMessage = if (message!!.messageOwner?.media is TL_messageMediaPoll) {
-										val mediaPoll = message!!.messageOwner?.media as TL_messageMediaPoll
-										String.format("\uD83D\uDCCA \u2068%s\u2069", mediaPoll.poll.question)
+									var innerMessage = if (message!!.messageOwner?.media is TLRPC.TLMessageMediaPoll) {
+										val mediaPoll = message!!.messageOwner?.media as TLRPC.TLMessageMediaPoll
+										String.format("\uD83D\uDCCA \u2068%s\u2069", mediaPoll.poll?.question)
 									}
-									else if (message!!.messageOwner?.media is TL_messageMediaGame) {
+									else if (message!!.messageOwner?.media is TLRPC.TLMessageMediaGame) {
 										String.format("\uD83C\uDFAE \u2068%s\u2069", message?.messageOwner?.media?.game?.title)
 									}
-									else if (message!!.messageOwner?.media is TL_messageMediaInvoice) {
+									else if (message!!.messageOwner?.media is TLRPC.TLMessageMediaInvoice) {
 										message?.messageOwner?.media?.title
 									}
 									else if (message!!.type == MessageObject.TYPE_MUSIC) {
@@ -1367,10 +1365,10 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 								if (!restrictionReason.isNullOrEmpty()) {
 									messageString = restrictionReason
 								}
-								else if (message!!.messageOwner?.media is TL_messageMediaPhoto && message!!.messageOwner?.media?.photo is TL_photoEmpty && message!!.messageOwner!!.media?.ttl_seconds != 0) {
+								else if (message!!.messageOwner?.media is TLRPC.TLMessageMediaPhoto && message!!.messageOwner?.media?.photo is TLRPC.TLPhotoEmpty && message!!.messageOwner!!.media?.ttlSeconds != 0) {
 									messageString = context.getString(R.string.AttachPhotoExpired)
 								}
-								else if (message!!.messageOwner?.media is TL_messageMediaDocument && message!!.messageOwner?.media?.document is TL_documentEmpty && message!!.messageOwner?.media?.ttl_seconds != 0) {
+								else if (message!!.messageOwner?.media is TLRPC.TLMessageMediaDocument && message!!.messageOwner?.media?.document is TLRPC.TLDocumentEmpty && message!!.messageOwner?.media?.ttlSeconds != 0) {
 									messageString = context.getString(R.string.AttachVideoExpired)
 								}
 								else if (message!!.caption != null) {
@@ -1423,14 +1421,14 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 									}
 								}
 								else {
-									if (message!!.messageOwner?.media is TL_messageMediaPoll) {
-										val mediaPoll = message!!.messageOwner?.media as TL_messageMediaPoll
-										messageString = "\uD83D\uDCCA " + mediaPoll.poll.question
+									if (message!!.messageOwner?.media is TLRPC.TLMessageMediaPoll) {
+										val mediaPoll = message!!.messageOwner?.media as TLRPC.TLMessageMediaPoll
+										messageString = "\uD83D\uDCCA " + mediaPoll.poll?.question
 									}
-									else if (message!!.messageOwner?.media is TL_messageMediaGame) {
+									else if (message!!.messageOwner?.media is TLRPC.TLMessageMediaGame) {
 										messageString = "\uD83C\uDFAE " + message!!.messageOwner?.media?.game?.title
 									}
-									else if (message!!.messageOwner?.media is TL_messageMediaInvoice) {
+									else if (message!!.messageOwner?.media is TLRPC.TLMessageMediaInvoice) {
 										messageString = message!!.messageOwner?.media?.title
 									}
 									else if (message!!.type == MessageObject.TYPE_MUSIC) {
@@ -1583,7 +1581,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 					drawReactionMention = reactionMentionCount > 0
 				}
 
-				if (message!!.isOut && draftMessage == null && showChecks && message?.messageOwner?.action !is TL_messageActionHistoryClear) {
+				if (message!!.isOut && draftMessage == null && showChecks && message?.messageOwner?.action !is TLRPC.TLMessageActionHistoryClear) {
 					if (message!!.isSending) {
 						drawCheck1 = false
 						drawCheck2 = false
@@ -2493,7 +2491,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				MessagesController.getInstance(currentAccount).dialogMessage[dialog.id]
 			}
 
-			if (dialogId != dialog.id || message != null && message!!.id != dialog.top_message || newMessageObject != null && newMessageObject.messageOwner?.edit_date != currentEditDate || unreadCount != dialog.unread_count || mentionCount != dialog.unread_mentions_count || markUnread != dialog.unread_mark || message !== newMessageObject || newDraftMessage !== draftMessage || isPinned != dialog.pinned) {
+			if (dialogId != dialog.id || message != null && message!!.id != dialog.topMessage || newMessageObject != null && newMessageObject.messageOwner?.editDate != currentEditDate || unreadCount != dialog.unreadCount || mentionCount != dialog.unreadMentionsCount || markUnread != dialog.unreadMark || message !== newMessageObject || newDraftMessage !== draftMessage || isPinned != dialog.pinned) {
 				val dialogChanged = dialogId != dialog.id
 
 				dialogId = dialog.id
@@ -2508,22 +2506,17 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 					lastStatusDrawableParams = -1
 				}
 
-				currentDialogFolderId = if (dialog is TL_dialogFolder) {
-					dialog.folder.id
-				}
-				else {
-					0
-				}
+				currentDialogFolderId = (dialog as? TLRPC.TLDialogFolder)?.folder?.id ?: 0
 
 				if (dialogsType == 7 || dialogsType == 8) {
 					val filter = MessagesController.getInstance(currentAccount).selectedDialogFilter[if (dialogsType == 8) 1 else 0]
 
-					fullSeparator = dialog is TL_dialog && nextDialog != null && filter != null && filter.pinnedDialogs.indexOfKey(dialog.id) >= 0 && filter.pinnedDialogs.indexOfKey(nextDialog.id) < 0
+					fullSeparator = dialog is TLRPC.TLDialog && nextDialog != null && filter != null && filter.pinnedDialogs.indexOfKey(dialog.id) >= 0 && filter.pinnedDialogs.indexOfKey(nextDialog.id) < 0
 					fullSeparator2 = false
 				}
 				else {
-					fullSeparator = dialog is TL_dialog && dialog.pinned && nextDialog != null && !nextDialog.pinned
-					fullSeparator2 = dialog is TL_dialogFolder && nextDialog != null && !nextDialog.pinned
+					fullSeparator = dialog is TLRPC.TLDialog && dialog.pinned && nextDialog != null && !nextDialog.pinned
+					fullSeparator2 = dialog is TLRPC.TLDialogFolder && nextDialog != null && !nextDialog.pinned
 				}
 
 				update(0, !dialogChanged)
@@ -2588,8 +2581,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 		if (customDialog != null) {
 			lastMessageDate = customDialog.date
-			lastUnreadState = customDialog.unread_count != 0
-			unreadCount = customDialog.unread_count
+			lastUnreadState = customDialog.unreadCount != 0
+			unreadCount = customDialog.unreadCount
 			isPinned = customDialog.pinned
 			isMuted = customDialog.muted
 			avatarDrawable.setInfo(customDialog.name, null)
@@ -2617,20 +2610,20 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 						lastUnreadState = (message?.isUnread == true)
 
-						if (dialog is TL_dialogFolder) {
+						if (dialog is TLRPC.TLDialogFolder) {
 							unreadCount = MessagesStorage.getInstance(currentAccount).archiveUnreadCount
 							mentionCount = 0
 							reactionMentionCount = 0
 						}
 						else {
-							unreadCount = dialog.unread_count
-							mentionCount = dialog.unread_mentions_count
-							reactionMentionCount = dialog.unread_reactions_count
+							unreadCount = dialog.unreadCount
+							mentionCount = dialog.unreadMentionsCount
+							reactionMentionCount = dialog.unreadReactionsCount
 						}
 
-						markUnread = dialog.unread_mark
-						currentEditDate = message?.messageOwner?.edit_date ?: 0
-						lastMessageDate = dialog.last_message_date
+						markUnread = dialog.unreadMark
+						currentEditDate = message?.messageOwner?.editDate ?: 0
+						lastMessageDate = dialog.lastMessageDate
 
 						isPinned = if (dialogsType == 7 || dialogsType == 8) {
 							val filter = MessagesController.getInstance(currentAccount).selectedDialogFilter[if (dialogsType == 8) 1 else 0]
@@ -2640,7 +2633,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 							currentDialogFolderId == 0 && dialog.pinned
 						}
 
-						message?.messageOwner?.send_state?.let {
+						message?.messageOwner?.sendState?.let {
 							lastSendState = it
 						}
 					}
@@ -2673,13 +2666,13 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				if (user != null && mask and MessagesController.UPDATE_MASK_EMOJI_STATUS != 0) {
 					user = MessagesController.getInstance(currentAccount).getUser(user!!.id)
 
-					if (user!!.emoji_status is TL_emojiStatusUntil && (user!!.emoji_status as TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+					if (user!!.emojiStatus is TLRPC.TLEmojiStatusUntil && (user!!.emojiStatus as TLRPC.TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
 						nameLayoutEllipsizeByGradient = true
-						emojiStatus[(user!!.emoji_status as TL_emojiStatusUntil).document_id] = animated
+						emojiStatus[(user!!.emojiStatus as TLRPC.TLEmojiStatusUntil).documentId] = animated
 					}
-					else if (user!!.emoji_status is TL_emojiStatus) {
+					else if (user!!.emojiStatus is TLRPC.TLEmojiStatus) {
 						nameLayoutEllipsizeByGradient = true
-						emojiStatus[(user!!.emoji_status as TL_emojiStatus).document_id] = animated
+						emojiStatus[(user!!.emojiStatus as TLRPC.TLEmojiStatus).documentId] = animated
 					}
 					else {
 						nameLayoutEllipsizeByGradient = true
@@ -2708,7 +2701,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				if (!continueUpdate && mask and MessagesController.UPDATE_MASK_CHAT != 0 && chat != null) {
 					val newChat = MessagesController.getInstance(currentAccount).getChat(chat!!.id)
 
-					if ((newChat!!.call_active && newChat.call_not_empty) != hasCall) {
+					if ((newChat!!.callActive && newChat.callNotEmpty) != hasCall) {
 						continueUpdate = true
 					}
 				}
@@ -2749,23 +2742,23 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						val newMentionCount: Int
 						var newReactionCount = 0
 
-						if (dialog is TL_dialogFolder) {
+						if (dialog is TLRPC.TLDialogFolder) {
 							newCount = MessagesStorage.getInstance(currentAccount).archiveUnreadCount
 							newMentionCount = 0
 						}
 						else if (dialog != null) {
-							newCount = dialog.unread_count
-							newMentionCount = dialog.unread_mentions_count
-							newReactionCount = dialog.unread_reactions_count
+							newCount = dialog.unreadCount
+							newMentionCount = dialog.unreadMentionsCount
+							newReactionCount = dialog.unreadReactionsCount
 						}
 						else {
 							newCount = 0
 							newMentionCount = 0
 						}
-						if (dialog != null && (unreadCount != newCount || markUnread != dialog.unread_mark || mentionCount != newMentionCount || reactionMentionCount != newReactionCount)) {
+						if (dialog != null && (unreadCount != newCount || markUnread != dialog.unreadMark || mentionCount != newMentionCount || reactionMentionCount != newReactionCount)) {
 							unreadCount = newCount
 							mentionCount = newMentionCount
-							markUnread = dialog.unread_mark
+							markUnread = dialog.unreadMark
 							reactionMentionCount = newReactionCount
 							continueUpdate = true
 						}
@@ -2773,8 +2766,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				}
 
 				if (!continueUpdate && mask and MessagesController.UPDATE_MASK_SEND_STATE != 0) {
-					if (message != null && lastSendState != message?.messageOwner?.send_state) {
-						lastSendState = message!!.messageOwner!!.send_state
+					if (message != null && lastSendState != message?.messageOwner?.sendState) {
+						lastSendState = message!!.messageOwner!!.sendState
 						continueUpdate = true
 					}
 				}
@@ -2804,7 +2797,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 					encryptedChat = MessagesController.getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(dialogId))
 
 					if (encryptedChat != null) {
-						user = MessagesController.getInstance(currentAccount).getUser(encryptedChat!!.user_id)
+						user = MessagesController.getInstance(currentAccount).getUser(encryptedChat!!.userId)
 					}
 				}
 				else if (DialogObject.isUserDialog(dialogId)) {
@@ -2813,8 +2806,8 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				else {
 					chat = MessagesController.getInstance(currentAccount).getChat(-dialogId)
 
-					if (!isDialogCell && chat != null && chat!!.migrated_to != null) {
-						val chat2 = MessagesController.getInstance(currentAccount).getChat(chat!!.migrated_to.channel_id)
+					if (!isDialogCell && chat?.migratedTo != null) {
+						val chat2 = MessagesController.getInstance(currentAccount).getChat(chat?.migratedTo?.channelId)
 
 						if (chat2 != null) {
 							chat = chat2
@@ -2827,7 +2820,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				}
 
 				drawAdult = chat?.adult ?: false
-				drawPaid = ChatObject.isSubscriptionChannel(chat) || ChatObject.isOnlineCourse(chat) || ChatObject.isPaidChannel(chat)
+				drawPaid = ChatObject.isSubscriptionChannel(chat) || ChatObject.isMasterclass(chat) || ChatObject.isPaidChannel(chat)
 				drawPrivate = user == null && chat != null && chat?.username.isNullOrEmpty()
 			}
 			else {
@@ -3028,10 +3021,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 		if (currentDialogFolderId != 0 && archivedChatsDrawable != null && archivedChatsDrawable!!.getOutProgress() == 0.0f && translationX == 0.0f) {
 			if (!drawingForBlur) {
-				canvas.save()
-				canvas.clipRect(0, 0, measuredWidth, measuredHeight)
-				archivedChatsDrawable?.draw(canvas)
-				canvas.restore()
+				canvas.withClip(0, 0, measuredWidth, measuredHeight) {
+					archivedChatsDrawable?.draw(this)
+				}
 			}
 
 			return
@@ -3178,15 +3170,11 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			val drawableCy = drawableY + translationDrawable!!.intrinsicHeight / 2
 
 			if (currentRevealProgress > 0.0f) {
-				canvas.save()
-				canvas.clipRect(tx - AndroidUtilities.dp(8f), 0f, measuredWidth.toFloat(), measuredHeight.toFloat())
-
-				Theme.dialogs_pinnedPaint.color = revealBackgroundColor
-
-				val rad = sqrt((drawableCx * drawableCx + (drawableCy - measuredHeight) * (drawableCy - measuredHeight)).toDouble()).toFloat()
-
-				canvas.drawCircle(drawableCx.toFloat(), drawableCy.toFloat(), rad * AndroidUtilities.accelerateInterpolator.getInterpolation(currentRevealProgress), Theme.dialogs_pinnedPaint)
-				canvas.restore()
+				canvas.withClip(tx - AndroidUtilities.dp(8f), 0f, measuredWidth.toFloat(), measuredHeight.toFloat()) {
+					Theme.dialogs_pinnedPaint.color = revealBackgroundColor
+					val rad = sqrt((drawableCx * drawableCx + (drawableCy - measuredHeight) * (drawableCy - measuredHeight)).toDouble()).toFloat()
+					drawCircle(drawableCx.toFloat(), drawableCy.toFloat(), rad * AndroidUtilities.accelerateInterpolator.getInterpolation(currentRevealProgress), Theme.dialogs_pinnedPaint)
+				}
 
 				if (!Theme.dialogs_archiveDrawableRecolored) {
 					Theme.dialogs_archiveDrawable.setLayerColor("Arrow.**", context.getColor(R.color.medium_gray))
@@ -3231,15 +3219,11 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			}
 
 			if (swipeMessageTextLayout != null) {
-				canvas.save()
-
-				val yOffset = (if (swipeMessageTextLayout!!.lineCount > 1) -AndroidUtilities.dp(4f) else 0).toFloat()
-
-				canvas.translate(measuredWidth - AndroidUtilities.dp(43f) - swipeMessageTextLayout!!.width / 2f, AndroidUtilities.dp((if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 50 else 47).toFloat()) + yOffset)
-
-				swipeMessageTextLayout!!.draw(canvas)
-
-				canvas.restore()
+				canvas.withSave {
+					val yOffset = (if (swipeMessageTextLayout!!.lineCount > 1) -AndroidUtilities.dp(4f) else 0).toFloat()
+					translate(measuredWidth - AndroidUtilities.dp(43f) - swipeMessageTextLayout!!.width / 2f, AndroidUtilities.dp((if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 50 else 47).toFloat()) + yOffset)
+					swipeMessageTextLayout?.draw(this)
+				}
 			}
 
 			canvas.restore()
@@ -3274,28 +3258,26 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		}
 
 		if (translationX != 0f || cornerProgress != 0.0f) {
-			canvas.save()
+			canvas.withSave {
+				Theme.dialogs_pinnedPaint.color = context.getColor(R.color.background)
 
-			Theme.dialogs_pinnedPaint.color = context.getColor(R.color.background)
+				rect.set((measuredWidth - AndroidUtilities.dp(64f)).toFloat(), 0f, measuredWidth.toFloat(), measuredHeight.toFloat())
 
-			rect.set((measuredWidth - AndroidUtilities.dp(64f)).toFloat(), 0f, measuredWidth.toFloat(), measuredHeight.toFloat())
+				drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_pinnedPaint)
 
-			canvas.drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_pinnedPaint)
+				if (isSelected) {
+					drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_tabletSeletedPaint)
+				}
 
-			if (isSelected) {
-				canvas.drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_tabletSeletedPaint)
+				if (currentDialogFolderId != 0 && (!SharedConfig.archiveHidden || archiveBackgroundProgress != 0f)) {
+					Theme.dialogs_pinnedPaint.color = AndroidUtilities.getOffsetColor(0, context.getColor(R.color.light_background), archiveBackgroundProgress, 1.0f)
+					drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_pinnedPaint)
+				}
+				else if (isPinned || drawPinBackground) {
+					Theme.dialogs_pinnedPaint.color = context.getColor(R.color.light_background)
+					drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_pinnedPaint)
+				}
 			}
-
-			if (currentDialogFolderId != 0 && (!SharedConfig.archiveHidden || archiveBackgroundProgress != 0f)) {
-				Theme.dialogs_pinnedPaint.color = AndroidUtilities.getOffsetColor(0, context.getColor(R.color.light_background), archiveBackgroundProgress, 1.0f)
-				canvas.drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_pinnedPaint)
-			}
-			else if (isPinned || drawPinBackground) {
-				Theme.dialogs_pinnedPaint.color = context.getColor(R.color.light_background)
-				canvas.drawRoundRect(rect, cornersRadius, cornersRadius, Theme.dialogs_pinnedPaint)
-			}
-
-			canvas.restore()
 		}
 
 		if (translationX != 0f) {
@@ -3377,10 +3359,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		}
 
 		if (timeLayout != null && currentDialogFolderId == 0) {
-			canvas.save()
-			canvas.translate(timeLeft.toFloat(), timeTop.toFloat())
-			timeLayout?.draw(canvas)
-			canvas.restore()
+			canvas.withTranslation(timeLeft.toFloat(), timeTop.toFloat()) {
+				timeLayout?.draw(this)
+			}
 		}
 
 		if (messageNameLayout != null) {
@@ -3394,17 +3375,14 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				Theme.dialogs_messageNamePaint.color = context.getColor(R.color.text).also { Theme.dialogs_messageNamePaint.linkColor = it }
 			}
 
-			canvas.save()
-			canvas.translate(messageNameLeft.toFloat(), messageNameTop.toFloat())
-
-			try {
-				messageNameLayout?.draw(canvas)
+			canvas.withTranslation(messageNameLeft.toFloat(), messageNameTop.toFloat()) {
+				try {
+					messageNameLayout?.draw(this)
+				}
+				catch (e: Exception) {
+					FileLog.e(e)
+				}
 			}
-			catch (e: Exception) {
-				FileLog.e(e)
-			}
-
-			canvas.restore()
 		}
 
 		if (messageLayout != null) {
@@ -3420,53 +3398,47 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				Theme.dialogs_messagePaint[paintIndex].color = context.getColor(R.color.dark_gray).also { Theme.dialogs_messagePaint[paintIndex].linkColor = it }
 			}
 
-			canvas.save()
-			canvas.translate(messageLeft.toFloat(), messageTop.toFloat())
+			canvas.withTranslation(messageLeft.toFloat(), messageTop.toFloat()) {
+				if (spoilers.isNotEmpty()) {
+					try {
+						withSave {
+							SpoilerEffect.clipOutCanvas(this, spoilers)
+							messageLayout?.draw(this)
+							AnimatedEmojiSpan.drawAnimatedEmojis(this, messageLayout, animatedEmojiStack, -.075f, spoilers, 0f, 0f, 0f, 1f)
+						}
 
-			if (spoilers.isNotEmpty()) {
-				try {
-					canvas.save()
-					SpoilerEffect.clipOutCanvas(canvas, spoilers)
-					messageLayout?.draw(canvas)
-					AnimatedEmojiSpan.drawAnimatedEmojis(canvas, messageLayout, animatedEmojiStack, -.075f, spoilers, 0f, 0f, 0f, 1f)
-
-					canvas.restore()
-
-					for (i in spoilers.indices) {
-						val eff = spoilers[i]
-						eff.setColor(messageLayout!!.paint.color)
-						eff.draw(canvas)
+						for (i in spoilers.indices) {
+							val eff = spoilers[i]
+							eff.setColor(messageLayout!!.paint.color)
+							eff.draw(this)
+						}
+					}
+					catch (e: Exception) {
+						FileLog.e(e)
 					}
 				}
-				catch (e: Exception) {
-					FileLog.e(e)
+				else {
+					messageLayout?.draw(this)
+					AnimatedEmojiSpan.drawAnimatedEmojis(this, messageLayout, animatedEmojiStack, -.075f, null, 0f, 0f, 0f, 1f)
 				}
-			}
-			else {
-				messageLayout?.draw(canvas)
-				AnimatedEmojiSpan.drawAnimatedEmojis(canvas, messageLayout, animatedEmojiStack, -.075f, null, 0f, 0f, 0f, 1f)
-			}
 
-			canvas.restore()
+			}
 
 			if (printingStringType >= 0) {
 				val statusDrawable = Theme.getChatStatusDrawable(printingStringType)
 
 				if (statusDrawable != null) {
-					canvas.save()
+					canvas.withSave {
+						if (printingStringType == 1 || printingStringType == 4) {
+							translate(statusDrawableLeft.toFloat(), (messageTop + if (printingStringType == 1) AndroidUtilities.dp(1f) else 0).toFloat())
+						}
+						else {
+							translate(statusDrawableLeft.toFloat(), messageTop + (AndroidUtilities.dp(18f) - statusDrawable.intrinsicHeight) / 2f)
+						}
 
-					if (printingStringType == 1 || printingStringType == 4) {
-						canvas.translate(statusDrawableLeft.toFloat(), (messageTop + if (printingStringType == 1) AndroidUtilities.dp(1f) else 0).toFloat())
+						statusDrawable.draw(this)
+						invalidate()
 					}
-					else {
-						canvas.translate(statusDrawableLeft.toFloat(), messageTop + (AndroidUtilities.dp(18f) - statusDrawable.intrinsicHeight) / 2f)
-					}
-
-					statusDrawable.draw(canvas)
-
-					invalidate()
-
-					canvas.restore()
 				}
 			}
 		}
@@ -3507,7 +3479,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		}
 
 		if (dialogsType != 2 && (isMuted || dialogMutedProgress > 0) && !drawVerified && drawScam == 0 && !drawPremium) {
-			val muteIcon = ResourcesCompat.getDrawable(context!!.resources, R.drawable.volume_slash, null)
+			val muteIcon = ResourcesCompat.getDrawable(context!!.resources, R.drawable.volume_slash, null)!!
 
 			if (isMuted && dialogMutedProgress != 1f) {
 				dialogMutedProgress += 16 / 150f
@@ -3533,18 +3505,50 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 			setDrawableBounds(muteIcon, nameMuteLeft - AndroidUtilities.dp((if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 0 else 1).toFloat()), AndroidUtilities.dp(if (SharedConfig.useThreeLinesLayout) 14f else 19f))
 
 			if (dialogMutedProgress != 1f) {
-				canvas.save()
-				canvas.scale(dialogMutedProgress, dialogMutedProgress, muteIcon!!.bounds.centerX().toFloat(), muteIcon.bounds.centerY().toFloat())
-
-				muteIcon.alpha = (255 * dialogMutedProgress).toInt()
-				muteIcon.draw(canvas)
-				muteIcon.alpha = 255
-
-				canvas.restore()
+				canvas.withScale(dialogMutedProgress, dialogMutedProgress, muteIcon.bounds.centerX().toFloat(), muteIcon.bounds.centerY().toFloat()) {
+					muteIcon.alpha = (255 * dialogMutedProgress).toInt()
+					muteIcon.draw(this)
+					muteIcon.alpha = 255
+				}
 			}
 			else {
-				muteIcon?.draw(canvas)
+				muteIcon.draw(canvas)
 			}
+		}
+		else if (drawPremium) {
+			val drawables = mutableListOf<Drawable>()
+
+			if (drawVerified) {
+				ResourcesCompat.getDrawable(resources, R.drawable.verified_donated_icon, null)?.let { drawables.add(it) }
+			}
+			else {
+				ResourcesCompat.getDrawable(resources, R.drawable.donated, null)?.let { drawables.add(it) }
+			}
+
+			if (isMuted) {
+				ResourcesCompat.getDrawable(context!!.resources, R.drawable.volume_slash, null)?.let { drawables.add(it) }
+			}
+
+			val donatedMuteIcons = combineDrawables(AndroidUtilities.dp(11f), drawables)
+
+			if (isLastCharUpperCaseOrDigit(user, chat)) {
+				setDrawableBounds(donatedMuteIcons, nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else Gravity.CENTER.toFloat() + 2.1f))
+			}
+			else {
+				setDrawableBounds(donatedMuteIcons, nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else Gravity.CENTER.toFloat() + 2.3f))
+			}
+
+			donatedMuteIcons.draw(canvas)
+//			if (emojiStatus.drawable != null) {
+//				emojiStatus.setBounds(nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else 15.5f) - AndroidUtilities.dp(4f), nameMuteLeft + AndroidUtilities.dp(20f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else 15.5f) - AndroidUtilities.dp(4f) + AndroidUtilities.dp(22f))
+//				emojiStatus.color = context.getColor(R.color.brand)
+//				emojiStatus.draw(canvas)
+//			}
+//			else {
+//				val premiumDrawable = PremiumGradient.getInstance().premiumStarDrawableMini
+//				setDrawableBounds(premiumDrawable, nameMuteLeft - AndroidUtilities.dp(1f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else 15.5f))
+//				premiumDrawable.draw(canvas)
+//			}
 		}
 		else if (drawVerified) {
 			val drawables = mutableListOf<Drawable>()
@@ -3566,18 +3570,6 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 			verifiedMuteIcons.draw(canvas)
 		}
-		else if (drawPremium) {
-			if (emojiStatus.drawable != null) {
-				emojiStatus.setBounds(nameMuteLeft - AndroidUtilities.dp(2f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else 15.5f) - AndroidUtilities.dp(4f), nameMuteLeft + AndroidUtilities.dp(20f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else 15.5f) - AndroidUtilities.dp(4f) + AndroidUtilities.dp(22f))
-				emojiStatus.color = context.getColor(R.color.brand)
-				emojiStatus.draw(canvas)
-			}
-			else {
-				val premiumDrawable = PremiumGradient.getInstance().premiumStarDrawableMini
-				setDrawableBounds(premiumDrawable, nameMuteLeft - AndroidUtilities.dp(1f), AndroidUtilities.dp(if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12.5f else 15.5f))
-				premiumDrawable.draw(canvas)
-			}
-		}
 		else if (drawScam != 0) {
 			setDrawableBounds(if (drawScam == 1) Theme.dialogs_scamDrawable else Theme.dialogs_fakeDrawable, nameMuteLeft, AndroidUtilities.dp((if (useForceThreeLines || SharedConfig.useThreeLinesLayout) 12 else 15).toFloat()))
 			(if (drawScam == 1) Theme.dialogs_scamDrawable else Theme.dialogs_fakeDrawable).draw(canvas)
@@ -3596,7 +3588,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		}
 
 		if (drawPaid) {
-			val paidDrawable = if (ChatObject.isOnlineCourse(chat)) {
+			val paidDrawable = if (ChatObject.isMasterclass(chat)) {
 				ResourcesCompat.getDrawable(context.resources, R.drawable.online_course, null)?.mutate()
 			}
 			else {
@@ -3643,12 +3635,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 							setDrawableBounds(Theme.dialogs_pinnedDrawable, pinLeft, pinTop)
 
-							canvas.save()
-							canvas.scale(1f - progressFinal, 1f - progressFinal, Theme.dialogs_pinnedDrawable.bounds.centerX().toFloat(), Theme.dialogs_pinnedDrawable.bounds.centerY().toFloat())
-
-							Theme.dialogs_pinnedDrawable.draw(canvas)
-
-							canvas.restore()
+							canvas.withScale(1f - progressFinal, 1f - progressFinal, Theme.dialogs_pinnedDrawable.bounds.centerX().toFloat(), Theme.dialogs_pinnedDrawable.bounds.centerY().toFloat()) {
+								Theme.dialogs_pinnedDrawable.draw(this)
+							}
 						}
 
 						canvas.save()
@@ -3658,10 +3647,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 					canvas.drawRoundRect(rect, COUNTER_CORNER_RADIUS * AndroidUtilities.density, COUNTER_CORNER_RADIUS * AndroidUtilities.density, paint)
 
 					if (drawLayout != null) {
-						canvas.save()
-						canvas.translate(countLeft.toFloat(), (countTop + AndroidUtilities.dp(4f)).toFloat())
-						drawLayout.draw(canvas)
-						canvas.restore()
+						canvas.withTranslation(countLeft.toFloat(), (countTop + AndroidUtilities.dp(4f)).toFloat()) {
+							drawLayout.draw(this)
+						}
 					}
 
 					if (progressFinal != 1f) {
@@ -3694,45 +3682,40 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						0.1f * CubicBezierInterpolator.EASE_IN.getInterpolation(1f - (progressFinal - 0.5f) * 2)
 					}
 
-					canvas.save()
-					canvas.scale(scale, scale, rect.centerX(), rect.centerY())
-					canvas.drawRoundRect(rect, COUNTER_CORNER_RADIUS * AndroidUtilities.density, COUNTER_CORNER_RADIUS * AndroidUtilities.density, paint)
+					canvas.withScale(scale, scale, rect.centerX(), rect.centerY()) {
+						drawRoundRect(rect, COUNTER_CORNER_RADIUS * AndroidUtilities.density, COUNTER_CORNER_RADIUS * AndroidUtilities.density, paint)
 
-					if (countAnimationStableLayout != null) {
-						canvas.save()
-						canvas.translate(countLeft, (countTop + AndroidUtilities.dp(4f)).toFloat())
-						countAnimationStableLayout?.draw(canvas)
-						canvas.restore()
+						if (countAnimationStableLayout != null) {
+							withTranslation(countLeft, (countTop + AndroidUtilities.dp(4f)).toFloat()) {
+								countAnimationStableLayout?.draw(this)
+							}
+						}
+
+						val textAlpha = Theme.dialogs_countTextPaint.alpha
+
+						Theme.dialogs_countTextPaint.alpha = (textAlpha * progressHalf).toInt()
+
+						if (countAnimationInLayout != null) {
+							withTranslation(countLeft, (if (countAnimationIncrement) AndroidUtilities.dp(13f) else -AndroidUtilities.dp(13f)) * (1f - progressHalf) + countTop + AndroidUtilities.dp(4f)) {
+								countAnimationInLayout?.draw(this)
+							}
+						}
+						else if (countLayout != null) {
+							withTranslation(countLeft, (if (countAnimationIncrement) AndroidUtilities.dp(13f) else -AndroidUtilities.dp(13f)) * (1f - progressHalf) + countTop + AndroidUtilities.dp(4f)) {
+								countLayout?.draw(this)
+							}
+						}
+
+						if (countOldLayout != null) {
+							Theme.dialogs_countTextPaint.alpha = (textAlpha * (1f - progressHalf)).toInt()
+
+							withTranslation(countLeft, (if (countAnimationIncrement) -AndroidUtilities.dp(13f) else AndroidUtilities.dp(13f)) * progressHalf + countTop + AndroidUtilities.dp(4f)) {
+								countOldLayout?.draw(this)
+							}
+						}
+
+						Theme.dialogs_countTextPaint.alpha = textAlpha
 					}
-
-					val textAlpha = Theme.dialogs_countTextPaint.alpha
-
-					Theme.dialogs_countTextPaint.alpha = (textAlpha * progressHalf).toInt()
-
-					if (countAnimationInLayout != null) {
-						canvas.save()
-						canvas.translate(countLeft, (if (countAnimationIncrement) AndroidUtilities.dp(13f) else -AndroidUtilities.dp(13f)) * (1f - progressHalf) + countTop + AndroidUtilities.dp(4f))
-						countAnimationInLayout?.draw(canvas)
-						canvas.restore()
-					}
-					else if (countLayout != null) {
-						canvas.save()
-						canvas.translate(countLeft, (if (countAnimationIncrement) AndroidUtilities.dp(13f) else -AndroidUtilities.dp(13f)) * (1f - progressHalf) + countTop + AndroidUtilities.dp(4f))
-						countLayout?.draw(canvas)
-						canvas.restore()
-					}
-
-					if (countOldLayout != null) {
-						Theme.dialogs_countTextPaint.alpha = (textAlpha * (1f - progressHalf)).toInt()
-						canvas.save()
-						canvas.translate(countLeft, (if (countAnimationIncrement) -AndroidUtilities.dp(13f) else AndroidUtilities.dp(13f)) * progressHalf + countTop + AndroidUtilities.dp(4f))
-						countOldLayout?.draw(canvas)
-						canvas.restore()
-					}
-
-					Theme.dialogs_countTextPaint.alpha = textAlpha
-
-					canvas.restore()
 				}
 			}
 
@@ -3749,10 +3732,10 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 				if (mentionLayout != null) {
 					Theme.dialogs_countTextPaint.alpha = ((1.0f - reorderIconProgress) * 255).toInt()
-					canvas.save()
-					canvas.translate(mentionLeft.toFloat(), (countTop + AndroidUtilities.dp(4f)).toFloat())
-					mentionLayout?.draw(canvas)
-					canvas.restore()
+
+					canvas.withTranslation(mentionLeft.toFloat(), (countTop + AndroidUtilities.dp(4f)).toFloat()) {
+						mentionLayout?.draw(this)
+					}
 				}
 				else {
 					Theme.dialogs_mentionDrawable.alpha = ((1.0f - reorderIconProgress) * 255).toInt()
@@ -3770,22 +3753,17 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 
 				val paint = Theme.dialogs_reactionsCountPaint
 
-				canvas.save()
+				canvas.withSave {
+					if (reactionsMentionsChangeProgress != 1f) {
+						val s = if (drawReactionMention) reactionsMentionsChangeProgress else 1f - reactionsMentionsChangeProgress
+						scale(s, s, rect.centerX(), rect.centerY())
+					}
 
-				if (reactionsMentionsChangeProgress != 1f) {
-					val s = if (drawReactionMention) reactionsMentionsChangeProgress else 1f - reactionsMentionsChangeProgress
-					canvas.scale(s, s, rect.centerX(), rect.centerY())
+					drawRoundRect(rect, COUNTER_CORNER_RADIUS * AndroidUtilities.density, COUNTER_CORNER_RADIUS * AndroidUtilities.density, paint)
+					Theme.dialogs_reactionsMentionDrawable.alpha = ((1.0f - reorderIconProgress) * 255).toInt()
+					setDrawableBounds(Theme.dialogs_reactionsMentionDrawable, reactionMentionLeft - AndroidUtilities.dp(2f), countTop + AndroidUtilities.dp(3.8f), AndroidUtilities.dp(16f), AndroidUtilities.dp(16f))
+					Theme.dialogs_reactionsMentionDrawable.draw(this)
 				}
-
-				canvas.drawRoundRect(rect, COUNTER_CORNER_RADIUS * AndroidUtilities.density, COUNTER_CORNER_RADIUS * AndroidUtilities.density, paint)
-
-				Theme.dialogs_reactionsMentionDrawable.alpha = ((1.0f - reorderIconProgress) * 255).toInt()
-
-				setDrawableBounds(Theme.dialogs_reactionsMentionDrawable, reactionMentionLeft - AndroidUtilities.dp(2f), countTop + AndroidUtilities.dp(3.8f), AndroidUtilities.dp(16f), AndroidUtilities.dp(16f))
-
-				Theme.dialogs_reactionsMentionDrawable.draw(canvas)
-
-				canvas.restore()
 			}
 		}
 		else if (isPinned) {
@@ -3889,7 +3867,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 				}
 			}
 			else if (chat != null) {
-				hasCall = chat!!.call_active && chat!!.call_not_empty
+				hasCall = chat!!.callActive && chat!!.callNotEmpty
 
 				if (hasCall || chatCallProgress != 0f) {
 					val checkProgress = if (checkBox?.isChecked == true) 1.0f - (checkBox?.progress ?: 0f) else 1.0f
@@ -4018,10 +3996,9 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		}
 
 		if (currentDialogFolderId != 0 && translationX == 0f && archivedChatsDrawable != null) {
-			canvas.save()
-			canvas.clipRect(0, 0, measuredWidth, measuredHeight)
-			archivedChatsDrawable?.draw(canvas)
-			canvas.restore()
+			canvas.withClip(0, 0, measuredWidth, measuredHeight) {
+				archivedChatsDrawable?.draw(this)
+			}
 		}
 
 		if (useSeparator) {
@@ -4165,7 +4142,7 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 	}
 
 	private fun isLastCharUpperCaseOrDigit(user: User?, chat: Chat?): Boolean {
-		val name = user?.last_name ?: user?.first_name
+		val name = user?.lastName ?: user?.firstName
 		val channelName = chat?.title
 
 		if (!name.isNullOrEmpty()) {
@@ -4333,11 +4310,11 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 						sb.append(context.getString(R.string.Bot))
 						sb.append(". ")
 					}
-					if (user.self) {
+					if (user.isSelf) {
 						sb.append(context.getString(R.string.SavedMessages))
 					}
 					else {
-						sb.append(ContactsController.formatName(user.first_name, user.last_name))
+						sb.append(ContactsController.formatName(user.firstName, user.lastName))
 					}
 				}
 
@@ -4402,10 +4379,10 @@ class DialogCell @JvmOverloads constructor(private val parentFragment: DialogsAc
 		sb.append(". ")
 
 		if (chat != null && !message.isOut && message.isFromUser && message.messageOwner?.action == null) {
-			val fromUser = MessagesController.getInstance(currentAccount).getUser(message.messageOwner?.from_id?.user_id)
+			val fromUser = MessagesController.getInstance(currentAccount).getUser(message.messageOwner?.fromId?.userId)
 
 			if (fromUser != null) {
-				sb.append(ContactsController.formatName(fromUser.first_name, fromUser.last_name))
+				sb.append(ContactsController.formatName(fromUser.firstName, fromUser.lastName))
 				sb.append(". ")
 			}
 		}

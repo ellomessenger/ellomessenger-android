@@ -1,7 +1,16 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.messenger.utils;
 
 import android.text.Spanned;
 
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AnimatedEmojiSpan;
 import org.telegram.ui.Components.TextStyleSpan;
 import org.telegram.ui.Components.URLSpanMono;
@@ -9,6 +18,7 @@ import org.telegram.ui.Components.URLSpanReplacement;
 
 public class CustomHtml {
 	private CustomHtml() {
+		// prevent instantiation
 	}
 
 	public static String toHtml(Spanned text) {
@@ -47,8 +57,8 @@ public class CustomHtml {
 							out.append("<s>");
 						}
 						if ((flags & TextStyleSpan.FLAG_STYLE_URL) > 0) {
-							if (spanObject.getStyle().urlEntity != null) {
-								out.append("<a href=\"").append(spanObject.getStyle().urlEntity.url).append("\">");
+							if (spanObject.getStyle().urlEntity instanceof TLRPC.TLMessageEntityTextUrl urlEntity) {
+								out.append("<a href=\"").append(urlEntity.url).append("\">");
 							}
 						}
 					}
@@ -60,8 +70,9 @@ public class CustomHtml {
 			if (spans != null) {
 				for (TextStyleSpan spanObject : spans) {
 					if (spanObject != null) {
-						int flags = ((TextStyleSpan)spanObject).getStyle().styleFlags;
-						if ((flags & TextStyleSpan.FLAG_STYLE_URL) > 0 && ((TextStyleSpan)spanObject).getStyle() != null && ((TextStyleSpan)spanObject).getStyle().urlEntity != null) {
+						int flags = spanObject.getStyle().styleFlags;
+
+						if ((flags & TextStyleSpan.FLAG_STYLE_URL) > 0 && spanObject.getStyle() != null && spanObject.getStyle().urlEntity != null) {
 							out.append("</a>");
 						}
 						if ((flags & TextStyleSpan.FLAG_STYLE_STRIKE) > 0) {

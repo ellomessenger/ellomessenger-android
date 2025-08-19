@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells
 
@@ -30,10 +30,14 @@ import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.UserObject.getUserName
 import org.telegram.messenger.UserObject.isUserSelf
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
 import org.telegram.tgnet.TLRPC.FileLocation
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoSmall
 import org.telegram.ui.ActionBar.SimpleTextView
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AvatarDrawable
@@ -69,7 +73,7 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 
 		addView(avatarImageView, createFrame(46, 46f, (if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT) or Gravity.TOP, if (LocaleController.isRTL) 0f else (13f + padding), 6f, if (LocaleController.isRTL) 13f + padding else 0f, 0f))
 
-		nameTextView.textColor = Theme.getColor(if (forceDarkTheme) Theme.key_voipgroup_nameText else Theme.key_windowBackgroundWhiteBlackText)
+		nameTextView.textColor = if (forceDarkTheme) context.getColor(R.color.dark_fixed) else context.getColor(R.color.text)
 		nameTextView.setTypeface(Theme.TYPEFACE_BOLD)
 		nameTextView.setTextSize(16)
 		nameTextView.setGravity((if (LocaleController.isRTL) Gravity.RIGHT else Gravity.LEFT) or Gravity.TOP)
@@ -83,7 +87,7 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 
 		if (checkBoxType == 1) {
 			checkBox = CheckBox2(context, 21)
-			checkBox?.setColor(0, context.getColor(R.color.background), context.getColor(R.color.brand))
+			checkBox?.setColor(0, context.getColor(R.color.background), context.getColor(R.color.white))
 			checkBox?.setDrawUnchecked(false)
 			checkBox?.setDrawBackgroundAsArc(3)
 
@@ -243,8 +247,8 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 				}
 			}
 
-			if (`object` is User) {
-				val currentUser = `object` as User?
+			if (`object` is TLRPC.User) {
+				val currentUser = `object` as? TLRPC.User
 
 				if (showSelfAsSaved && isUserSelf(currentUser)) {
 					nameTextView.setText(context.getString(R.string.SavedMessages), true)
@@ -256,20 +260,20 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 				}
 
 				if (currentUser?.photo != null) {
-					photo = currentUser.photo?.photo_small
+					photo = currentUser.photo?.photoSmall
 				}
 
 				if (mask != 0) {
 					var continueUpdate = false
 
 					if (mask and MessagesController.UPDATE_MASK_AVATAR != 0) {
-						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar.volume_id != photo.volume_id || lastAvatar.local_id != photo.local_id)) {
+						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar.volumeId != photo.volumeId || lastAvatar.localId != photo.localId)) {
 							continueUpdate = true
 						}
 					}
 
 					if (currentUser != null && currentStatus == null && !continueUpdate && mask and MessagesController.UPDATE_MASK_STATUS != 0) {
-						val newStatus = currentUser.status?.expires ?: 0
+						val newStatus = (currentUser as? TLRPC.TLUser)?.status?.expires ?: 0
 
 						if (newStatus != lastStatus) {
 							continueUpdate = true
@@ -291,7 +295,7 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 
 				avatarDrawable.setInfo(currentUser)
 
-				lastStatus = currentUser?.status?.expires ?: 0
+				lastStatus = (currentUser as? TLRPC.TLUser)?.status?.expires ?: 0
 
 				if (currentName != null) {
 					lastName = null
@@ -308,7 +312,7 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 						statusTextView.setText(context.getString(R.string.Bot))
 					}
 					else {
-						if (currentUser?.id == getInstance(currentAccount).getClientUserId() || (currentUser?.status?.expires ?: 0) > ConnectionsManager.getInstance(currentAccount).currentTime || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(currentUser?.id)) {
+						if (currentUser?.id == getInstance(currentAccount).getClientUserId() || ((currentUser as? TLRPC.TLUser)?.status?.expires ?: 0) > ConnectionsManager.getInstance(currentAccount).currentTime || MessagesController.getInstance(currentAccount).onlinePrivacy.containsKey(currentUser?.id)) {
 							statusTextView.textColor = ResourcesCompat.getColor(context.resources, R.color.brand, null)
 							statusTextView.setText(context.getString(R.string.Online))
 						}
@@ -325,14 +329,14 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 				val currentChat = `object` as Chat
 
 				if (currentChat.photo != null) {
-					photo = currentChat.photo.photo_small
+					photo = currentChat.photo.photoSmall
 				}
 
 				if (mask != 0) {
 					var continueUpdate = false
 
 					if (mask and MessagesController.UPDATE_MASK_AVATAR != 0) {
-						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar.volume_id != photo.volume_id || lastAvatar.local_id != photo.local_id)) {
+						if (lastAvatar != null && photo == null || lastAvatar == null && photo != null || lastAvatar != null && photo != null && (lastAvatar.volumeId != photo.volumeId || lastAvatar.localId != photo.localId)) {
 							continueUpdate = true
 						}
 					}
@@ -364,15 +368,15 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 				if (currentStatus == null) {
 					statusTextView.textColor = ResourcesCompat.getColor(context.resources, R.color.dark_gray, null)
 
-					if (currentChat.participants_count != 0) {
+					if (currentChat.participantsCount != 0) {
 						if (ChatObject.isChannel(currentChat) && !currentChat.megagroup) {
-							statusTextView.setText(LocaleController.formatPluralString("Subscribers", currentChat.participants_count))
+							statusTextView.setText(LocaleController.formatPluralString("Subscribers", currentChat.participantsCount))
 						}
 						else {
-							statusTextView.setText(LocaleController.formatPluralString("Members", currentChat.participants_count))
+							statusTextView.setText(LocaleController.formatPluralString("Members", currentChat.participantsCount))
 						}
 					}
-					else if (currentChat.has_geo) {
+					else if (currentChat.hasGeo) {
 						statusTextView.setText(context.getString(R.string.MegaLocation))
 					}
 					else if (currentChat.username.isNullOrEmpty()) {
@@ -407,7 +411,7 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 		super.onDraw(canvas)
 
 		if (checkBoxType == 2 && (isChecked || checkProgress > 0.0f)) {
-			paint?.color = Theme.getColor(Theme.key_checkboxSquareBackground) // TODO: replace color
+			paint?.color = context.getColor(R.color.brand)
 			val cx = (avatarImageView.left + avatarImageView.measuredWidth / 2).toFloat()
 			val cy = (avatarImageView.top + avatarImageView.measuredHeight / 2).toFloat()
 			canvas.drawCircle(cx, cy, AndroidUtilities.dp(18f) + AndroidUtilities.dp(4f) * checkProgress, paint!!)
@@ -417,9 +421,8 @@ class GroupCreateUserCell @JvmOverloads constructor(context: Context, private va
 			val start = AndroidUtilities.dp(if (LocaleController.isRTL) 0f else 72f + padding.toFloat())
 			val end = measuredWidth - AndroidUtilities.dp(if (!LocaleController.isRTL) 0f else 72f + padding.toFloat())
 
-			// TODO: replace color
 			if (forceDarkTheme) {
-				Theme.dividerExtraPaint.color = Theme.getColor(Theme.key_voipgroup_actionBar)
+				Theme.dividerExtraPaint.color = context.getColor(R.color.dark_fixed)
 				canvas.drawRect(start.toFloat(), (measuredHeight - 1).toFloat(), end.toFloat(), measuredHeight.toFloat(), Theme.dividerExtraPaint)
 			}
 			else {

@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Cells;
 
@@ -20,12 +20,14 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CheckBoxSquare;
 import org.telegram.ui.Components.LayoutHelper;
+
+import androidx.annotation.NonNull;
 
 public class CheckBoxUserCell extends FrameLayout {
 	private final TextView textView;
@@ -33,7 +35,6 @@ public class CheckBoxUserCell extends FrameLayout {
 	private final CheckBoxSquare checkBox;
 	private final AvatarDrawable avatarDrawable;
 	private boolean needDivider;
-
 	private User currentUser;
 
 	public CheckBoxUserCell(Context context) {
@@ -73,7 +74,7 @@ public class CheckBoxUserCell extends FrameLayout {
 
 	public void setUser(User user, boolean checked, boolean divider) {
 		currentUser = user;
-		textView.setText(ContactsController.formatName(user.getFirst_name(), user.getLast_name()));
+		textView.setText(ContactsController.formatName(user.firstName, user.lastName));
 		checkBox.setChecked(checked, false);
 		avatarDrawable.setInfo(user);
 		imageView.setForUserOrChat(user, avatarDrawable);
@@ -98,7 +99,7 @@ public class CheckBoxUserCell extends FrameLayout {
 	}
 
 	@Override
-	protected void onDraw(Canvas canvas) {
+	protected void onDraw(@NonNull Canvas canvas) {
 		if (needDivider) {
 			canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(20), getMeasuredHeight() - 1, getMeasuredWidth() - (LocaleController.isRTL ? AndroidUtilities.dp(20) : 0), getMeasuredHeight() - 1, Theme.dividerPaint);
 		}

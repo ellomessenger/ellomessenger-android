@@ -1,3 +1,10 @@
+/*
+ * This is the source code of Ello for Android.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikita Denin, Ello 2023-2025.
+ */
 package org.telegram.ui.profile
 
 import android.annotation.SuppressLint
@@ -5,7 +12,6 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.Toast
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.R
 import org.telegram.messenger.databinding.ChangeEmailPasswordFragmentBinding

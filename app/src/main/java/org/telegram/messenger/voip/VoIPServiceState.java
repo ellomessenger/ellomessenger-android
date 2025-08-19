@@ -4,12 +4,12 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Telegram, 2024.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.messenger.voip;
 
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.User;
+import org.telegram.tgnet.TLRPC.User;
 
 import javax.annotation.Nullable;
 

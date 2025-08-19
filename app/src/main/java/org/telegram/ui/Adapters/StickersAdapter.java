@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Adapters;
 
@@ -136,7 +136,7 @@ public class StickersAdapter extends RecyclerListView.SelectionAdapter implement
 		if (isValidEmoji) {
 			TLRPC.Document animatedSticker = MediaDataController.getInstance(currentAccount).getEmojiAnimatedSticker(emoji);
 			if (animatedSticker != null) {
-				List<TLRPC.TL_messages_stickerSet> sets = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_EMOJI);
+				List<TLRPC.TLMessagesStickerSet> sets = MediaDataController.getInstance(currentAccount).getStickerSets(MediaDataController.TYPE_EMOJI);
 				File f = FileLoader.getInstance(currentAccount).getPathToAttach(animatedSticker, true);
 				if (!f.exists()) {
 					FileLoader.getInstance(currentAccount).loadFile(ImageLocation.getForDocument(animatedSticker), sets.get(0), null, FileLoader.PRIORITY_NORMAL, 1);

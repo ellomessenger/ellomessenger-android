@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger.messageobject
 
@@ -13,7 +13,6 @@ import android.graphics.Paint.FontMetricsInt
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.text.LineBreaker
-import android.net.Uri
 import android.os.Build
 import android.text.Layout
 import android.text.Spannable
@@ -30,6 +29,8 @@ import android.text.style.URLSpan
 import android.text.util.Linkify
 import android.util.Base64
 import androidx.collection.LongSparseArray
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.net.toUri
 import org.telegram.PhoneFormat.PhoneFormat
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -65,209 +66,205 @@ import org.telegram.messenger.browser.Browser
 import org.telegram.messenger.ringtone.RingtoneDataStore
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.SerializedData
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.BotInlineResult
 import org.telegram.tgnet.TLRPC.ChannelParticipant
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.tlrpc.ChatInvite
+import org.telegram.tgnet.TLRPC.ChatInvite
 import org.telegram.tgnet.TLRPC.ChatReactions
 import org.telegram.tgnet.TLRPC.InputStickerSet
-import org.telegram.tgnet.tlrpc.MessageEntity
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.MessageEntity
 import org.telegram.tgnet.TLRPC.MessageMedia
-import org.telegram.tgnet.TLRPC.MessagePeerReaction
 import org.telegram.tgnet.TLRPC.PageBlock
 import org.telegram.tgnet.TLRPC.Peer
 import org.telegram.tgnet.TLRPC.PhotoSize
-import org.telegram.tgnet.TLRPC.PollResults
 import org.telegram.tgnet.TLRPC.StickerSetCovered
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEvent
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeAbout
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeAvailableReactions
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeHistoryTTL
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeLinkedChat
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeLocation
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangePhoto
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeStickerSet
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeTheme
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeTitle
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionChangeUsername
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionDefaultBannedRights
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionDeleteMessage
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionDiscardGroupCall
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionEditMessage
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionExportedInviteDelete
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionExportedInviteEdit
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionExportedInviteRevoke
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantInvite
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantJoin
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantJoinByInvite
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantJoinByRequest
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantLeave
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantMute
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantToggleAdmin
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantToggleBan
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantUnmute
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionParticipantVolume
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionSendMessage
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionStartGroupCall
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionStopPoll
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionToggleGroupCallSetting
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionToggleInvites
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionToggleNoForwards
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionTogglePreHistoryHidden
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionToggleSignatures
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionToggleSlowMode
-import org.telegram.tgnet.TLRPC.TL_channelAdminLogEventActionUpdatePinned
-import org.telegram.tgnet.TLRPC.TL_channelLocation
-import org.telegram.tgnet.TLRPC.TL_channelLocationEmpty
-import org.telegram.tgnet.TLRPC.TL_channelParticipant
-import org.telegram.tgnet.TLRPC.TL_channelParticipantAdmin
-import org.telegram.tgnet.TLRPC.TL_channelParticipantCreator
-import org.telegram.tgnet.TLRPC.TL_chatAdminRights
-import org.telegram.tgnet.TLRPC.TL_chatInviteExported
-import org.telegram.tgnet.TLRPC.TL_chatInvitePublicJoinRequests
-import org.telegram.tgnet.TLRPC.TL_chatReactionsAll
-import org.telegram.tgnet.TLRPC.TL_chatReactionsSome
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionScreenshotMessages
-import org.telegram.tgnet.TLRPC.TL_decryptedMessageActionSetMessageTTL
-import org.telegram.tgnet.TLRPC.TL_document
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAnimated
-import org.telegram.tgnet.TLRPC.TL_documentAttributeAudio
-import org.telegram.tgnet.TLRPC.TL_documentAttributeCustomEmoji
-import org.telegram.tgnet.TLRPC.TL_documentAttributeHasStickers
-import org.telegram.tgnet.TLRPC.TL_documentAttributeImageSize
-import org.telegram.tgnet.TLRPC.TL_documentAttributeSticker
-import org.telegram.tgnet.TLRPC.TL_documentAttributeVideo
-import org.telegram.tgnet.TLRPC.TL_documentEmpty
-import org.telegram.tgnet.TLRPC.TL_documentEncrypted
-import org.telegram.tgnet.TLRPC.TL_fileLocationUnavailable
-import org.telegram.tgnet.TLRPC.TL_game
-import org.telegram.tgnet.tlrpc.TL_inputMessageEntityMentionName
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetEmpty
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetShortName
-import org.telegram.tgnet.TLRPC.TL_keyboardButtonBuy
-import org.telegram.tgnet.TLRPC.TL_messageActionBotAllowed
-import org.telegram.tgnet.TLRPC.TL_messageActionChatAddUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatCreate
-import org.telegram.tgnet.TLRPC.TL_messageActionChatDeletePhoto
-import org.telegram.tgnet.TLRPC.TL_messageActionChatDeleteUser
-import org.telegram.tgnet.TLRPC.TL_messageActionChatEditPhoto
-import org.telegram.tgnet.TLRPC.TL_messageActionChatEditTitle
-import org.telegram.tgnet.TLRPC.TL_messageActionChatJoinedByLink
-import org.telegram.tgnet.TLRPC.TL_messageActionChatJoinedByRequest
-import org.telegram.tgnet.TLRPC.TL_messageActionContactSignUp
-import org.telegram.tgnet.TLRPC.TL_messageActionCustomAction
-import org.telegram.tgnet.TLRPC.TL_messageActionEmpty
-import org.telegram.tgnet.TLRPC.TL_messageActionGeoProximityReached
-import org.telegram.tgnet.TLRPC.TL_messageActionGiftPremium
-import org.telegram.tgnet.TLRPC.TL_messageActionGroupCall
-import org.telegram.tgnet.TLRPC.TL_messageActionGroupCallScheduled
-import org.telegram.tgnet.TLRPC.TL_messageActionHistoryClear
-import org.telegram.tgnet.TLRPC.TL_messageActionInviteToGroupCall
-import org.telegram.tgnet.TLRPC.TL_messageActionLoginUnknownLocation
-import org.telegram.tgnet.TLRPC.TL_messageActionPhoneCall
-import org.telegram.tgnet.TLRPC.TL_messageActionSecureValuesSent
-import org.telegram.tgnet.TLRPC.TL_messageActionSetChatTheme
-import org.telegram.tgnet.TLRPC.TL_messageActionSetMessagesTTL
-import org.telegram.tgnet.TLRPC.TL_messageActionTTLChange
-import org.telegram.tgnet.TLRPC.TL_messageActionUserUpdatedPhoto
-import org.telegram.tgnet.TLRPC.TL_messageActionWebViewDataSent
-import org.telegram.tgnet.TLRPC.TL_messageEmpty
-import org.telegram.tgnet.TLRPC.TL_messageEncryptedAction
-import org.telegram.tgnet.tlrpc.TL_messageEntityBankCard
-import org.telegram.tgnet.tlrpc.TL_messageEntityBlockquote
-import org.telegram.tgnet.tlrpc.TL_messageEntityBold
-import org.telegram.tgnet.tlrpc.TL_messageEntityBotCommand
-import org.telegram.tgnet.tlrpc.TL_messageEntityCashtag
-import org.telegram.tgnet.tlrpc.TL_messageEntityCode
-import org.telegram.tgnet.tlrpc.TL_messageEntityCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_messageEntityEmail
-import org.telegram.tgnet.tlrpc.TL_messageEntityHashtag
-import org.telegram.tgnet.tlrpc.TL_messageEntityItalic
-import org.telegram.tgnet.tlrpc.TL_messageEntityMention
-import org.telegram.tgnet.tlrpc.TL_messageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_messageEntityPhone
-import org.telegram.tgnet.tlrpc.TL_messageEntityPre
-import org.telegram.tgnet.tlrpc.TL_messageEntitySpoiler
-import org.telegram.tgnet.tlrpc.TL_messageEntityStrike
-import org.telegram.tgnet.tlrpc.TL_messageEntityTextUrl
-import org.telegram.tgnet.tlrpc.TL_messageEntityUnderline
-import org.telegram.tgnet.tlrpc.TL_messageEntityUrl
-import org.telegram.tgnet.TLRPC.TL_messageExtendedMedia
-import org.telegram.tgnet.TLRPC.TL_messageExtendedMediaPreview
-import org.telegram.tgnet.TLRPC.TL_messageForwarded_old
-import org.telegram.tgnet.TLRPC.TL_messageForwarded_old2
-import org.telegram.tgnet.TLRPC.TL_messageMediaContact
-import org.telegram.tgnet.TLRPC.TL_messageMediaDice
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument_layer68
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument_layer74
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument_old
-import org.telegram.tgnet.TLRPC.TL_messageMediaEmpty
-import org.telegram.tgnet.TLRPC.TL_messageMediaGame
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeo
-import org.telegram.tgnet.TLRPC.TL_messageMediaGeoLive
-import org.telegram.tgnet.TLRPC.TL_messageMediaInvoice
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto_layer68
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto_layer74
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto_old
-import org.telegram.tgnet.TLRPC.TL_messageMediaPoll
-import org.telegram.tgnet.TLRPC.TL_messageMediaUnsupported
-import org.telegram.tgnet.TLRPC.TL_messageMediaVenue
-import org.telegram.tgnet.TLRPC.TL_messageMediaWebPage
-import org.telegram.tgnet.TLRPC.TL_messagePeerReaction
-import org.telegram.tgnet.TLRPC.TL_messageService
-import org.telegram.tgnet.TLRPC.TL_message_old
-import org.telegram.tgnet.TLRPC.TL_message_old2
-import org.telegram.tgnet.TLRPC.TL_message_old3
-import org.telegram.tgnet.TLRPC.TL_message_old4
-import org.telegram.tgnet.TLRPC.TL_message_secret
-import org.telegram.tgnet.TLRPC.TL_messages_stickerSet
-import org.telegram.tgnet.TLRPC.TL_pageBlockCollage
-import org.telegram.tgnet.TLRPC.TL_pageBlockPhoto
-import org.telegram.tgnet.TLRPC.TL_pageBlockSlideshow
-import org.telegram.tgnet.TLRPC.TL_pageBlockVideo
-import org.telegram.tgnet.TLRPC.TL_peerChannel
-import org.telegram.tgnet.TLRPC.TL_peerChat
-import org.telegram.tgnet.TLRPC.TL_peerUser
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonBusy
-import org.telegram.tgnet.TLRPC.TL_phoneCallDiscardReasonMissed
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.TLRPC.TL_photoCachedSize
-import org.telegram.tgnet.TLRPC.TL_photoEmpty
-import org.telegram.tgnet.TLRPC.TL_photoSizeEmpty
-import org.telegram.tgnet.TLRPC.TL_photoStrippedSize
-import org.telegram.tgnet.TLRPC.TL_pollAnswer
-import org.telegram.tgnet.TLRPC.TL_replyInlineMarkup
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeAddress
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeBankStatement
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeDriverLicense
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeEmail
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeIdentityCard
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeInternalPassport
-import org.telegram.tgnet.TLRPC.TL_secureValueTypePassport
-import org.telegram.tgnet.TLRPC.TL_secureValueTypePassportRegistration
-import org.telegram.tgnet.TLRPC.TL_secureValueTypePersonalDetails
-import org.telegram.tgnet.TLRPC.TL_secureValueTypePhone
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeRentalAgreement
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeTemporaryRegistration
-import org.telegram.tgnet.TLRPC.TL_secureValueTypeUtilityBill
-import org.telegram.tgnet.TLRPC.TL_stickerSetFullCovered
-import org.telegram.tgnet.TLRPC.TL_webPage
-import org.telegram.tgnet.TLRPC.VideoSize
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEvent
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeAbout
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeAvailableReactions
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeHistoryTTL
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeLinkedChat
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeLocation
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangePhoto
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeStickerSet
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeTitle
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionChangeUsername
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionDefaultBannedRights
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionDeleteMessage
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionDiscardGroupCall
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionEditMessage
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionExportedInviteDelete
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionExportedInviteEdit
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionExportedInviteRevoke
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantInvite
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantJoin
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantJoinByInvite
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantJoinByRequest
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantLeave
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantMute
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantToggleAdmin
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantToggleBan
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantUnmute
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionParticipantVolume
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionSendMessage
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionStartGroupCall
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionStopPoll
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionToggleGroupCallSetting
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionToggleInvites
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionToggleNoForwards
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionTogglePreHistoryHidden
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionToggleSignatures
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionToggleSlowMode
+import org.telegram.tgnet.TLRPC.TLChannelAdminLogEventActionUpdatePinned
+import org.telegram.tgnet.TLRPC.TLChannelLocation
+import org.telegram.tgnet.TLRPC.TLChannelLocationEmpty
+import org.telegram.tgnet.TLRPC.TLChannelParticipant
+import org.telegram.tgnet.TLRPC.TLChannelParticipantAdmin
+import org.telegram.tgnet.TLRPC.TLChannelParticipantBanned
+import org.telegram.tgnet.TLRPC.TLChannelParticipantCreator
+import org.telegram.tgnet.TLRPC.TLChatAdminRights
+import org.telegram.tgnet.TLRPC.TLChatBannedRights
+import org.telegram.tgnet.TLRPC.TLChatInviteExported
+import org.telegram.tgnet.TLRPC.TLChatInvitePublicJoinRequests
+import org.telegram.tgnet.TLRPC.TLChatReactionsAll
+import org.telegram.tgnet.TLRPC.TLChatReactionsSome
+import org.telegram.tgnet.TLRPC.TLDocument
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeAnimated
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeAudio
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeCustomEmoji
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeHasStickers
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeImageSize
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeSticker
+import org.telegram.tgnet.TLRPC.TLDocumentAttributeVideo
+import org.telegram.tgnet.TLRPC.TLDocumentEmpty
+import org.telegram.tgnet.TLRPC.TLFileLocationUnavailable
+import org.telegram.tgnet.TLRPC.TLGame
+import org.telegram.tgnet.TLRPC.TLInputMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLInputStickerSetEmpty
+import org.telegram.tgnet.TLRPC.TLInputStickerSetID
+import org.telegram.tgnet.TLRPC.TLInputStickerSetShortName
+import org.telegram.tgnet.TLRPC.TLKeyboardButtonBuy
+import org.telegram.tgnet.TLRPC.TLMessage
+import org.telegram.tgnet.TLRPC.TLMessageActionBotAllowed
+import org.telegram.tgnet.TLRPC.TLMessageActionChatAddUser
+import org.telegram.tgnet.TLRPC.TLMessageActionChatCreate
+import org.telegram.tgnet.TLRPC.TLMessageActionChatDeletePhoto
+import org.telegram.tgnet.TLRPC.TLMessageActionChatDeleteUser
+import org.telegram.tgnet.TLRPC.TLMessageActionChatEditPhoto
+import org.telegram.tgnet.TLRPC.TLMessageActionChatEditTitle
+import org.telegram.tgnet.TLRPC.TLMessageActionChatJoinedByLink
+import org.telegram.tgnet.TLRPC.TLMessageActionChatJoinedByRequest
+import org.telegram.tgnet.TLRPC.TLMessageActionContactSignUp
+import org.telegram.tgnet.TLRPC.TLMessageActionCustomAction
+import org.telegram.tgnet.TLRPC.TLMessageActionEmpty
+import org.telegram.tgnet.TLRPC.TLMessageActionGeoProximityReached
+import org.telegram.tgnet.TLRPC.TLMessageActionGiftPremium
+import org.telegram.tgnet.TLRPC.TLMessageActionGroupCall
+import org.telegram.tgnet.TLRPC.TLMessageActionGroupCallScheduled
+import org.telegram.tgnet.TLRPC.TLMessageActionHistoryClear
+import org.telegram.tgnet.TLRPC.TLMessageActionInviteToGroupCall
+import org.telegram.tgnet.TLRPC.TLMessageActionPhoneCall
+import org.telegram.tgnet.TLRPC.TLMessageActionSecureValuesSent
+import org.telegram.tgnet.TLRPC.TLMessageActionSetChatTheme
+import org.telegram.tgnet.TLRPC.TLMessageActionSetMessagesTTL
+import org.telegram.tgnet.TLRPC.TLMessageActionWebViewDataSent
+import org.telegram.tgnet.TLRPC.TLMessageEmpty
+import org.telegram.tgnet.TLRPC.TLMessageEntityBankCard
+import org.telegram.tgnet.TLRPC.TLMessageEntityBlockquote
+import org.telegram.tgnet.TLRPC.TLMessageEntityBold
+import org.telegram.tgnet.TLRPC.TLMessageEntityBotCommand
+import org.telegram.tgnet.TLRPC.TLMessageEntityCashtag
+import org.telegram.tgnet.TLRPC.TLMessageEntityCode
+import org.telegram.tgnet.TLRPC.TLMessageEntityCustomEmoji
+import org.telegram.tgnet.TLRPC.TLMessageEntityEmail
+import org.telegram.tgnet.TLRPC.TLMessageEntityHashtag
+import org.telegram.tgnet.TLRPC.TLMessageEntityItalic
+import org.telegram.tgnet.TLRPC.TLMessageEntityMention
+import org.telegram.tgnet.TLRPC.TLMessageEntityMentionName
+import org.telegram.tgnet.TLRPC.TLMessageEntityPhone
+import org.telegram.tgnet.TLRPC.TLMessageEntityPre
+import org.telegram.tgnet.TLRPC.TLMessageEntitySpoiler
+import org.telegram.tgnet.TLRPC.TLMessageEntityStrike
+import org.telegram.tgnet.TLRPC.TLMessageEntityTextUrl
+import org.telegram.tgnet.TLRPC.TLMessageEntityUnderline
+import org.telegram.tgnet.TLRPC.TLMessageEntityUrl
+import org.telegram.tgnet.TLRPC.TLMessageExtendedMedia
+import org.telegram.tgnet.TLRPC.TLMessageExtendedMediaPreview
+import org.telegram.tgnet.TLRPC.TLMessageMediaContact
+import org.telegram.tgnet.TLRPC.TLMessageMediaDice
+import org.telegram.tgnet.TLRPC.TLMessageMediaDocument
+import org.telegram.tgnet.TLRPC.TLMessageMediaEmpty
+import org.telegram.tgnet.TLRPC.TLMessageMediaGame
+import org.telegram.tgnet.TLRPC.TLMessageMediaGeo
+import org.telegram.tgnet.TLRPC.TLMessageMediaGeoLive
+import org.telegram.tgnet.TLRPC.TLMessageMediaInvoice
+import org.telegram.tgnet.TLRPC.TLMessageMediaPhoto
+import org.telegram.tgnet.TLRPC.TLMessageMediaPoll
+import org.telegram.tgnet.TLRPC.TLMessageMediaUnsupported
+import org.telegram.tgnet.TLRPC.TLMessageMediaVenue
+import org.telegram.tgnet.TLRPC.TLMessageMediaWebPage
+import org.telegram.tgnet.TLRPC.TLMessagePeerReaction
+import org.telegram.tgnet.TLRPC.TLMessageReactions
+import org.telegram.tgnet.TLRPC.TLMessageService
+import org.telegram.tgnet.TLRPC.TLPageBlockCollage
+import org.telegram.tgnet.TLRPC.TLPageBlockPhoto
+import org.telegram.tgnet.TLRPC.TLPageBlockSlideshow
+import org.telegram.tgnet.TLRPC.TLPageBlockVideo
+import org.telegram.tgnet.TLRPC.TLPeerChannel
+import org.telegram.tgnet.TLRPC.TLPeerChat
+import org.telegram.tgnet.TLRPC.TLPeerUser
+import org.telegram.tgnet.TLRPC.TLPhoneCallDiscardReasonBusy
+import org.telegram.tgnet.TLRPC.TLPhoneCallDiscardReasonMissed
+import org.telegram.tgnet.TLRPC.TLPhoto
+import org.telegram.tgnet.TLRPC.TLPhotoCachedSize
+import org.telegram.tgnet.TLRPC.TLPhotoEmpty
+import org.telegram.tgnet.TLRPC.TLPhotoSizeEmpty
+import org.telegram.tgnet.TLRPC.TLPhotoStrippedSize
+import org.telegram.tgnet.TLRPC.TLPollAnswer
+import org.telegram.tgnet.TLRPC.TLPollResults
+import org.telegram.tgnet.TLRPC.TLReactionCount
+import org.telegram.tgnet.TLRPC.TLReactionCustomEmoji
+import org.telegram.tgnet.TLRPC.TLReactionEmoji
+import org.telegram.tgnet.TLRPC.TLReplyInlineMarkup
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeAddress
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeBankStatement
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeDriverLicense
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeEmail
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeIdentityCard
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeInternalPassport
+import org.telegram.tgnet.TLRPC.TLSecureValueTypePassport
+import org.telegram.tgnet.TLRPC.TLSecureValueTypePassportRegistration
+import org.telegram.tgnet.TLRPC.TLSecureValueTypePersonalDetails
+import org.telegram.tgnet.TLRPC.TLSecureValueTypePhone
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeRentalAgreement
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeTemporaryRegistration
+import org.telegram.tgnet.TLRPC.TLSecureValueTypeUtilityBill
+import org.telegram.tgnet.TLRPC.TLStickerSetFullCovered
+import org.telegram.tgnet.TLRPC.TLWebPage
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.tgnet.TLRPC.WebDocument
 import org.telegram.tgnet.TLRPC.WebPage
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.ReactionCount
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.tlrpc.TL_message
-import org.telegram.tgnet.tlrpc.TL_messageReactions
-import org.telegram.tgnet.tlrpc.TL_reactionCount
-import org.telegram.tgnet.tlrpc.TL_reactionCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.action
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.dcId
+import org.telegram.tgnet.description
+import org.telegram.tgnet.entities
+import org.telegram.tgnet.extendedMedia
+import org.telegram.tgnet.fwdFrom
+import org.telegram.tgnet.game
+import org.telegram.tgnet.media
+import org.telegram.tgnet.message
+import org.telegram.tgnet.period
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.reactions
+import org.telegram.tgnet.replies
+import org.telegram.tgnet.replyMarkup
+import org.telegram.tgnet.sizes
+import org.telegram.tgnet.thumbs
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.AnimatedEmojiDrawable
 import org.telegram.ui.Components.AnimatedEmojiSpan
@@ -283,6 +280,7 @@ import org.telegram.ui.Components.URLSpanBrowser
 import org.telegram.ui.Components.URLSpanMono
 import org.telegram.ui.Components.URLSpanNoUnderline
 import org.telegram.ui.Components.URLSpanNoUnderlineBold
+import org.telegram.ui.Components.URLSpanNoUnderlineBrowser
 import org.telegram.ui.Components.URLSpanReplacement
 import org.telegram.ui.Components.URLSpanUserMention
 import org.telegram.ui.Components.spoilers.SpoilerEffect
@@ -292,7 +290,6 @@ import java.util.AbstractMap
 import java.util.Calendar
 import java.util.GregorianCalendar
 import java.util.Locale
-import java.util.Objects
 import java.util.regex.Pattern
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
@@ -341,12 +338,12 @@ open class MessageObject {
 	var playedGiftAnimation: Boolean = false
 	var hadAnimationNotReadyLoading: Boolean = false
 	var cancelEditing: Boolean = false
-	var checkedVotes: ArrayList<TL_pollAnswer>? = null
+	var checkedVotes: MutableList<TLPollAnswer>? = null
 	var editingMessageSearchWebPage: Boolean = false
-	private var webPageDescriptionEntities: ArrayList<MessageEntity>? = null
+	private var webPageDescriptionEntities: MutableList<MessageEntity>? = null
 	var previousMessage: String? = null
 	var previousMedia: MessageMedia? = null
-	var previousMessageEntities: ArrayList<MessageEntity>? = null
+	var previousMessageEntities: MutableList<MessageEntity>? = null
 	var previousAttachPath: String? = null
 	var pathThumb: SvgDrawable? = null
 	var lastLineWidth: Int = 0
@@ -364,13 +361,6 @@ open class MessageObject {
 	private var layoutCreated = false
 	private var generatedWithMinSize = 0
 	private var generatedWithDensity = 0f
-	var isMediaSale: Boolean = false
-	var isMediaSaleInfo: Boolean = false
-	private var mediaSalePrice: Double = 0.0
-	private var mediaSaleQuantity: Int = 0
-	var mediaSaleHash: String? = null
-	private var mediaSaleTitle: String? = null
-	private var mediaSaleDescription: String? = null
 
 	@JvmField
 	var localType: Int = 0
@@ -490,7 +480,7 @@ open class MessageObject {
 	var currentAccount: Int = 0
 
 	@JvmField
-	var currentEvent: TL_channelAdminLogEvent? = null
+	var currentEvent: TLChannelAdminLogEvent? = null
 
 	@JvmField
 	var forceUpdate: Boolean = false
@@ -556,11 +546,6 @@ open class MessageObject {
 		localChannel = isChannel
 		localSupergroup = supergroup
 		localEdit = edit
-		isMediaSale = message.is_media_sale
-		mediaSaleTitle = message.title
-		// mediaSaleDescription = message.description // FIXME: uncomment
-		mediaSalePrice = message.price
-		mediaSaleQuantity = message.quantity
 	}
 
 	constructor(accountNum: Int, message: Message, users: AbstractMap<Long, User>?, generateLayout: Boolean, checkMediaExists: Boolean) : this(accountNum, message, users, null, generateLayout, checkMediaExists)
@@ -582,12 +567,6 @@ open class MessageObject {
 		currentAccount = accountNum
 		messageOwner = message
 
-		isMediaSale = message.is_media_sale
-		mediaSaleTitle = message.title
-		// mediaSaleDescription = message?.description // FIXME: uncomment
-		mediaSalePrice = message.price
-		mediaSaleQuantity = message.quantity
-
 		if (replyToMessage != null) {
 			replyMessageObject = replyToMessage
 		}
@@ -598,8 +577,8 @@ open class MessageObject {
 		if (message.replyMessage != null) {
 			replyMessageObject = MessageObject(currentAccount, message.replyMessage!!, null, users, chats, sUsers, sChats, false, checkMediaExists, eid)
 		}
-		else if (message.reply_to != null) {
-			val m = MessagesStorage.getInstance(currentAccount).getMessage(message.dialog_id, (message.reply_to?.reply_to_msg_id ?: 0).toLong())
+		else if (message.replyTo != null) {
+			val m = MessagesStorage.getInstance(currentAccount).getMessage(message.dialogId, (message.replyTo?.replyToMsgId ?: 0).toLong())
 
 			if (m != null) {
 				message.replyMessage = m
@@ -625,7 +604,7 @@ open class MessageObject {
 		generateCaption()
 
 		if (generateLayout) {
-			val paint = if (getMedia(message) is TL_messageMediaGame) {
+			val paint = if (getMedia(message) is TLMessageMediaGame) {
 				Theme.chat_msgGameTextPaint
 			}
 			else {
@@ -635,7 +614,7 @@ open class MessageObject {
 			val emojiOnly = if (allowsBigEmoji()) IntArray(1) else null
 
 			messageText = Emoji.replaceEmoji(messageText, paint.fontMetricsInt, false, emojiOnly)
-			messageText = replaceAnimatedEmoji(messageText, message.entities, paint.fontMetricsInt)
+			messageText = replaceAnimatedEmoji(messageText, (message as? TLMessage)?.entities, paint.fontMetricsInt)
 
 			if (emojiOnly != null && emojiOnly[0] > 1) {
 				replaceEmojiToLottieFrame(messageText, emojiOnly)
@@ -656,26 +635,15 @@ open class MessageObject {
 		}
 	}
 
-	constructor(accountNum: Int, event: TL_channelAdminLogEvent, messageObjects: ArrayList<MessageObject>, messagesByDays: HashMap<String, ArrayList<MessageObject>>, chat: Chat, mid: IntArray, addToEnd: Boolean) {
+	constructor(accountNum: Int, event: TLChannelAdminLogEvent, messageObjects: ArrayList<MessageObject>, messagesByDays: HashMap<String, ArrayList<MessageObject>>, chat: Chat, mid: IntArray, addToEnd: Boolean) {
 		currentEvent = event
 		currentAccount = accountNum
 
-		for (messageObject in messageObjects) {
-			if (messageObject.isMediaSale) {
-				isMediaSale = true
-				mediaSaleTitle = messageObject.mediaSaleTitle
-				mediaSaleDescription = messageObject.mediaSaleDescription
-				mediaSalePrice = messageObject.mediaSalePrice
-				mediaSaleQuantity = messageObject.mediaSaleQuantity
-			}
-		}
-
 		val context = ApplicationLoader.applicationContext
-
 		var fromUser: User? = null
 
-		if (event.user_id > 0) {
-			fromUser = MessagesController.getInstance(currentAccount).getUser(event.user_id)
+		if (event.userId > 0) {
+			fromUser = MessagesController.getInstance(currentAccount).getUser(event.userId)
 		}
 
 		val rightNow: Calendar = GregorianCalendar()
@@ -688,14 +656,16 @@ open class MessageObject {
 		dateKey = String.format(Locale.getDefault(), "%d_%02d_%02d", dateYear, dateMonth, dateDay)
 		monthKey = String.format(Locale.getDefault(), "%d_%02d", dateYear, dateMonth)
 
-		val peer_id: Peer = TL_peerChannel()
-		peer_id.channel_id = chat.id
+		val peer_id: Peer = TLPeerChannel().also {
+			it.channelId = chat.id
+		}
 
 		var message: Message? = null
-		var webPageDescriptionEntities: ArrayList<MessageEntity>? = null
+		var webPageDescriptionEntities: MutableList<MessageEntity>? = null
+		val action = event.action
 
-		if (event.action is TL_channelAdminLogEventActionChangeTitle) {
-			val title = (event.action as TL_channelAdminLogEventActionChangeTitle).new_value
+		if (action is TLChannelAdminLogEventActionChangeTitle) {
+			val title = action.newValue
 
 			messageText = if (chat.megagroup) {
 				replaceWithLink(LocaleController.formatString("EventLogEditedGroupTitle", R.string.EventLogEditedGroupTitle, title), "un1", fromUser)
@@ -704,13 +674,11 @@ open class MessageObject {
 				replaceWithLink(LocaleController.formatString("EventLogEditedChannelTitle", R.string.EventLogEditedChannelTitle, title), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangePhoto) {
-			val action = event.action as TL_channelAdminLogEventActionChangePhoto
+		else if (action is TLChannelAdminLogEventActionChangePhoto) {
+			val messageOwner = TLMessageService().also { this.messageOwner = it }
 
-			messageOwner = TL_messageService()
-
-			if (action.new_photo is TL_photoEmpty) {
-				messageOwner?.action = TL_messageActionChatDeletePhoto()
+			if (action.newPhoto is TLPhotoEmpty) {
+				messageOwner.action = TLMessageActionChatDeletePhoto()
 
 				messageText = if (chat.megagroup) {
 					replaceWithLink(context.getString(R.string.EventLogRemovedWGroupPhoto), "un1", fromUser)
@@ -720,8 +688,9 @@ open class MessageObject {
 				}
 			}
 			else {
-				messageOwner?.action = TL_messageActionChatEditPhoto()
-				messageOwner?.action?.photo = action.new_photo
+				messageOwner.action = TLMessageActionChatEditPhoto().also {
+					it.photo = action.newPhoto
+				}
 
 				messageText = if (chat.megagroup) {
 					if (isVideoAvatar) {
@@ -741,7 +710,7 @@ open class MessageObject {
 				}
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantJoin) {
+		else if (action is TLChannelAdminLogEventActionParticipantJoin) {
 			messageText = if (chat.megagroup) {
 				replaceWithLink(context.getString(R.string.EventLogGroupJoined), "un1", fromUser)
 			}
@@ -749,10 +718,12 @@ open class MessageObject {
 				replaceWithLink(context.getString(R.string.EventLogChannelJoined), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantLeave) {
-			messageOwner = TL_messageService()
-			messageOwner?.action = TL_messageActionChatDeleteUser()
-			messageOwner?.action?.user_id = event.user_id
+		else if (action is TLChannelAdminLogEventActionParticipantLeave) {
+			val messageOwner = TLMessageService().also { this.messageOwner = it }
+
+			messageOwner.action = TLMessageActionChatDeleteUser().also {
+				it.userId = event.userId
+			}
 
 			messageText = if (chat.megagroup) {
 				replaceWithLink(context.getString(R.string.EventLogLeftGroup), "un1", fromUser)
@@ -761,12 +732,15 @@ open class MessageObject {
 				replaceWithLink(context.getString(R.string.EventLogLeftChannel), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantInvite) {
-			val action = event.action as TL_channelAdminLogEventActionParticipantInvite
-			messageOwner = TL_messageService()
-			messageOwner?.action = TL_messageActionChatAddUser()
+		else if (action is TLChannelAdminLogEventActionParticipantInvite) {
+			val messageOwner = TLMessageService().also { this.messageOwner = it }
+			messageOwner.action = TLMessageActionChatAddUser()
 
-			val peerId = getPeerId(action.participant.peer)
+			var peerId = getPeerId(action.participant?.peer)
+
+			if (peerId == 0L) {
+				peerId = action.participant?.userId ?: 0L
+			}
 
 			val whoUser = if (peerId > 0) {
 				MessagesController.getInstance(currentAccount).getUser(peerId)
@@ -775,7 +749,7 @@ open class MessageObject {
 				MessagesController.getInstance(currentAccount).getChat(-peerId)
 			}
 
-			if (messageOwner?.from_id is TL_peerUser && peerId == messageOwner?.from_id?.user_id) {
+			if (messageOwner.fromId is TLPeerUser && peerId == (messageOwner.fromId as? TLPeerUser)?.userId) {
 				messageText = if (chat.megagroup) {
 					replaceWithLink(context.getString(R.string.EventLogGroupJoined), "un1", fromUser)
 				}
@@ -788,24 +762,34 @@ open class MessageObject {
 				messageText = replaceWithLink(messageText, "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantToggleAdmin || event.action is TL_channelAdminLogEventActionParticipantToggleBan && (event.action as TL_channelAdminLogEventActionParticipantToggleBan).prev_participant is TL_channelParticipantAdmin && (event.action as TL_channelAdminLogEventActionParticipantToggleBan).new_participant is TL_channelParticipant) {
-			val prev_participant: ChannelParticipant
-			val new_participant: ChannelParticipant
+		else if (action is TLChannelAdminLogEventActionParticipantToggleAdmin || action is TLChannelAdminLogEventActionParticipantToggleBan && action.prevParticipant is TLChannelParticipantAdmin && action.newParticipant is TLChannelParticipant) {
+			val prev_participant: ChannelParticipant?
+			val new_participant: ChannelParticipant?
 
-			if (event.action is TL_channelAdminLogEventActionParticipantToggleAdmin) {
-				val action = event.action as TL_channelAdminLogEventActionParticipantToggleAdmin
-				prev_participant = action.prev_participant
-				new_participant = action.new_participant
+			when (action) {
+				is TLChannelAdminLogEventActionParticipantToggleAdmin -> {
+					prev_participant = action.prevParticipant
+					new_participant = action.newParticipant
+				}
+
+				is TLChannelAdminLogEventActionParticipantToggleBan -> {
+					prev_participant = action.prevParticipant
+					new_participant = action.newParticipant
+				}
+
+				else -> {
+					prev_participant = null
+					new_participant = null
+				}
 			}
-			else {
-				val action = event.action as TL_channelAdminLogEventActionParticipantToggleBan
-				prev_participant = action.prev_participant
-				new_participant = action.new_participant
+
+			val messageOwner = TLMessage().also { this.messageOwner = it }
+
+			var peerId = getPeerId(prev_participant?.peer)
+
+			if (peerId == 0L) {
+				peerId = prev_participant?.userId ?: 0L
 			}
-
-			messageOwner = TL_message()
-
-			val peerId = getPeerId(prev_participant.peer)
 
 			val whoUser: TLObject? = if (peerId > 0) {
 				MessagesController.getInstance(currentAccount).getUser(peerId)
@@ -816,22 +800,15 @@ open class MessageObject {
 
 			val rights: StringBuilder
 
-			if (prev_participant !is TL_channelParticipantCreator && new_participant is TL_channelParticipantCreator) {
+			if (prev_participant !is TLChannelParticipantCreator && new_participant is TLChannelParticipantCreator) {
 				val str = context.getString(R.string.EventLogChangedOwnership)
 				val offset = str.indexOf("%1\$s")
-				rights = StringBuilder(String.format(str, getUserName(whoUser, messageOwner!!.entities, offset)))
+				rights = StringBuilder(String.format(str, getUserName(whoUser, messageOwner.entities, offset)))
 			}
 			else {
-				var o = prev_participant.admin_rights
-				var n = new_participant.admin_rights
+				val o = prev_participant?.adminRights ?: TLChatAdminRights()
+				val n = new_participant?.adminRights ?: TLChatAdminRights()
 
-				if (o == null) {
-					o = TL_chatAdminRights()
-				}
-
-				if (n == null) {
-					n = TL_chatAdminRights()
-				}
 				val str = if (n.other) {
 					context.getString(R.string.EventLogPromotedNoRights)
 				}
@@ -841,44 +818,44 @@ open class MessageObject {
 
 				val offset = str.indexOf("%1\$s")
 
-				rights = StringBuilder(String.format(str, getUserName(whoUser, messageOwner!!.entities, offset)))
+				rights = StringBuilder(String.format(str, getUserName(whoUser, messageOwner.entities, offset)))
 				rights.append("\n")
 
-				if (!TextUtils.equals(prev_participant.rank, new_participant.rank)) {
-					if (new_participant.rank.isNullOrEmpty()) {
+				if (!TextUtils.equals(prev_participant?.rank, new_participant?.rank)) {
+					if (new_participant?.rank.isNullOrEmpty()) {
 						rights.append('\n').append('-').append(' ')
 						rights.append(context.getString(R.string.EventLogPromotedRemovedTitle))
 					}
 					else {
 						rights.append('\n').append('+').append(' ')
-						rights.append(LocaleController.formatString("EventLogPromotedTitle", R.string.EventLogPromotedTitle, new_participant.rank))
+						rights.append(LocaleController.formatString("EventLogPromotedTitle", R.string.EventLogPromotedTitle, new_participant?.rank))
 					}
 				}
 
-				if (o.change_info != n.change_info) {
-					rights.append('\n').append(if (n.change_info) '+' else '-').append(' ')
+				if (o.changeInfo != n.changeInfo) {
+					rights.append('\n').append(if (n.changeInfo) '+' else '-').append(' ')
 					rights.append(if (chat.megagroup) context.getString(R.string.EventLogPromotedChangeGroupInfo) else context.getString(R.string.EventLogPromotedChangeChannelInfo))
 				}
 
 				if (!chat.megagroup) {
-					if (o.post_messages != n.post_messages) {
-						rights.append('\n').append(if (n.post_messages) '+' else '-').append(' ')
+					if (o.postMessages != n.postMessages) {
+						rights.append('\n').append(if (n.postMessages) '+' else '-').append(' ')
 						rights.append(context.getString(R.string.EventLogPromotedPostMessages))
 					}
 
-					if (o.edit_messages != n.edit_messages) {
-						rights.append('\n').append(if (n.edit_messages) '+' else '-').append(' ')
+					if (o.editMessages != n.editMessages) {
+						rights.append('\n').append(if (n.editMessages) '+' else '-').append(' ')
 						rights.append(context.getString(R.string.EventLogPromotedEditMessages))
 					}
 				}
 
-				if (o.delete_messages != n.delete_messages) {
-					rights.append('\n').append(if (n.delete_messages) '+' else '-').append(' ')
+				if (o.deleteMessages != n.deleteMessages) {
+					rights.append('\n').append(if (n.deleteMessages) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogPromotedDeleteMessages))
 				}
 
-				if (o.add_admins != n.add_admins) {
-					rights.append('\n').append(if (n.add_admins) '+' else '-').append(' ')
+				if (o.addAdmins != n.addAdmins) {
+					rights.append('\n').append(if (n.addAdmins) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogPromotedAddAdmins))
 				}
 
@@ -888,25 +865,25 @@ open class MessageObject {
 				}
 
 				if (chat.megagroup) {
-					if (o.ban_users != n.ban_users) {
-						rights.append('\n').append(if (n.ban_users) '+' else '-').append(' ')
+					if (o.banUsers != n.banUsers) {
+						rights.append('\n').append(if (n.banUsers) '+' else '-').append(' ')
 						rights.append(context.getString(R.string.EventLogPromotedBanUsers))
 					}
 
-					if (o.manage_call != n.manage_call) {
-						rights.append('\n').append(if (n.manage_call) '+' else '-').append(' ')
+					if (o.manageCall != n.manageCall) {
+						rights.append('\n').append(if (n.manageCall) '+' else '-').append(' ')
 						rights.append(context.getString(R.string.EventLogPromotedManageCall))
 					}
 				}
 
-				if (o.invite_users != n.invite_users) {
-					rights.append('\n').append(if (n.invite_users) '+' else '-').append(' ')
+				if (o.inviteUsers != n.inviteUsers) {
+					rights.append('\n').append(if (n.inviteUsers) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogPromotedAddUsers))
 				}
 
 				if (chat.megagroup) {
-					if (o.pin_messages != n.pin_messages) {
-						rights.append('\n').append(if (n.pin_messages) '+' else '-').append(' ')
+					if (o.pinMessages != n.pinMessages) {
+						rights.append('\n').append(if (n.pinMessages) '+' else '-').append(' ')
 						rights.append(context.getString(R.string.EventLogPromotedPinMessages))
 					}
 				}
@@ -914,108 +891,100 @@ open class MessageObject {
 
 			messageText = rights.toString()
 		}
-		else if (event.action is TL_channelAdminLogEventActionDefaultBannedRights) {
-			val bannedRights = event.action as TL_channelAdminLogEventActionDefaultBannedRights
+		else if (action is TLChannelAdminLogEventActionDefaultBannedRights) {
+			messageOwner = TLMessage()
 
-			messageOwner = TL_message()
-
-			var o = bannedRights.prev_banned_rights
-			var n = bannedRights.new_banned_rights
+			val o = action.prevBannedRights ?: TLChatBannedRights()
+			val n = action.newBannedRights ?: TLChatBannedRights()
 			val rights = StringBuilder(context.getString(R.string.EventLogDefaultPermissions))
 			var added = false
 
-			if (o == null) {
-				o = TL_chatBannedRights()
-			}
-
-			if (n == null) {
-				n = TL_chatBannedRights()
-			}
-
-			if (o.send_messages != n.send_messages) {
+			if (o.sendMessages != n.sendMessages) {
 				rights.append('\n')
 				added = true
-				rights.append('\n').append(if (!n.send_messages) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.sendMessages) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedSendMessages))
 			}
 
-			if (o.send_stickers != n.send_stickers || o.send_inline != n.send_inline || o.send_gifs != n.send_gifs || o.send_games != n.send_games) {
+			if (o.sendStickers != n.sendStickers || o.sendInline != n.sendInline || o.sendGifs != n.sendGifs || o.sendGames != n.sendGames) {
 				if (!added) {
 					rights.append('\n')
 					added = true
 				}
 
-				rights.append('\n').append(if (!n.send_stickers) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.sendStickers) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedSendStickers))
 			}
 
-			if (o.send_media != n.send_media) {
+			if (o.sendMedia != n.sendMedia) {
 				if (!added) {
 					rights.append('\n')
 					added = true
 				}
 
-				rights.append('\n').append(if (!n.send_media) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.sendMedia) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedSendMedia))
 			}
 
-			if (o.send_polls != n.send_polls) {
+			if (o.sendPolls != n.sendPolls) {
 				if (!added) {
 					rights.append('\n')
 					added = true
 				}
 
-				rights.append('\n').append(if (!n.send_polls) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.sendPolls) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedSendPolls))
 			}
 
-			if (o.embed_links != n.embed_links) {
+			if (o.embedLinks != n.embedLinks) {
 				if (!added) {
 					rights.append('\n')
 					added = true
 				}
 
-				rights.append('\n').append(if (!n.embed_links) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.embedLinks) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedSendEmbed))
 			}
 
-			if (o.change_info != n.change_info) {
+			if (o.changeInfo != n.changeInfo) {
 				if (!added) {
 					rights.append('\n')
 					added = true
 				}
 
-				rights.append('\n').append(if (!n.change_info) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.changeInfo) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedChangeInfo))
 			}
 
-			if (o.invite_users != n.invite_users) {
+			if (o.inviteUsers != n.inviteUsers) {
 				if (!added) {
 					rights.append('\n')
 					added = true
 				}
 
-				rights.append('\n').append(if (!n.invite_users) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.inviteUsers) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedInviteUsers))
 			}
 
-			if (o.pin_messages != n.pin_messages) {
+			if (o.pinMessages != n.pinMessages) {
 				if (!added) {
 					rights.append('\n')
 				}
 
-				rights.append('\n').append(if (!n.pin_messages) '+' else '-').append(' ')
+				rights.append('\n').append(if (!n.pinMessages) '+' else '-').append(' ')
 				rights.append(context.getString(R.string.EventLogRestrictedPinMessages))
 			}
 
 			messageText = rights.toString()
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantToggleBan) {
-			val action = event.action as TL_channelAdminLogEventActionParticipantToggleBan
+		else if (action is TLChannelAdminLogEventActionParticipantToggleBan) {
+			val messageOwner = TLMessage().also { this.messageOwner = it }
 
-			messageOwner = TL_message()
+			var peerId = getPeerId(action.prevParticipant?.peer)
 
-			val peerId = getPeerId(action.prev_participant.peer)
+			if (peerId == 0L) {
+				peerId = action.prevParticipant?.userId ?: 0L
+			}
 
 			val whoUser = if (peerId > 0) {
 				MessagesController.getInstance(currentAccount).getUser(peerId)
@@ -1024,17 +993,17 @@ open class MessageObject {
 				MessagesController.getInstance(currentAccount).getChat(-peerId)
 			}
 
-			var o = action.prev_participant.banned_rights
-			var n = action.new_participant.banned_rights
+			var o = (action.prevParticipant as? TLChannelParticipantBanned)?.bannedRights
+			var n = (action.newParticipant as? TLChannelParticipantBanned)?.bannedRights
 
-			if (chat.megagroup && (n == null || !n.view_messages || o != null && n.until_date != o.until_date)) {
+			if (chat.megagroup && (n == null || !n.viewMessages || o != null && n.untilDate != o.untilDate)) {
 				val rights: StringBuilder
 				val bannedDuration: StringBuilder
 
 				if (n != null && !AndroidUtilities.isBannedForever(n)) {
 					bannedDuration = StringBuilder()
 
-					var duration = n.until_date - event.date
+					var duration = n.untilDate - event.date
 					val days = duration / 60 / 60 / 24
 
 					duration -= days * 60 * 60 * 24
@@ -1088,108 +1057,108 @@ open class MessageObject {
 				val str = context.getString(R.string.EventLogRestrictedUntil)
 				val offset = str.indexOf("%1\$s")
 
-				rights = StringBuilder(String.format(str, getUserName(whoUser, messageOwner!!.entities, offset), bannedDuration))
+				rights = StringBuilder(String.format(str, getUserName(whoUser, messageOwner.entities, offset), bannedDuration))
 
 				var added = false
 
 				if (o == null) {
-					o = TL_chatBannedRights()
+					o = TLChatBannedRights()
 				}
 
 				if (n == null) {
-					n = TL_chatBannedRights()
+					n = TLChatBannedRights()
 				}
 
-				if (o.view_messages != n.view_messages) {
+				if (o.viewMessages != n.viewMessages) {
 					rights.append('\n')
 					added = true
-					rights.append('\n').append(if (!n.view_messages) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.viewMessages) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedReadMessages))
 				}
 
-				if (o.send_messages != n.send_messages) {
+				if (o.sendMessages != n.sendMessages) {
 					if (!added) {
 						rights.append('\n')
 						added = true
 					}
 
-					rights.append('\n').append(if (!n.send_messages) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.sendMessages) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedSendMessages))
 				}
 
-				if (o.send_stickers != n.send_stickers || o.send_inline != n.send_inline || o.send_gifs != n.send_gifs || o.send_games != n.send_games) {
+				if (o.sendStickers != n.sendStickers || o.sendInline != n.sendInline || o.sendGifs != n.sendGifs || o.sendGames != n.sendGames) {
 					if (!added) {
 						rights.append('\n')
 						added = true
 					}
 
-					rights.append('\n').append(if (!n.send_stickers) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.sendStickers) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedSendStickers))
 				}
 
-				if (o.send_media != n.send_media) {
+				if (o.sendMedia != n.sendMedia) {
 					if (!added) {
 						rights.append('\n')
 						added = true
 					}
 
-					rights.append('\n').append(if (!n.send_media) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.sendMedia) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedSendMedia))
 				}
 
-				if (o.send_polls != n.send_polls) {
+				if (o.sendPolls != n.sendPolls) {
 					if (!added) {
 						rights.append('\n')
 						added = true
 					}
 
-					rights.append('\n').append(if (!n.send_polls) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.sendPolls) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedSendPolls))
 				}
 
-				if (o.embed_links != n.embed_links) {
+				if (o.embedLinks != n.embedLinks) {
 					if (!added) {
 						rights.append('\n')
 						added = true
 					}
 
-					rights.append('\n').append(if (!n.embed_links) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.embedLinks) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedSendEmbed))
 				}
 
-				if (o.change_info != n.change_info) {
+				if (o.changeInfo != n.changeInfo) {
 					if (!added) {
 						rights.append('\n')
 						added = true
 					}
 
-					rights.append('\n').append(if (!n.change_info) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.changeInfo) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedChangeInfo))
 				}
 
-				if (o.invite_users != n.invite_users) {
+				if (o.inviteUsers != n.inviteUsers) {
 					if (!added) {
 						rights.append('\n')
 						added = true
 					}
 
-					rights.append('\n').append(if (!n.invite_users) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.inviteUsers) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedInviteUsers))
 				}
 
-				if (o.pin_messages != n.pin_messages) {
+				if (o.pinMessages != n.pinMessages) {
 					if (!added) {
 						rights.append('\n')
 					}
 
-					rights.append('\n').append(if (!n.pin_messages) '+' else '-').append(' ')
+					rights.append('\n').append(if (!n.pinMessages) '+' else '-').append(' ')
 					rights.append(context.getString(R.string.EventLogRestrictedPinMessages))
 				}
 
 				messageText = rights.toString()
 			}
 			else {
-				val str = if (n != null && (o == null || n.view_messages)) {
+				val str = if (n != null && (o == null || n.viewMessages)) {
 					context.getString(R.string.EventLogChannelRestricted)
 				}
 				else {
@@ -1198,18 +1167,19 @@ open class MessageObject {
 
 				val offset = str.indexOf("%1\$s")
 
-				messageText = String.format(str, getUserName(whoUser, messageOwner!!.entities, offset))
+				messageText = String.format(str, getUserName(whoUser, messageOwner.entities, offset))
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionUpdatePinned) {
-			val action = event.action as TL_channelAdminLogEventActionUpdatePinned
-
+		else if (action is TLChannelAdminLogEventActionUpdatePinned) {
 			message = action.message
 
-			if (fromUser != null && fromUser.id == 136817688L && action.message.fwd_from?.from_id is TL_peerChannel) {
-				val channel = MessagesController.getInstance(currentAccount).getChat(action.message.fwd_from?.from_id?.channel_id)
+			val fromId = (message as? TLMessage)?.fwdFrom?.fromId
+			val pinned = (message as? TLMessage)?.pinned ?: false
 
-				messageText = if (action.message is TL_messageEmpty || !action.message.pinned) {
+			if (fromUser != null && fromUser.id == 136817688L && fromId is TLPeerChannel) {
+				val channel = MessagesController.getInstance(currentAccount).getChat(fromId.channelId)
+
+				messageText = if (action.message is TLMessageEmpty || !pinned) {
 					replaceWithLink(context.getString(R.string.EventLogUnpinnedMessages), "un1", channel)
 				}
 				else {
@@ -1217,7 +1187,7 @@ open class MessageObject {
 				}
 			}
 			else {
-				messageText = if (action.message is TL_messageEmpty || !action.message.pinned) {
+				messageText = if (action.message is TLMessageEmpty || !pinned) {
 					replaceWithLink(context.getString(R.string.EventLogUnpinnedMessages), "un1", fromUser)
 				}
 				else {
@@ -1225,41 +1195,41 @@ open class MessageObject {
 				}
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionStopPoll) {
-			val action = event.action as TL_channelAdminLogEventActionStopPoll
-
+		else if (action is TLChannelAdminLogEventActionStopPoll) {
 			message = action.message
 
-			messageText = if (getMedia(message) is TL_messageMediaPoll && (getMedia(message) as TL_messageMediaPoll?)!!.poll.quiz) {
+			val media = getMedia(message)
+
+			messageText = if (media is TLMessageMediaPoll && media.poll?.quiz == true) {
 				replaceWithLink(context.getString(R.string.EventLogStopQuiz), "un1", fromUser)
 			}
 			else {
 				replaceWithLink(context.getString(R.string.EventLogStopPoll), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionToggleSignatures) {
-			messageText = if ((event.action as TL_channelAdminLogEventActionToggleSignatures).new_value) {
+		else if (action is TLChannelAdminLogEventActionToggleSignatures) {
+			messageText = if (action.newValue) {
 				replaceWithLink(context.getString(R.string.EventLogToggledSignaturesOn), "un1", fromUser)
 			}
 			else {
 				replaceWithLink(context.getString(R.string.EventLogToggledSignaturesOff), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionToggleInvites) {
-			messageText = if ((event.action as TL_channelAdminLogEventActionToggleInvites).new_value) {
+		else if (action is TLChannelAdminLogEventActionToggleInvites) {
+			messageText = if (action.newValue) {
 				replaceWithLink(context.getString(R.string.EventLogToggledInvitesOn), "un1", fromUser)
 			}
 			else {
 				replaceWithLink(context.getString(R.string.EventLogToggledInvitesOff), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionDeleteMessage) {
-			message = (event.action as TL_channelAdminLogEventActionDeleteMessage).message
+		else if (action is TLChannelAdminLogEventActionDeleteMessage) {
+			message = action.message
 			messageText = replaceWithLink(context.getString(R.string.EventLogDeletedMessages), "un1", fromUser)
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangeLinkedChat) {
-			val newChatId = (event.action as TL_channelAdminLogEventActionChangeLinkedChat).new_value
-			val oldChatId = (event.action as TL_channelAdminLogEventActionChangeLinkedChat).prev_value
+		else if (action is TLChannelAdminLogEventActionChangeLinkedChat) {
+			val newChatId = action.newValue
+			val oldChatId = action.prevValue
 
 			if (chat.megagroup) {
 				if (newChatId == 0L) {
@@ -1290,67 +1260,68 @@ open class MessageObject {
 				}
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionTogglePreHistoryHidden) {
-			messageText = if ((event.action as TL_channelAdminLogEventActionTogglePreHistoryHidden).new_value) {
+		else if (action is TLChannelAdminLogEventActionTogglePreHistoryHidden) {
+			messageText = if (action.newValue) {
 				replaceWithLink(context.getString(R.string.EventLogToggledInvitesHistoryOff), "un1", fromUser)
 			}
 			else {
 				replaceWithLink(context.getString(R.string.EventLogToggledInvitesHistoryOn), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangeAbout) {
+		else if (action is TLChannelAdminLogEventActionChangeAbout) {
 			messageText = replaceWithLink(if (chat.megagroup) context.getString(R.string.EventLogEditedGroupDescription) else context.getString(R.string.EventLogEditedChannelDescription), "un1", fromUser)
 
-			message = TL_message()
+			message = TLMessage()
 			message.out = false
 			message.unread = false
-			message.from_id = TL_peerUser()
-			message.from_id?.user_id = event.user_id
-			message.peer_id = peer_id
+			message.fromId = TLPeerUser().also { it.userId = event.userId }
+			message.peerId = peer_id
 			message.date = event.date
 
-			message.message = (event.action as TL_channelAdminLogEventActionChangeAbout).new_value
+			message.message = action.newValue
 
-			if (!(event.action as TL_channelAdminLogEventActionChangeAbout).prev_value.isNullOrEmpty()) {
-				message.media = TL_messageMediaWebPage()
-				message.media?.webpage = TL_webPage()
-				message.media?.webpage?.flags = 10
-				message.media?.webpage?.display_url = ""
-				message.media?.webpage?.url = ""
-				message.media?.webpage?.site_name = context.getString(R.string.EventLogPreviousGroupDescription)
-				message.media?.webpage?.description = (event.action as TL_channelAdminLogEventActionChangeAbout).prev_value
+			if (!action.prevValue.isNullOrEmpty()) {
+				message.media = TLMessageMediaWebPage().also {
+					it.webpage = TLWebPage().also {
+						it.flags = 10
+						it.displayUrl = ""
+						it.url = ""
+						it.siteName = context.getString(R.string.EventLogPreviousGroupDescription)
+						it.description = action.prevValue
+					}
+				}
 			}
 			else {
-				message.media = TL_messageMediaEmpty()
+				message.media = TLMessageMediaEmpty()
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangeTheme) {
-			messageText = replaceWithLink(if (chat.megagroup) context.getString(R.string.EventLogEditedGroupTheme) else context.getString(R.string.EventLogEditedChannelTheme), "un1", fromUser)
-
-			message = TL_message()
-			message.out = false
-			message.unread = false
-			message.from_id = TL_peerUser()
-			message.from_id?.user_id = event.user_id
-			message.peer_id = peer_id
-			message.date = event.date
-			message.message = (event.action as TL_channelAdminLogEventActionChangeTheme).new_value
-
-			if (!(event.action as TL_channelAdminLogEventActionChangeTheme).prev_value.isNullOrEmpty()) {
-				message.media = TL_messageMediaWebPage()
-				message.media?.webpage = TL_webPage()
-				message.media?.webpage?.flags = 10
-				message.media?.webpage?.display_url = ""
-				message.media?.webpage?.url = ""
-				message.media?.webpage?.site_name = context.getString(R.string.EventLogPreviousGroupTheme)
-				message.media?.webpage?.description = (event.action as TL_channelAdminLogEventActionChangeTheme).prev_value
-			}
-			else {
-				message.media = TL_messageMediaEmpty()
-			}
-		}
-		else if (event.action is TL_channelAdminLogEventActionChangeUsername) {
-			val newLink = (event.action as TL_channelAdminLogEventActionChangeUsername).new_value
+//		else if (action is TLChannelAdminLogEventActionChangeTheme) {
+//			messageText = replaceWithLink(if (chat.megagroup) context.getString(R.string.EventLogEditedGroupTheme) else context.getString(R.string.EventLogEditedChannelTheme), "un1", fromUser)
+//
+//			message = TLMessage()
+//			message.out = false
+//			message.unread = false
+//			message.fromId = TLPeerUser()
+//			message.fromId?.userId = event.userId
+//			message.peerId = peer_id
+//			message.date = event.date
+//			message.message = (action as TLChannelAdminLogEventActionChangeTheme).newValue
+//
+//			if (!(action as TLChannelAdminLogEventActionChangeTheme).prev_value.isNullOrEmpty()) {
+//				message.media = TLMessageMediaWebPage()
+//				message.media?.webpage = TLWebPage()
+//				message.media?.webpage?.flags = 10
+//				message.media?.webpage?.display_url = ""
+//				message.media?.webpage?.url = ""
+//				message.media?.webpage?.site_name = context.getString(R.string.EventLogPreviousGroupTheme)
+//				message.media?.webpage?.description = (action as TLChannelAdminLogEventActionChangeTheme).prev_value
+//			}
+//			else {
+//				message.media = TLMessageMediaEmpty()
+//			}
+//		}
+		else if (action is TLChannelAdminLogEventActionChangeUsername) {
+			val newLink = action.newValue
 
 			messageText = if (!newLink.isNullOrEmpty()) {
 				replaceWithLink(if (chat.megagroup) context.getString(R.string.EventLogChangedGroupLink) else context.getString(R.string.EventLogChangedChannelLink), "un1", fromUser)
@@ -1359,12 +1330,11 @@ open class MessageObject {
 				replaceWithLink(if (chat.megagroup) context.getString(R.string.EventLogRemovedGroupLink) else context.getString(R.string.EventLogRemovedChannelLink), "un1", fromUser)
 			}
 
-			message = TL_message()
+			message = TLMessage()
 			message.out = false
 			message.unread = false
-			message.from_id = TL_peerUser()
-			message.from_id?.user_id = event.user_id
-			message.peer_id = peer_id
+			message.fromId = TLPeerUser().also { it.userId = event.userId }
+			message.peerId = peer_id
 			message.date = event.date
 
 			if (!newLink.isNullOrEmpty()) {
@@ -1374,48 +1344,53 @@ open class MessageObject {
 				message.message = ""
 			}
 
-			val url = TL_messageEntityUrl()
+			val url = TLMessageEntityUrl()
 			url.offset = 0
 			url.length = message.message!!.length
 
 			message.entities.add(url)
 
-			if (!(event.action as TL_channelAdminLogEventActionChangeUsername).prev_value.isNullOrEmpty()) {
-				message.media = TL_messageMediaWebPage()
-				message.media?.webpage = TL_webPage()
-				message.media?.webpage?.flags = 10
-				message.media?.webpage?.display_url = ""
-				message.media?.webpage?.url = ""
-				message.media?.webpage?.site_name = context.getString(R.string.EventLogPreviousLink)
-				message.media?.webpage?.description = "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + (event.action as TL_channelAdminLogEventActionChangeUsername).prev_value
+			if (!action.prevValue.isNullOrEmpty()) {
+				message.media = TLMessageMediaWebPage().also {
+					it.webpage = TLWebPage().also {
+						it.flags = 10
+						it.displayUrl = ""
+						it.url = ""
+						it.siteName = context.getString(R.string.EventLogPreviousLink)
+						it.description = "https://" + MessagesController.getInstance(currentAccount).linkPrefix + "/" + action.prevValue
+					}
+				}
 			}
 			else {
-				message.media = TL_messageMediaEmpty()
+				message.media = TLMessageMediaEmpty()
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionEditMessage) {
-			message = TL_message()
+		else if (action is TLChannelAdminLogEventActionEditMessage) {
+			message = TLMessage()
 			message.out = false
 			message.unread = false
-			message.peer_id = peer_id
+			message.peerId = peer_id
 			message.date = event.date
 
-			val newMessage = (event.action as TL_channelAdminLogEventActionEditMessage).new_message
-			val oldMessage = (event.action as TL_channelAdminLogEventActionEditMessage).prev_message
+			val newMessage = action.newMessage
+			val oldMessage = action.prevMessage
 
-			if (newMessage?.from_id != null) {
-				message.from_id = newMessage.from_id
+			if (newMessage?.fromId != null) {
+				message.fromId = newMessage.fromId
 			}
 			else {
-				message.from_id = TL_peerUser()
-				message.from_id?.user_id = event.user_id
+				message.fromId = TLPeerUser().also { it.userId = event.userId }
 			}
 
 			val newMessageMedia = getMedia(newMessage)
 
-			if (newMessageMedia != null && newMessageMedia !is TL_messageMediaEmpty && newMessageMedia !is TL_messageMediaWebPage) {
+			if (newMessage is TLMessage && oldMessage is TLMessage && newMessageMedia != null && newMessageMedia !is TLMessageMediaEmpty && newMessageMedia !is TLMessageMediaWebPage) {
 				val changedCaption = !TextUtils.equals(newMessage.message, oldMessage.message)
-				val changedMedia = newMessageMedia.javaClass != oldMessage.media?.javaClass || newMessageMedia.photo != null && oldMessage.media?.photo != null && newMessageMedia.photo.id != oldMessage.media?.photo?.id || newMessageMedia.document != null && oldMessage.media?.document != null && newMessageMedia.document.id != oldMessage.media?.document?.id
+				val newPhoto = (newMessageMedia as? TLMessageMediaPhoto)?.photo
+				val oldPhoto = (oldMessage.media as? TLMessageMediaPhoto)?.photo
+				val newDocument = (newMessageMedia as? TLMessageMediaDocument)?.document
+				val oldDocument = (oldMessage.media as? TLMessageMediaDocument)?.document
+				val changedMedia = newMessageMedia.javaClass != oldMessage.media?.javaClass || newPhoto != null && oldPhoto != null && newPhoto.id != oldPhoto.id || newDocument != null && oldDocument != null && newDocument.id != oldDocument.id
 
 				messageText = if (changedMedia && changedCaption) {
 					replaceWithLink(context.getString(R.string.EventLogEditedMediaCaption), "un1", fromUser)
@@ -1430,91 +1405,109 @@ open class MessageObject {
 				message.media = getMedia(newMessage)
 
 				if (changedCaption) {
-					message.media?.webpage = TL_webPage()
-					message.media?.webpage?.site_name = context.getString(R.string.EventLogOriginalCaption)
+					val media = message.media
 
-					if (oldMessage.message.isNullOrEmpty()) {
-						message.media?.webpage?.description = context.getString(R.string.EventLogOriginalCaptionEmpty)
-					}
-					else {
-						message.media?.webpage?.description = oldMessage.message
-						webPageDescriptionEntities = oldMessage.entities
+					if (media is TLMessageMediaWebPage) {
+						media.webpage = TLWebPage().also {
+							it.siteName = context.getString(R.string.EventLogOriginalCaption)
+
+							if (oldMessage.message.isNullOrEmpty()) {
+								it.description = context.getString(R.string.EventLogOriginalCaptionEmpty)
+							}
+							else {
+								it.description = oldMessage.message
+
+								webPageDescriptionEntities = oldMessage.entities
+							}
+						}
 					}
 				}
 			}
 			else {
 				messageText = replaceWithLink(context.getString(R.string.EventLogEditedMessages), "un1", fromUser)
 
-				if (newMessage.action is TL_messageActionGroupCall) {
+				if ((newMessage as? TLMessageService)?.action is TLMessageActionGroupCall) {
 					message = newMessage
-					message.media = TL_messageMediaEmpty()
+					// message.media = TLMessageMediaEmpty()
 				}
 				else {
-					message.message = newMessage.message
-					message.entities = newMessage.entities
-					message.media = TL_messageMediaWebPage()
-					message.media?.webpage = TL_webPage()
-					message.media?.webpage?.site_name = context.getString(R.string.EventLogOriginalMessages)
+					if (newMessage is TLMessage) {
+						@Suppress("NAME_SHADOWING") val oldMessage = oldMessage as? TLMessage
 
-					if (oldMessage.message.isNullOrEmpty()) {
-						message.media?.webpage?.description = context.getString(R.string.EventLogOriginalCaptionEmpty)
-					}
-					else {
-						message.media?.webpage?.description = oldMessage.message
-						webPageDescriptionEntities = oldMessage.entities
+						message.message = newMessage.message
+
+						message.entities.clear()
+						message.entities.addAll(newMessage.entities)
+
+						var webpage: TLWebPage?
+
+						message.media = TLMessageMediaWebPage().also {
+							it.webpage = TLWebPage().also {
+								it.siteName = context.getString(R.string.EventLogOriginalMessages)
+								webpage = it
+							}
+						}
+
+						if (oldMessage?.message.isNullOrEmpty()) {
+							webpage?.description = context.getString(R.string.EventLogOriginalCaptionEmpty)
+						}
+						else {
+							webpage?.description = oldMessage?.message
+							webPageDescriptionEntities = oldMessage?.entities
+						}
 					}
 				}
 			}
 
-			message?.reply_markup = newMessage.reply_markup
+			(message as? TLMessage)?.replyMarkup = newMessage?.replyMarkup
 
-			message?.media?.webpage?.flags = 10
-			message?.media?.webpage?.display_url = ""
-			message?.media?.webpage?.url = ""
+			((message as? TLMessage)?.media as? TLMessageMediaWebPage)?.let {
+				(it.webpage as? TLWebPage)?.let {
+					it.flags = 10
+					it.displayUrl = ""
+					it.url = ""
+				}
+			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangeStickerSet) {
-			val newStickerset = (event.action as TL_channelAdminLogEventActionChangeStickerSet).new_stickerset
-			// TLRPC.InputStickerSet oldStickerset = ((TLRPC.TL_channelAdminLogEventActionChangeStickerSet)event.action).new_stickerset;
+		else if (action is TLChannelAdminLogEventActionChangeStickerSet) {
+			val newStickerset = action.newStickerset
+			// TLRPC.InputStickerSet oldStickerset = ((TLRPC.TLChannelAdminLogEventActionChangeStickerSet)action).new_stickerset;
 
-			messageText = if (newStickerset == null || newStickerset is TL_inputStickerSetEmpty) {
+			messageText = if (newStickerset == null || newStickerset is TLInputStickerSetEmpty) {
 				replaceWithLink(context.getString(R.string.EventLogRemovedStickersSet), "un1", fromUser)
 			}
 			else {
 				replaceWithLink(context.getString(R.string.EventLogChangedStickersSet), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangeLocation) {
-			val location = event.action as TL_channelAdminLogEventActionChangeLocation
-
-			if (location.new_value is TL_channelLocationEmpty) {
+		else if (action is TLChannelAdminLogEventActionChangeLocation) {
+			if (action.newValue is TLChannelLocationEmpty) {
 				messageText = replaceWithLink(context.getString(R.string.EventLogRemovedLocation), "un1", fromUser)
 			}
 			else {
-				val channelLocation = location.new_value as TL_channelLocation
+				val channelLocation = action.newValue as TLChannelLocation
 				messageText = replaceWithLink(LocaleController.formatString("EventLogChangedLocation", R.string.EventLogChangedLocation, channelLocation.address), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionToggleSlowMode) {
-			val slowMode = event.action as TL_channelAdminLogEventActionToggleSlowMode
-
-			if (slowMode.new_value == 0) {
+		else if (action is TLChannelAdminLogEventActionToggleSlowMode) {
+			if (action.newValue == 0) {
 				messageText = replaceWithLink(context.getString(R.string.EventLogToggledSlowmodeOff), "un1", fromUser)
 			}
 			else {
-				val string = if (slowMode.new_value < 60) {
-					LocaleController.formatPluralString("Seconds", slowMode.new_value)
+				val string = if (action.newValue < 60) {
+					LocaleController.formatPluralString("Seconds", action.newValue)
 				}
-				else if (slowMode.new_value < 60 * 60) {
-					LocaleController.formatPluralString("Minutes", slowMode.new_value / 60)
+				else if (action.newValue < 60 * 60) {
+					LocaleController.formatPluralString("Minutes", action.newValue / 60)
 				}
 				else {
-					LocaleController.formatPluralString("Hours", slowMode.new_value / 60 / 60)
+					LocaleController.formatPluralString("Hours", action.newValue / 60 / 60)
 				}
 
 				messageText = replaceWithLink(LocaleController.formatString("EventLogToggledSlowmodeOn", R.string.EventLogToggledSlowmodeOn, string), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionStartGroupCall) {
+		else if (action is TLChannelAdminLogEventActionStartGroupCall) {
 			messageText = if (ChatObject.isChannel(chat) && (!chat.megagroup || chat.gigagroup)) {
 				replaceWithLink(context.getString(R.string.EventLogStartedLiveStream), "un1", fromUser)
 			}
@@ -1522,7 +1515,7 @@ open class MessageObject {
 				replaceWithLink(context.getString(R.string.EventLogStartedVoiceChat), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionDiscardGroupCall) {
+		else if (action is TLChannelAdminLogEventActionDiscardGroupCall) {
 			messageText = if (ChatObject.isChannel(chat) && (!chat.megagroup || chat.gigagroup)) {
 				replaceWithLink(context.getString(R.string.EventLogEndedLiveStream), "un1", fromUser)
 			}
@@ -1530,9 +1523,8 @@ open class MessageObject {
 				replaceWithLink(context.getString(R.string.EventLogEndedVoiceChat), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantMute) {
-			val action = event.action as TL_channelAdminLogEventActionParticipantMute
-			val id = getPeerId(action.participant.peer)
+		else if (action is TLChannelAdminLogEventActionParticipantMute) {
+			val id = getPeerId(action.participant?.peer)
 
 			val `object` = if (id > 0) {
 				MessagesController.getInstance(currentAccount).getUser(id)
@@ -1544,9 +1536,8 @@ open class MessageObject {
 			messageText = replaceWithLink(context.getString(R.string.EventLogVoiceChatMuted), "un1", fromUser)
 			messageText = replaceWithLink(messageText, "un2", `object`)
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantUnmute) {
-			val action = event.action as TL_channelAdminLogEventActionParticipantUnmute
-			val id = getPeerId(action.participant.peer)
+		else if (action is TLChannelAdminLogEventActionParticipantUnmute) {
+			val id = getPeerId(action.participant?.peer)
 
 			val `object` = if (id > 0) {
 				MessagesController.getInstance(currentAccount).getUser(id)
@@ -1558,24 +1549,21 @@ open class MessageObject {
 			messageText = replaceWithLink(context.getString(R.string.EventLogVoiceChatUnmuted), "un1", fromUser)
 			messageText = replaceWithLink(messageText, "un2", `object`)
 		}
-		else if (event.action is TL_channelAdminLogEventActionToggleGroupCallSetting) {
-			val action = event.action as TL_channelAdminLogEventActionToggleGroupCallSetting
-
-			messageText = if (action.join_muted) {
+		else if (action is TLChannelAdminLogEventActionToggleGroupCallSetting) {
+			messageText = if (action.joinMuted) {
 				replaceWithLink(context.getString(R.string.EventLogVoiceChatNotAllowedToSpeak), "un1", fromUser)
 			}
 			else {
 				replaceWithLink(context.getString(R.string.EventLogVoiceChatAllowedToSpeak), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantJoinByInvite) {
+		else if (action is TLChannelAdminLogEventActionParticipantJoinByInvite) {
 			messageText = replaceWithLink(context.getString(R.string.ActionInviteUser), "un1", fromUser)
 		}
-		else if (event.action is TL_channelAdminLogEventActionToggleNoForwards) {
-			val action = event.action as TL_channelAdminLogEventActionToggleNoForwards
+		else if (action is TLChannelAdminLogEventActionToggleNoForwards) {
 			val isChannel = ChatObject.isChannel(chat) && !chat.megagroup
 
-			messageText = if (action.new_value) {
+			messageText = if (action.newValue) {
 				if (isChannel) {
 					replaceWithLink(context.getString(R.string.ActionForwardsRestrictedChannel), "un1", fromUser)
 				}
@@ -1592,34 +1580,27 @@ open class MessageObject {
 				}
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionExportedInviteDelete) {
-			val action = event.action as TL_channelAdminLogEventActionExportedInviteDelete
-
+		else if (action is TLChannelAdminLogEventActionExportedInviteDelete) {
 			messageText = replaceWithLink(LocaleController.formatString("ActionDeletedInviteLinkClickable", R.string.ActionDeletedInviteLinkClickable), "un1", fromUser)
 			messageText = replaceWithLink(messageText, "un2", action.invite)
 		}
-		else if (event.action is TL_channelAdminLogEventActionExportedInviteRevoke) {
-			val action = event.action as TL_channelAdminLogEventActionExportedInviteRevoke
-
-			messageText = replaceWithLink(LocaleController.formatString("ActionRevokedInviteLinkClickable", R.string.ActionRevokedInviteLinkClickable, action.invite.link), "un1", fromUser)
+		else if (action is TLChannelAdminLogEventActionExportedInviteRevoke) {
+			messageText = replaceWithLink(LocaleController.formatString("ActionRevokedInviteLinkClickable", R.string.ActionRevokedInviteLinkClickable, (action.invite as? TLChatInviteExported)?.link), "un1", fromUser)
 			messageText = replaceWithLink(messageText, "un2", action.invite)
 		}
-		else if (event.action is TL_channelAdminLogEventActionExportedInviteEdit) {
-			val action = event.action as TL_channelAdminLogEventActionExportedInviteEdit
-
-			messageText = if (action.prev_invite.link != null && action.prev_invite.link == action.new_invite.link) {
+		else if (action is TLChannelAdminLogEventActionExportedInviteEdit) {
+			messageText = if ((action.prevInvite as? TLChatInviteExported)?.link != null && (action.prevInvite as? TLChatInviteExported)?.link == (action.newInvite as? TLChatInviteExported)?.link) {
 				replaceWithLink(LocaleController.formatString("ActionEditedInviteLinkToSameClickable", R.string.ActionEditedInviteLinkToSameClickable), "un1", fromUser)
 			}
 			else {
 				replaceWithLink(LocaleController.formatString("ActionEditedInviteLinkClickable", R.string.ActionEditedInviteLinkClickable), "un1", fromUser)
 			}
 
-			messageText = replaceWithLink(messageText, "un2", action.prev_invite)
-			messageText = replaceWithLink(messageText, "un3", action.new_invite)
+			messageText = replaceWithLink(messageText, "un2", action.prevInvite)
+			messageText = replaceWithLink(messageText, "un3", action.newInvite)
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantVolume) {
-			val action = event.action as TL_channelAdminLogEventActionParticipantVolume
-			val id = getPeerId(action.participant.peer)
+		else if (action is TLChannelAdminLogEventActionParticipantVolume) {
+			val id = getPeerId(action.participant?.peer)
 
 			val `object` = if (id > 0) {
 				MessagesController.getInstance(currentAccount).getUser(id)
@@ -1633,61 +1614,56 @@ open class MessageObject {
 			messageText = replaceWithLink(LocaleController.formatString("ActionVolumeChanged", R.string.ActionVolumeChanged, (if (vol > 0) max(vol, 1.0) else 0).toInt()), "un1", fromUser)
 			messageText = replaceWithLink(messageText, "un2", `object`)
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangeHistoryTTL) {
-			val action = event.action as TL_channelAdminLogEventActionChangeHistoryTTL
-
+		else if (action is TLChannelAdminLogEventActionChangeHistoryTTL) {
 			if (!chat.megagroup) {
-				messageText = if (action.new_value != 0) {
-					LocaleController.formatString("ActionTTLChannelChanged", R.string.ActionTTLChannelChanged, LocaleController.formatTTLString(action.new_value))
+				messageText = if (action.newValue != 0) {
+					LocaleController.formatString("ActionTTLChannelChanged", R.string.ActionTTLChannelChanged, LocaleController.formatTTLString(action.newValue))
 				}
 				else {
 					context.getString(R.string.ActionTTLChannelDisabled)
 				}
 			}
-			else if (action.new_value == 0) {
+			else if (action.newValue == 0) {
 				messageText = replaceWithLink(context.getString(R.string.ActionTTLDisabled), "un1", fromUser)
 			}
 			else {
-				val time = if (action.new_value > 24 * 60 * 60) {
-					LocaleController.formatPluralString("Days", action.new_value / (24 * 60 * 60))
+				val time = if (action.newValue > 24 * 60 * 60) {
+					LocaleController.formatPluralString("Days", action.newValue / (24 * 60 * 60))
 				}
-				else if (action.new_value >= 60 * 60) {
-					LocaleController.formatPluralString("Hours", action.new_value / (60 * 60))
+				else if (action.newValue >= 60 * 60) {
+					LocaleController.formatPluralString("Hours", action.newValue / (60 * 60))
 				}
-				else if (action.new_value >= 60) {
-					LocaleController.formatPluralString("Minutes", action.new_value / 60)
+				else if (action.newValue >= 60) {
+					LocaleController.formatPluralString("Minutes", action.newValue / 60)
 				}
 				else {
-					LocaleController.formatPluralString("Seconds", action.new_value)
+					LocaleController.formatPluralString("Seconds", action.newValue)
 				}
 
 				messageText = replaceWithLink(LocaleController.formatString("ActionTTLChanged", R.string.ActionTTLChanged, time), "un1", fromUser)
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionParticipantJoinByRequest) {
-			val action = event.action as TL_channelAdminLogEventActionParticipantJoinByRequest
-
+		else if (action is TLChannelAdminLogEventActionParticipantJoinByRequest) {
 			val url = String.format(Locale.getDefault(), "https://%s/+PublicChat", ApplicationLoader.applicationContext.getString(R.string.domain))
 
-			if ((action.invite is TL_chatInviteExported) && url == (action.invite as TL_chatInviteExported).link || action.invite is TL_chatInvitePublicJoinRequests) {
+			if ((action.invite is TLChatInviteExported) && url == (action.invite as TLChatInviteExported).link || action.invite is TLChatInvitePublicJoinRequests) {
 				messageText = replaceWithLink(context.getString(R.string.JoinedViaRequestApproved), "un1", fromUser)
-				messageText = replaceWithLink(messageText, "un2", MessagesController.getInstance(currentAccount).getUser(action.approved_by))
+				messageText = replaceWithLink(messageText, "un2", MessagesController.getInstance(currentAccount).getUser(action.approvedBy))
 			}
 			else {
 				messageText = replaceWithLink(context.getString(R.string.JoinedViaInviteLinkApproved), "un1", fromUser)
 				messageText = replaceWithLink(messageText, "un2", action.invite)
-				messageText = replaceWithLink(messageText, "un3", MessagesController.getInstance(currentAccount).getUser(action.approved_by))
+				messageText = replaceWithLink(messageText, "un3", MessagesController.getInstance(currentAccount).getUser(action.approvedBy))
 			}
 		}
-		else if (event.action is TL_channelAdminLogEventActionSendMessage) {
-			message = (event.action as TL_channelAdminLogEventActionSendMessage).message
+		else if (action is TLChannelAdminLogEventActionSendMessage) {
+			message = action.message
 
 			messageText = replaceWithLink(context.getString(R.string.EventLogSendMessages), "un1", fromUser)
 		}
-		else if (event.action is TL_channelAdminLogEventActionChangeAvailableReactions) {
-			val eventActionChangeAvailableReactions = event.action as TL_channelAdminLogEventActionChangeAvailableReactions
-			val oldReactions = getStringFrom(eventActionChangeAvailableReactions.prev_value)
-			val newReactions = getStringFrom(eventActionChangeAvailableReactions.new_value)
+		else if (action is TLChannelAdminLogEventActionChangeAvailableReactions) {
+			val oldReactions = getStringFrom(action.prevValue)
+			val newReactions = getStringFrom(action.newValue)
 			val spannableStringBuilder = SpannableStringBuilder(replaceWithLink(LocaleController.formatString("ActionReactionsChanged", R.string.ActionReactionsChanged, "**old**", "**new**"), "un1", fromUser))
 
 			var i = spannableStringBuilder.toString().indexOf("**old**")
@@ -1705,29 +1681,27 @@ open class MessageObject {
 			messageText = spannableStringBuilder
 		}
 		else {
-			messageText = "unsupported " + event.action
+			messageText = "unsupported $action"
 		}
 
 		if (messageOwner == null) {
-			messageOwner = TL_messageService()
+			messageOwner = TLMessageService()
 		}
 
-		messageOwner?.message = messageText.toString()
-		messageOwner?.from_id = TL_peerUser()
-		messageOwner?.from_id?.user_id = event.user_id
+		(messageOwner as? TLMessage)?.message = messageText.toString()
+		messageOwner?.fromId = TLPeerUser().also { it.userId = event.userId }
 		messageOwner?.date = event.date
 		messageOwner?.id = mid[0]++
 
 		eventId = event.id
 
 		messageOwner?.out = false
-		messageOwner?.peer_id = TL_peerChannel()
-		messageOwner?.peer_id?.channel_id = chat.id
+		messageOwner?.peerId = TLPeerChannel().also { it.channelId = chat.id }
 		messageOwner?.unread = false
 
 		val mediaController = MediaController.getInstance()
 
-		if (message is TL_messageEmpty) {
+		if (message is TLMessageEmpty) {
 			message = null
 		}
 
@@ -1735,7 +1709,7 @@ open class MessageObject {
 			message.out = false
 			message.id = mid[0]++
 			message.flags = message.flags and TLRPC.MESSAGE_FLAG_REPLY.inv()
-			message.reply_to = null
+			message.replyTo = null
 			message.flags = message.flags and TLRPC.MESSAGE_FLAG_EDITED.inv()
 
 			val messageObject = MessageObject(currentAccount, message, null, null, generateLayout = true, checkMediaExists = true, eid = eventId)
@@ -1786,7 +1760,7 @@ open class MessageObject {
 			messageText = ""
 		}
 
-		val paint = if (getMedia(messageOwner) is TL_messageMediaGame) {
+		val paint = if (getMedia(messageOwner) is TLMessageMediaGame) {
 			Theme.chat_msgGameTextPaint
 		}
 		else {
@@ -1796,7 +1770,7 @@ open class MessageObject {
 		val emojiOnly = if (allowsBigEmoji()) IntArray(1) else null
 
 		messageText = Emoji.replaceEmoji(messageText, paint.fontMetricsInt, false, emojiOnly)
-		messageText = replaceAnimatedEmoji(messageText, messageOwner!!.entities, paint.fontMetricsInt)
+		messageText = replaceAnimatedEmoji(messageText, (messageOwner as? TLMessage)?.entities, paint.fontMetricsInt)
 
 		if (emojiOnly != null && emojiOnly[0] > 1) {
 			replaceEmojiToLottieFrame(messageText, emojiOnly)
@@ -1834,13 +1808,13 @@ open class MessageObject {
 //		return user != null && user.premium;//getDialogId() < 0 || UserConfig.getInstance(currentAccount).isPremium();
 	}
 
-	val randomUnreadReaction: MessagePeerReaction?
-		get() = messageOwner?.originalReactions?.recentReactions?.firstOrNull()
+	val randomUnreadReaction: TLMessagePeerReaction?
+		get() = (messageOwner as? TLMessage)?.reactions?.recentReactions?.firstOrNull()
 
 	fun markReactionsAsRead() {
 		var changed = false
 
-		messageOwner?.originalReactions?.recentReactions?.forEach {
+		(messageOwner as? TLMessage)?.reactions?.recentReactions?.forEach {
 			if (it.unread) {
 				it.unread = false
 				changed = true
@@ -1848,13 +1822,13 @@ open class MessageObject {
 		}
 
 		if (changed) {
-			MessagesStorage.getInstance(currentAccount).markMessageReactionsAsRead(messageOwner?.dialog_id ?: 0, messageOwner?.id ?: 0, true)
+			MessagesStorage.getInstance(currentAccount).markMessageReactionsAsRead(messageOwner?.dialogId ?: 0, messageOwner?.id ?: 0, true)
 		}
 	}
 
 	val isPremiumSticker: Boolean
 		get() {
-			val media = getMedia(messageOwner)
+			val media = getMedia(messageOwner) as? TLMessageMediaDocument
 
 			if (media != null && media.nopremium) {
 				return false
@@ -1863,7 +1837,7 @@ open class MessageObject {
 			return isPremiumSticker(document)
 		}
 
-	val premiumStickerAnimation: VideoSize?
+	val premiumStickerAnimation: TLRPC.VideoSize?
 		get() = getPremiumStickerAnimation(document)
 
 	fun copyStableParams(old: MessageObject) {
@@ -1872,8 +1846,8 @@ open class MessageObject {
 		forcePlayEffect = old.forcePlayEffect
 		wasJustSent = old.wasJustSent
 
-		val reactions = messageOwner?.originalReactions
-		val oldReactions = old.messageOwner?.originalReactions
+		val reactions = (messageOwner as? TLMessage)?.reactions
+		val oldReactions = (old.messageOwner as? TLMessage)?.reactions
 
 		if (!reactions?.results.isNullOrEmpty() && oldReactions?.results != null) {
 			for (i in reactions!!.results.indices) {
@@ -1901,7 +1875,7 @@ open class MessageObject {
 	val chosenReactions: List<VisibleReaction>
 		get() {
 			val chosenReactions = mutableListOf<VisibleReaction>()
-			val reactions = messageOwner?.originalReactions
+			val reactions = (messageOwner as? TLMessage)?.reactions
 
 			if (reactions != null) {
 				for (i in reactions.results.indices) {
@@ -1918,8 +1892,8 @@ open class MessageObject {
 		emojiAnimatedSticker = null
 		emojiAnimatedStickerId = null
 
-		if (emojiOnlyCount == 1 && getMedia(messageOwner) !is TL_messageMediaWebPage && getMedia(messageOwner) !is TL_messageMediaInvoice && (getMedia(messageOwner) is TL_messageMediaEmpty || getMedia(messageOwner) == null) && messageOwner?.realGroupId == 0L) {
-			if (messageOwner?.entities.isNullOrEmpty()) {
+		if (emojiOnlyCount == 1 && getMedia(messageOwner) !is TLMessageMediaWebPage && getMedia(messageOwner) !is TLMessageMediaInvoice && (getMedia(messageOwner) is TLMessageMediaEmpty || getMedia(messageOwner) == null) && (messageOwner as? TLMessage)?.groupedId == 0L) {
+			if ((messageOwner as? TLMessage)?.entities.isNullOrEmpty()) {
 				var emoji = messageText
 				var index: Int
 
@@ -1955,9 +1929,9 @@ open class MessageObject {
 					emojiAnimatedSticker = MediaDataController.getInstance(currentAccount).getEmojiAnimatedSticker(emoji)
 				}
 			}
-			else if (messageOwner?.entities?.size == 1 && messageOwner?.entities?.first() is TL_messageEntityCustomEmoji) {
+			else if ((messageOwner as? TLMessage)?.entities?.size == 1 && (messageOwner as? TLMessage)?.entities?.first() is TLMessageEntityCustomEmoji) {
 				try {
-					emojiAnimatedStickerId = (messageOwner?.entities?.first() as TL_messageEntityCustomEmoji).documentId
+					emojiAnimatedStickerId = ((messageOwner as? TLMessage)?.entities?.first() as TLMessageEntityCustomEmoji).documentId
 					emojiAnimatedSticker = AnimatedEmojiDrawable.findDocument(currentAccount, emojiAnimatedStickerId!!)
 
 					if (emojiAnimatedSticker == null && messageText is Spanned) {
@@ -2003,8 +1977,8 @@ open class MessageObject {
 
 		try {
 			for (photoSize in photoThumbs) {
-				if (photoSize is TL_photoStrippedSize) {
-					strippedThumb = BitmapDrawable(ApplicationLoader.applicationContext.resources, ImageLoader.getStrippedPhotoBitmap(photoSize.bytes, "b"))
+				if (photoSize is TLPhotoStrippedSize) {
+					strippedThumb = ImageLoader.getStrippedPhotoBitmap(photoSize.bytes, "b")?.toDrawable(ApplicationLoader.applicationContext.resources)
 					break
 				}
 			}
@@ -2014,7 +1988,7 @@ open class MessageObject {
 		}
 	}
 
-	private fun createDateArray(accountNum: Int, event: TL_channelAdminLogEvent, messageObjects: ArrayList<MessageObject>, messagesByDays: HashMap<String, ArrayList<MessageObject>>, addToEnd: Boolean) {
+	private fun createDateArray(accountNum: Int, event: TLChannelAdminLogEvent, messageObjects: ArrayList<MessageObject>, messagesByDays: HashMap<String, ArrayList<MessageObject>>, addToEnd: Boolean) {
 		val dateKey = dateKey ?: return
 		var dayArray = messagesByDays[dateKey]
 
@@ -2023,7 +1997,7 @@ open class MessageObject {
 
 			messagesByDays[dateKey] = dayArray
 
-			val dateMsg = TL_message()
+			val dateMsg = TLMessage()
 			dateMsg.message = LocaleController.formatDateChat(event.date.toLong())
 			dateMsg.id = 0
 			dateMsg.date = event.date
@@ -2162,12 +2136,12 @@ open class MessageObject {
 		}
 	}
 
-	private fun getStringFrom(reactions: ChatReactions): CharSequence {
-		if (reactions is TL_chatReactionsAll) {
+	private fun getStringFrom(reactions: ChatReactions?): CharSequence {
+		if (reactions is TLChatReactionsAll) {
 			return ApplicationLoader.applicationContext.getString(R.string.AllReactions)
 		}
 
-		if (reactions is TL_chatReactionsSome) {
+		if (reactions is TLChatReactionsSome) {
 			val spannableStringBuilder = SpannableStringBuilder()
 
 			for (i in reactions.reactions.indices) {
@@ -2182,7 +2156,7 @@ open class MessageObject {
 		return ApplicationLoader.applicationContext.getString(R.string.NoReactions)
 	}
 
-	private fun getUserName(`object`: TLObject?, entities: ArrayList<MessageEntity>, offset: Int): String {
+	private fun getUserName(`object`: TLObject?, entities: MutableList<MessageEntity>, offset: Int): String {
 		val name: String
 		val username: String?
 		val id: Long
@@ -2195,11 +2169,11 @@ open class MessageObject {
 			}
 
 			is User -> {
-				name = if (`object`.deleted) {
+				name = if ((`object` as? TLRPC.TLUser)?.deleted == true) {
 					ApplicationLoader.applicationContext.getString(R.string.HiddenName)
 				}
 				else {
-					ContactsController.formatName(`object`.first_name, `object`.last_name)
+					ContactsController.formatName(`object`.firstName, `object`.lastName)
 				}
 
 				username = `object`.username
@@ -2208,14 +2182,14 @@ open class MessageObject {
 
 			else -> {
 				val chat = `object` as Chat
-				name = chat.title
+				name = chat.title ?: ""
 				username = chat.username
 				id = -chat.id
 			}
 		}
 
 		if (offset >= 0) {
-			val entity = TL_messageEntityMentionName()
+			val entity = TLMessageEntityMentionName()
 			entity.userId = id
 			entity.offset = offset
 			entity.length = name.length
@@ -2225,7 +2199,7 @@ open class MessageObject {
 
 		if (!username.isNullOrEmpty()) {
 			if (offset >= 0) {
-				val entity = TL_messageEntityMentionName()
+				val entity = TLMessageEntityMentionName()
 				entity.userId = id
 				entity.offset = offset + name.length + 2
 				entity.length = username.length + 1
@@ -2240,14 +2214,14 @@ open class MessageObject {
 	}
 
 	@JvmOverloads
-	fun applyNewText(text: CharSequence? = messageOwner?.message) {
+	fun applyNewText(text: CharSequence? = (messageOwner as? TLMessage)?.message) {
 		if (text.isNullOrEmpty()) {
 			return
 		}
 
 		messageText = text
 
-		val paint = if (getMedia(messageOwner) is TL_messageMediaGame) {
+		val paint = if (getMedia(messageOwner) is TLMessageMediaGame) {
 			Theme.chat_msgGameTextPaint
 		}
 		else {
@@ -2256,7 +2230,7 @@ open class MessageObject {
 
 		val emojiOnly = if (allowsBigEmoji()) IntArray(1) else null
 		messageText = Emoji.replaceEmoji(messageText, paint.fontMetricsInt, false, emojiOnly)
-		messageText = replaceAnimatedEmoji(messageText, messageOwner?.entities, paint.fontMetricsInt)
+		messageText = replaceAnimatedEmoji(messageText, (messageOwner as? TLMessage)?.entities, paint.fontMetricsInt)
 
 		if (emojiOnly != null && emojiOnly[0] > 1) {
 			replaceEmojiToLottieFrame(messageText, emojiOnly)
@@ -2272,11 +2246,11 @@ open class MessageObject {
 			return false
 		}
 
-		if (messageOwner == null || messageOwner?.peer_id == null || messageOwner?.peer_id?.channel_id == 0L && messageOwner?.peer_id?.chat_id == 0L) {
+		if (messageOwner == null || messageOwner?.peerId == null || messageOwner?.peerId?.channelId == 0L && messageOwner?.peerId?.chatId == 0L) {
 			return true
 		}
 
-		val chat = MessagesController.getInstance(currentAccount).getChat(if (messageOwner?.peer_id?.channel_id != 0L) messageOwner?.peer_id?.channel_id else messageOwner?.peer_id?.chat_id)
+		val chat = MessagesController.getInstance(currentAccount).getChat(if (messageOwner?.peerId?.channelId != 0L) messageOwner?.peerId?.channelId else messageOwner?.peerId?.chatId)
 
 		return chat != null && chat.gigagroup || (!ChatObject.isActionBanned(chat, ChatObject.ACTION_SEND_STICKERS) || ChatObject.hasAdminRights(chat))
 	}
@@ -2285,29 +2259,31 @@ open class MessageObject {
 		@Suppress("NAME_SHADOWING") var fromUser = fromUser
 
 		if (fromUser == null && isFromUser) {
-			fromUser = MessagesController.getInstance(currentAccount).getUser(messageOwner?.from_id?.user_id)
+			fromUser = MessagesController.getInstance(currentAccount).getUser(messageOwner?.fromId?.userId)
 		}
 
-		var game: TL_game? = null
+		var game: TLGame? = null
 
 		if (replyMessageObject != null && getMedia(messageOwner)?.game != null) {
 			game = getMedia(messageOwner)?.game
 		}
 
+		val score = (messageOwner?.action as? TLRPC.TLMessageActionGameScore)?.score ?: 0
+
 		if (game == null) {
 			messageText = if (fromUser != null && fromUser.id == UserConfig.getInstance(currentAccount).getClientUserId()) {
-				LocaleController.formatString("ActionYouScored", R.string.ActionYouScored, LocaleController.formatPluralString("Points", messageOwner?.action?.score ?: 0))
+				LocaleController.formatString("ActionYouScored", R.string.ActionYouScored, LocaleController.formatPluralString("Points", score))
 			}
 			else {
-				replaceWithLink(LocaleController.formatString("ActionUserScored", R.string.ActionUserScored, LocaleController.formatPluralString("Points", messageOwner?.action?.score ?: 0)), "un1", fromUser)
+				replaceWithLink(LocaleController.formatString("ActionUserScored", R.string.ActionUserScored, LocaleController.formatPluralString("Points", score)), "un1", fromUser)
 			}
 		}
 		else {
 			messageText = if (fromUser != null && fromUser.id == UserConfig.getInstance(currentAccount).getClientUserId()) {
-				LocaleController.formatString("ActionYouScoredInGame", R.string.ActionYouScoredInGame, LocaleController.formatPluralString("Points", messageOwner?.action?.score ?: 0))
+				LocaleController.formatString("ActionYouScoredInGame", R.string.ActionYouScoredInGame, LocaleController.formatPluralString("Points", score))
 			}
 			else {
-				replaceWithLink(LocaleController.formatString("ActionUserScoredInGame", R.string.ActionUserScoredInGame, LocaleController.formatPluralString("Points", messageOwner?.action?.score ?: 0)), "un1", fromUser)
+				replaceWithLink(LocaleController.formatString("ActionUserScoredInGame", R.string.ActionUserScoredInGame, LocaleController.formatPluralString("Points", score)), "un1", fromUser)
 			}
 
 			messageText = replaceWithLink(messageText, "un2", game)
@@ -2315,7 +2291,7 @@ open class MessageObject {
 	}
 
 	fun hasValidReplyMessageObject(): Boolean {
-		return !(replyMessageObject == null || replyMessageObject?.messageOwner is TL_messageEmpty || replyMessageObject?.messageOwner?.action is TL_messageActionHistoryClear)
+		return !(replyMessageObject == null || replyMessageObject?.messageOwner is TLMessageEmpty || replyMessageObject?.messageOwner?.action is TLMessageActionHistoryClear)
 	}
 
 	fun generatePaymentSentMessageText(fromUser: User?) {
@@ -2335,15 +2311,15 @@ open class MessageObject {
 		var currency: String?
 
 		try {
-			currency = LocaleController.getInstance().formatCurrencyString(messageOwner?.action?.total_amount ?: 0L, messageOwner?.action?.currency ?: "")
+			currency = LocaleController.getInstance().formatCurrencyString(messageOwner?.action?.totalAmount ?: 0L, messageOwner?.action?.currency ?: "")
 		}
 		catch (e: Exception) {
 			currency = "<error>"
 			FileLog.e(e)
 		}
 
-		messageText = if (replyMessageObject != null && getMedia(messageOwner) is TL_messageMediaInvoice) {
-			if (messageOwner?.action?.recurring_init == true) {
+		messageText = if (replyMessageObject != null && getMedia(messageOwner) is TLMessageMediaInvoice) {
+			if (messageOwner?.action?.recurringInit == true) {
 				LocaleController.formatString(R.string.PaymentSuccessfullyPaidRecurrent, currency, name, getMedia(messageOwner)?.title)
 			}
 			else {
@@ -2351,7 +2327,7 @@ open class MessageObject {
 			}
 		}
 		else {
-			if (messageOwner?.action?.recurring_init == true) {
+			if (messageOwner?.action?.recurringInit == true) {
 				LocaleController.formatString(R.string.PaymentSuccessfullyPaidNoItemRecurrent, currency, name)
 			}
 			else {
@@ -2366,15 +2342,15 @@ open class MessageObject {
 
 		if (fromUser == null && chat == null) {
 			if (isFromUser) {
-				fromUser = MessagesController.getInstance(currentAccount).getUser(messageOwner?.from_id?.user_id)
+				fromUser = MessagesController.getInstance(currentAccount).getUser(messageOwner?.fromId?.userId)
 			}
 
 			if (fromUser == null) {
-				if (messageOwner?.peer_id is TL_peerChannel) {
-					chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.peer_id?.channel_id)
+				if (messageOwner?.peerId is TLPeerChannel) {
+					chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.peerId?.channelId)
 				}
-				else if (messageOwner?.peer_id is TL_peerChat) {
-					chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.peer_id?.chat_id)
+				else if (messageOwner?.peerId is TLPeerChat) {
+					chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.peerId?.chatId)
 				}
 			}
 		}
@@ -2382,7 +2358,7 @@ open class MessageObject {
 		val context = ApplicationLoader.applicationContext
 		val replyMessageObject = replyMessageObject
 
-		if (replyMessageObject == null || replyMessageObject.messageOwner is TL_messageEmpty || replyMessageObject.messageOwner?.action is TL_messageActionHistoryClear) {
+		if (replyMessageObject == null || replyMessageObject.messageOwner is TLMessageEmpty || replyMessageObject.messageOwner?.action is TLMessageActionHistoryClear) {
 			messageText = replaceWithLink(context.getString(R.string.ActionPinnedNoText), "un1", fromUser ?: chat)
 		}
 		else {
@@ -2404,30 +2380,30 @@ open class MessageObject {
 			else if ((replyMessageObject.isSticker || replyMessageObject.isAnimatedSticker) && !replyMessageObject.isAnimatedEmoji) {
 				messageText = replaceWithLink(context.getString(R.string.ActionPinnedSticker), "un1", fromUser ?: chat)
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaDocument) {
+			else if (getMedia(messageOwner) is TLMessageMediaDocument) {
 				messageText = replaceWithLink(context.getString(R.string.ActionPinnedFile), "un1", fromUser ?: chat)
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaGeo) {
+			else if (getMedia(messageOwner) is TLMessageMediaGeo) {
 				messageText = replaceWithLink(context.getString(R.string.ActionPinnedGeo), "un1", fromUser ?: chat)
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaGeoLive) {
+			else if (getMedia(messageOwner) is TLMessageMediaGeoLive) {
 				messageText = replaceWithLink(context.getString(R.string.ActionPinnedGeoLive), "un1", fromUser ?: chat)
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaContact) {
+			else if (getMedia(messageOwner) is TLMessageMediaContact) {
 				messageText = replaceWithLink(context.getString(R.string.ActionPinnedContact), "un1", fromUser ?: chat)
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaPoll) {
-				messageText = if ((getMedia(messageOwner) as? TL_messageMediaPoll?)?.poll?.quiz == true) {
+			else if (getMedia(messageOwner) is TLMessageMediaPoll) {
+				messageText = if ((getMedia(messageOwner) as? TLMessageMediaPoll?)?.poll?.quiz == true) {
 					replaceWithLink(context.getString(R.string.ActionPinnedQuiz), "un1", fromUser ?: chat)
 				}
 				else {
 					replaceWithLink(context.getString(R.string.ActionPinnedPoll), "un1", fromUser ?: chat)
 				}
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaPhoto) {
+			else if (getMedia(messageOwner) is TLMessageMediaPhoto) {
 				messageText = replaceWithLink(context.getString(R.string.ActionPinnedPhoto), "un1", fromUser ?: chat)
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaGame) {
+			else if (getMedia(messageOwner) is TLMessageMediaGame) {
 				messageText = replaceWithLink(LocaleController.formatString("ActionPinnedGame", R.string.ActionPinnedGame, "\uD83C\uDFAE " + getMedia(messageOwner)?.game?.title), "un1", fromUser ?: chat)
 				messageText = Emoji.replaceEmoji(messageText, Theme.chat_msgTextPaint.fontMetricsInt, false)
 			}
@@ -2443,7 +2419,7 @@ open class MessageObject {
 				mess = Emoji.replaceEmoji(mess, Theme.chat_msgTextPaint.fontMetricsInt, false)
 
 				if (replyMessageObject.messageOwner != null) {
-					mess = replaceAnimatedEmoji(mess, replyMessageObject.messageOwner?.entities, Theme.chat_msgTextPaint.fontMetricsInt)
+					mess = replaceAnimatedEmoji(mess, (replyMessageObject.messageOwner as? TLMessage)?.entities, Theme.chat_msgTextPaint.fontMetricsInt)
 				}
 
 				MediaDataController.addTextStyleRuns(replyMessageObject, mess as? Spannable ?: SpannableString(""))
@@ -2466,7 +2442,7 @@ open class MessageObject {
 	}
 
 	fun hasReactions(): Boolean {
-		return !messageOwner?.originalReactions?.results.isNullOrEmpty()
+		return !(messageOwner as? TLMessage)?.reactions?.results.isNullOrEmpty()
 	}
 
 	fun loadAnimatedEmojiDocument() {
@@ -2490,7 +2466,7 @@ open class MessageObject {
 				return false
 			}
 
-			return (getMedia(messageOwner) as? TL_messageMediaPoll)?.poll?.closed == true
+			return (getMedia(messageOwner) as? TLMessageMediaPoll)?.poll?.closed == true
 		}
 
 	val isQuiz: Boolean
@@ -2499,7 +2475,7 @@ open class MessageObject {
 				return false
 			}
 
-			return (getMedia(messageOwner) as? TL_messageMediaPoll)?.poll?.quiz == true
+			return (getMedia(messageOwner) as? TLMessageMediaPoll)?.poll?.quiz == true
 		}
 
 	val isPublicPoll: Boolean
@@ -2508,7 +2484,7 @@ open class MessageObject {
 				return false
 			}
 
-			return (getMedia(messageOwner) as? TL_messageMediaPoll)?.poll?.public_voters == true
+			return (getMedia(messageOwner) as? TLMessageMediaPoll)?.poll?.publicVoters == true
 		}
 
 	val isPoll: Boolean
@@ -2519,13 +2495,13 @@ open class MessageObject {
 			return false
 		}
 
-		val mediaPoll = getMedia(messageOwner) as? TL_messageMediaPoll
+		val mediaPoll = getMedia(messageOwner) as? TLMessageMediaPoll
 
-		if (mediaPoll?.results == null || mediaPoll.results.results.isEmpty() || mediaPoll.poll.quiz) {
+		if (mediaPoll?.results == null || mediaPoll.results?.results.isNullOrEmpty() || mediaPoll.poll?.quiz == true) {
 			return false
 		}
 
-		for (answer in mediaPoll.results.results) {
+		for (answer in mediaPoll.results!!.results) {
 			if (answer.chosen) {
 				return true
 			}
@@ -2540,13 +2516,13 @@ open class MessageObject {
 				return false
 			}
 
-			val mediaPoll = getMedia(messageOwner) as? TL_messageMediaPoll
+			val mediaPoll = getMedia(messageOwner) as? TLMessageMediaPoll
 
-			if (mediaPoll?.results == null || mediaPoll.results.results.isEmpty()) {
+			if (mediaPoll?.results == null || mediaPoll.results?.results.isNullOrEmpty()) {
 				return false
 			}
 
-			for (answer in mediaPoll.results.results) {
+			for (answer in mediaPoll.results!!.results) {
 				if (answer.chosen) {
 					return true
 				}
@@ -2564,7 +2540,7 @@ open class MessageObject {
 				return 0L
 			}
 
-			return (getMedia(messageOwner) as? TL_messageMediaPoll)?.poll?.id ?: 0L
+			return (getMedia(messageOwner) as? TLMessageMediaPoll)?.poll?.id ?: 0L
 		}
 
 	private fun getPhotoWithId(webPage: WebPage?, id: Long): TLRPC.Photo? {
@@ -2572,23 +2548,17 @@ open class MessageObject {
 			returnsNotNull() implies (webPage != null)
 		}
 
-		if (webPage?.cached_page == null) {
+		@Suppress("NAME_SHADOWING") val webPage = webPage as? TLWebPage
+
+		if (webPage?.cachedPage == null) {
 			return null
 		}
 
-		if (webPage.photo != null && webPage.photo.id == id) {
+		if (webPage.photo?.id == id) {
 			return webPage.photo
 		}
 
-		for (a in webPage.cached_page.photos.indices) {
-			val photo = webPage.cached_page.photos[a]
-
-			if (photo.id == id) {
-				return photo
-			}
-		}
-
-		return null
+		return webPage.cachedPage?.photos?.firstOrNull { it.id == id }
 	}
 
 	private fun getDocumentWithId(webPage: WebPage?, id: Long): TLRPC.Document? {
@@ -2596,23 +2566,17 @@ open class MessageObject {
 			returnsNotNull() implies (webPage != null)
 		}
 
-		if (webPage?.cached_page == null) {
+		@Suppress("NAME_SHADOWING") val webPage = webPage as? TLWebPage
+
+		if (webPage?.cachedPage == null) {
 			return null
 		}
 
-		if (webPage.document != null && webPage.document.id == id) {
+		if (webPage.document?.id == id) {
 			return webPage.document
 		}
 
-		for (a in webPage.cached_page.documents.indices) {
-			val document = webPage.cached_page.documents[a]
-
-			if (document.id == id) {
-				return document
-			}
-		}
-
-		return null
+		return webPage.cachedPage?.documents?.firstOrNull { it.id == id }
 	}
 
 	val isSupergroup: Boolean
@@ -2625,8 +2589,8 @@ open class MessageObject {
 				return it
 			}
 
-			if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) {
-				val chat = getChat(null, null, messageOwner?.peer_id?.channel_id)
+			if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) {
+				val chat = getChat(null, null, messageOwner?.peerId?.channelId)
 				return chat?.megagroup?.also { cachedIsSupergroup = it } ?: false
 			}
 			else {
@@ -2637,62 +2601,58 @@ open class MessageObject {
 		}
 
 	private fun getMessageObjectForBlock(webPage: WebPage, pageBlock: PageBlock): MessageObject {
-		var message: TL_message? = null
+		var message: TLMessage? = null
 
-		if (pageBlock is TL_pageBlockPhoto) {
-			val photo = getPhotoWithId(webPage, pageBlock.photo_id)
+		if (pageBlock is TLPageBlockPhoto) {
+			val photo = getPhotoWithId(webPage, pageBlock.photoId)
 
-			if (photo === webPage.photo) {
+			if (photo === (webPage as? TLWebPage)?.photo) {
 				return this
 			}
 
-			message = TL_message()
-			message.media = TL_messageMediaPhoto()
-			message.media?.photo = photo
+			message = TLMessage()
+			message.media = TLMessageMediaPhoto().also { it.photo = photo }
 		}
-		else if (pageBlock is TL_pageBlockVideo) {
-			val document = getDocumentWithId(webPage, pageBlock.video_id)
+		else if (pageBlock is TLPageBlockVideo) {
+			val document = getDocumentWithId(webPage, pageBlock.videoId)
 
-			if (document === webPage.document) {
+			if (document === (webPage as? TLWebPage)?.document) {
 				return this
 			}
 
-			message = TL_message()
-			message.media = TL_messageMediaDocument()
-			message.media?.document = getDocumentWithId(webPage, pageBlock.video_id)
+			message = TLMessage()
+			message.media = TLMessageMediaDocument().also { it.document = getDocumentWithId(webPage, pageBlock.videoId) }
 		}
 
 		message?.message = ""
 		message?.realId = id
 		message?.id = Utilities.random.nextInt()
 		message?.date = messageOwner?.date ?: 0
-		message?.peer_id = messageOwner?.peer_id
+		message?.peerId = messageOwner?.peerId
 		message?.out = messageOwner?.out ?: false
-		message?.from_id = messageOwner?.from_id
+		message?.fromId = messageOwner?.fromId
 
 		return MessageObject(currentAccount, message!!, generateLayout = false, checkMediaExists = true)
 	}
 
-	fun getWebPagePhotos(array: ArrayList<MessageObject>?, blocksToSearch: ArrayList<PageBlock>?): ArrayList<MessageObject> {
+	fun getWebPagePhotos(array: ArrayList<MessageObject>?, blocksToSearch: List<PageBlock>?): ArrayList<MessageObject> {
 		val messageObjects = array ?: ArrayList()
 		val media = getMedia(messageOwner)
-		val webPage = media?.webpage ?: return messageObjects
+		val webPage = (((media as? TLMessageMediaWebPage)?.webpage) as? TLWebPage) ?: return messageObjects
 
-		if (webPage.cached_page == null) {
+		if (webPage.cachedPage == null) {
 			return messageObjects
 		}
 
-		val blocks = blocksToSearch ?: webPage.cached_page.blocks
+		val blocks = blocksToSearch ?: webPage.cachedPage?.blocks
 
-		for (a in blocks.indices) {
-			val block = blocks[a]
-
-			if (block is TL_pageBlockSlideshow) {
+		blocks?.forEach { block ->
+			if (block is TLPageBlockSlideshow) {
 				for (blockItem in block.items) {
 					messageObjects.add(getMessageObjectForBlock(webPage, blockItem))
 				}
 			}
-			else if (block is TL_pageBlockCollage) {
+			else if (block is TLPageBlockCollage) {
 				for (blockItem in block.items) {
 					messageObjects.add(getMessageObjectForBlock(webPage, blockItem))
 				}
@@ -2703,7 +2663,7 @@ open class MessageObject {
 	}
 
 	fun createMessageSendInfo() {
-		val messageOwner = messageOwner
+		val messageOwner = messageOwner as? TLMessage
 		val params = messageOwner?.params
 
 		if (messageOwner?.message != null && (messageOwner.id < 0 || isEditing) && params != null) {
@@ -2720,11 +2680,11 @@ open class MessageObject {
 				}
 			}
 
-			if (messageOwner.send_state == MESSAGE_SEND_STATE_EDITING && (params["prevMedia"].also { param = it }) != null) {
+			if (messageOwner.sendState == MESSAGE_SEND_STATE_EDITING && (params["prevMedia"].also { param = it }) != null) {
 				val serializedData = SerializedData(Base64.decode(param, Base64.DEFAULT))
 				var constructor = serializedData.readInt32(false)
 
-				previousMedia = MessageMedia.TLdeserialize(serializedData, constructor, false)
+				previousMedia = MessageMedia.deserialize(serializedData, constructor, false)
 				previousMessage = serializedData.readString(false)
 				previousAttachPath = serializedData.readString(false)
 
@@ -2735,7 +2695,7 @@ open class MessageObject {
 				for (a in 0 until count) {
 					constructor = serializedData.readInt32(false)
 
-					val entity = MessageEntity.TLdeserialize(serializedData, constructor, false)
+					val entity = MessageEntity.deserialize(serializedData, constructor, false)
 
 					if (entity != null) {
 						previousMessageEntities?.add(entity)
@@ -2754,7 +2714,7 @@ open class MessageObject {
 
 		wantedBotKeyboardWidth = 0
 
-		if (messageOwner?.reply_markup is TL_replyInlineMarkup && !hasExtendedMedia() || messageOwner?.originalReactions != null && !messageOwner?.originalReactions?.results.isNullOrEmpty()) {
+		if (messageOwner?.replyMarkup is TLReplyInlineMarkup && !hasExtendedMedia() || messageOwner?.reactions != null && !messageOwner?.reactions?.results.isNullOrEmpty()) {
 			Theme.createCommonMessageResources()
 
 			if (botButtonsLayout == null) {
@@ -2765,9 +2725,9 @@ open class MessageObject {
 			}
 		}
 
-		val replyMarkup = messageOwner?.reply_markup
+		val replyMarkup = messageOwner?.replyMarkup
 
-		if (replyMarkup is TL_replyInlineMarkup && !hasExtendedMedia()) {
+		if (replyMarkup is TLReplyInlineMarkup && !hasExtendedMedia()) {
 			val context = ApplicationLoader.applicationContext
 
 			for (a in replyMarkup.rows.indices) {
@@ -2782,7 +2742,7 @@ open class MessageObject {
 
 					var text: CharSequence?
 
-					if (button is TL_keyboardButtonBuy && (getMedia(messageOwner)!!.flags and 4) != 0) {
+					if (button is TLKeyboardButtonBuy && (getMedia(messageOwner)!!.flags and 4) != 0) {
 						text = context.getString(R.string.PaymentReceipt)
 					}
 					else {
@@ -2812,8 +2772,8 @@ open class MessageObject {
 				wantedBotKeyboardWidth = max(wantedBotKeyboardWidth.toDouble(), ((maxButtonSize + AndroidUtilities.dp(12f)) * size + AndroidUtilities.dp(5f) * (size - 1)).toDouble()).toInt()
 			}
 		}
-		else if (messageOwner?.originalReactions != null) {
-			val reactions = messageOwner!!.originalReactions!!
+		else if (messageOwner?.reactions != null) {
+			val reactions = messageOwner!!.reactions!!
 
 			val size = reactions.results.size
 
@@ -2843,7 +2803,7 @@ open class MessageObject {
 	}
 
 	val isVideoAvatar: Boolean
-		get() = !messageOwner?.action?.photo?.video_sizes.isNullOrEmpty()
+		get() = !(messageOwner?.action?.photo as? TLPhoto)?.videoSizes.isNullOrEmpty()
 
 	val isFcmMessage: Boolean
 		get() = localType != 0
@@ -2890,28 +2850,28 @@ open class MessageObject {
 		var fromUser: User? = null
 		var fromChat: Chat? = null
 
-		if (messageOwner?.from_id is TL_peerUser) {
-			fromUser = getUser(users, sUsers, messageOwner?.from_id?.user_id ?: 0L)
+		if (messageOwner?.fromId is TLPeerUser) {
+			fromUser = getUser(users, sUsers, messageOwner?.fromId?.userId ?: 0L)
 		}
-		else if (messageOwner?.from_id is TL_peerChannel) {
-			fromChat = getChat(chats, sChats, messageOwner?.from_id?.channel_id)
+		else if (messageOwner?.fromId is TLPeerChannel) {
+			fromChat = getChat(chats, sChats, messageOwner?.fromId?.channelId)
 		}
 
 		val fromObject = fromUser ?: fromChat
 		val context = ApplicationLoader.applicationContext
 
-		if (messageOwner is TL_messageService) {
+		if (messageOwner is TLMessageService) {
 			when (val action = messageOwner?.action) {
-				is TL_messageActionGroupCallScheduled -> {
-					messageText = if (messageOwner?.peer_id is TL_peerChat || isSupergroup) {
-						LocaleController.formatString("ActionGroupCallScheduled", R.string.ActionGroupCallScheduled, LocaleController.formatStartsTime(action.schedule_date.toLong(), 3, false))
+				is TLMessageActionGroupCallScheduled -> {
+					messageText = if (messageOwner?.peerId is TLPeerChat || isSupergroup) {
+						LocaleController.formatString("ActionGroupCallScheduled", R.string.ActionGroupCallScheduled, LocaleController.formatStartsTime(action.scheduleDate.toLong(), 3, false))
 					}
 					else {
-						LocaleController.formatString("ActionChannelCallScheduled", R.string.ActionChannelCallScheduled, LocaleController.formatStartsTime(action.schedule_date.toLong(), 3, false))
+						LocaleController.formatString("ActionChannelCallScheduled", R.string.ActionChannelCallScheduled, LocaleController.formatStartsTime(action.scheduleDate.toLong(), 3, false))
 					}
 				}
 
-				is TL_messageActionGroupCall -> {
+				is TLMessageActionGroupCall -> {
 					if (action.duration != 0) {
 						val time: String
 						val days = action.duration / (3600 * 24)
@@ -2937,7 +2897,7 @@ open class MessageObject {
 							}
 						}
 
-						messageText = if (messageOwner?.peer_id is TL_peerChat || isSupergroup) {
+						messageText = if (messageOwner?.peerId is TLPeerChat || isSupergroup) {
 							if (isOut) {
 								LocaleController.formatString("ActionGroupCallEndedByYou", R.string.ActionGroupCallEndedByYou, time)
 							}
@@ -2950,7 +2910,7 @@ open class MessageObject {
 						}
 					}
 					else {
-						messageText = if (messageOwner?.peer_id is TL_peerChat || isSupergroup) {
+						messageText = if (messageOwner?.peerId is TLPeerChat || isSupergroup) {
 							if (isOut) {
 								context.getString(R.string.ActionGroupCallStartedByYou)
 							}
@@ -2964,8 +2924,8 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionInviteToGroupCall -> {
-					var singleUserId = action.user_id
+				is TLMessageActionInviteToGroupCall -> {
+					var singleUserId = action.userId
 
 					if (singleUserId == 0L && action.users.size == 1) {
 						singleUserId = action.users[0]
@@ -2996,8 +2956,8 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionGeoProximityReached -> {
-					val fromId = getPeerId(action.from_id)
+				is TLMessageActionGeoProximityReached -> {
+					val fromId = getPeerId(action.fromId)
 
 					val from = if (fromId > 0) {
 						getUser(users, sUsers, fromId)
@@ -3006,7 +2966,7 @@ open class MessageObject {
 						getChat(chats, sChats, -fromId)
 					}
 
-					val toId = getPeerId(action.to_id)
+					val toId = getPeerId(action.toId)
 					val selfUserId = UserConfig.getInstance(currentAccount).getClientUserId()
 
 					if (toId == selfUserId) {
@@ -3030,11 +2990,11 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionCustomAction -> {
+				is TLMessageActionCustomAction -> {
 					messageText = action.message
 				}
 
-				is TL_messageActionChatCreate -> {
+				is TLMessageActionChatCreate -> {
 					messageText = if (isOut) {
 						context.getString(R.string.ActionYouCreateGroup)
 					}
@@ -3043,8 +3003,8 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionChatDeleteUser -> {
-					if (isFromUser && action.user_id == messageOwner?.from_id?.user_id) {
+				is TLMessageActionChatDeleteUser -> {
+					if (isFromUser && action.userId == messageOwner?.fromId?.userId) {
 						messageText = if (isOut) {
 							context.getString(R.string.ActionYouLeftUser)
 						}
@@ -3053,12 +3013,12 @@ open class MessageObject {
 						}
 					}
 					else {
-						val whoUser = getUser(users, sUsers, action.user_id)
+						val whoUser = getUser(users, sUsers, action.userId)
 
 						if (isOut) {
 							messageText = replaceWithLink(context.getString(R.string.ActionYouKickUser), "un2", whoUser)
 						}
-						else if (action.user_id == UserConfig.getInstance(currentAccount).getClientUserId()) {
+						else if (action.userId == UserConfig.getInstance(currentAccount).getClientUserId()) {
 							messageText = replaceWithLink(context.getString(R.string.ActionKickUserYou), "un1", fromObject)
 						}
 						else {
@@ -3068,8 +3028,8 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionChatAddUser -> {
-					var singleUserId = action.user_id
+				is TLMessageActionChatAddUser -> {
+					var singleUserId = action.userId
 
 					if (singleUserId == 0L && action.users.size == 1) {
 						singleUserId = action.users[0]
@@ -3079,16 +3039,16 @@ open class MessageObject {
 						val whoUser = getUser(users, sUsers, singleUserId)
 						var chat: Chat? = null
 
-						if (messageOwner?.peer_id?.channel_id != 0L) {
-							chat = getChat(chats, sChats, messageOwner?.peer_id?.channel_id)
+						if (messageOwner?.peerId?.channelId != 0L) {
+							chat = getChat(chats, sChats, messageOwner?.peerId?.channelId)
 						}
 
-						if (messageOwner?.from_id != null && singleUserId == messageOwner?.from_id?.user_id) {
+						if (messageOwner?.fromId != null && singleUserId == messageOwner?.fromId?.userId) {
 							messageText = if (ChatObject.isChannel(chat) && !chat.megagroup) {
 								context.getString(R.string.ChannelJoined)
 							}
 							else {
-								if (messageOwner?.peer_id?.channel_id != 0L) {
+								if (messageOwner?.peerId?.channelId != 0L) {
 									if (singleUserId == UserConfig.getInstance(currentAccount).getClientUserId()) {
 										context.getString(R.string.ChannelMegaJoined)
 									}
@@ -3109,7 +3069,7 @@ open class MessageObject {
 								messageText = replaceWithLink(context.getString(R.string.ActionYouAddUser), "un2", whoUser)
 							}
 							else if (singleUserId == UserConfig.getInstance(currentAccount).getClientUserId()) {
-								messageText = if (messageOwner?.peer_id?.channel_id != 0L) {
+								messageText = if (messageOwner?.peerId?.channelId != 0L) {
 									if (chat != null && chat.megagroup) {
 										replaceWithLink(context.getString(R.string.MegaAddedBy), "un1", fromObject)
 									}
@@ -3138,7 +3098,7 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionChatJoinedByLink -> {
+				is TLMessageActionChatJoinedByLink -> {
 					messageText = if (isOut) {
 						context.getString(R.string.ActionInviteYou)
 					}
@@ -3147,9 +3107,9 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionGiftPremium -> {
-					if (fromObject is User && fromObject.self) {
-						val user = getUser(users, sUsers, messageOwner?.peer_id?.user_id ?: 0L)
+				is TLMessageActionGiftPremium -> {
+					if (fromObject is TLRPC.TLUser && fromObject.isSelf) {
+						val user = getUser(users, sUsers, messageOwner?.peerId?.userId ?: 0L)
 						messageText = replaceWithLink(AndroidUtilities.replaceTags(context.getString(R.string.ActionGiftOutbound)), "un1", user)
 					}
 					else {
@@ -3165,15 +3125,20 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionChatEditPhoto -> {
-					val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(chats, sChats, messageOwner?.peer_id?.channel_id) else null
+				is TLMessageActionChatEditPhoto -> {
+					val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(chats, sChats, messageOwner?.peerId?.channelId) else null
 
 					messageText = if (ChatObject.isChannel(chat) && !chat.megagroup) {
 						if (isVideoAvatar) {
 							context.getString(R.string.ActionChannelChangedVideo)
 						}
 						else {
-							context.getString(R.string.ActionChannelChangedPhoto)
+							if (ChatObject.isMasterclass(chat)) {
+								context.getString(R.string.ActionMasterclassChangedPhoto)
+							}
+							else {
+								context.getString(R.string.ActionChannelChangedPhoto)
+							}
 						}
 					}
 					else {
@@ -3196,27 +3161,37 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionChatEditTitle -> {
-					val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(chats, sChats, messageOwner?.peer_id?.channel_id) else null
+				is TLMessageActionChatEditTitle -> {
+					val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(chats, sChats, messageOwner?.peerId?.channelId) else null
 
 					messageText = if (ChatObject.isChannel(chat) && !chat.megagroup) {
-						context.getString(R.string.ActionChannelChangedTitle).replace("un2", action.title)
+						if (ChatObject.isMasterclass(chat)) {
+							context.getString(R.string.ActionMasterclassChangedTitle).replace("un2", action.title ?: "")
+						}
+						else {
+							context.getString(R.string.ActionChannelChangedTitle).replace("un2", action.title ?: "")
+						}
 					}
 					else {
 						if (isOut) {
-							context.getString(R.string.ActionYouChangedTitle).replace("un2", action.title)
+							context.getString(R.string.ActionYouChangedTitle).replace("un2", action.title ?: "")
 						}
 						else {
-							replaceWithLink(context.getString(R.string.ActionChangedTitle).replace("un2", action.title), "un1", fromObject)
+							replaceWithLink(context.getString(R.string.ActionChangedTitle).replace("un2", action.title ?: ""), "un1", fromObject)
 						}
 					}
 				}
 
-				is TL_messageActionChatDeletePhoto -> {
-					val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(chats, sChats, messageOwner?.peer_id?.channel_id) else null
+				is TLMessageActionChatDeletePhoto -> {
+					val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(chats, sChats, messageOwner?.peerId?.channelId) else null
 
 					messageText = if (ChatObject.isChannel(chat) && !chat.megagroup) {
-						context.getString(R.string.ActionChannelRemovedPhoto)
+						if (ChatObject.isMasterclass(chat)) {
+							context.getString(R.string.ActionMasterclassRemovedPhoto)
+						}
+						else {
+							context.getString(R.string.ActionChannelRemovedPhoto)
+						}
 					}
 					else {
 						if (isOut) {
@@ -3228,27 +3203,27 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionTTLChange -> {
-					messageText = if (action.ttl != 0) {
-						if (isOut) {
-							LocaleController.formatString("MessageLifetimeChangedOutgoing", R.string.MessageLifetimeChangedOutgoing, LocaleController.formatTTLString(action.ttl))
-						}
-						else {
-							LocaleController.formatString("MessageLifetimeChanged", R.string.MessageLifetimeChanged, UserObject.getFirstName(fromUser), LocaleController.formatTTLString(action.ttl))
-						}
-					}
-					else {
-						if (isOut) {
-							context.getString(R.string.MessageLifetimeYouRemoved)
-						}
-						else {
-							LocaleController.formatString("MessageLifetimeRemoved", R.string.MessageLifetimeRemoved, UserObject.getFirstName(fromUser))
-						}
-					}
-				}
+//				is TLMessageActionTTLChange -> {
+//					messageText = if (action.ttl != 0) {
+//						if (isOut) {
+//							LocaleController.formatString("MessageLifetimeChangedOutgoing", R.string.MessageLifetimeChangedOutgoing, LocaleController.formatTTLString(action.ttl))
+//						}
+//						else {
+//							LocaleController.formatString("MessageLifetimeChanged", R.string.MessageLifetimeChanged, UserObject.getFirstName(fromUser), LocaleController.formatTTLString(action.ttl))
+//						}
+//					}
+//					else {
+//						if (isOut) {
+//							context.getString(R.string.MessageLifetimeYouRemoved)
+//						}
+//						else {
+//							LocaleController.formatString("MessageLifetimeRemoved", R.string.MessageLifetimeRemoved, UserObject.getFirstName(fromUser))
+//						}
+//					}
+//				}
 
-				is TL_messageActionSetMessagesTTL -> {
-					val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(chats, sChats, messageOwner?.peer_id?.channel_id) else null
+				is TLMessageActionSetMessagesTTL -> {
+					val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(chats, sChats, messageOwner?.peerId?.channelId) else null
 
 					messageText = if (chat != null && !chat.megagroup) {
 						if (action.period != 0) {
@@ -3276,68 +3251,69 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionLoginUnknownLocation -> {
-					val date: String
-					val time = ((messageOwner?.date ?: 0).toLong()) * 1000
+//				is TLMessageActionLoginUnknownLocation -> {
+//					val date: String
+//					val time = ((messageOwner?.date ?: 0).toLong()) * 1000
+//
+//					date = if (LocaleController.getInstance().formatterDay != null && LocaleController.getInstance().formatterYear != null) {
+//						LocaleController.formatString("formatDateAtTime", R.string.formatDateAtTime, LocaleController.getInstance().formatterYear.format(time), LocaleController.getInstance().formatterDay.format(time))
+//					}
+//					else {
+//						"" + (messageOwner?.date ?: 0)
+//					}
+//
+//					var toUser = UserConfig.getInstance(currentAccount).getCurrentUser()
+//
+//					if (toUser == null) {
+//						toUser = getUser(users, sUsers, messageOwner?.peerId?.userId ?: 0L)
+//					}
+//
+//					val name = if (toUser != null) UserObject.getFirstName(toUser) else ""
+//
+//					messageText = LocaleController.formatString("NotificationUnrecognizedDevice", R.string.NotificationUnrecognizedDevice, name, date, action.title, action.address)
+//				}
 
-					date = if (LocaleController.getInstance().formatterDay != null && LocaleController.getInstance().formatterYear != null) {
-						LocaleController.formatString("formatDateAtTime", R.string.formatDateAtTime, LocaleController.getInstance().formatterYear.format(time), LocaleController.getInstance().formatterDay.format(time))
-					}
-					else {
-						"" + (messageOwner?.date ?: 0)
-					}
-
-					var toUser = UserConfig.getInstance(currentAccount).getCurrentUser()
-
-					if (toUser == null) {
-						toUser = getUser(users, sUsers, messageOwner?.peer_id?.user_id ?: 0L)
-					}
-
-					val name = if (toUser != null) UserObject.getFirstName(toUser) else ""
-
-					messageText = LocaleController.formatString("NotificationUnrecognizedDevice", R.string.NotificationUnrecognizedDevice, name, date, action.title, action.address)
-				}
-
-				is TLRPC.TL_messageActionUserJoined, is TL_messageActionContactSignUp -> {
+				// is TLRPC.TLMessageActionUserJoined
+				is TLMessageActionContactSignUp -> {
 					messageText = LocaleController.formatString("NotificationContactJoined", R.string.NotificationContactJoined, UserObject.getUserName(fromUser))
 				}
 
-				is TL_messageActionUserUpdatedPhoto -> {
-					messageText = LocaleController.formatString("NotificationContactNewPhoto", R.string.NotificationContactNewPhoto, UserObject.getUserName(fromUser))
-				}
+//				is TLMessageActionUserUpdatedPhoto -> {
+//					messageText = LocaleController.formatString("NotificationContactNewPhoto", R.string.NotificationContactNewPhoto, UserObject.getUserName(fromUser))
+//				}
 
-				is TL_messageEncryptedAction -> {
-					if (action.encryptedAction is TL_decryptedMessageActionScreenshotMessages) {
-						messageText = if (isOut) {
-							LocaleController.formatString("ActionTakeScreenshootYou", R.string.ActionTakeScreenshootYou)
-						}
-						else {
-							replaceWithLink(context.getString(R.string.ActionTakeScreenshoot), "un1", fromObject)
-						}
-					}
-					else if (action.encryptedAction is TL_decryptedMessageActionSetMessageTTL) {
-						@Suppress("NAME_SHADOWING") val action = action.encryptedAction as TL_decryptedMessageActionSetMessageTTL
+//				is TLMessageEncryptedAction -> {
+//					if (action.encryptedAction is TLDecryptedMessageActionScreenshotMessages) {
+//						messageText = if (isOut) {
+//							LocaleController.formatString("ActionTakeScreenshootYou", R.string.ActionTakeScreenshootYou)
+//						}
+//						else {
+//							replaceWithLink(context.getString(R.string.ActionTakeScreenshoot), "un1", fromObject)
+//						}
+//					}
+//					else if (action.encryptedAction is TLDecryptedMessageActionSetMessageTTL) {
+//						@Suppress("NAME_SHADOWING") val action = action.encryptedAction as TLDecryptedMessageActionSetMessageTTL
+//
+//						messageText = if (action.ttlSeconds != 0) {
+//							if (isOut) {
+//								LocaleController.formatString("MessageLifetimeChangedOutgoing", R.string.MessageLifetimeChangedOutgoing, LocaleController.formatTTLString(action.ttlSeconds))
+//							}
+//							else {
+//								LocaleController.formatString("MessageLifetimeChanged", R.string.MessageLifetimeChanged, UserObject.getFirstName(fromUser), LocaleController.formatTTLString(action.ttlSeconds))
+//							}
+//						}
+//						else {
+//							if (isOut) {
+//								context.getString(R.string.MessageLifetimeYouRemoved)
+//							}
+//							else {
+//								LocaleController.formatString("MessageLifetimeRemoved", R.string.MessageLifetimeRemoved, UserObject.getFirstName(fromUser))
+//							}
+//						}
+//					}
+//				}
 
-						messageText = if (action.ttl_seconds != 0) {
-							if (isOut) {
-								LocaleController.formatString("MessageLifetimeChangedOutgoing", R.string.MessageLifetimeChangedOutgoing, LocaleController.formatTTLString(action.ttl_seconds))
-							}
-							else {
-								LocaleController.formatString("MessageLifetimeChanged", R.string.MessageLifetimeChanged, UserObject.getFirstName(fromUser), LocaleController.formatTTLString(action.ttl_seconds))
-							}
-						}
-						else {
-							if (isOut) {
-								context.getString(R.string.MessageLifetimeYouRemoved)
-							}
-							else {
-								LocaleController.formatString("MessageLifetimeRemoved", R.string.MessageLifetimeRemoved, UserObject.getFirstName(fromUser))
-							}
-						}
-					}
-				}
-
-				is TLRPC.TL_messageActionScreenshotTaken -> {
+				is TLRPC.TLMessageActionScreenshotTaken -> {
 					messageText = if (isOut) {
 						LocaleController.formatString("ActionTakeScreenshootYou", R.string.ActionTakeScreenshootYou)
 					}
@@ -3346,32 +3322,35 @@ open class MessageObject {
 					}
 				}
 
-				is TLRPC.TL_messageActionCreatedBroadcastList -> {
-					messageText = LocaleController.formatString("YouCreatedBroadcastList", R.string.YouCreatedBroadcastList)
-				}
+//				is TLRPC.TLMessageActionCreatedBroadcastList -> {
+//					messageText = LocaleController.formatString("YouCreatedBroadcastList", R.string.YouCreatedBroadcastList)
+//				}
 
-				is TLRPC.TL_messageActionChannelCreate -> {
-					val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(chats, sChats, messageOwner?.peer_id?.channel_id) else null
+				is TLRPC.TLMessageActionChannelCreate -> {
+					val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(chats, sChats, messageOwner?.peerId?.channelId) else null
 
 					messageText = if (ChatObject.isChannel(chat) && chat.megagroup) {
 						context.getString(R.string.ActionCreateMega)
+					}
+					else if (ChatObject.isMasterclass(chat)) {
+						context.getString(R.string.ActionCreateMasterclass)
 					}
 					else {
 						context.getString(R.string.ActionCreateChannel)
 					}
 				}
 
-				is TLRPC.TL_messageActionChatMigrateTo -> {
+				is TLRPC.TLMessageActionChatMigrateTo -> {
 					messageText = context.getString(R.string.ActionMigrateFromGroup)
 				}
 
-				is TLRPC.TL_messageActionChannelMigrateFrom -> {
+				is TLRPC.TLMessageActionChannelMigrateFrom -> {
 					messageText = context.getString(R.string.ActionMigrateFromGroup)
 				}
 
-				is TLRPC.TL_messageActionPinMessage -> {
+				is TLRPC.TLMessageActionPinMessage -> {
 					val chat = if (fromUser == null) {
-						getChat(chats, sChats, messageOwner?.peer_id?.channel_id)
+						getChat(chats, sChats, messageOwner?.peerId?.channelId)
 					}
 					else {
 						null
@@ -3380,18 +3359,18 @@ open class MessageObject {
 					generatePinMessageText(fromUser, chat)
 				}
 
-				is TL_messageActionHistoryClear -> {
+				is TLMessageActionHistoryClear -> {
 					messageText = context.getString(R.string.HistoryCleared)
 				}
 
-				is TLRPC.TL_messageActionGameScore -> {
+				is TLRPC.TLMessageActionGameScore -> {
 					generateGameMessageText(fromUser)
 				}
 
-				is TL_messageActionPhoneCall -> {
-					val isMissed = action.reason is TL_phoneCallDiscardReasonMissed
+				is TLMessageActionPhoneCall -> {
+					val isMissed = action.reason is TLPhoneCallDiscardReasonMissed
 
-					messageText = if (isFromUser && messageOwner?.from_id?.user_id == UserConfig.getInstance(currentAccount).getClientUserId()) {
+					messageText = if (isFromUser && messageOwner?.fromId?.userId == UserConfig.getInstance(currentAccount).getClientUserId()) {
 						if (isMissed) {
 							if (action.video) {
 								context.getString(R.string.CallMessageVideoOutgoingMissed)
@@ -3418,7 +3397,7 @@ open class MessageObject {
 								context.getString(R.string.CallMessageIncomingMissed)
 							}
 						}
-						else if (action.reason is TL_phoneCallDiscardReasonBusy) {
+						else if (action.reason is TLPhoneCallDiscardReasonBusy) {
 							if (action.video) {
 								context.getString(R.string.CallMessageVideoIncomingDeclined)
 							}
@@ -3465,13 +3444,13 @@ open class MessageObject {
 					}
 				}
 
-				is TLRPC.TL_messageActionPaymentSent -> {
+				is TLRPC.TLMessageActionPaymentSent -> {
 					val user = getUser(users, sUsers, dialogId)
 					generatePaymentSentMessageText(user)
 				}
 
-				is TL_messageActionBotAllowed -> {
-					val domain = action.domain
+				is TLMessageActionBotAllowed -> {
+					val domain = action.domain ?: ""
 					val text = context.getString(R.string.ActionBotAllowed)
 					val start = text.indexOf("%1\$s")
 					val str = SpannableString(String.format(text, domain))
@@ -3483,7 +3462,7 @@ open class MessageObject {
 					messageText = str
 				}
 
-				is TL_messageActionSecureValuesSent -> {
+				is TLMessageActionSecureValuesSent -> {
 					val str = StringBuilder()
 
 					for (type in action.types) {
@@ -3492,55 +3471,55 @@ open class MessageObject {
 						}
 
 						when (type) {
-							is TL_secureValueTypePhone -> {
+							is TLSecureValueTypePhone -> {
 								str.append(context.getString(R.string.ActionBotDocumentPhone))
 							}
 
-							is TL_secureValueTypeEmail -> {
+							is TLSecureValueTypeEmail -> {
 								str.append(context.getString(R.string.ActionBotDocumentEmail))
 							}
 
-							is TL_secureValueTypeAddress -> {
+							is TLSecureValueTypeAddress -> {
 								str.append(context.getString(R.string.ActionBotDocumentAddress))
 							}
 
-							is TL_secureValueTypePersonalDetails -> {
+							is TLSecureValueTypePersonalDetails -> {
 								str.append(context.getString(R.string.ActionBotDocumentIdentity))
 							}
 
-							is TL_secureValueTypePassport -> {
+							is TLSecureValueTypePassport -> {
 								str.append(context.getString(R.string.ActionBotDocumentPassport))
 							}
 
-							is TL_secureValueTypeDriverLicense -> {
+							is TLSecureValueTypeDriverLicense -> {
 								str.append(context.getString(R.string.ActionBotDocumentDriverLicence))
 							}
 
-							is TL_secureValueTypeIdentityCard -> {
+							is TLSecureValueTypeIdentityCard -> {
 								str.append(context.getString(R.string.ActionBotDocumentIdentityCard))
 							}
 
-							is TL_secureValueTypeUtilityBill -> {
+							is TLSecureValueTypeUtilityBill -> {
 								str.append(context.getString(R.string.ActionBotDocumentUtilityBill))
 							}
 
-							is TL_secureValueTypeBankStatement -> {
+							is TLSecureValueTypeBankStatement -> {
 								str.append(context.getString(R.string.ActionBotDocumentBankStatement))
 							}
 
-							is TL_secureValueTypeRentalAgreement -> {
+							is TLSecureValueTypeRentalAgreement -> {
 								str.append(context.getString(R.string.ActionBotDocumentRentalAgreement))
 							}
 
-							is TL_secureValueTypeInternalPassport -> {
+							is TLSecureValueTypeInternalPassport -> {
 								str.append(context.getString(R.string.ActionBotDocumentInternalPassport))
 							}
 
-							is TL_secureValueTypePassportRegistration -> {
+							is TLSecureValueTypePassportRegistration -> {
 								str.append(context.getString(R.string.ActionBotDocumentPassportRegistration))
 							}
 
-							is TL_secureValueTypeTemporaryRegistration -> {
+							is TLSecureValueTypeTemporaryRegistration -> {
 								str.append(context.getString(R.string.ActionBotDocumentTemporaryRegistration))
 							}
 						}
@@ -3548,18 +3527,18 @@ open class MessageObject {
 
 					var user: User? = null
 
-					if (messageOwner?.peer_id != null) {
-						user = getUser(users, sUsers, messageOwner?.peer_id?.user_id ?: 0L)
+					if (messageOwner?.peerId != null) {
+						user = getUser(users, sUsers, messageOwner?.peerId?.userId ?: 0L)
 					}
 
 					messageText = LocaleController.formatString("ActionBotDocuments", R.string.ActionBotDocuments, UserObject.getFirstName(user), str.toString())
 				}
 
-				is TL_messageActionWebViewDataSent -> {
+				is TLMessageActionWebViewDataSent -> {
 					messageText = LocaleController.formatString("ActionBotWebViewData", R.string.ActionBotWebViewData, action.text)
 				}
 
-				is TL_messageActionSetChatTheme -> {
+				is TLMessageActionSetChatTheme -> {
 					val emoticon = action.emoticon
 					val userName = UserObject.getFirstName(fromUser)
 					val isUserSelf = isUserSelf(fromUser)
@@ -3572,9 +3551,9 @@ open class MessageObject {
 					}
 				}
 
-				is TL_messageActionChatJoinedByRequest -> {
+				is TLMessageActionChatJoinedByRequest -> {
 					if (isUserSelf(fromUser)) {
-						val isChannel = ChatObject.isChannelAndNotMegaGroup(messageOwner?.peer_id?.channel_id ?: 0L, currentAccount)
+						val isChannel = ChatObject.isChannelAndNotMegaGroup(messageOwner?.peerId?.channelId ?: 0L, currentAccount)
 						messageText = if (isChannel) context.getString(R.string.RequestToJoinChannelApproved) else context.getString(R.string.RequestToJoinGroupApproved)
 					}
 					else {
@@ -3586,7 +3565,7 @@ open class MessageObject {
 		else {
 			isRestrictedMessage = false
 
-			val restrictionReason = MessagesController.getRestrictionReason(messageOwner?.restriction_reason)
+			val restrictionReason = MessagesController.getRestrictionReason((messageOwner as? TLMessage)?.restrictionReason)
 
 			if (!restrictionReason.isNullOrEmpty()) {
 				messageText = restrictionReason
@@ -3595,27 +3574,27 @@ open class MessageObject {
 			else if (!isMediaEmpty) {
 				val media = getMedia(messageOwner)
 
-				if (media is TL_messageMediaDice) {
+				if (media is TLMessageMediaDice) {
 					messageText = diceEmoji
 				}
-				else if (media is TL_messageMediaPoll) {
-					messageText = if (media.poll.quiz) {
+				else if (media is TLMessageMediaPoll) {
+					messageText = if (media.poll?.quiz == true) {
 						context.getString(R.string.QuizPoll)
 					}
 					else {
 						context.getString(R.string.Poll)
 					}
 				}
-				else if (media is TL_messageMediaPhoto) {
-					messageText = if (media.ttl_seconds != 0 && messageOwner !is TL_message_secret) {
+				else if (media is TLMessageMediaPhoto) {
+					messageText = if (media.ttlSeconds != 0) { // && messageOwner !is TLMessageSecret) {
 						context.getString(R.string.AttachDestructingPhoto)
 					}
 					else {
 						context.getString(R.string.AttachPhoto)
 					}
 				}
-				else if (isVideo || media is TL_messageMediaDocument && document is TL_documentEmpty && media.ttl_seconds != 0) {
-					messageText = if (media?.ttl_seconds != 0 && messageOwner !is TL_message_secret) {
+				else if (isVideo || media is TLMessageMediaDocument && document is TLDocumentEmpty && media.ttlSeconds != 0) {
+					messageText = if (media?.ttlSeconds != 0) { // && messageOwner !is TLMessage_secret) {
 						context.getString(R.string.AttachDestructingVideo)
 					}
 					else {
@@ -3628,29 +3607,29 @@ open class MessageObject {
 				else if (isRoundVideo) {
 					messageText = context.getString(R.string.AttachRound)
 				}
-				else if (media is TL_messageMediaGeo || media is TL_messageMediaVenue) {
+				else if (media is TLMessageMediaGeo || media is TLMessageMediaVenue) {
 					messageText = context.getString(R.string.AttachLocation)
 				}
-				else if (media is TL_messageMediaGeoLive) {
+				else if (media is TLMessageMediaGeoLive) {
 					messageText = context.getString(R.string.AttachLiveLocation)
 				}
-				else if (media is TL_messageMediaContact) {
+				else if (media is TLMessageMediaContact) {
 					messageText = context.getString(R.string.AttachContact)
 
 					if (!media.vcard.isNullOrEmpty()) {
 						vCardData = VCardData.parse(media.vcard)
 					}
 				}
-				else if (media is TL_messageMediaGame) {
+				else if (media is TLMessageMediaGame) {
 					messageText = messageOwner?.message
 				}
-				else if (media is TL_messageMediaInvoice) {
+				else if (media is TLMessageMediaInvoice) {
 					messageText = media.description
 				}
-				else if (media is TL_messageMediaUnsupported) {
+				else if (media is TLMessageMediaUnsupported) {
 					messageText = context.getString(R.string.UnsupportedMedia)
 				}
-				else if (media is TL_messageMediaDocument) {
+				else if (media is TLMessageMediaDocument) {
 					if (isSticker || isAnimatedStickerDocument(document, true)) {
 						val sch = stickerChar
 
@@ -3705,15 +3684,15 @@ open class MessageObject {
 	}
 
 	fun hasRevealedExtendedMedia(): Boolean {
-		return messageOwner?.media?.extended_media is TL_messageExtendedMedia
+		return messageOwner?.media?.extendedMedia is TLMessageExtendedMedia
 	}
 
 	fun hasExtendedMedia(): Boolean {
-		return messageOwner?.media?.extended_media != null
+		return messageOwner?.media?.extendedMedia != null
 	}
 
 	fun hasExtendedMediaPreview(): Boolean {
-		return messageOwner?.media?.extended_media is TL_messageExtendedMediaPreview
+		return messageOwner?.media?.extendedMedia is TLMessageExtendedMediaPreview
 	}
 
 	fun setType() {
@@ -3722,7 +3701,7 @@ open class MessageObject {
 		type = 1000
 		isRoundVideoCached = 0
 
-		if (messageOwner is TL_message || messageOwner is TL_messageForwarded_old2) {
+		if (messageOwner is TLMessage) {
 			val media = getMedia(messageOwner)
 
 			if (isRestrictedMessage) {
@@ -3749,31 +3728,31 @@ open class MessageObject {
 			else if (hasExtendedMediaPreview()) {
 				type = TYPE_EXTENDED_MEDIA_PREVIEW
 			}
-			else if (media?.ttl_seconds != 0 && (media?.photo is TL_photoEmpty || document is TL_documentEmpty)) {
+			else if (media?.ttlSeconds != 0 && ((media as? TLMessageMediaPhoto)?.photo is TLPhotoEmpty || document is TLDocumentEmpty)) {
 				contentType = 1
 				type = 10
 			}
-			else if (media is TL_messageMediaDice) {
+			else if (media is TLMessageMediaDice) {
 				type = TYPE_ANIMATED_STICKER
 
-				if (media.document == null) {
-					media.document = TL_document()
-					media.document.file_reference = ByteArray(0)
-					media.document.mime_type = "application/x-tgsdice"
-					media.document.dc_id = Int.MIN_VALUE
-					media.document.id = Int.MIN_VALUE.toLong()
-
-					val attributeImageSize = TL_documentAttributeImageSize()
-					attributeImageSize.w = 512
-					attributeImageSize.h = 512
-
-					media.document.attributes.add(attributeImageSize)
-				}
+//				if (media.document == null) {
+//					media.document = TLDocument()
+//					media.document.file_reference = ByteArray(0)
+//					media.document.mimeType = "application/x-tgsdice"
+//					media.document.dc_id = Int.MIN_VALUE
+//					media.document.id = Int.MIN_VALUE.toLong()
+//
+//					val attributeImageSize = TLDocumentAttributeImageSize()
+//					attributeImageSize.w = 512
+//					attributeImageSize.h = 512
+//
+//					media.document.attributes.add(attributeImageSize)
+//				}
 			}
-			else if (media is TL_messageMediaPhoto) {
+			else if (media is TLMessageMediaPhoto) {
 				type = TYPE_PHOTO
 			}
-			else if (media is TL_messageMediaGeo || media is TL_messageMediaVenue || media is TL_messageMediaGeoLive) {
+			else if (media is TLMessageMediaGeo || media is TLMessageMediaVenue || media is TLMessageMediaGeoLive) {
 				type = TYPE_GEO
 			}
 			else if (isRoundVideo) {
@@ -3788,20 +3767,20 @@ open class MessageObject {
 			else if (isMusic) {
 				type = TYPE_MUSIC
 			}
-			else if (media is TL_messageMediaContact) {
+			else if (media is TLMessageMediaContact) {
 				type = TYPE_CONTACT
 			}
-			else if (media is TL_messageMediaPoll) {
+			else if (media is TLMessageMediaPoll) {
 				type = TYPE_POLL
 				checkedVotes = ArrayList()
 			}
-			else if (media is TL_messageMediaUnsupported) {
+			else if (media is TLMessageMediaUnsupported) {
 				type = TYPE_COMMON
 			}
-			else if (media is TL_messageMediaDocument) {
+			else if (media is TLMessageMediaDocument) {
 				val document = document
 
-				type = if (document?.mime_type != null) {
+				type = if (document?.mimeType != null) {
 					if (isGifDocument(document, hasValidGroupId())) {
 						TYPE_GIF
 					}
@@ -3819,45 +3798,51 @@ open class MessageObject {
 					TYPE_DOCUMENT
 				}
 			}
-			else if (media is TL_messageMediaGame) {
+			else if (media is TLMessageMediaGame) {
 				type = TYPE_COMMON
 			}
-			else if (media is TL_messageMediaInvoice) {
+			else if (media is TLMessageMediaInvoice) {
 				type = TYPE_COMMON
 			}
 		}
-		else if (messageOwner is TL_messageService) {
-			if (messageOwner?.action is TL_messageActionLoginUnknownLocation) {
-				type = TYPE_COMMON
-			}
-			else if (messageOwner?.action is TL_messageActionGiftPremium) {
-				contentType = 1
-				type = TYPE_GIFT_PREMIUM
-			}
-			else if (messageOwner?.action is TL_messageActionChatEditPhoto || messageOwner?.action is TL_messageActionUserUpdatedPhoto) {
-				contentType = 1
-				type = 11
-			}
-			else if (messageOwner?.action is TL_messageEncryptedAction) {
-				if (messageOwner?.action?.encryptedAction is TL_decryptedMessageActionScreenshotMessages || messageOwner?.action?.encryptedAction is TL_decryptedMessageActionSetMessageTTL) {
+		else if (messageOwner is TLMessageService) {
+//			if (messageOwner?.action is TLMessageActionLoginUnknownLocation) {
+//				type = TYPE_COMMON
+//			}
+//			else
+			when (messageOwner?.action) {
+				is TLMessageActionGiftPremium -> {
 					contentType = 1
-					type = 10
+					type = TYPE_GIFT_PREMIUM
 				}
-				else {
+
+				is TLMessageActionChatEditPhoto -> { // || messageOwner?.action is TLMessageActionUserUpdatedPhoto) {
+					contentType = 1
+					type = 11
+				}
+				//			else if (messageOwner?.action is TLMessageEncryptedAction) {
+				//				if (messageOwner?.action?.encryptedAction is TLDecryptedMessageActionScreenshotMessages || messageOwner?.action?.encryptedAction is TLDecryptedMessageActionSetMessageTTL) {
+				//					contentType = 1
+				//					type = 10
+				//				}
+				//				else {
+				//					contentType = -1
+				//					type = -1
+				//				}
+				//			}
+				is TLMessageActionHistoryClear -> {
 					contentType = -1
 					type = -1
 				}
-			}
-			else if (messageOwner?.action is TL_messageActionHistoryClear) {
-				contentType = -1
-				type = -1
-			}
-			else if (messageOwner?.action is TL_messageActionPhoneCall) {
-				type = TYPE_CALL
-			}
-			else {
-				contentType = 1
-				type = 10
+
+				is TLMessageActionPhoneCall -> {
+					type = TYPE_CALL
+				}
+
+				else -> {
+					contentType = 1
+					type = 10
+				}
 			}
 		}
 
@@ -3868,7 +3853,7 @@ open class MessageObject {
 	}
 
 	fun checkLayout(): Boolean {
-		if (type != TYPE_COMMON && type != TYPE_EMOJIS || messageOwner?.peer_id == null || messageText.isNullOrEmpty()) {
+		if (type != TYPE_COMMON && type != TYPE_EMOJIS || messageOwner?.peerId == null || messageText.isNullOrEmpty()) {
 			return false
 		}
 
@@ -3883,7 +3868,7 @@ open class MessageObject {
 		if (!layoutCreated) {
 			layoutCreated = true
 
-			val paint = if (getMedia(messageOwner) is TL_messageMediaGame) {
+			val paint = if (getMedia(messageOwner) is TLMessageMediaGame) {
 				Theme.chat_msgGameTextPaint
 			}
 			else {
@@ -3919,20 +3904,20 @@ open class MessageObject {
 			val media = getMedia(messageOwner)
 
 			if (document != null) {
-				return document.mime_type
+				return document.mimeType ?: ""
 			}
-			else if (media is TL_messageMediaInvoice) {
+			else if (media is TLMessageMediaInvoice) {
 				val photo = media.photo
 
 				if (photo != null) {
-					return photo.mime_type
+					return photo.mimeType ?: ""
 				}
 			}
-			else if (media is TL_messageMediaPhoto) {
+			else if (media is TLMessageMediaPhoto) {
 				return "image/jpeg"
 			}
-			else if (media is TL_messageMediaWebPage) {
-				if (media.webpage.photo != null) {
+			else if (media is TLMessageMediaWebPage) {
+				if ((media.webpage as? TLWebPage)?.photo != null) {
 					return "image/jpeg"
 				}
 			}
@@ -3942,7 +3927,7 @@ open class MessageObject {
 
 	fun generateThumbs(update: Boolean) {
 		if (hasExtendedMediaPreview()) {
-			val preview = messageOwner?.media?.extended_media as TL_messageExtendedMediaPreview
+			val preview = messageOwner?.media?.extendedMedia as TLMessageExtendedMediaPreview
 
 			if (!update) {
 				photoThumbs = ArrayList(listOf(preview.thumb))
@@ -3957,37 +3942,38 @@ open class MessageObject {
 				createStrippedThumb()
 			}
 		}
-		else if (messageOwner is TL_messageService) {
-			if (messageOwner?.action is TL_messageActionChatEditPhoto) {
-				val photo = messageOwner?.action?.photo!!
+		else if (messageOwner is TLMessageService) {
+			if (messageOwner?.action is TLMessageActionChatEditPhoto) {
+				val photo = messageOwner?.action?.photo as? TLPhoto
 
-				if (!update) {
-					photoThumbs = ArrayList(photo.sizes)
-				}
-				else if (photoThumbs != null && photoThumbs!!.isNotEmpty()) {
-					for (a in photoThumbs!!.indices) {
-						val photoObject = photoThumbs!![a]
+				if (photo != null) {
+					if (!update) {
+						photoThumbs = ArrayList(photo.sizes)
+					}
+					else if (!photoThumbs.isNullOrEmpty()) {
+						for (a in photoThumbs!!.indices) {
+							val photoObject = photoThumbs!![a]
 
-						for (b in photo.sizes.indices) {
-							val size = photo.sizes[b]
+							for (b in photo.sizes.indices) {
+								val size = photo.sizes[b]
 
-							if (size is TL_photoSizeEmpty) {
-								continue
-							}
+								if (size is TLPhotoSizeEmpty) {
+									continue
+								}
 
-							if (size.type == photoObject?.type) {
-								photoObject?.location = size.location
-								break
+								if (size.type == photoObject?.type) {
+									photoObject?.location = size.location
+									break
+								}
 							}
 						}
 					}
-				}
 
-				if (photo.dc_id != 0 && photoThumbs != null) {
-					for (thumb in photoThumbs!!) {
-						val location = thumb?.location ?: continue
-						location.dc_id = photo.dc_id
-						location.file_reference = photo.file_reference
+					if (photo.dcId != 0 && photoThumbs != null) {
+						for (thumb in photoThumbs!!) {
+							thumb?.location?.dcId = photo.dcId
+							// thumb.location?.fileReference = photo.fileReference
+						}
 					}
 				}
 
@@ -3998,41 +3984,48 @@ open class MessageObject {
 			if (emojiAnimatedStickerColor.isNullOrEmpty() && isDocumentHasThumb(emojiAnimatedSticker)) {
 				if (!update || photoThumbs == null) {
 					photoThumbs = ArrayList()
-					photoThumbs?.addAll(emojiAnimatedSticker!!.thumbs)
+
+					emojiAnimatedSticker?.thumbs?.let {
+						photoThumbs?.addAll(it)
+					}
 				}
-				else if (photoThumbs!!.isNotEmpty()) {
-					updatePhotoSizeLocations(photoThumbs, emojiAnimatedSticker!!.thumbs)
+				else if (!photoThumbs.isNullOrEmpty()) {
+					updatePhotoSizeLocations(photoThumbs, emojiAnimatedSticker?.thumbs)
 				}
 
 				photoThumbsObject = emojiAnimatedSticker
 			}
 		}
-		else if (getMedia(messageOwner) != null && getMedia(messageOwner) !is TL_messageMediaEmpty) {
+		else if (getMedia(messageOwner) != null && getMedia(messageOwner) !is TLMessageMediaEmpty) {
 			val media = getMedia(messageOwner)
 
-			if (media is TL_messageMediaPhoto) {
+			if (media is TLMessageMediaPhoto) {
 				val photo = media.photo
-				if (!update || photoThumbs != null && photoThumbs!!.size != photo.sizes.size) {
-					photoThumbs = ArrayList(photo.sizes)
+
+				if (!update || photoThumbs != null && photoThumbs?.size != photo?.sizes?.size) {
+					photoThumbs = ArrayList(photo?.sizes ?: emptyList())
 				}
-				else if (photoThumbs != null && photoThumbs!!.isNotEmpty()) {
+				else if (!photoThumbs.isNullOrEmpty()) {
 					for (a in photoThumbs!!.indices) {
 						val photoObject = photoThumbs!![a] ?: continue
+						val photoSizes = photo?.sizes
 
-						for (b in photo.sizes.indices) {
-							val size = photo.sizes[b]
+						if (!photoSizes.isNullOrEmpty()) {
+							for (b in photoSizes.indices) {
+								val size = photoSizes[b]
 
-							if (size == null || size is TL_photoSizeEmpty) {
-								continue
-							}
+								if (size is TLPhotoSizeEmpty) {
+									continue
+								}
 
-							if (size.type == photoObject.type) {
-								photoObject.location = size.location
-								break
-							}
-							else if ("s" == photoObject.type && size is TL_photoStrippedSize) {
-								photoThumbs!![a] = size
-								break
+								if (size.type == photoObject.type) {
+									photoObject.location = size.location
+									break
+								}
+								else if ("s" == photoObject.type && size is TLPhotoStrippedSize) {
+									photoThumbs!![a] = size
+									break
+								}
 							}
 						}
 					}
@@ -4040,13 +4033,16 @@ open class MessageObject {
 
 				photoThumbsObject = media.photo
 			}
-			else if (media is TL_messageMediaDocument) {
+			else if (media is TLMessageMediaDocument) {
 				val document = document
 
 				if (isDocumentHasThumb(document)) {
 					if (!update || photoThumbs == null) {
 						photoThumbs = ArrayList()
-						photoThumbs?.addAll(document.thumbs)
+
+						document.thumbs?.let {
+							photoThumbs?.addAll(it)
+						}
 					}
 					else if (photoThumbs!!.isNotEmpty()) {
 						updatePhotoSizeLocations(photoThumbs, document.thumbs)
@@ -4055,16 +4051,19 @@ open class MessageObject {
 					photoThumbsObject = document
 				}
 			}
-			else if (media is TL_messageMediaGame) {
-				val document = media.game.document
+			else if (media is TLMessageMediaGame) {
+				val document = media.game?.document
 
 				if (document != null) {
 					if (isDocumentHasThumb(document)) {
 						if (!update) {
 							photoThumbs = ArrayList()
-							photoThumbs?.addAll(document.thumbs)
+
+							document.thumbs?.let {
+								photoThumbs?.addAll(it)
+							}
 						}
-						else if (photoThumbs != null && photoThumbs!!.isNotEmpty()) {
+						else if (!photoThumbs.isNullOrEmpty()) {
 							updatePhotoSizeLocations(photoThumbs, document.thumbs)
 						}
 
@@ -4072,13 +4071,13 @@ open class MessageObject {
 					}
 				}
 
-				val photo = media.game.photo
+				val photo = media.game?.photo
 
 				if (photo != null) {
 					if (!update || photoThumbs2 == null) {
-						photoThumbs2 = ArrayList(photo.sizes)
+						photoThumbs2 = ArrayList(photo.sizes ?: emptyList())
 					}
-					else if (photoThumbs2!!.isNotEmpty()) {
+					else if (!photoThumbs2.isNullOrEmpty()) {
 						updatePhotoSizeLocations(photoThumbs2, photo.sizes)
 					}
 
@@ -4092,13 +4091,13 @@ open class MessageObject {
 					photoThumbsObject2 = null
 				}
 			}
-			else if (media is TL_messageMediaWebPage) {
-				val photo = media.webpage.photo
-				val document = media.webpage.document
+			else if (media is TLMessageMediaWebPage) {
+				val photo = (media.webpage as? TLWebPage)?.photo
+				val document = (media.webpage as? TLWebPage)?.document
 
 				if (photo != null) {
 					if (!update || photoThumbs == null) {
-						photoThumbs = ArrayList(photo.sizes)
+						photoThumbs = ArrayList(photo.sizes ?: emptyList())
 					}
 					else if (photoThumbs!!.isNotEmpty()) {
 						updatePhotoSizeLocations(photoThumbs, photo.sizes)
@@ -4110,7 +4109,10 @@ open class MessageObject {
 					if (isDocumentHasThumb(document)) {
 						if (!update) {
 							photoThumbs = ArrayList()
-							photoThumbs?.addAll(document.thumbs)
+
+							document.thumbs?.let {
+								photoThumbs?.addAll(it)
+							}
 						}
 						else if (photoThumbs != null && photoThumbs!!.isNotEmpty()) {
 							updatePhotoSizeLocations(photoThumbs, document.thumbs)
@@ -4123,7 +4125,7 @@ open class MessageObject {
 		}
 	}
 
-	fun replaceWithLink(source: CharSequence, param: String, uids: ArrayList<Long>, usersDict: AbstractMap<Long, User>?, sUsersDict: LongSparseArray<User>?): CharSequence {
+	fun replaceWithLink(source: CharSequence, param: String, uids: List<Long>, usersDict: AbstractMap<Long, User>?, sUsersDict: LongSparseArray<User>?): CharSequence {
 		var start = TextUtils.indexOf(source, param)
 
 		if (start >= 0) {
@@ -4174,7 +4176,7 @@ open class MessageObject {
 			}
 
 			if (ext.isNullOrEmpty()) {
-				ext = document?.mime_type
+				ext = document?.mimeType
 			}
 
 			if (ext == null) {
@@ -4197,10 +4199,10 @@ open class MessageObject {
 			else if (isVoice) {
 				return FileLoader.MEDIA_DIR_AUDIO
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaDocument) {
+			else if (getMedia(messageOwner) is TLMessageMediaDocument) {
 				return FileLoader.MEDIA_DIR_DOCUMENT
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaPhoto) {
+			else if (getMedia(messageOwner) is TLMessageMediaPhoto) {
 				return FileLoader.MEDIA_DIR_IMAGE
 			}
 
@@ -4215,14 +4217,10 @@ open class MessageObject {
 		var hashtagsType = 0
 		val media = getMedia(messageOwner)
 
-		if (media is TL_messageMediaWebPage && media.webpage is TL_webPage && media.webpage.description != null) {
-			linkDescription = Spannable.Factory.getInstance().newSpannable(media.webpage.description)
+		if (media is TLMessageMediaWebPage && (media.webpage as? TLWebPage)?.description != null) {
+			linkDescription = Spannable.Factory.getInstance().newSpannable((media.webpage as? TLWebPage)?.description ?: "")
 
-			var siteName = media.webpage.site_name
-
-			if (siteName != null) {
-				siteName = siteName.lowercase()
-			}
+			val siteName = (media.webpage as? TLWebPage)?.siteName?.lowercase()
 
 			if ("instagram" == siteName) {
 				hashtagsType = 1
@@ -4231,10 +4229,10 @@ open class MessageObject {
 				hashtagsType = 2
 			}
 		}
-		else if (media is TL_messageMediaGame && media.game.description != null) {
-			linkDescription = Spannable.Factory.getInstance().newSpannable(media.game.description)
+		else if (media is TLMessageMediaGame && media.game?.description != null) {
+			linkDescription = Spannable.Factory.getInstance().newSpannable(media.game?.description)
 		}
-		else if (media is TL_messageMediaInvoice && media.description != null) {
+		else if (media is TLMessageMediaInvoice && media.description != null) {
 			linkDescription = Spannable.Factory.getInstance().newSpannable(media.description)
 		}
 
@@ -4321,18 +4319,18 @@ open class MessageObject {
 
 		val media = getMedia(messageOwner)
 
-		if (!isMediaEmpty && media !is TL_messageMediaGame && !messageOwner.message.isNullOrEmpty()) {
+		if (!isMediaEmpty && media !is TLMessageMediaGame && !messageOwner.message.isNullOrEmpty()) {
 			caption = Emoji.replaceEmoji(messageOwner.message, Theme.chat_msgTextPaint.fontMetricsInt, false)
 			caption = replaceAnimatedEmoji(caption, messageOwner.entities, Theme.chat_msgTextPaint.fontMetricsInt)
 
-			val hasEntities = if (messageOwner.send_state != MESSAGE_SEND_STATE_SENT) {
+			val hasEntities = if (messageOwner.sendState != MESSAGE_SEND_STATE_SENT) {
 				false
 			}
 			else {
-				messageOwner.entities.isNotEmpty()
+				!messageOwner.entities.isNullOrEmpty()
 			}
 
-			val useManualParse = !hasEntities && (eventId != 0L || media is TL_messageMediaPhoto_old || media is TL_messageMediaPhoto_layer68 || media is TL_messageMediaPhoto_layer74 || media is TL_messageMediaDocument_old || media is TL_messageMediaDocument_layer68 || media is TL_messageMediaDocument_layer74 || isOut && messageOwner.send_state != MESSAGE_SEND_STATE_SENT || messageOwner.id < 0)
+			val useManualParse = !hasEntities && (eventId != 0L || isOut && messageOwner.sendState != MESSAGE_SEND_STATE_SENT || messageOwner.id < 0)
 
 			if (useManualParse) {
 				if (containsUrls(caption)) {
@@ -4368,7 +4366,7 @@ open class MessageObject {
 				return localSentGroupId
 			}
 
-			return messageOwner?.groupId ?: 0L
+			return (messageOwner as? TLMessage)?.groupedId ?: 0L
 		}
 
 	val groupId: Long
@@ -4392,7 +4390,7 @@ open class MessageObject {
 		if (isRestrictedMessage) {
 			val entities = ArrayList<MessageEntity>()
 
-			val entityItalic = TL_messageEntityItalic()
+			val entityItalic = TLMessageEntityItalic()
 			entityItalic.offset = 0
 			entityItalic.length = text.length
 			entities.add(entityItalic)
@@ -4400,7 +4398,7 @@ open class MessageObject {
 			return addEntitiesToText(text, entities, isOutOwner, true, photoViewer, useManualParse)
 		}
 		else {
-			return addEntitiesToText(text, messageOwner?.entities ?: arrayListOf(), isOutOwner, true, photoViewer, useManualParse, messageOwner?.dialog_id ?: 0L)
+			return addEntitiesToText(text, messageOwner?.entities ?: arrayListOf(), isOutOwner, true, photoViewer, useManualParse, messageOwner?.dialogId ?: 0L)
 		}
 	}
 
@@ -4446,46 +4444,46 @@ open class MessageObject {
 		else if (eventId != 0L) {
 			return false
 		}
-		else if (messageOwner.noforwards) {
+		else if ((messageOwner as? TLMessage)?.noforwards == true) {
 			return false
 		}
-		else if (messageOwner.fwd_from != null && !isOutOwner && messageOwner.fwd_from?.saved_from_peer != null && dialogId == UserConfig.getInstance(currentAccount).getClientUserId()) {
+		else if ((messageOwner as? TLMessage)?.fwdFrom != null && !isOutOwner && (messageOwner as? TLMessage)?.fwdFrom?.savedFromPeer != null && dialogId == UserConfig.getInstance(currentAccount).getClientUserId()) {
 			return true
 		}
 		else if (type == TYPE_STICKER || type == TYPE_ANIMATED_STICKER || type == TYPE_EMOJIS) {
 			return false
 		}
-		else if (messageOwner.fwd_from != null && messageOwner.fwd_from?.from_id is TL_peerChannel && !isOutOwner) {
+		else if ((messageOwner as? TLMessage)?.fwdFrom?.fromId is TLPeerChannel && !isOutOwner) {
 			return true
 		}
 		else if (isFromUser) {
-			if (getMedia(messageOwner) is TL_messageMediaEmpty || getMedia(messageOwner) == null || getMedia(messageOwner) is TL_messageMediaWebPage && getMedia(messageOwner)?.webpage !is TL_webPage) {
+			if (getMedia(messageOwner) is TLMessageMediaEmpty || getMedia(messageOwner) == null || getMedia(messageOwner) is TLMessageMediaWebPage && (getMedia(messageOwner) as? TLMessageMediaWebPage)?.webpage !is TLWebPage) {
 				return false
 			}
 
-			val user = MessagesController.getInstance(currentAccount).getUser(messageOwner.from_id?.user_id)
+			val user = MessagesController.getInstance(currentAccount).getUser(messageOwner.fromId?.userId)
 
-			if (user != null && user.bot && !hasExtendedMedia()) {
+			if (user != null && (user as? TLRPC.TLUser)?.bot == true && !hasExtendedMedia()) {
 				return true
 			}
 
 			if (!isOut) {
-				if (getMedia(messageOwner) is TL_messageMediaGame || getMedia(messageOwner) is TL_messageMediaInvoice && !hasExtendedMedia()) {
+				if (getMedia(messageOwner) is TLMessageMediaGame || getMedia(messageOwner) is TLMessageMediaInvoice && !hasExtendedMedia()) {
 					return true
 				}
-				val chat = if (messageOwner.peer_id != null && messageOwner.peer_id?.channel_id != 0L) getChat(null, null, messageOwner.peer_id?.channel_id) else null
+				val chat = if (messageOwner.peerId != null && messageOwner.peerId?.channelId != 0L) getChat(null, null, messageOwner.peerId?.channelId) else null
 
 				if (ChatObject.isChannel(chat) && chat.megagroup) {
-					return chat.username != null && chat.username.isNotEmpty() && getMedia(messageOwner) !is TL_messageMediaContact && getMedia(messageOwner) !is TL_messageMediaGeo
+					return chat.username != null && !chat.username.isNullOrEmpty() && getMedia(messageOwner) !is TLMessageMediaContact && getMedia(messageOwner) !is TLMessageMediaGeo
 				}
 			}
 		}
-		else if (messageOwner.from_id is TL_peerChannel || messageOwner.post) {
+		else if (messageOwner.fromId is TLPeerChannel || messageOwner.post) {
 			if (isSupergroup) {
 				return false
 			}
 
-			return messageOwner.peer_id?.channel_id != 0L && (messageOwner.via_bot_id == 0L && messageOwner.reply_to == null || type != TYPE_STICKER && type != TYPE_ANIMATED_STICKER)
+			return messageOwner.peerId?.channelId != 0L && ((messageOwner as? TLMessage)?.viaBotId == 0L && messageOwner.replyTo == null || type != TYPE_STICKER && type != TYPE_ANIMATED_STICKER)
 		}
 
 		return false
@@ -4493,9 +4491,9 @@ open class MessageObject {
 
 	val isYouTubeVideo: Boolean
 		get() {
-			val media = getMedia(messageOwner)
-
-			return media is TL_messageMediaWebPage && media.webpage != null && !media.webpage?.embed_url.isNullOrEmpty() && "YouTube" == media.webpage?.site_name
+			val media = getMedia(messageOwner) as? TLMessageMediaWebPage ?: return false
+			val webpage = media.webpage as? TLWebPage ?: return false
+			return !webpage.embedUrl.isNullOrEmpty() && "YouTube" == webpage.siteName
 		}
 
 	val maxMessageTextWidth: Int
@@ -4513,12 +4511,12 @@ open class MessageObject {
 
 			val media = getMedia(messageOwner)
 
-			if (media is TL_messageMediaWebPage && media.webpage != null && "telegram_background" == media.webpage.type) {
+			if (media is TLMessageMediaWebPage && media.webpage != null && "telegram_background" == (media.webpage as? TLWebPage)?.type) {
 				try {
-					val uri = Uri.parse(media.webpage.url)
-					val segment = uri.lastPathSegment
+					val uri = media.webpage?.url?.toUri()
+					val segment = uri?.lastPathSegment
 
-					if (uri.getQueryParameter("bg_color") != null) {
+					if (uri?.getQueryParameter("bg_color") != null) {
 						maxWidth = AndroidUtilities.dp(220f)
 					}
 					else if (segment?.length == 6 || (segment?.length == 13 && segment[6] == '-')) {
@@ -4540,7 +4538,7 @@ open class MessageObject {
 					maxWidth -= AndroidUtilities.dp(10f)
 				}
 
-				if (media is TL_messageMediaGame) {
+				if (media is TLMessageMediaGame) {
 					maxWidth -= AndroidUtilities.dp(10f)
 				}
 			}
@@ -4553,7 +4551,7 @@ open class MessageObject {
 		}
 
 	fun generateLayout() {
-		if (type != 0 && type != TYPE_EMOJIS || messageOwner?.peer_id == null || messageText.isNullOrEmpty()) {
+		if (type != 0 && type != TYPE_EMOJIS || messageOwner?.peerId == null || messageText.isNullOrEmpty()) {
 			return
 		}
 
@@ -4562,14 +4560,14 @@ open class MessageObject {
 		textLayoutBlocks = ArrayList()
 		textWidth = 0
 
-		val hasEntities = if (messageOwner?.send_state != MESSAGE_SEND_STATE_SENT) {
+		val hasEntities = if (messageOwner?.sendState != MESSAGE_SEND_STATE_SENT) {
 			false
 		}
 		else {
 			!messageOwner?.entities.isNullOrEmpty()
 		}
 
-		val useManualParse = !hasEntities && (eventId != 0L || messageOwner is TL_message_old || messageOwner is TL_message_old2 || messageOwner is TL_message_old3 || messageOwner is TL_message_old4 || messageOwner is TL_messageForwarded_old || messageOwner is TL_messageForwarded_old2 || messageOwner is TL_message_secret || getMedia(messageOwner) is TL_messageMediaInvoice || isOut && messageOwner?.send_state != MESSAGE_SEND_STATE_SENT || (messageOwner?.id ?: 0) < 0 || getMedia(messageOwner) is TL_messageMediaUnsupported)
+		val useManualParse = !hasEntities && (eventId != 0L || getMedia(messageOwner) is TLMessageMediaInvoice || isOut && messageOwner?.sendState != MESSAGE_SEND_STATE_SENT || (messageOwner?.id ?: 0) < 0 || getMedia(messageOwner) is TLMessageMediaUnsupported)
 
 		if (useManualParse) {
 			addLinks(isOutOwner, messageText, botCommands = true, check = true)
@@ -4601,7 +4599,7 @@ open class MessageObject {
 		val maxWidth = maxMessageTextWidth
 		val textLayout: StaticLayout
 
-		val paint = if (getMedia(messageOwner) is TL_messageMediaGame) {
+		val paint = if (getMedia(messageOwner) is TLMessageMediaGame) {
 			Theme.chat_msgGameTextPaint
 		}
 		else {
@@ -4900,23 +4898,23 @@ open class MessageObject {
 				return true
 			}
 
-			val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(null, null, messageOwner?.peer_id?.channel_id) else null
+			val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(null, null, messageOwner?.peerId?.channelId) else null
 
-			if (messageOwner?.out != true || (messageOwner?.from_id !is TL_peerUser) && (messageOwner?.from_id !is TL_peerChannel || ChatObject.isChannel(chat) && !chat.megagroup) || ((ChatObject.isChannel(chat) && !chat.megagroup) && messageOwner?.post == true)) {
+			if (messageOwner?.out != true || (messageOwner?.fromId !is TLPeerUser) && (messageOwner?.fromId !is TLPeerChannel || ChatObject.isChannel(chat) && !chat.megagroup) || ((ChatObject.isChannel(chat) && !chat.megagroup) && messageOwner?.post == true)) {
 				return false
 			}
 
-			if (messageOwner?.fwd_from == null) {
+			if (messageOwner?.fwdFrom == null) {
 				return true
 			}
 
 			val selfUserId = UserConfig.getInstance(currentAccount).getClientUserId()
 
 			if (dialogId == selfUserId) {
-				return messageOwner?.fwd_from?.from_id is TL_peerUser && messageOwner?.fwd_from?.from_id?.user_id == selfUserId && (messageOwner?.fwd_from?.saved_from_peer == null || messageOwner?.fwd_from?.saved_from_peer?.user_id == selfUserId) || messageOwner?.fwd_from?.saved_from_peer != null && messageOwner?.fwd_from?.saved_from_peer?.user_id == selfUserId && (messageOwner?.fwd_from?.from_id == null || messageOwner?.fwd_from?.from_id?.user_id == selfUserId)
+				return messageOwner?.fwdFrom?.fromId is TLPeerUser && messageOwner?.fwdFrom?.fromId?.userId == selfUserId && (messageOwner?.fwdFrom?.savedFromPeer == null || messageOwner?.fwdFrom?.savedFromPeer?.userId == selfUserId) || messageOwner?.fwdFrom?.savedFromPeer != null && messageOwner?.fwdFrom?.savedFromPeer?.userId == selfUserId && (messageOwner?.fwdFrom?.fromId == null || messageOwner?.fwdFrom?.fromId?.userId == selfUserId)
 			}
 
-			return messageOwner?.fwd_from?.saved_from_peer == null || messageOwner?.fwd_from?.saved_from_peer?.user_id == selfUserId
+			return messageOwner?.fwdFrom?.savedFromPeer == null || messageOwner?.fwdFrom?.savedFromPeer?.userId == selfUserId
 		}
 
 	fun needDrawAvatar(): Boolean {
@@ -4928,11 +4926,11 @@ open class MessageObject {
 			return true
 		}
 
-		if (isFromChannel && messageOwner?.fwd_from?.saved_from_peer != null) {
+		if (isFromChannel && messageOwner?.fwdFrom?.savedFromPeer != null) {
 			return false
 		}
 
-		return !isSponsored && (isFromUser || isFromGroup || eventId != 0L || messageOwner?.fwd_from?.saved_from_peer != null)
+		return !isSponsored && (isFromUser || isFromGroup || eventId != 0L || messageOwner?.fwdFrom?.savedFromPeer != null)
 	}
 
 	fun needDrawAvatarInternal(): Boolean {
@@ -4940,7 +4938,7 @@ open class MessageObject {
 			return true
 		}
 
-		return !isSponsored && (isFromChat && isFromUser || isFromGroup || eventId != 0L || messageOwner?.fwd_from != null && messageOwner?.fwd_from?.saved_from_peer != null)
+		return !isSponsored && (isFromChat && isFromUser || isFromGroup || eventId != 0L || messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.savedFromPeer != null)
 	}
 
 	val isFromChat: Boolean
@@ -4949,13 +4947,13 @@ open class MessageObject {
 				return true
 			}
 
-			val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(null, null, messageOwner?.peer_id?.channel_id) else null
+			val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(null, null, messageOwner?.peerId?.channelId) else null
 
-			if (ChatObject.isChannel(chat) && chat.megagroup || messageOwner?.peer_id != null && messageOwner?.peer_id!!.chat_id != 0L) {
+			if (ChatObject.isChannel(chat) && chat.megagroup || messageOwner?.peerId != null && messageOwner?.peerId!!.chatId != 0L) {
 				return true
 			}
 
-			if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) {
+			if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) {
 				return chat != null && chat.megagroup
 			}
 
@@ -4967,11 +4965,11 @@ open class MessageObject {
 
 	val chatId: Long
 		get() {
-			if (messageOwner?.peer_id is TL_peerChat) {
-				return messageOwner?.peer_id?.chat_id ?: 0L
+			if (messageOwner?.peerId is TLPeerChat) {
+				return messageOwner?.peerId?.chatId ?: 0L
 			}
-			else if (messageOwner?.peer_id is TL_peerChannel) {
-				return messageOwner?.peer_id?.channel_id ?: 0L
+			else if (messageOwner?.peerId is TLPeerChannel) {
+				return messageOwner?.peerId?.channelId ?: 0L
 			}
 
 			return 0L
@@ -4979,28 +4977,28 @@ open class MessageObject {
 
 	private val isFromChannel: Boolean
 		get() {
-			val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(null, null, messageOwner?.peer_id?.channel_id) else null
+			val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(null, null, messageOwner?.peerId?.channelId) else null
 			return ChatObject.isChannel(chat) && !chat.megagroup
 		}
 
 	val isFromUser: Boolean
-		// get() = messageOwner?.from_id is TL_peerUser // MARK: this prevents avatars from drawing for grouped messages: && messageOwner?.post != true
-		get() = messageOwner?.from_id is TL_peerUser && !isFromChannel
+		// get() = messageOwner?.fromId is TLPeerUser // MARK: this prevents avatars from drawing for grouped messages: && messageOwner?.post != true
+		get() = messageOwner?.fromId is TLPeerUser && !isFromChannel
 
 	val isFromGroup: Boolean
 		get() {
-			val chat = if (messageOwner?.peer_id != null && messageOwner?.peer_id?.channel_id != 0L) getChat(null, null, messageOwner?.peer_id?.channel_id) else null
-			return messageOwner?.from_id is TL_peerChannel && ChatObject.isChannel(chat) && chat.megagroup
+			val chat = if (messageOwner?.peerId != null && messageOwner?.peerId?.channelId != 0L) getChat(null, null, messageOwner?.peerId?.channelId) else null
+			return messageOwner?.fromId is TLPeerChannel && ChatObject.isChannel(chat) && chat.megagroup
 		}
 
 	val isForwardedChannelPost: Boolean
-		get() = messageOwner?.from_id is TL_peerChannel && messageOwner?.fwd_from != null && messageOwner?.fwd_from?.channel_post != 0 && messageOwner?.fwd_from?.saved_from_peer is TL_peerChannel && messageOwner?.from_id?.channel_id == messageOwner?.fwd_from?.saved_from_peer?.channel_id
+		get() = messageOwner?.fromId is TLPeerChannel && messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.channelPost != 0 && messageOwner?.fwdFrom?.savedFromPeer is TLPeerChannel && messageOwner?.fromId?.channelId == messageOwner?.fwdFrom?.savedFromPeer?.channelId
 
 	val isUnread: Boolean
 		get() = messageOwner?.unread == true
 
 	val isContentUnread: Boolean
-		get() = messageOwner?.media_unread == true
+		get() = messageOwner?.mediaUnread == true
 
 	fun setIsRead() {
 		messageOwner?.unread = false
@@ -5010,7 +5008,7 @@ open class MessageObject {
 		get() = getUnreadFlags(messageOwner)
 
 	fun setContentIsRead() {
-		messageOwner?.media_unread = false
+		messageOwner?.mediaUnread = false
 	}
 
 	val id: Int
@@ -5029,12 +5027,12 @@ open class MessageObject {
 		if (hasExtendedMediaPreview()) {
 			return true
 		}
-		else if (messageOwner is TL_message_secret) {
-			val ttl = max(messageOwner?.ttl?.toDouble() ?: 0.0, (getMedia(messageOwner)?.ttl_seconds?.toDouble() ?: 0.0)).toInt()
-			return ttl > 0 && ((getMedia(messageOwner) is TL_messageMediaPhoto || isVideo || isGif) && ttl <= 60 || this.isRoundVideo)
-		}
-		else if (messageOwner is TL_message) {
-			return (getMedia(messageOwner) != null && getMedia(messageOwner)?.ttl_seconds != 0) && (getMedia(messageOwner) is TL_messageMediaPhoto || getMedia(messageOwner) is TL_messageMediaDocument)
+//		else if (messageOwner is TLMessageSecret) {
+//			val ttl = max(messageOwner?.ttl?.toDouble() ?: 0.0, (getMedia(messageOwner)?.ttlSeconds?.toDouble() ?: 0.0)).toInt()
+//			return ttl > 0 && ((getMedia(messageOwner) is TLMessageMediaPhoto || isVideo || isGif) && ttl <= 60 || this.isRoundVideo)
+//		}
+		else if (messageOwner is TLMessage) {
+			return (getMedia(messageOwner) != null && getMedia(messageOwner)?.ttlSeconds != 0) && (getMedia(messageOwner) is TLMessageMediaPhoto || getMedia(messageOwner) is TLMessageMediaDocument)
 		}
 
 		return false
@@ -5042,11 +5040,12 @@ open class MessageObject {
 
 	val isSecretMedia: Boolean
 		get() {
-			if (messageOwner is TL_message_secret) {
-				return (((getMedia(messageOwner) is TL_messageMediaPhoto) || this.isGif) && ((messageOwner?.ttl ?: 0) > 0) && ((messageOwner?.ttl ?: 0) <= 60) || this.isVoice || this.isRoundVideo || this.isVideo)
-			}
-			else if (messageOwner is TL_message) {
-				return (getMedia(messageOwner) != null && getMedia(messageOwner)?.ttl_seconds != 0) && (getMedia(messageOwner) is TL_messageMediaPhoto || getMedia(messageOwner) is TL_messageMediaDocument)
+//			if (messageOwner is TLMessage_secret) {
+//				return (((getMedia(messageOwner) is TLMessageMediaPhoto) || this.isGif) && ((messageOwner?.ttl ?: 0) > 0) && ((messageOwner?.ttl ?: 0) <= 60) || this.isVoice || this.isRoundVideo || this.isVideo)
+//			}
+//			else
+			if (messageOwner is TLMessage) {
+				return (getMedia(messageOwner) != null && getMedia(messageOwner)?.ttlSeconds != 0) && (getMedia(messageOwner) is TLMessageMediaPhoto || getMedia(messageOwner) is TLMessageMediaDocument)
 			}
 
 			return false
@@ -5054,8 +5053,8 @@ open class MessageObject {
 
 	val isSavedFromMegagroup: Boolean
 		get() {
-			if (messageOwner?.fwd_from != null && messageOwner?.fwd_from?.saved_from_peer != null && messageOwner?.fwd_from?.saved_from_peer?.channel_id != 0L) {
-				val chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwd_from?.saved_from_peer?.channel_id)
+			if (messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.savedFromPeer != null && messageOwner?.fwdFrom?.savedFromPeer?.channelId != 0L) {
+				val chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwdFrom?.savedFromPeer?.channelId)
 				return ChatObject.isMegagroup(chat)
 			}
 
@@ -5066,48 +5065,46 @@ open class MessageObject {
 		get() = getDialogId(messageOwner)
 
 	fun canStreamVideo(): Boolean {
-		val document = document
-
-		if (document == null || document is TL_documentEncrypted) {
-			return false
-		}
+		val document = document as? TLDocument ?: return false
 
 		if (SharedConfig.streamAllVideo) {
 			return true
 		}
 
 		for (attribute in document.attributes) {
-			if (attribute is TL_documentAttributeVideo) {
-				return attribute.supports_streaming
+			if (attribute is TLDocumentAttributeVideo) {
+				return attribute.supportsStreaming
 			}
 		}
 
-		return SharedConfig.streamMkv && "video/x-matroska" == document.mime_type
+		return SharedConfig.streamMkv && "video/x-matroska" == document.mimeType
 	}
 
 	val isSending: Boolean
-		get() = messageOwner?.send_state == MESSAGE_SEND_STATE_SENDING && (messageOwner?.id ?: 0) < 0
+		get() = messageOwner?.sendState == MESSAGE_SEND_STATE_SENDING && (messageOwner?.id ?: 0) < 0
 
 	val isEditing: Boolean
-		get() = messageOwner?.send_state == MESSAGE_SEND_STATE_EDITING && (messageOwner?.id ?: 0) > 0
+		get() = messageOwner?.sendState == MESSAGE_SEND_STATE_EDITING && (messageOwner?.id ?: 0) > 0
 
 	val isEditingMedia: Boolean
 		get() {
-			if (getMedia(messageOwner) is TL_messageMediaPhoto) {
-				return getMedia(messageOwner)?.photo?.id == 0L
+			val media = getMedia(messageOwner)
+
+			if (media is TLMessageMediaPhoto) {
+				return media.photo?.id == 0L
 			}
-			else if (getMedia(messageOwner) is TL_messageMediaDocument) {
-				return getMedia(messageOwner)?.document?.dc_id == 0
+			else if (media is TLMessageMediaDocument) {
+				return (media.document as? TLDocument)?.dcId == 0
 			}
 
 			return false
 		}
 
 	val isSendError: Boolean
-		get() = (messageOwner?.send_state == MESSAGE_SEND_STATE_SEND_ERROR) && ((messageOwner?.id ?: 0 < 0) || (scheduled && ((messageOwner?.id ?: 0) > 0) && ((messageOwner?.date ?: 0) < ConnectionsManager.getInstance(currentAccount).currentTime - 60)))
+		get() = (messageOwner?.sendState == MESSAGE_SEND_STATE_SEND_ERROR) && ((messageOwner?.id ?: 0 < 0) || (scheduled && ((messageOwner?.id ?: 0) > 0) && ((messageOwner?.date ?: 0) < ConnectionsManager.getInstance(currentAccount).currentTime - 60)))
 
 	val isSent: Boolean
-		get() = messageOwner?.send_state == MESSAGE_SEND_STATE_SENT || (messageOwner?.id ?: 0) > 0
+		get() = messageOwner?.sendState == MESSAGE_SEND_STATE_SENT || (messageOwner?.id ?: 0) > 0
 
 	private val secretTimeLeft: Int
 		get() {
@@ -5149,11 +5146,11 @@ open class MessageObject {
 
 	private val stickerChar: String?
 		get() {
-			val document = document
+			val document = document as? TLDocument
 
 			if (document != null) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeSticker) {
+					if (attribute is TLDocumentAttributeSticker) {
 						return attribute.alt
 					}
 				}
@@ -5165,7 +5162,9 @@ open class MessageObject {
 	val approximateHeight: Int
 		get() {
 			if (type == TYPE_COMMON) {
-				var height = textHeight + (if (getMedia(messageOwner) is TL_messageMediaWebPage && getMedia(messageOwner)?.webpage is TL_webPage) AndroidUtilities.dp(100f) else 0)
+				val media = getMedia(messageOwner)
+
+				var height = textHeight + (if (media is TLMessageMediaWebPage && media.webpage is TLWebPage) AndroidUtilities.dp(100f) else 0)
 
 				if (isReply) {
 					height += AndroidUtilities.dp(42f)
@@ -5215,11 +5214,11 @@ open class MessageObject {
 
 				var photoHeight = 0
 				var photoWidth = 0
-				val document = document
+				val document = document as? TLDocument
 
 				if (document != null) {
 					for (attribute in document.attributes) {
-						if (attribute is TL_documentAttributeImageSize) {
+						if (attribute is TLDocumentAttributeImageSize) {
 							photoWidth = attribute.w
 							photoHeight = attribute.h
 							break
@@ -5303,11 +5302,11 @@ open class MessageObject {
 
 	val stickerEmoji: String?
 		get() {
-			val document = document ?: return null
+			val document = document as? TLDocument ?: return null
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeSticker || attribute is TL_documentAttributeCustomEmoji) {
-					return if (attribute.alt != null && attribute.alt.isNotEmpty()) attribute.alt else null
+				if (attribute is TLDocumentAttributeSticker || attribute is TLDocumentAttributeCustomEmoji) {
+					return attribute.alt
 				}
 			}
 
@@ -5315,7 +5314,7 @@ open class MessageObject {
 		}
 
 	val isVideoCall: Boolean
-		get() = messageOwner?.action is TL_messageActionPhoneCall && messageOwner?.action?.video == true
+		get() = (messageOwner?.action as? TLMessageActionPhoneCall)?.video == true
 
 	val isAnimatedEmoji: Boolean
 		get() = emojiAnimatedSticker != null || emojiAnimatedStickerId != null
@@ -5324,7 +5323,7 @@ open class MessageObject {
 		get() = isAnimatedEmoji && isAnimatedEmoji(document)
 
 	val isDice: Boolean
-		get() = getMedia(messageOwner) is TL_messageMediaDice
+		get() = getMedia(messageOwner) is TLMessageMediaDice
 
 	val diceEmoji: String?
 		get() {
@@ -5332,7 +5331,7 @@ open class MessageObject {
 				return null
 			}
 
-			val messageMediaDice = getMedia(messageOwner) as? TL_messageMediaDice
+			val messageMediaDice = getMedia(messageOwner) as? TLMessageMediaDice
 
 			if (messageMediaDice?.emoticon.isNullOrEmpty()) {
 				return "\uD83C\uDFB2"
@@ -5342,7 +5341,7 @@ open class MessageObject {
 		}
 
 	val diceValue: Int
-		get() = (getMedia(messageOwner) as? TL_messageMediaDice)?.value ?: -1
+		get() = (getMedia(messageOwner) as? TLMessageMediaDice)?.value ?: -1
 
 	val isSticker: Boolean
 		get() {
@@ -5436,10 +5435,10 @@ open class MessageObject {
 	fun hasAttachedStickers(): Boolean {
 		val media = getMedia(messageOwner)
 
-		if (media is TL_messageMediaPhoto) {
-			return media.photo != null && media.photo.has_stickers
+		if (media is TLMessageMediaPhoto) {
+			return (media.photo as? TLPhoto)?.hasStickers == true
 		}
-		else if (media is TL_messageMediaDocument) {
+		else if (media is TLMessageMediaDocument) {
 			return isDocumentHasAttachedStickers(media.document)
 		}
 
@@ -5450,30 +5449,33 @@ open class MessageObject {
 		get() = isGifMessage(messageOwner)
 
 	val isWebpageDocument: Boolean
-		get() = getMedia(messageOwner) is TL_messageMediaWebPage && getMedia(messageOwner)?.webpage?.document != null && !isGifDocument(getMedia(messageOwner)?.webpage?.document)
+		get() {
+			val media = getMedia(messageOwner) as? TLMessageMediaWebPage
+			val webpage = media?.webpage as? TLWebPage
+			return webpage?.document != null && !isGifDocument(webpage.document)
+		}
 
 	val isWebpage: Boolean
-		get() = getMedia(messageOwner) is TL_messageMediaWebPage
+		get() = getMedia(messageOwner) is TLMessageMediaWebPage
 
 	val isNewGif: Boolean
 		get() = getMedia(messageOwner) != null && isNewGifDocument(document)
 
 	private val isAndroidTheme: Boolean
 		get() {
-			if (getMedia(messageOwner) != null && getMedia(messageOwner)?.webpage != null && !getMedia(messageOwner)?.webpage?.attributes.isNullOrEmpty()) {
-				val mediaAttributes = getMedia(messageOwner)?.webpage?.attributes
+			val media = getMedia(messageOwner) as? TLMessageMediaWebPage
+			val webpage = media?.webpage as? TLWebPage
 
-				if (mediaAttributes != null) {
-					for (attribute in mediaAttributes) {
-						for (document in attribute.documents) {
-							if ("application/x-tgtheme-android" == document.mime_type) {
-								return true
-							}
-						}
-
-						if (attribute.settings != null) {
+			if (webpage != null && webpage.attributes.isNotEmpty()) {
+				for (attribute in webpage.attributes) {
+					for (document in attribute.documents) {
+						if ("application/x-tgtheme-android" == document.mimeType) {
 							return true
 						}
+					}
+
+					if (attribute.settings != null) {
+						return true
 					}
 				}
 			}
@@ -5485,13 +5487,11 @@ open class MessageObject {
 		get() = getMusicTitle(true)
 
 	fun getMusicTitle(unknown: Boolean): String? {
-		val document = document
+		val document = document as? TLDocument
 
 		if (document != null) {
-			for (a in document.attributes.indices) {
-				val attribute = document.attributes[a]
-
-				if (attribute is TL_documentAttributeAudio) {
+			for (attribute in document.attributes) {
+				if (attribute is TLDocumentAttributeAudio) {
 					if (attribute.voice) {
 						if (!unknown) {
 							return null
@@ -5512,8 +5512,8 @@ open class MessageObject {
 
 					return title
 				}
-				else if (attribute is TL_documentAttributeVideo) {
-					if (attribute.round_message) {
+				else if (attribute is TLDocumentAttributeVideo) {
+					if (attribute.roundMessage) {
 						return LocaleController.formatDateAudio(messageOwner?.date?.toLong() ?: 0L, true)
 					}
 				}
@@ -5531,17 +5531,17 @@ open class MessageObject {
 
 	val duration: Int
 		get() {
-			val document = document ?: return 0
+			val document = document as? TLDocument ?: return 0
 
 			if (audioPlayerDuration > 0) {
 				return audioPlayerDuration
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeAudio) {
+				if (attribute is TLDocumentAttributeAudio) {
 					return attribute.duration
 				}
-				else if (attribute is TL_documentAttributeVideo) {
+				else if (attribute is TLDocumentAttributeVideo) {
 					return attribute.duration
 				}
 			}
@@ -5550,15 +5550,15 @@ open class MessageObject {
 		}
 
 	fun getArtworkUrl(small: Boolean): String? {
-		val document = document
+		val document = document as? TLDocument
 
 		if (document != null) {
-			if ("audio/ogg" == document.mime_type) {
+			if ("audio/ogg" == document.mimeType) {
 				return null
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeAudio) {
+				if (attribute is TLDocumentAttributeAudio) {
 					if (attribute.voice) {
 						return null
 					}
@@ -5568,7 +5568,7 @@ open class MessageObject {
 
 						if (!performer.isNullOrEmpty()) {
 							for (excludeWord in excludeWords) {
-								performer = performer.replace(excludeWord, " ")
+								performer = performer?.replace(excludeWord, " ")
 							}
 						}
 
@@ -5594,13 +5594,13 @@ open class MessageObject {
 		get() = getMusicAuthor(true)
 
 	fun getMusicAuthor(unknown: Boolean): String? {
-		val document = document
+		val document = document as? TLDocument
 
 		if (document != null) {
 			var isVoice = false
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeAudio) {
+				if (attribute is TLDocumentAttributeAudio) {
 					if (attribute.voice) {
 						isVoice = true
 					}
@@ -5614,8 +5614,8 @@ open class MessageObject {
 						return performer
 					}
 				}
-				else if (attribute is TL_documentAttributeVideo) {
-					if (attribute.round_message) {
+				else if (attribute is TLDocumentAttributeVideo) {
+					if (attribute.roundMessage) {
 						isVoice = true
 					}
 				}
@@ -5625,36 +5625,36 @@ open class MessageObject {
 						return null
 					}
 
-					if (isOutOwner || messageOwner?.fwd_from != null && messageOwner?.fwd_from?.from_id is TL_peerUser && messageOwner?.fwd_from?.from_id?.user_id == UserConfig.getInstance(currentAccount).getClientUserId()) {
+					if (isOutOwner || messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.fromId is TLPeerUser && messageOwner?.fwdFrom?.fromId?.userId == UserConfig.getInstance(currentAccount).getClientUserId()) {
 						return ApplicationLoader.applicationContext.getString(R.string.FromYou)
 					}
 
 					var user: User? = null
 					var chat: Chat? = null
 
-					if (messageOwner?.fwd_from != null && messageOwner?.fwd_from?.from_id is TL_peerChannel) {
-						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwd_from?.from_id?.channel_id)
+					if (messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.fromId is TLPeerChannel) {
+						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwdFrom?.fromId?.channelId)
 					}
-					else if (messageOwner?.fwd_from != null && messageOwner?.fwd_from?.from_id is TL_peerChat) {
-						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwd_from?.from_id?.chat_id)
+					else if (messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.fromId is TLPeerChat) {
+						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwdFrom?.fromId?.chatId)
 					}
-					else if (messageOwner?.fwd_from != null && messageOwner?.fwd_from?.from_id is TL_peerUser) {
-						user = MessagesController.getInstance(currentAccount).getUser(messageOwner?.fwd_from?.from_id?.user_id)
+					else if (messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.fromId is TLPeerUser) {
+						user = MessagesController.getInstance(currentAccount).getUser(messageOwner?.fwdFrom?.fromId?.userId)
 					}
-					else if (messageOwner?.fwd_from != null && messageOwner?.fwd_from?.from_name != null) {
-						return messageOwner?.fwd_from?.from_name
+					else if (messageOwner?.fwdFrom != null && messageOwner?.fwdFrom?.fromName != null) {
+						return messageOwner?.fwdFrom?.fromName
 					}
-					else if (messageOwner?.from_id is TL_peerChat) {
-						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.from_id?.chat_id)
+					else if (messageOwner?.fromId is TLPeerChat) {
+						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fromId?.chatId)
 					}
-					else if (messageOwner?.from_id is TL_peerChannel) {
-						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.from_id?.channel_id)
+					else if (messageOwner?.fromId is TLPeerChannel) {
+						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fromId?.channelId)
 					}
-					else if (messageOwner?.from_id == null && messageOwner?.peer_id?.channel_id != 0L) {
-						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.peer_id?.channel_id)
+					else if (messageOwner?.fromId == null && messageOwner?.peerId?.channelId != 0L) {
+						chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.peerId?.channelId)
 					}
 					else {
-						user = MessagesController.getInstance(currentAccount).getUser(messageOwner?.from_id?.user_id)
+						user = MessagesController.getInstance(currentAccount).getUser(messageOwner?.fromId?.userId)
 					}
 
 					if (user != null) {
@@ -5678,13 +5678,13 @@ open class MessageObject {
 
 	open fun needDrawForwarded(): Boolean {
 		val messageOwner = messageOwner ?: return false
-		return (messageOwner.flags and TLRPC.MESSAGE_FLAG_FWD) != 0 && (messageOwner.fwd_from != null) && !messageOwner.fwd_from!!.imported && (messageOwner.fwd_from!!.saved_from_peer == null || messageOwner.fwd_from!!.from_id !is TL_peerChannel || messageOwner.fwd_from!!.saved_from_peer.channel_id != messageOwner.fwd_from!!.from_id.channel_id) && (UserConfig.getInstance(currentAccount).getClientUserId() != dialogId)
+		return (messageOwner.flags and TLRPC.MESSAGE_FLAG_FWD) != 0 && (messageOwner.fwdFrom != null) && !messageOwner.fwdFrom!!.imported && (messageOwner.fwdFrom!!.savedFromPeer == null || messageOwner.fwdFrom!!.fromId !is TLPeerChannel || messageOwner.fwdFrom!!.savedFromPeer.channelId != messageOwner.fwdFrom!!.fromId.channelId) && (UserConfig.getInstance(currentAccount).getClientUserId() != dialogId)
 	}
 
 	val isReply: Boolean
 		get() {
 			val replyMessageObject = replyMessageObject
-			return (!(replyMessageObject != null && replyMessageObject.messageOwner is TL_messageEmpty) && messageOwner?.reply_to != null && (messageOwner?.reply_to?.reply_to_msg_id != 0 || messageOwner?.reply_to?.reply_to_random_id != 0L)) && (messageOwner!!.flags and TLRPC.MESSAGE_FLAG_REPLY) != 0
+			return (!(replyMessageObject != null && replyMessageObject.messageOwner is TLMessageEmpty) && messageOwner?.replyTo != null && (messageOwner?.replyTo?.replyToMsgId != 0 || messageOwner?.replyTo?.replyToRandomId != 0L)) && (messageOwner!!.flags and TLRPC.MESSAGE_FLAG_REPLY) != 0
 		}
 
 	val isMediaEmpty: Boolean
@@ -5709,7 +5709,7 @@ open class MessageObject {
 		get() = messageOwner?.replies?.comments == true
 
 	fun isLinkedToChat(chatId: Long): Boolean {
-		return messageOwner?.replies != null && (chatId == 0L || messageOwner?.replies?.channel_id == chatId)
+		return messageOwner?.replies != null && (chatId == 0L || messageOwner?.replies?.channelId == chatId)
 	}
 
 	val repliesCount: Int
@@ -5724,17 +5724,17 @@ open class MessageObject {
 	}
 
 	fun canForwardMessage(): Boolean {
-		return messageOwner !is TL_message_secret && !needDrawBluredPreview() && !isLiveLocation && type != 16 && !isSponsored && messageOwner?.noforwards != true
+		return /*messageOwner !is TLMessageSecret && */ !needDrawBluredPreview() && !isLiveLocation && type != 16 && !isSponsored && (messageOwner as? TLMessage)?.noforwards != true
 	}
 
 	fun canEditMedia(): Boolean {
 		if (isSecretMedia) {
 			return false
 		}
-		else if (getMedia(messageOwner) is TL_messageMediaPhoto) {
+		else if (getMedia(messageOwner) is TLMessageMediaPhoto) {
 			return true
 		}
-		else if (getMedia(messageOwner) is TL_messageMediaDocument) {
+		else if (getMedia(messageOwner) is TLMessageMediaDocument) {
 			return !isVoice && !isSticker && !isAnimatedSticker && !isRoundVideo
 		}
 
@@ -5751,29 +5751,29 @@ open class MessageObject {
 
 	val forwardedName: String?
 		get() {
-			if (messageOwner?.fwd_from != null) {
-				if (messageOwner?.fwd_from?.from_id is TL_peerChannel) {
-					val chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwd_from?.from_id?.channel_id)
+			if (messageOwner?.fwdFrom != null) {
+				if (messageOwner?.fwdFrom?.fromId is TLPeerChannel) {
+					val chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwdFrom?.fromId?.channelId)
 					if (chat != null) {
 						return chat.title
 					}
 				}
-				else if (messageOwner?.fwd_from?.from_id is TL_peerChat) {
-					val chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwd_from?.from_id?.chat_id)
+				else if (messageOwner?.fwdFrom?.fromId is TLPeerChat) {
+					val chat = MessagesController.getInstance(currentAccount).getChat(messageOwner?.fwdFrom?.fromId?.chatId)
 
 					if (chat != null) {
 						return chat.title
 					}
 				}
-				else if (messageOwner?.fwd_from?.from_id is TL_peerUser) {
-					val user = MessagesController.getInstance(currentAccount).getUser(messageOwner?.fwd_from?.from_id?.user_id)
+				else if (messageOwner?.fwdFrom?.fromId is TLPeerUser) {
+					val user = MessagesController.getInstance(currentAccount).getUser(messageOwner?.fwdFrom?.fromId?.userId)
 
 					if (user != null) {
 						return UserObject.getUserName(user)
 					}
 				}
-				else if (messageOwner?.fwd_from?.from_name != null) {
-					return messageOwner?.fwd_from?.from_name
+				else if (messageOwner?.fwdFrom?.fromName != null) {
+					return messageOwner?.fwdFrom?.fromName
 				}
 			}
 
@@ -5781,19 +5781,19 @@ open class MessageObject {
 		}
 
 	val replyMsgId: Int
-		get() = messageOwner?.reply_to?.reply_to_msg_id ?: 0
+		get() = messageOwner?.replyTo?.replyToMsgId ?: 0
 
 	val replyTopMsgId: Int
-		get() = messageOwner?.reply_to?.reply_to_top_id ?: 0
+		get() = messageOwner?.replyTo?.replyToTopId ?: 0
 
 	val replyAnyMsgId: Int
 		get() {
-			if (messageOwner?.reply_to != null) {
-				return if (messageOwner?.reply_to?.reply_to_top_id != 0) {
-					messageOwner?.reply_to?.reply_to_top_id ?: 0
+			if (messageOwner?.replyTo != null) {
+				return if (messageOwner?.replyTo?.replyToTopId != 0) {
+					messageOwner?.replyTo?.replyToTopId ?: 0
 				}
 				else {
-					messageOwner?.reply_to?.reply_to_msg_id ?: 0
+					messageOwner?.replyTo?.replyToMsgId ?: 0
 				}
 			}
 
@@ -5801,68 +5801,76 @@ open class MessageObject {
 		}
 
 	val isPrivateForward: Boolean
-		get() = !messageOwner?.fwd_from?.from_name.isNullOrEmpty()
+		get() = !messageOwner?.fwdFrom?.fromName.isNullOrEmpty()
 
 	val isImportedForward: Boolean
-		get() = messageOwner?.fwd_from?.imported == true
+		get() = messageOwner?.fwdFrom?.imported == true
 
 	val senderId: Long
 		get() {
 			val messageOwner = messageOwner
 
-			if (messageOwner?.fwd_from != null && messageOwner.fwd_from!!.saved_from_peer != null) {
-				if (messageOwner.fwd_from!!.saved_from_peer.user_id != 0L) {
-					return if (messageOwner.fwd_from!!.from_id is TL_peerUser) {
-						messageOwner.fwd_from!!.from_id.user_id
+			if (messageOwner?.fwdFrom != null && messageOwner.fwdFrom!!.savedFromPeer != null) {
+				if (messageOwner.fwdFrom!!.savedFromPeer.userId != 0L) {
+					return if (messageOwner.fwdFrom!!.fromId is TLPeerUser) {
+						messageOwner.fwdFrom!!.fromId.userId
 					}
 					else {
-						messageOwner.fwd_from!!.saved_from_peer.user_id
+						messageOwner.fwdFrom!!.savedFromPeer.userId
 					}
 				}
-				else if (messageOwner.fwd_from!!.saved_from_peer.channel_id != 0L) {
-					return if (isSavedFromMegagroup && messageOwner.fwd_from!!.from_id is TL_peerUser) {
-						messageOwner.fwd_from!!.from_id.user_id
+				else if (messageOwner.fwdFrom!!.savedFromPeer.channelId != 0L) {
+					return if (isSavedFromMegagroup && messageOwner.fwdFrom!!.fromId is TLPeerUser) {
+						messageOwner.fwdFrom!!.fromId.userId
 					}
-					else if (messageOwner.fwd_from!!.from_id is TL_peerChannel) {
-						-messageOwner.fwd_from!!.from_id.channel_id
+					else if (messageOwner.fwdFrom!!.fromId is TLPeerChannel) {
+						-messageOwner.fwdFrom!!.fromId.channelId
 					}
-					else if (messageOwner.fwd_from!!.from_id is TL_peerChat) {
-						-messageOwner.fwd_from!!.from_id.chat_id
+					else if (messageOwner.fwdFrom!!.fromId is TLPeerChat) {
+						-messageOwner.fwdFrom!!.fromId.chatId
 					}
 					else {
-						-messageOwner.fwd_from!!.saved_from_peer.channel_id
+						-messageOwner.fwdFrom!!.savedFromPeer.channelId
 					}
 				}
-				else if (messageOwner.fwd_from!!.saved_from_peer.chat_id != 0L) {
-					return when (messageOwner.fwd_from!!.from_id) {
-						is TL_peerUser -> messageOwner.fwd_from!!.from_id.user_id
-						is TL_peerChannel -> -messageOwner.fwd_from!!.from_id.channel_id
-						is TL_peerChat -> -messageOwner.fwd_from!!.from_id.chat_id
-						else -> -messageOwner.fwd_from!!.saved_from_peer.chat_id
+				else if (messageOwner.fwdFrom!!.savedFromPeer.chatId != 0L) {
+					return when (messageOwner.fwdFrom!!.fromId) {
+						is TLPeerUser -> messageOwner.fwdFrom!!.fromId.userId
+						is TLPeerChannel -> -messageOwner.fwdFrom!!.fromId.channelId
+						is TLPeerChat -> -messageOwner.fwdFrom!!.fromId.chatId
+						else -> -messageOwner.fwdFrom!!.savedFromPeer.chatId
 					}
 				}
 			}
-			else if (messageOwner?.from_id is TL_peerUser) {
-				return messageOwner.from_id!!.user_id
+			else if (messageOwner?.fromId is TLPeerUser) {
+				return messageOwner.fromId!!.userId
 			}
-			else if (messageOwner?.from_id is TL_peerChannel) {
-				return -messageOwner.from_id!!.channel_id
+			else if (messageOwner?.fromId is TLPeerChannel) {
+				return -messageOwner.fromId!!.channelId
 			}
-			else if (messageOwner?.from_id is TL_peerChat) {
-				return -messageOwner.from_id!!.chat_id
+			else if (messageOwner?.fromId is TLPeerChat) {
+				return -messageOwner.fromId!!.chatId
 			}
 			else if (messageOwner?.post == true) {
-				return messageOwner.peer_id?.channel_id ?: 0
+				return messageOwner.peerId?.channelId ?: 0
 			}
 
 			return 0
 		}
 
 	val isWallpaper: Boolean
-		get() = getMedia(messageOwner) is TL_messageMediaWebPage && "telegram_background" == getMedia(messageOwner)?.webpage?.type
+		get() {
+			val media = getMedia(messageOwner) as? TLMessageMediaWebPage
+			val webpage = media?.webpage as? TLWebPage
+			return "telegram_background" == webpage?.type
+		}
 
 	val isTheme: Boolean
-		get() = getMedia(messageOwner) is TL_messageMediaWebPage && "telegram_theme" == getMedia(messageOwner)?.webpage?.type
+		get() {
+			val media = getMedia(messageOwner) as? TLMessageMediaWebPage
+			val webpage = media?.webpage as? TLWebPage
+			return "telegram_theme" == webpage?.type
+		}
 
 	val mediaExistanceFlags: Int
 		get() {
@@ -5895,13 +5903,13 @@ open class MessageObject {
 		mediaExists = false
 
 		if (type == TYPE_EXTENDED_MEDIA_PREVIEW) {
-			val preview = messageOwner?.media?.extended_media as? TL_messageExtendedMediaPreview
+			val preview = messageOwner?.media?.extendedMedia as? TLMessageExtendedMediaPreview
 
 			if (preview?.thumb != null) {
 				val file = FileLoader.getInstance(currentAccount).getPathToAttach(preview.thumb)
 
 				if (!mediaExists) {
-					mediaExists = file.exists() || preview.thumb is TL_photoStrippedSize
+					mediaExists = file.exists() || preview.thumb is TLPhotoStrippedSize
 				}
 			}
 		}
@@ -5955,13 +5963,13 @@ open class MessageObject {
 				mediaExists = FileLoader.getInstance(currentAccount).getPathToAttach(currentPhotoObject, null, true, useFileDatabaseQueue).exists()
 			}
 			else if (type == 11) {
-				val photo = messageOwner?.action?.photo
+				val photo = messageOwner?.action?.photo as? TLPhoto
 
-				if (photo == null || photo.video_sizes.isEmpty()) {
+				if (photo == null || photo.videoSizes.isEmpty()) {
 					return
 				}
 
-				mediaExists = FileLoader.getInstance(currentAccount).getPathToAttach(photo.video_sizes[0], null, true, useFileDatabaseQueue).exists()
+				mediaExists = FileLoader.getInstance(currentAccount).getPathToAttach(photo.videoSizes[0], null, true, useFileDatabaseQueue).exists()
 			}
 		}
 	}
@@ -6011,18 +6019,11 @@ open class MessageObject {
 
 		val media = getMedia(messageOwner)
 
-		if (media is TL_messageMediaWebPage && media.webpage is TL_webPage) {
-			val webPage = media.webpage
-
-			var title = webPage.title
-
-			if (title == null) {
-				title = webPage.site_name
-			}
+		if (media is TLMessageMediaWebPage && media.webpage is TLWebPage) {
+			val webPage = media.webpage as? TLWebPage
+			val title = (webPage?.title ?: webPage?.siteName)?.lowercase()
 
 			if (title != null) {
-				title = title.lowercase()
-
 				if (title.contains(query) && !foundWords.contains(query)) {
 					foundWords.add(query)
 				}
@@ -6169,7 +6170,7 @@ open class MessageObject {
 			mediaThumb = ImageLocation.getForDocument(qualityThumb, document)
 			mediaSmallThumb = ImageLocation.getForDocument(thumb, document)
 		}
-		else if (getMedia(messageOwner) is TL_messageMediaPhoto && getMedia(messageOwner)?.photo != null && !photoThumbs.isNullOrEmpty()) {
+		else if ((getMedia(messageOwner) as? TLMessageMediaPhoto)?.photo != null && !photoThumbs.isNullOrEmpty()) {
 			val currentPhotoObjectThumb = FileLoader.getClosestPhotoSizeWithSize(photoThumbs, 50)
 			val currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(photoThumbs, 320, false, currentPhotoObjectThumb, false)
 
@@ -6192,22 +6193,22 @@ open class MessageObject {
 	fun selectReaction(visibleReaction: VisibleReaction?, big: Boolean, fromDoubleTap: Boolean): Boolean {
 		val messageOwner = messageOwner
 
-		if (messageOwner?.originalReactions == null) {
-			val r = TL_messageReactions()
+		if (messageOwner?.reactions == null) {
+			val r = TLMessageReactions()
 			r.canSeeList = isFromGroup || isFromUser
 
 			messageOwner?.reactions = r
 		}
 
-		val chosenReactions = mutableListOf<ReactionCount>()
-		var newReaction: ReactionCount? = null
+		val chosenReactions = mutableListOf<TLReactionCount>()
+		var newReaction: TLReactionCount? = null
 		var maxChosenOrder = 0
 
-		val originalReactions = messageOwner?.originalReactions
+		val reactions = messageOwner?.reactions
 
-		if (originalReactions != null) {
-			for (i in originalReactions.results.indices) {
-				val reactionCount = originalReactions.results[i]
+		if (reactions != null) {
+			for (i in reactions.results.indices) {
+				val reactionCount = reactions.results[i]
 
 				if (reactionCount.chosen) {
 					chosenReactions.add(reactionCount)
@@ -6219,7 +6220,7 @@ open class MessageObject {
 
 				val tlReaction = reactionCount.reaction
 
-				if (tlReaction is TL_reactionEmoji) {
+				if (tlReaction is TLReactionEmoji) {
 					if (visibleReaction?.emojicon == null) {
 						continue
 					}
@@ -6229,7 +6230,7 @@ open class MessageObject {
 					}
 				}
 
-				if (tlReaction is TL_reactionCustomEmoji) {
+				if (tlReaction is TLReactionCustomEmoji) {
 					if (visibleReaction?.documentId == 0L) {
 						continue
 					}
@@ -6252,15 +6253,15 @@ open class MessageObject {
 			newReaction.count--
 
 			if (newReaction.count <= 0) {
-				originalReactions?.results?.remove(newReaction)
+				reactions?.results?.remove(newReaction)
 			}
 
-			if (originalReactions?.canSeeList == true) {
+			if (reactions?.canSeeList == true) {
 				var i = 0
 
-				while (i < originalReactions.recentReactions.size) {
-					if (getPeerId(originalReactions.recentReactions[i].peer_id) == UserConfig.getInstance(currentAccount).getClientUserId() && ReactionsUtils.compare(messageOwner.originalReactions?.recentReactions?.get(i)?.reaction, visibleReaction)) {
-						originalReactions.recentReactions.removeAt(i)
+				while (i < reactions.recentReactions.size) {
+					if (getPeerId(reactions.recentReactions[i].peerId) == UserConfig.getInstance(currentAccount).getClientUserId() && ReactionsUtils.compare(messageOwner.reactions?.recentReactions?.get(i)?.reaction, visibleReaction)) {
+						reactions.recentReactions.removeAt(i)
 						i--
 					}
 
@@ -6287,17 +6288,17 @@ open class MessageObject {
 			chosenReaction.count--
 
 			if (chosenReaction.count <= 0) {
-				messageOwner?.originalReactions?.results?.remove(chosenReaction)
+				messageOwner?.reactions?.results?.remove(chosenReaction)
 			}
 
 			chosenReactions.remove(chosenReaction)
 
-			if (messageOwner?.originalReactions?.canSeeList == true) {
+			if (messageOwner?.reactions?.canSeeList == true) {
 				var i = 0
 
-				while (i < messageOwner.originalReactions!!.recentReactions.size) {
-					if (getPeerId(messageOwner.originalReactions!!.recentReactions[i].peer_id) == UserConfig.getInstance(currentAccount).getClientUserId() && ReactionsUtils.compare(messageOwner.originalReactions?.recentReactions?.get(i)?.reaction, visibleReaction)) {
-						messageOwner.originalReactions!!.recentReactions.removeAt(i)
+				while (i < messageOwner.reactions!!.recentReactions.size) {
+					if (getPeerId(messageOwner.reactions!!.recentReactions[i].peerId) == UserConfig.getInstance(currentAccount).getClientUserId() && ReactionsUtils.compare(messageOwner.reactions?.recentReactions?.get(i)?.reaction, visibleReaction)) {
+						messageOwner.reactions!!.recentReactions.removeAt(i)
 						i--
 					}
 
@@ -6307,19 +6308,19 @@ open class MessageObject {
 		}
 
 		if (newReaction == null) {
-			newReaction = TL_reactionCount()
+			newReaction = TLReactionCount()
 
 			if (visibleReaction?.emojicon != null) {
-				newReaction.reaction = TL_reactionEmoji()
-				(newReaction.reaction as? TL_reactionEmoji)?.emoticon = visibleReaction.emojicon
+				newReaction.reaction = TLReactionEmoji()
+				(newReaction.reaction as? TLReactionEmoji)?.emoticon = visibleReaction.emojicon
 
-				messageOwner?.originalReactions?.results?.add(newReaction)
+				messageOwner?.reactions?.results?.add(newReaction)
 			}
 			else {
-				newReaction.reaction = TL_reactionCustomEmoji()
-				(newReaction.reaction as? TL_reactionCustomEmoji)?.documentId = visibleReaction?.documentId ?: 0L
+				newReaction.reaction = TLReactionCustomEmoji()
+				(newReaction.reaction as? TLReactionCustomEmoji)?.documentId = visibleReaction?.documentId ?: 0L
 
-				messageOwner?.originalReactions?.results?.add(newReaction)
+				messageOwner?.reactions?.results?.add(newReaction)
 			}
 		}
 
@@ -6327,21 +6328,22 @@ open class MessageObject {
 		newReaction.count++
 		newReaction.chosenOrder = maxChosenOrder + 1
 
-		if (messageOwner?.originalReactions?.canSeeList == true || ((messageOwner?.dialog_id ?: 0) > 0 && maxReactionsCount > 1)) {
-			val action = TL_messagePeerReaction()
+		if (messageOwner?.reactions?.canSeeList == true || ((messageOwner?.dialogId ?: 0) > 0 && maxReactionsCount > 1)) {
+			val action = TLMessagePeerReaction()
 
-			messageOwner?.originalReactions?.recentReactions?.add(0, action)
+			messageOwner?.reactions?.recentReactions?.add(0, action)
 
-			action.peer_id = TL_peerUser()
-			action.peer_id.user_id = UserConfig.getInstance(currentAccount).getClientUserId()
+			action.peerId = TLPeerUser().also { it.userId = UserConfig.getInstance(currentAccount).getClientUserId() }
 
 			if (visibleReaction?.emojicon != null) {
-				action.reaction = TL_reactionEmoji()
-				(action.reaction as TL_reactionEmoji).emoticon = visibleReaction.emojicon
+				action.reaction = TLReactionEmoji().also {
+					it.emoticon = visibleReaction.emojicon
+				}
 			}
 			else {
-				action.reaction = TL_reactionCustomEmoji()
-				(action.reaction as TL_reactionCustomEmoji).documentId = visibleReaction?.documentId ?: 0L
+				action.reaction = TLReactionCustomEmoji().also {
+					it.documentId = visibleReaction?.documentId ?: 0L
+				}
 			}
 		}
 
@@ -6351,11 +6353,11 @@ open class MessageObject {
 	}
 
 	fun probablyRingtone(): Boolean {
-		val document = document
+		val document = document as? TLDocument
 
-		if (document != null && RingtoneDataStore.ringtoneSupportedMimeType.contains(document.mime_type) && document.size < MessagesController.getInstance(currentAccount).ringtoneSizeMax * 2L) {
+		if (document != null && RingtoneDataStore.ringtoneSupportedMimeType.contains(document.mimeType) && document.size < MessagesController.getInstance(currentAccount).ringtoneSizeMax * 2L) {
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeAudio) {
+				if (attribute is TLDocumentAttributeAudio) {
 					if (attribute.duration < 60) {
 						return true
 					}
@@ -6383,7 +6385,7 @@ open class MessageObject {
 		const val TYPE_PHOTO: Int = 1
 		const val TYPE_VOICE: Int = 2
 		const val TYPE_VIDEO: Int = 3
-		const val TYPE_GEO: Int = 4 // TL_messageMediaGeo, TL_messageMediaVenue, TL_messageMediaGeoLive
+		const val TYPE_GEO: Int = 4 // TLMessageMediaGeo, TLMessageMediaVenue, TLMessageMediaGeoLive
 		const val TYPE_ROUND_VIDEO: Int = 5
 		const val TYPE_GIF: Int = 8
 		const val TYPE_DOCUMENT: Int = 9
@@ -6424,10 +6426,10 @@ open class MessageObject {
 				return false
 			}
 
-			return hasUnreadReactions(message.originalReactions)
+			return hasUnreadReactions(message.reactions)
 		}
 
-		fun hasUnreadReactions(reactions: TL_messageReactions?): Boolean {
+		fun hasUnreadReactions(reactions: TLMessageReactions?): Boolean {
 			if (reactions == null) {
 				return false
 			}
@@ -6443,12 +6445,12 @@ open class MessageObject {
 
 		@JvmStatic
 		fun isPremiumSticker(document: TLRPC.Document?): Boolean {
-			if (document?.thumbs == null) {
+			if (document !is TLDocument) {
 				return false
 			}
 
-			for (i in document.video_thumbs.indices) {
-				if ("f" == document.video_thumbs[i].type) {
+			for (thumb in document.videoThumbs) {
+				if ("f" == thumb.type) {
 					return true
 				}
 			}
@@ -6457,14 +6459,14 @@ open class MessageObject {
 		}
 
 		@JvmStatic
-		fun getPremiumStickerAnimation(document: TLRPC.Document?): VideoSize? {
-			if (document?.thumbs == null) {
+		fun getPremiumStickerAnimation(document: TLRPC.Document?): TLRPC.VideoSize? {
+			if (document !is TLDocument) {
 				return null
 			}
 
-			for (i in document.video_thumbs.indices) {
-				if ("f" == document.video_thumbs[i].type) {
-					return document.video_thumbs[i]
+			for (thumb in document.videoThumbs) {
+				if ("f" == thumb.type) {
+					return thumb
 				}
 			}
 
@@ -6472,7 +6474,7 @@ open class MessageObject {
 		}
 
 		@JvmStatic
-		fun updateReactions(message: Message?, reactions: TL_messageReactions?) {
+		fun updateReactions(message: Message?, reactions: TLMessageReactions?) {
 			if (message == null || reactions == null) {
 				return
 			}
@@ -6516,7 +6518,7 @@ open class MessageObject {
 		}
 
 		@JvmStatic
-		fun updatePollResults(media: TL_messageMediaPoll?, results: PollResults?) {
+		fun updatePollResults(media: TLMessageMediaPoll?, results: TLPollResults?) {
 			if (media == null || results == null) {
 				return
 			}
@@ -6525,8 +6527,8 @@ open class MessageObject {
 				var chosen: ArrayList<ByteArray?>? = null
 				var correct: ByteArray? = null
 
-				if (results.min && media.results.results != null) {
-					for (answerVoters in media.results.results) {
+				if (results.min && media.results?.results != null) {
+					for (answerVoters in media.results!!.results) {
 						if (answerVoters.chosen) {
 							if (chosen == null) {
 								chosen = ArrayList()
@@ -6541,25 +6543,27 @@ open class MessageObject {
 					}
 				}
 
-				media.results.results = results.results
+				media.results?.results?.clear()
+				media.results?.results?.addAll(results.results)
 
 				if (chosen != null || correct != null) {
 					var b = 0
-					val n2 = media.results.results.size
+					val n2 = media.results?.results?.size ?: 0
 
 					while (b < n2) {
-						val answerVoters = media.results.results[b]
+						val answerVoters = media.results?.results?.get(b)
 
 						if (chosen != null) {
 							var a = 0
 							val n = chosen.size
 
 							while (a < n) {
-								if (answerVoters.option.contentEquals(chosen[a])) {
+								if (answerVoters?.option?.contentEquals(chosen[a]) == true) {
 									answerVoters.chosen = true
 									chosen.removeAt(a)
 									break
 								}
+
 								a++
 							}
 
@@ -6568,7 +6572,7 @@ open class MessageObject {
 							}
 						}
 
-						if (correct != null && answerVoters.option.contentEquals(correct)) {
+						if (correct != null && answerVoters?.option?.contentEquals(correct) == true) {
 							answerVoters.correct = true
 							correct = null
 						}
@@ -6581,23 +6585,25 @@ open class MessageObject {
 					}
 				}
 
-				media.results.flags = media.results.flags or 2
+				media.results?.flags = media.results!!.flags or 2
 			}
 
 			if ((results.flags and 4) != 0) {
-				media.results.total_voters = results.total_voters
-				media.results.flags = media.results.flags or 4
+				media.results?.totalVoters = results.totalVoters
+				media.results?.flags = media.results!!.flags or 4
 			}
 
 			if ((results.flags and 8) != 0) {
-				media.results.recent_voters = results.recent_voters
-				media.results.flags = media.results.flags or 8
+				media.results?.recentVoters?.clear()
+				media.results?.recentVoters?.addAll(results.recentVoters)
+				media.results?.flags = media.results!!.flags or 8
 			}
 
 			if ((results.flags and 16) != 0) {
-				media.results.solution = results.solution
-				media.results.solution_entities = results.solution_entities
-				media.results.flags = media.results.flags or 16
+				media.results?.solution = results.solution
+				media.results?.solutionEntities?.clear()
+				media.results?.solutionEntities?.addAll(results.solutionEntities)
+				media.results?.flags = media.results!!.flags or 16
 			}
 		}
 
@@ -6611,8 +6617,8 @@ open class MessageObject {
 				return null
 			}
 
-			if (messageOwner.media != null && messageOwner.media!!.extended_media is TL_messageExtendedMedia) {
-				return (messageOwner.media!!.extended_media as TL_messageExtendedMedia).media
+			if (messageOwner.media != null && messageOwner.media!!.extendedMedia is TLMessageExtendedMedia) {
+				return (messageOwner.media!!.extendedMedia as TLMessageExtendedMedia).media
 			}
 
 			return messageOwner.media
@@ -6623,7 +6629,7 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			return document != null && document.mime_type == "video/webm"
+			return document != null && document.mimeType == "video/webm"
 		}
 
 		@JvmStatic
@@ -6638,7 +6644,7 @@ open class MessageObject {
 		@JvmStatic
 		fun isGifDocument(document: TLRPC.Document?): Boolean {
 			contract {
-				returns(true) implies (document != null)
+				returns(true) implies (document != null && document is TLDocument)
 			}
 
 			return isGifDocument(document, false)
@@ -6649,7 +6655,7 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			return document?.mime_type != null && (document.mime_type == "image/gif" && !hasGroup || isNewGifDocument(document))
+			return document?.mimeType != null && (document.mimeType == "image/gif" && !hasGroup || isNewGifDocument(document))
 		}
 
 		@JvmStatic
@@ -6658,12 +6664,16 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document == null || document.thumbs.isEmpty()) {
+			if (document !is TLDocument) {
+				return false
+			}
+
+			if (document.thumbs.isEmpty()) {
 				return false
 			}
 
 			for (photoSize in document.thumbs) {
-				if (photoSize != null && photoSize !is TL_photoSizeEmpty && photoSize.location !is TL_fileLocationUnavailable) {
+				if (photoSize !is TLPhotoSizeEmpty && photoSize.location !is TLFileLocationUnavailable) {
 					return true
 				}
 			}
@@ -6677,12 +6687,16 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document?.mime_type != null) {
-				val mime = document.mime_type.lowercase()
+			if (document !is TLDocument) {
+				return false
+			}
+
+			if (document.mimeType != null) {
+				val mime = document.mimeType?.lowercase()
 
 				if (isDocumentHasThumb(document) && (mime == "image/png" || mime == "image/jpg" || mime == "image/jpeg") || (Build.VERSION.SDK_INT >= 26 && (mime == "image/heic"))) {
 					for (attribute in document.attributes) {
-						if (attribute is TL_documentAttributeImageSize) {
+						if (attribute is TLDocumentAttributeImageSize) {
 							return attribute.w < 6000 && attribute.h < 6000
 						}
 					}
@@ -6708,16 +6722,20 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null && "video/mp4" == document.mime_type) {
+			if (document !is TLDocument) {
+				return false
+			}
+
+			if ("video/mp4" == document.mimeType) {
 				var width = 0
 				var height = 0
 				var round = false
 
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeVideo) {
+					if (attribute is TLDocumentAttributeVideo) {
 						width = attribute.w
 						height = attribute.h
-						round = attribute.round_message
+						round = attribute.roundMessage
 					}
 				}
 
@@ -6737,7 +6755,7 @@ open class MessageObject {
 				var height = 0
 
 				document.attributes?.forEach {
-					if (it is TL_documentAttributeVideo) {
+					if (it is TLDocumentAttributeVideo) {
 						width = it.w
 						height = it.h
 					}
@@ -6755,16 +6773,16 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null && "video/mp4" == document.mime_type) {
+			if (document is TLDocument && "video/mp4" == document.mimeType) {
 				var width = 0
 				var height = 0
 				var animated = false
 
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeAnimated) {
+					if (attribute is TLDocumentAttributeAnimated) {
 						animated = true
 					}
-					else if (attribute is TL_documentAttributeVideo) {
+					else if (attribute is TLDocumentAttributeVideo) {
 						width = attribute.w
 						height = attribute.h
 					}
@@ -6781,11 +6799,11 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return message != null && message.messageOwner is TL_messageService && message.messageOwner?.action is TL_messageActionContactSignUp
+			return message != null && message.messageOwner is TLMessageService && message.messageOwner?.action is TLMessageActionContactSignUp
 		}
 
-		private fun updatePhotoSizeLocations(o: ArrayList<PhotoSize?>?, n: List<PhotoSize?>) {
-			if (o == null) {
+		private fun updatePhotoSizeLocations(o: ArrayList<PhotoSize?>?, n: List<PhotoSize?>?) {
+			if (o == null || n == null) {
 				return
 			}
 
@@ -6795,7 +6813,7 @@ open class MessageObject {
 				}
 
 				for (size in n) {
-					if (size == null || size is TL_photoSizeEmpty || size is TL_photoCachedSize) {
+					if (size == null || size is TLPhotoSizeEmpty || size is TLPhotoCachedSize) {
 						continue
 					}
 
@@ -6822,17 +6840,17 @@ open class MessageObject {
 					}
 
 					is Chat -> {
-						name = `object`.title
+						name = `object`.title ?: ""
 						id = "" + -`object`.id
 					}
 
-					is TL_game -> {
-						name = `object`.title
+					is TLGame -> {
+						name = `object`.title ?: ""
 						id = "game"
 					}
 
-					is TL_chatInviteExported -> {
-						name = `object`.link
+					is TLChatInviteExported -> {
+						name = `object`.link ?: ""
 						id = "invite"
 						spanObject = `object`
 					}
@@ -6861,13 +6879,13 @@ open class MessageObject {
 		fun getFileName(messageOwner: Message?): String {
 			val media = getMedia(messageOwner)
 
-			if (media is TL_messageMediaDocument) {
+			if (media is TLMessageMediaDocument) {
 				return FileLoader.getAttachFileName(getDocument(messageOwner))
 			}
-			else if (media is TL_messageMediaPhoto) {
-				val sizes = media.photo.sizes
+			else if (media is TLMessageMediaPhoto) {
+				val sizes = media.photo?.sizes
 
-				if (sizes.size > 0) {
+				if (!sizes.isNullOrEmpty()) {
 					val sizeFull = FileLoader.getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize())
 
 					if (sizeFull != null) {
@@ -6875,8 +6893,8 @@ open class MessageObject {
 					}
 				}
 			}
-			else if (media is TL_messageMediaWebPage) {
-				return FileLoader.getAttachFileName(media.webpage.document)
+			else if (media is TLMessageMediaWebPage) {
+				return FileLoader.getAttachFileName((media.webpage as? TLWebPage)?.document)
 			}
 
 			return ""
@@ -7098,10 +7116,10 @@ open class MessageObject {
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeImageSize) {
+				if (attribute is TLDocumentAttributeImageSize) {
 					return intArrayOf(attribute.w, attribute.h)
 				}
-				else if (attribute is TL_documentAttributeVideo) {
+				else if (attribute is TLDocumentAttributeVideo) {
 					return intArrayOf(attribute.w, attribute.h)
 				}
 			}
@@ -7115,10 +7133,10 @@ open class MessageObject {
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeVideo) {
+				if (attribute is TLDocumentAttributeVideo) {
 					return attribute.duration
 				}
-				else if (attribute is TL_documentAttributeAudio) {
+				else if (attribute is TLDocumentAttributeAudio) {
 					return attribute.duration
 				}
 			}
@@ -7128,10 +7146,10 @@ open class MessageObject {
 
 		@JvmStatic
 		fun getInlineResultWidthAndHeight(inlineResult: BotInlineResult): IntArray {
-			var result = getWebDocumentWidthAndHeight(inlineResult.content)
+			var result = getWebDocumentWidthAndHeight((inlineResult as? TLRPC.TLBotInlineResult)?.content)
 
 			if (result == null) {
-				result = getWebDocumentWidthAndHeight(inlineResult.thumb)
+				result = getWebDocumentWidthAndHeight((inlineResult as? TLRPC.TLBotInlineResult)?.thumb)
 
 				if (result == null) {
 					result = intArrayOf(0, 0)
@@ -7143,10 +7161,10 @@ open class MessageObject {
 
 		@JvmStatic
 		fun getInlineResultDuration(inlineResult: BotInlineResult): Int {
-			var result = getWebDocumentDuration(inlineResult.content)
+			var result = getWebDocumentDuration((inlineResult as? TLRPC.TLBotInlineResult)?.content)
 
 			if (result == 0) {
-				result = getWebDocumentDuration(inlineResult.thumb)
+				result = getWebDocumentDuration((inlineResult as? TLRPC.TLBotInlineResult)?.thumb)
 			}
 
 			return result
@@ -7177,7 +7195,7 @@ open class MessageObject {
 			}
 		}
 
-		fun replaceAnimatedEmoji(text: CharSequence?, entities: ArrayList<MessageEntity>?, fontMetricsInt: FontMetricsInt?): Spannable {
+		fun replaceAnimatedEmoji(text: CharSequence?, entities: List<MessageEntity>?, fontMetricsInt: FontMetricsInt?): Spannable {
 			val spannable = if (text is Spannable) text else SpannableString(text)
 
 			if (entities == null) {
@@ -7187,7 +7205,7 @@ open class MessageObject {
 			val emojiSpans = spannable.getSpans(0, spannable.length, EmojiSpan::class.java)
 
 			for (messageEntity in entities) {
-				if (messageEntity is TL_messageEntityCustomEmoji) {
+				if (messageEntity is TLMessageEntityCustomEmoji) {
 					for (j in emojiSpans.indices) {
 						val span = emojiSpans[j]
 
@@ -7211,12 +7229,7 @@ open class MessageObject {
 							}
 						}
 
-						val span = if (messageEntity.document != null) {
-							AnimatedEmojiSpan(messageEntity.document!!, fontMetricsInt)
-						}
-						else {
-							AnimatedEmojiSpan(messageEntity.documentId, fontMetricsInt)
-						}
+						val span = AnimatedEmojiSpan(messageEntity.documentId, fontMetricsInt)
 
 						spannable.setSpan(span, messageEntity.offset, messageEntity.offset + messageEntity.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 					}
@@ -7228,7 +7241,7 @@ open class MessageObject {
 
 		@JvmStatic
 		@JvmOverloads
-		fun addEntitiesToText(text: CharSequence?, entities: ArrayList<MessageEntity>, out: Boolean, usernames: Boolean, photoViewer: Boolean, useManualParse: Boolean, messageOwnerId: Long = 0L): Boolean {
+		fun addEntitiesToText(text: CharSequence?, entities: List<MessageEntity>, out: Boolean, usernames: Boolean, photoViewer: Boolean, useManualParse: Boolean, messageOwnerId: Long = 0L): Boolean {
 			if (text !is Spannable) {
 				return false
 			}
@@ -7279,7 +7292,7 @@ open class MessageObject {
 					entity.length = text.length - entity.offset
 				}
 
-				if (!useManualParse || entity is TL_messageEntityBold || entity is TL_messageEntityItalic || entity is TL_messageEntityStrike || entity is TL_messageEntityUnderline || entity is TL_messageEntityBlockquote || entity is TL_messageEntityCode || entity is TL_messageEntityPre || entity is TL_messageEntityMentionName || entity is TL_inputMessageEntityMentionName || entity is TL_messageEntityTextUrl || entity is TL_messageEntitySpoiler || entity is TL_messageEntityCustomEmoji) {
+				if (!useManualParse || entity is TLMessageEntityBold || entity is TLMessageEntityItalic || entity is TLMessageEntityStrike || entity is TLMessageEntityUnderline || entity is TLMessageEntityBlockquote || entity is TLMessageEntityCode || entity is TLMessageEntityPre || entity is TLMessageEntityMentionName || entity is TLInputMessageEntityMentionName || entity is TLMessageEntityTextUrl || entity is TLMessageEntitySpoiler || entity is TLMessageEntityCustomEmoji) {
 					if (spans != null && spans.isNotEmpty()) {
 						for (b in spans.indices) {
 							if (spans[b] == null) {
@@ -7297,7 +7310,7 @@ open class MessageObject {
 					}
 				}
 
-				if (entity is TL_messageEntityCustomEmoji) {
+				if (entity is TLMessageEntityCustomEmoji) {
 					continue
 				}
 
@@ -7305,28 +7318,28 @@ open class MessageObject {
 				newRun.start = entity.offset
 				newRun.end = newRun.start + entity.length
 
-				if (entity is TL_messageEntitySpoiler) {
+				if (entity is TLMessageEntitySpoiler) {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_SPOILER
 				}
-				else if (entity is TL_messageEntityStrike) {
+				else if (entity is TLMessageEntityStrike) {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_STRIKE
 				}
-				else if (entity is TL_messageEntityUnderline) {
+				else if (entity is TLMessageEntityUnderline) {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_UNDERLINE
 				}
-				else if (entity is TL_messageEntityBlockquote) {
+				else if (entity is TLMessageEntityBlockquote) {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_QUOTE
 				}
-				else if (entity is TL_messageEntityBold) {
+				else if (entity is TLMessageEntityBold) {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_BOLD
 				}
-				else if (entity is TL_messageEntityItalic) {
+				else if (entity is TLMessageEntityItalic) {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_ITALIC
 				}
-				else if (entity is TL_messageEntityCode || entity is TL_messageEntityPre) {
+				else if (entity is TLMessageEntityCode || entity is TLMessageEntityPre) {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_MONO
 				}
-				else if (entity is TL_messageEntityMentionName) {
+				else if (entity is TLMessageEntityMentionName) {
 					if (!usernames) {
 						continue
 					}
@@ -7334,7 +7347,7 @@ open class MessageObject {
 					newRun.styleFlags = TextStyleSpan.FLAG_STYLE_MENTION
 					newRun.urlEntity = entity
 				}
-				else if (entity is TL_inputMessageEntityMentionName) {
+				else if (entity is TLInputMessageEntityMentionName) {
 					if (!usernames) {
 						continue
 					}
@@ -7343,15 +7356,15 @@ open class MessageObject {
 					newRun.urlEntity = entity
 				}
 				else {
-					if (useManualParse && entity !is TL_messageEntityTextUrl) {
+					if (useManualParse && entity !is TLMessageEntityTextUrl) {
 						continue
 					}
 
-					if ((entity is TL_messageEntityUrl || entity is TL_messageEntityTextUrl) && Browser.isPassportUrl(entity.url)) {
+					if (entity is TLMessageEntityTextUrl && Browser.isPassportUrl(entity.url)) {
 						continue
 					}
 
-					if (entity is TL_messageEntityMention && !usernames) {
+					if (entity is TLMessageEntityMention && !usernames) {
 						continue
 					}
 
@@ -7447,36 +7460,35 @@ open class MessageObject {
 
 			for (run in runs) {
 				val runUrlEntity = run.urlEntity
-
 				var setRun = false
 				val url = if (runUrlEntity != null) TextUtils.substring(text, runUrlEntity.offset, runUrlEntity.offset + runUrlEntity.length) else null
 
-				if (runUrlEntity is TL_messageEntityBotCommand) {
+				if (runUrlEntity is TLMessageEntityBotCommand) {
 					text.setSpan(URLSpanBotCommand(url, t.toInt(), run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
-				else if (runUrlEntity is TL_messageEntityHashtag || runUrlEntity is TL_messageEntityMention || runUrlEntity is TL_messageEntityCashtag) {
+				else if (runUrlEntity is TLMessageEntityHashtag || runUrlEntity is TLMessageEntityMention || runUrlEntity is TLMessageEntityCashtag) {
 					text.setSpan(URLSpanNoUnderline(url, run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
-				else if (runUrlEntity is TL_messageEntityEmail) {
+				else if (runUrlEntity is TLMessageEntityEmail) {
 					text.setSpan(URLSpanReplacement("mailto:$url", run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
-				else if (runUrlEntity is TL_messageEntityUrl) {
+				else if (runUrlEntity is TLMessageEntityUrl) {
 					hasUrls = true
 
 					val lowerCase = url?.lowercase()
 
 					if (lowerCase?.contains("://") != true) {
-						text.setSpan(URLSpanBrowser("http://$url", run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+						text.setSpan(URLSpanNoUnderlineBrowser("http://$url", run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 					}
 					else {
-						text.setSpan(URLSpanBrowser(url, run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+						text.setSpan(URLSpanNoUnderlineBrowser(url, run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 					}
 				}
-				else if (runUrlEntity is TL_messageEntityBankCard) {
+				else if (runUrlEntity is TLMessageEntityBankCard) {
 					hasUrls = true
 					text.setSpan(URLSpanNoUnderline("card:$url", run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
-				else if (runUrlEntity is TL_messageEntityPhone) {
+				else if (runUrlEntity is TLMessageEntityPhone) {
 					hasUrls = true
 
 					var tel = PhoneFormat.stripExceptNumbers(url)
@@ -7487,14 +7499,14 @@ open class MessageObject {
 
 					text.setSpan(URLSpanBrowser("tel:$tel", run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
-				else if (runUrlEntity is TL_messageEntityTextUrl) {
+				else if (runUrlEntity is TLMessageEntityTextUrl) {
 					text.setSpan(URLSpanReplacement(runUrlEntity.url, run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
-				else if (runUrlEntity is TL_messageEntityMentionName) {
+				else if (runUrlEntity is TLMessageEntityMentionName) {
 					text.setSpan(URLSpanUserMention("" + runUrlEntity.userId, t.toInt(), run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
-				else if (runUrlEntity is TL_inputMessageEntityMentionName) {
-					text.setSpan(URLSpanUserMention("" + runUrlEntity.userId?.user_id, t.toInt(), run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+				else if (runUrlEntity is TLInputMessageEntityMentionName) {
+					text.setSpan(URLSpanUserMention("" + runUrlEntity.userId?.userId, t.toInt(), run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
 				else if ((run.styleFlags and TextStyleSpan.FLAG_STYLE_MONO) != 0) {
 					text.setSpan(URLSpanMono(text, run.start, run.end, t, run), run.start, run.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -7524,7 +7536,7 @@ open class MessageObject {
 
 		@JvmStatic
 		fun getFromChatId(message: Message?): Long {
-			return getPeerId(message?.from_id)
+			return getPeerId(message?.fromId)
 		}
 
 		@JvmStatic
@@ -7534,9 +7546,9 @@ open class MessageObject {
 			}
 
 			return when (peer) {
-				is TL_peerChat -> -peer.chat_id
-				is TL_peerChannel -> -peer.channel_id
-				else -> peer.user_id
+				is TLPeerChat -> -peer.chatId
+				is TLPeerChannel -> -peer.channelId
+				else -> peer.userId
 			}
 		}
 
@@ -7552,7 +7564,7 @@ open class MessageObject {
 				flags = flags or 1
 			}
 
-			if (!message.media_unread) {
+			if (!message.mediaUnread) {
 				flags = flags or 2
 			}
 
@@ -7562,16 +7574,16 @@ open class MessageObject {
 		@JvmStatic
 		fun getMessageSize(message: Message?): Long {
 			val document = when (val media = getMedia(message)) {
-				is TL_messageMediaWebPage -> {
-					media.webpage.document
+				is TLMessageMediaWebPage -> {
+					(media.webpage as? TLWebPage)?.document
 				}
 
-				is TL_messageMediaGame -> {
-					media.game.document
+				is TLMessageMediaGame -> {
+					media.game?.document
 				}
 
 				else -> {
-					media?.document
+					(media as? TLMessageMediaDocument)?.document
 				}
 			}
 
@@ -7579,22 +7591,21 @@ open class MessageObject {
 		}
 
 		@JvmStatic
-		fun fixMessagePeer(messages: ArrayList<Message>?, channelId: Long) {
+		fun fixMessagePeer(messages: List<Message>?, channelId: Long) {
 			if (messages.isNullOrEmpty() || channelId == 0L) {
 				return
 			}
 
 			for (message in messages) {
-				if (message is TL_messageEmpty) {
-					message.peer_id = TL_peerChannel()
-					message.peer_id?.channel_id = channelId
+				if (message is TLMessageEmpty) {
+					message.peerId = TLPeerChannel().also { it.channelId = channelId }
 				}
 			}
 		}
 
 		@JvmStatic
 		fun getChannelId(message: Message?): Long {
-			return message?.peer_id?.channel_id ?: 0L
+			return message?.peerId?.channelId ?: 0L
 		}
 
 		@JvmStatic
@@ -7603,12 +7614,12 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return if (message is TL_message_secret) {
-				(getMedia(message) is TL_messageMediaPhoto || isVideoMessage(message)) && message.ttl > 0 && message.ttl <= 60
-			}
-			else {
-				(getMedia(message) is TL_messageMediaPhoto || getMedia(message) is TL_messageMediaDocument) && getMedia(message)?.ttl_seconds != 0
-			}
+//			return if (message is TLMessageSecret) {
+//				(getMedia(message) is TLMessageMediaPhoto || isVideoMessage(message)) && message.ttl > 0 && message.ttl <= 60
+//			}
+//			else {
+			return (getMedia(message) is TLMessageMediaPhoto || getMedia(message) is TLMessageMediaDocument) && getMedia(message)?.ttlSeconds != 0
+//			}
 		}
 
 		fun isSecretPhotoOrVideo(message: Message?): Boolean {
@@ -7616,11 +7627,12 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			if (message is TL_message_secret) {
-				return (getMedia(message) is TL_messageMediaPhoto || isRoundVideoMessage(message) || isVideoMessage(message)) && (message.ttl > 0) && (message.ttl <= 60)
-			}
-			else if (message is TL_message) {
-				return (getMedia(message) is TL_messageMediaPhoto || getMedia(message) is TL_messageMediaDocument) && getMedia(message)!!.ttl_seconds != 0
+//			if (message is TLMessageSecret) {
+//				return (getMedia(message) is TLMessageMediaPhoto || isRoundVideoMessage(message) || isVideoMessage(message)) && (message.ttl > 0) && (message.ttl <= 60)
+//			}
+//			else
+			if (message is TLMessage) {
+				return (getMedia(message) is TLMessageMediaPhoto || getMedia(message) is TLMessageMediaDocument) && getMedia(message)!!.ttlSeconds != 0
 			}
 
 			return false
@@ -7632,11 +7644,12 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			if (message is TL_message_secret) {
-				return (getMedia(message) is TL_messageMediaPhoto || isRoundVideoMessage(message) || isVideoMessage(message)) && getMedia(message)?.ttl_seconds != 0
-			}
-			else if (message is TL_message) {
-				return (getMedia(message) is TL_messageMediaPhoto || getMedia(message) is TL_messageMediaDocument) && getMedia(message)?.ttl_seconds != 0
+//			if (message is TLMessage_secret) {
+//				return (getMedia(message) is TLMessageMediaPhoto || isRoundVideoMessage(message) || isVideoMessage(message)) && getMedia(message)?.ttlSeconds != 0
+//			}
+//			else
+			if (message is TLMessage) {
+				return (getMedia(message) is TLMessageMediaPhoto || getMedia(message) is TLMessageMediaDocument) && getMedia(message)?.ttlSeconds != 0
 			}
 
 			return false
@@ -7645,7 +7658,7 @@ open class MessageObject {
 		@JvmStatic
 		fun setUnreadFlags(message: Message, flag: Int) {
 			message.unread = (flag and 1) == 0
-			message.media_unread = (flag and 2) == 0
+			message.mediaUnread = (flag and 2) == 0
 		}
 
 		@JvmStatic
@@ -7662,7 +7675,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return message?.media_unread == true
+			return message?.mediaUnread == true
 		}
 
 		@JvmStatic
@@ -7680,22 +7693,22 @@ open class MessageObject {
 				return 0L
 			}
 
-			if (message.dialog_id == 0L && message.peer_id != null) {
-				if (message.peer_id!!.chat_id != 0L) {
-					message.dialog_id = -message.peer_id!!.chat_id
+			if (message.dialogId == 0L && message.peerId != null) {
+				if (message.peerId!!.chatId != 0L) {
+					message.dialogId = -message.peerId!!.chatId
 				}
-				else if (message.peer_id!!.channel_id != 0L) {
-					message.dialog_id = -message.peer_id!!.channel_id
+				else if (message.peerId!!.channelId != 0L) {
+					message.dialogId = -message.peerId!!.channelId
 				}
-				else if (message.from_id == null || isOut(message)) {
-					message.dialog_id = message.peer_id!!.user_id
+				else if (message.fromId == null || isOut(message)) {
+					message.dialogId = message.peerId!!.userId
 				}
 				else {
-					message.dialog_id = message.from_id!!.user_id
+					message.dialogId = message.fromId!!.userId
 				}
 			}
 
-			return message.dialog_id
+			return message.dialogId
 		}
 
 		@JvmStatic
@@ -7704,7 +7717,7 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			return "video/webm" == document?.mime_type
+			return "video/webm" == document?.mimeType
 		}
 
 		@JvmStatic
@@ -7722,10 +7735,10 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null) {
+			if (document is TLDocument) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeSticker) {
-						return "image/webp" == document.mime_type || "video/webm" == document.mime_type
+					if (attribute is TLDocumentAttributeSticker) {
+						return "image/webp" == document.mimeType || "video/webm" == document.mimeType
 					}
 				}
 			}
@@ -7739,10 +7752,10 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null) {
+			if (document is TLDocument) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeSticker || attribute is TL_documentAttributeCustomEmoji) {
-						return "video/webm" == document.mime_type
+					if (attribute is TLDocumentAttributeSticker || attribute is TLDocumentAttributeCustomEmoji) {
+						return "video/webm" == document.mimeType
 					}
 				}
 			}
@@ -7756,9 +7769,9 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null) {
+			if (document is TLDocument) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeSticker && attribute.stickerset != null && attribute.stickerset !is TL_inputStickerSetEmpty) {
+					if (attribute is TLDocumentAttributeSticker && attribute.stickerset != null && attribute.stickerset !is TLInputStickerSetEmpty) {
 						return true
 					}
 				}
@@ -7773,16 +7786,16 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null && ("application/x-tgsticker" == document.mime_type && document.thumbs.isNotEmpty() || "application/x-tgsdice" == document.mime_type)) {
+			if (document is TLDocument && ("application/x-tgsticker" == document.mimeType && document.thumbs.isNotEmpty() || "application/x-tgsdice" == document.mimeType)) {
 				if (allowWithoutSet) {
 					return true
 				}
 
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeSticker) {
-						return attribute.stickerset is TL_inputStickerSetShortName
+					if (attribute is TLDocumentAttributeSticker) {
+						return attribute.stickerset is TLInputStickerSetShortName
 					}
-					else if (attribute is TL_documentAttributeCustomEmoji) {
+					else if (attribute is TLDocumentAttributeCustomEmoji) {
 						return true
 					}
 				}
@@ -7806,9 +7819,9 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null) {
+			if (document is TLDocument) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeSticker && attribute.mask) {
+					if (attribute is TLDocumentAttributeSticker && attribute.mask) {
 						return true
 					}
 				}
@@ -7823,9 +7836,9 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null) {
+			if (document is TLDocument) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeAudio) {
+					if (attribute is TLDocumentAttributeAudio) {
 						return attribute.voice
 					}
 				}
@@ -7864,15 +7877,15 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null) {
+			if (document is TLDocument) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeAudio) {
+					if (attribute is TLDocumentAttributeAudio) {
 						return !attribute.voice
 					}
 				}
 
-				if (!document.mime_type.isNullOrEmpty()) {
-					val mime = document.mime_type.lowercase()
+				if (!document.mimeType.isNullOrEmpty()) {
+					val mime = document.mimeType?.lowercase()
 
 					return if (mime == "audio/flac" || mime == "audio/ogg" || mime == "audio/opus" || mime == "audio/x-opus+ogg") {
 						true
@@ -7887,12 +7900,12 @@ open class MessageObject {
 		}
 
 		@JvmStatic
-		fun getDocumentVideoThumb(document: TLRPC.Document?): VideoSize? {
+		fun getDocumentVideoThumb(document: TLRPC.Document?): TLRPC.VideoSize? {
 			contract {
 				returnsNotNull() implies (document != null)
 			}
 
-			return document?.video_thumbs?.firstOrNull()
+			return (document as? TLDocument)?.videoThumbs?.firstOrNull()
 		}
 
 		@JvmStatic
@@ -7901,7 +7914,7 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document == null) {
+			if (document !is TLDocument) {
 				return false
 			}
 
@@ -7911,8 +7924,8 @@ open class MessageObject {
 			var height = 0
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeVideo) {
-					if (attribute.round_message) {
+				if (attribute is TLDocumentAttributeVideo) {
+					if (attribute.roundMessage) {
 						return false
 					}
 
@@ -7920,7 +7933,7 @@ open class MessageObject {
 					width = attribute.w
 					height = attribute.h
 				}
-				else if (attribute is TL_documentAttributeAnimated) {
+				else if (attribute is TLDocumentAttributeAnimated) {
 					isAnimated = true
 				}
 			}
@@ -7929,7 +7942,7 @@ open class MessageObject {
 				isAnimated = false
 			}
 
-			if (SharedConfig.streamMkv && !isVideo && "video/x-matroska" == document.mime_type) {
+			if (SharedConfig.streamMkv && !isVideo && "video/x-matroska" == document.mimeType) {
 				isVideo = true
 			}
 
@@ -7944,14 +7957,14 @@ open class MessageObject {
 
 			val media = getMedia(message)
 
-			if (media is TL_messageMediaWebPage) {
-				return media.webpage.document
+			if (media is TLMessageMediaWebPage) {
+				return (media.webpage as? TLWebPage)?.document
 			}
-			else if (media is TL_messageMediaGame) {
-				return media.game.document
+			else if (media is TLMessageMediaGame) {
+				return media.game?.document
 			}
 
-			return media?.document
+			return (media as? TLMessageMediaDocument)?.document
 		}
 
 		@JvmStatic
@@ -7962,11 +7975,11 @@ open class MessageObject {
 
 			val media = getMedia(message)
 
-			if (media is TL_messageMediaWebPage) {
-				return media.webpage.photo
+			if (media is TLMessageMediaWebPage) {
+				return (media.webpage as? TLWebPage)?.photo
 			}
 
-			return media?.photo
+			return (media as? TLMessageMediaPhoto)?.photo
 		}
 
 		@JvmStatic
@@ -7975,7 +7988,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return isStickerDocument(getMedia(message)?.document)
+			return isStickerDocument(getDocument(message))
 		}
 
 		@JvmStatic
@@ -7984,15 +7997,13 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			val isSecretChat = DialogObject.isEncryptedDialog(message?.dialog_id)
+			val isSecretChat = DialogObject.isEncryptedDialog(message?.dialogId)
 
 			if (isSecretChat && message?.stickerVerified != 1) {
 				return false
 			}
 
-			val media = getMedia(message)
-
-			return isAnimatedStickerDocument(media?.document, !isSecretChat || message?.out == true)
+			return isAnimatedStickerDocument(getDocument(message), !isSecretChat || message?.out == true)
 		}
 
 		fun isLocationMessage(message: Message?): Boolean {
@@ -8002,7 +8013,7 @@ open class MessageObject {
 
 			val media = getMedia(message)
 
-			return media is TL_messageMediaGeo || media is TL_messageMediaGeoLive || media is TL_messageMediaVenue
+			return media is TLMessageMediaGeo || media is TLMessageMediaGeoLive || media is TLMessageMediaVenue
 		}
 
 		fun isMaskMessage(message: Message?): Boolean {
@@ -8010,7 +8021,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return isMaskDocument(getMedia(message)?.document)
+			return isMaskDocument(getDocument(message))
 		}
 
 		@JvmStatic
@@ -8019,13 +8030,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			val media = getMedia(message)
-
-			if (media is TL_messageMediaWebPage) {
-				return isMusicDocument(media.webpage.document)
-			}
-
-			return isMusicDocument(media?.document)
+			return isMusicDocument(getDocument(message))
 		}
 
 		@JvmStatic
@@ -8036,11 +8041,11 @@ open class MessageObject {
 
 			val media = getMedia(message)
 
-			if (media is TL_messageMediaWebPage) {
-				return isGifDocument(media.webpage.document)
+			if (media is TLMessageMediaWebPage) {
+				return isGifDocument((media.webpage as? TLWebPage)?.document)
 			}
 
-			return media != null && isGifDocument(media.document, message?.realGroupId != 0L)
+			return media != null && isGifDocument(getDocument(message), (message as? TLMessage)?.groupedId != 0L)
 		}
 
 		@JvmStatic
@@ -8049,13 +8054,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			val media = getMedia(message)
-
-			if (media is TL_messageMediaWebPage) {
-				return isRoundVideoDocument(media.webpage.document)
-			}
-
-			return isRoundVideoDocument(media?.document)
+			return isRoundVideoDocument(getDocument(message))
 		}
 
 		@JvmStatic
@@ -8066,11 +8065,11 @@ open class MessageObject {
 
 			val media = getMedia(message)
 
-			if (media is TL_messageMediaWebPage) {
-				return media.webpage.photo is TL_photo && media.webpage.document !is TL_document
+			if (media is TLMessageMediaWebPage) {
+				return (media.webpage as? TLWebPage)?.photo is TLPhoto && (media.webpage as? TLWebPage)?.document !is TLDocument
 			}
 
-			return media is TL_messageMediaPhoto
+			return media is TLMessageMediaPhoto
 		}
 
 		@JvmStatic
@@ -8079,13 +8078,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			val media = getMedia(message)
-
-			if (media is TL_messageMediaWebPage) {
-				return isVoiceDocument(media.webpage.document)
-			}
-
-			return isVoiceDocument(media?.document)
+			return isVoiceDocument(getDocument(message))
 		}
 
 		@JvmStatic
@@ -8094,13 +8087,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			val media = getMedia(message)
-
-			if (media is TL_messageMediaWebPage) {
-				return isNewGifDocument(media.webpage.document)
-			}
-
-			return isNewGifDocument(media?.document)
+			return isNewGifDocument(getDocument(message))
 		}
 
 		fun isLiveLocationMessage(message: Message?): Boolean {
@@ -8108,7 +8095,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return getMedia(message) is TL_messageMediaGeoLive
+			return getMedia(message) is TLMessageMediaGeoLive
 		}
 
 		@JvmStatic
@@ -8117,17 +8104,13 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			val media = getMedia(message)
+			val document = getDocument(message)
 
-			if (isVideoSticker(media?.document)) {
+			if (isVideoSticker(document)) {
 				return false
 			}
 
-			if (media is TL_messageMediaWebPage) {
-				return isVideoDocument(media.webpage.document)
-			}
-
-			return isVideoDocument(media?.document)
+			return isVideoDocument(document)
 		}
 
 		@JvmStatic
@@ -8136,7 +8119,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return getMedia(message) is TL_messageMediaGame
+			return getMedia(message) is TLMessageMediaGame
 		}
 
 		fun isInvoiceMessage(message: Message?): Boolean {
@@ -8144,7 +8127,7 @@ open class MessageObject {
 				returns(true) implies (message != null)
 			}
 
-			return getMedia(message) is TL_messageMediaInvoice
+			return getMedia(message) is TLMessageMediaInvoice
 		}
 
 		@JvmStatic
@@ -8163,13 +8146,13 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document == null) {
+			if (document !is TLDocument) {
 				return null
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeSticker || attribute is TL_documentAttributeCustomEmoji) {
-					if (attribute.stickerset is TL_inputStickerSetEmpty) {
+				if (attribute is TLDocumentAttributeSticker || attribute is TLDocumentAttributeCustomEmoji) {
+					if (attribute.stickerset is TLInputStickerSetEmpty) {
 						return null
 					}
 
@@ -8183,12 +8166,12 @@ open class MessageObject {
 		@JvmStatic
 		@JvmOverloads
 		fun findAnimatedEmojiEmoticon(document: TLRPC.Document?, fallback: String? = "\uD83D\uDE00"): String? {
-			if (document == null) {
+			if (document !is TLDocument) {
 				return fallback
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeCustomEmoji || attribute is TL_documentAttributeSticker) {
+				if (attribute is TLDocumentAttributeCustomEmoji || attribute is TLDocumentAttributeSticker) {
 					return attribute.alt
 				}
 			}
@@ -8201,12 +8184,12 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document == null) {
+			if (document !is TLDocument) {
 				return false
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeCustomEmoji) {
+				if (attribute is TLDocumentAttributeCustomEmoji) {
 					return true
 				}
 			}
@@ -8220,12 +8203,12 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document == null) {
+			if (document !is TLDocument) {
 				return false
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeCustomEmoji) {
+				if (attribute is TLDocumentAttributeCustomEmoji) {
 					return attribute.free
 				}
 			}
@@ -8234,12 +8217,12 @@ open class MessageObject {
 		}
 
 		@JvmStatic
-		fun isPremiumEmojiPack(set: TL_messages_stickerSet?): Boolean {
+		fun isPremiumEmojiPack(set: TLRPC.TLMessagesStickerSet?): Boolean {
 			contract {
 				returns(true) implies (set != null)
 			}
 
-			if (set?.set != null && !set.set.emojis) {
+			if (set?.set != null && set.set?.emojis != true) {
 				return false
 			}
 
@@ -8260,11 +8243,11 @@ open class MessageObject {
 				returns(true) implies (covered != null)
 			}
 
-			if (covered?.set != null && !covered.set.emojis) {
+			if (covered?.set != null && covered.set?.emojis != true) {
 				return false
 			}
 
-			val documents = if (covered is TL_stickerSetFullCovered) covered.documents else covered?.covers
+			val documents = if (covered is TLStickerSetFullCovered) covered.documents else (covered as? TLRPC.TLStickerSetMultiCovered)?.covers
 
 			if (covered != null && documents != null) {
 				for (document in documents) {
@@ -8278,17 +8261,18 @@ open class MessageObject {
 		}
 
 		fun getStickerSetId(document: TLRPC.Document?): Long {
-			if (document == null) {
+			if (document !is TLDocument) {
 				return -1
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeSticker) {
-					if (attribute.stickerset is TL_inputStickerSetEmpty) {
+				if (attribute is TLDocumentAttributeSticker) {
+					if (attribute.stickerset is TLInputStickerSetEmpty) {
 						return -1
 					}
-
-					return attribute.stickerset.id
+					else if (attribute.stickerset is TLInputStickerSetID) {
+						return (attribute.stickerset as TLInputStickerSetID).id
+					}
 				}
 			}
 
@@ -8301,17 +8285,18 @@ open class MessageObject {
 				returnsNotNull() implies (document != null)
 			}
 
-			if (document == null) {
+			if (document !is TLDocument) {
 				return null
 			}
 
 			for (attribute in document.attributes) {
-				if (attribute is TL_documentAttributeSticker) {
-					if (attribute.stickerset is TL_inputStickerSetEmpty) {
+				if (attribute is TLDocumentAttributeSticker) {
+					if (attribute.stickerset is TLInputStickerSetEmpty) {
 						return null
 					}
-
-					return attribute.stickerset.short_name
+					else if (attribute.stickerset is TLInputStickerSetShortName) {
+						return (attribute.stickerset as TLInputStickerSetShortName).shortName
+					}
 				}
 			}
 
@@ -8323,9 +8308,9 @@ open class MessageObject {
 				returns(true) implies (document != null)
 			}
 
-			if (document != null) {
+			if (document is TLDocument) {
 				for (attribute in document.attributes) {
-					if (attribute is TL_documentAttributeHasStickers) {
+					if (attribute is TLDocumentAttributeHasStickers) {
 						return true
 					}
 				}
@@ -8343,48 +8328,50 @@ open class MessageObject {
 				return false
 			}
 
-			return (message.flags and TLRPC.MESSAGE_FLAG_FWD) != 0 && message.fwd_from != null
+			return (message.flags and TLRPC.MESSAGE_FLAG_FWD) != 0 && message.fwdFrom != null
 		}
 
 		fun isMediaEmpty(message: Message?): Boolean {
-			return message == null || getMedia(message) == null || getMedia(message) is TL_messageMediaEmpty || getMedia(message) is TL_messageMediaWebPage
+			return message == null || getMedia(message) == null || getMedia(message) is TLMessageMediaEmpty || getMedia(message) is TLMessageMediaWebPage
 		}
 
 		fun isMediaEmptyWebpage(message: Message?): Boolean {
-			return message == null || getMedia(message) == null || getMedia(message) is TL_messageMediaEmpty
+			return message == null || getMedia(message) == null || getMedia(message) is TLMessageMediaEmpty
 		}
 
 		fun canEditMessageAnytime(currentAccount: Int, message: Message?, chat: Chat?): Boolean {
 			@Suppress("NAME_SHADOWING") var chat = chat
 
-			if (message?.peer_id == null || getMedia(message) != null && (isRoundVideoDocument(getMedia(message)?.document) || isStickerDocument(getMedia(message)?.document) || isAnimatedStickerDocument(getMedia(message)?.document, true)) || message.action != null && message.action !is TL_messageActionEmpty || isForwardedMessage(message) || message.via_bot_id != 0L || message.id < 0) {
+			val document = getDocument(message)
+
+			if (message?.peerId == null || getMedia(message) != null && (isRoundVideoDocument(document) || isStickerDocument(document) || isAnimatedStickerDocument(document, true)) || message.action != null && message.action !is TLMessageActionEmpty || isForwardedMessage(message) || (message as? TLMessage)?.viaBotId != 0L || message.id < 0) {
 				return false
 			}
 
-			if (message.from_id is TL_peerUser && message.from_id?.user_id == message.peer_id?.user_id && message.from_id?.user_id == UserConfig.getInstance(currentAccount).getClientUserId() && !isLiveLocationMessage(message)) {
+			if (message.fromId is TLPeerUser && message.fromId?.userId == message.peerId?.userId && message.fromId?.userId == UserConfig.getInstance(currentAccount).getClientUserId() && !isLiveLocationMessage(message)) {
 				return true
 			}
 
-			if (chat == null && message.peer_id?.channel_id != 0L) {
-				chat = MessagesController.getInstance(UserConfig.selectedAccount).getChat(message.peer_id?.channel_id)
+			if (chat == null && message.peerId?.channelId != 0L) {
+				chat = MessagesController.getInstance(UserConfig.selectedAccount).getChat(message.peerId?.channelId)
 
 				if (chat == null) {
 					return false
 				}
 			}
 
-			if (ChatObject.isChannel(chat) && !chat.megagroup && (chat.creator || chat.admin_rights != null && chat.admin_rights.edit_messages)) {
+			if (ChatObject.isChannel(chat) && !chat.megagroup && (chat.creator || chat.adminRights?.editMessages == true)) {
 				return true
 			}
 
-			return message.out && chat != null && chat.megagroup && (chat.creator || chat.admin_rights != null && chat.admin_rights.pin_messages || chat.default_banned_rights != null && !chat.default_banned_rights.pin_messages)
+			return message.out && chat != null && chat.megagroup && (chat.creator || chat.adminRights?.pinMessages == true || chat.defaultBannedRights?.pinMessages == false)
 		}
 
 		fun canEditMessageScheduleTime(currentAccount: Int, message: Message?, chat: Chat?): Boolean {
 			@Suppress("NAME_SHADOWING") var chat = chat
 
-			if (chat == null && message?.peer_id?.channel_id != 0L) {
-				chat = MessagesController.getInstance(currentAccount).getChat(message?.peer_id?.channel_id)
+			if (chat == null && message?.peerId?.channelId != 0L) {
+				chat = MessagesController.getInstance(currentAccount).getChat(message?.peerId?.channelId)
 
 				if (chat == null) {
 					return false
@@ -8395,49 +8382,47 @@ open class MessageObject {
 				return true
 			}
 
-			return chat.admin_rights != null && (chat.admin_rights.edit_messages || message?.out == true)
+			return chat.adminRights != null && (chat.adminRights?.editMessages == true || message?.out == true)
 		}
 
 		fun canEditMessage(currentAccount: Int, message: Message?, chat: Chat?, scheduled: Boolean): Boolean {
 			@Suppress("NAME_SHADOWING") var chat = chat
 
-			if (message != null && (message.is_media_sale || message.is_media_sale_info || message.mediaHash != null)) {
-				return false
-			}
-
 			if (scheduled && message!!.date < ConnectionsManager.getInstance(currentAccount).currentTime - 60) {
 				return false
 			}
 
-			if (chat != null && (chat.left || chat.kicked) && (!chat.megagroup || !chat.has_link)) {
+			if (chat != null && chat.left && (!chat.megagroup || !chat.hasLink)) {
 				return false
 			}
 
-			if (message?.peer_id == null || getMedia(message) != null && (isRoundVideoDocument(getMedia(message)?.document) || isStickerDocument(getMedia(message)?.document) || isAnimatedStickerDocument(getMedia(message)?.document, true) || isLocationMessage(message)) || message.action != null && message.action !is TL_messageActionEmpty || isForwardedMessage(message) || message.via_bot_id != 0L || message.id < 0) {
+			val document = getDocument(message)
+
+			if (message?.peerId == null || getMedia(message) != null && (isRoundVideoDocument(document) || isStickerDocument(document) || isAnimatedStickerDocument(document, true) || isLocationMessage(message)) || message.action != null && message.action !is TLMessageActionEmpty || isForwardedMessage(message) || (message as? TLMessage)?.viaBotId != 0L || message.id < 0) {
 				return false
 			}
 
-			if (message.from_id is TL_peerUser && message.from_id?.user_id == message.peer_id?.user_id && message.from_id?.user_id == UserConfig.getInstance(currentAccount).getClientUserId() && !isLiveLocationMessage(message) && getMedia(message) !is TL_messageMediaContact) {
+			if (message.fromId is TLPeerUser && message.fromId?.userId == message.peerId?.userId && message.fromId?.userId == UserConfig.getInstance(currentAccount).getClientUserId() && !isLiveLocationMessage(message) && getMedia(message) !is TLMessageMediaContact) {
 				return true
 			}
 
-			if (chat == null && message.peer_id?.channel_id != 0L) {
-				chat = MessagesController.getInstance(currentAccount).getChat(message.peer_id?.channel_id)
+			if (chat == null && message.peerId?.channelId != 0L) {
+				chat = MessagesController.getInstance(currentAccount).getChat(message.peerId?.channelId)
 
 				if (chat == null) {
 					return false
 				}
 			}
 
-			if (getMedia(message) != null && getMedia(message) !is TL_messageMediaEmpty && getMedia(message) !is TL_messageMediaPhoto && getMedia(message) !is TL_messageMediaDocument && getMedia(message) !is TL_messageMediaWebPage) {
+			if (getMedia(message) != null && getMedia(message) !is TLMessageMediaEmpty && getMedia(message) !is TLMessageMediaPhoto && getMedia(message) !is TLMessageMediaDocument && getMedia(message) !is TLMessageMediaWebPage) {
 				return false
 			}
 
-			if (ChatObject.isChannel(chat) && !chat.megagroup && (chat.creator || chat.admin_rights != null && chat.admin_rights.edit_messages)) {
+			if (ChatObject.isChannel(chat) && !chat.megagroup && (chat.creator || chat.adminRights?.editMessages == true)) {
 				return true
 			}
 
-			if (message.out && chat != null && chat.megagroup && (chat.creator || chat.admin_rights != null && chat.admin_rights.pin_messages || chat.default_banned_rights != null && !chat.default_banned_rights.pin_messages)) {
+			if (message.out && chat != null && chat.megagroup && (chat.creator || chat.adminRights?.pinMessages == true || chat.defaultBannedRights?.pinMessages == false)) {
 				return true
 			}
 
@@ -8445,12 +8430,12 @@ open class MessageObject {
 				return false
 			}
 
-			if (message.peer_id?.channel_id == 0L) {
-				return (message.out || message.from_id is TL_peerUser && message.from_id?.user_id == UserConfig.getInstance(currentAccount).getClientUserId()) && (getMedia(message) is TL_messageMediaPhoto || getMedia(message) is TL_messageMediaDocument && !isStickerMessage(message) && !isAnimatedStickerMessage(message) || getMedia(message) is TL_messageMediaEmpty || getMedia(message) is TL_messageMediaWebPage || getMedia(message) == null)
+			if (message.peerId?.channelId == 0L) {
+				return (message.out || message.fromId is TLPeerUser && message.fromId?.userId == UserConfig.getInstance(currentAccount).getClientUserId()) && (getMedia(message) is TLMessageMediaPhoto || getMedia(message) is TLMessageMediaDocument && !isStickerMessage(message) && !isAnimatedStickerMessage(message) || getMedia(message) is TLMessageMediaEmpty || getMedia(message) is TLMessageMediaWebPage || getMedia(message) == null)
 			}
 
-			if (chat != null && chat.megagroup && message.out || chat != null && !chat.megagroup && (chat.creator || chat.admin_rights != null && (chat.admin_rights.edit_messages || message.out && chat.admin_rights.post_messages)) && message.post) {
-				return getMedia(message) is TL_messageMediaPhoto || getMedia(message) is TL_messageMediaDocument && !isStickerMessage(message) && !isAnimatedStickerMessage(message) || getMedia(message) is TL_messageMediaEmpty || getMedia(message) is TL_messageMediaWebPage || getMedia(message) == null
+			if (chat != null && chat.megagroup && message.out || chat != null && !chat.megagroup && (chat.creator || chat.adminRights != null && (chat.adminRights?.editMessages == true || message.out && chat.adminRights?.postMessages == true)) && message.post) {
+				return getMedia(message) is TLMessageMediaPhoto || getMedia(message) is TLMessageMediaDocument && !isStickerMessage(message) && !isAnimatedStickerMessage(message) || getMedia(message) is TLMessageMediaEmpty || getMedia(message) is TLMessageMediaWebPage || getMedia(message) == null
 			}
 
 			return false
@@ -8464,7 +8449,7 @@ open class MessageObject {
 				return false
 			}
 
-			if (ChatObject.isChannelAndNotMegaGroup(chat) && message.action is TL_messageActionChatJoinedByRequest) {
+			if (ChatObject.isChannelAndNotMegaGroup(chat) && message.action is TLMessageActionChatJoinedByRequest) {
 				return false
 			}
 
@@ -8472,20 +8457,20 @@ open class MessageObject {
 				return true
 			}
 
-			if (chat == null && message.peer_id?.channel_id != 0L) {
-				chat = MessagesController.getInstance(currentAccount).getChat(message.peer_id?.channel_id)
+			if (chat == null && message.peerId?.channelId != 0L) {
+				chat = MessagesController.getInstance(currentAccount).getChat(message.peerId?.channelId)
 			}
 
 			if (ChatObject.isChannel(chat)) {
 				if (inScheduleMode && !chat.megagroup) {
-					return chat.creator || chat.admin_rights != null && (chat.admin_rights.delete_messages || message.out)
+					return chat.creator || chat.adminRights != null && (chat.adminRights?.deleteMessages == true || message.out)
 				}
 
-				if (message.out && message is TL_messageService) {
+				if (message.out && message is TLMessageService) {
 					return message.id != 1 && ChatObject.canUserDoAdminAction(chat, ChatObject.ACTION_DELETE_MESSAGES)
 				}
 
-				return inScheduleMode || message.id != 1 && (chat.creator || chat.admin_rights != null && (chat.admin_rights.delete_messages || message.out && (chat.megagroup || chat.admin_rights.post_messages)) || chat.megagroup && message.out)
+				return inScheduleMode || message.id != 1 && (chat.creator || chat.adminRights != null && (chat.adminRights?.deleteMessages == true || message.out && (chat.megagroup || chat.adminRights?.postMessages == true)) || chat.megagroup && message.out)
 			}
 
 			return inScheduleMode || isOut(message) || !ChatObject.isChannel(chat)
@@ -8493,12 +8478,12 @@ open class MessageObject {
 
 		@JvmStatic
 		fun getReplyToDialogId(message: Message): Long {
-			if (message.reply_to == null) {
+			if (message.replyTo == null) {
 				return 0L
 			}
 
-			if (message.reply_to?.reply_to_peer_id != null) {
-				return getPeerId(message.reply_to?.reply_to_peer_id)
+			if (message.replyTo?.replyToPeerId != null) {
+				return getPeerId(message.replyTo?.replyToPeerId)
 			}
 
 			return getDialogId(message)

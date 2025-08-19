@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui;
 
@@ -15,7 +15,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
-import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -108,15 +107,21 @@ public class FeaturedStickersActivity extends BaseFragment implements Notificati
 			if (position >= stickersStartRow && position < stickersEndRow && getParentActivity() != null) {
 				final TLRPC.StickerSetCovered stickerSet = MediaDataController.getInstance(currentAccount).getFeaturedStickerSets().get(position);
 				TLRPC.InputStickerSet inputStickerSet;
+
 				if (stickerSet.set.id != 0) {
-					inputStickerSet = new TLRPC.TL_inputStickerSetID();
-					inputStickerSet.id = stickerSet.set.id;
+					var stickerSetId = new TLRPC.TLInputStickerSetID();
+					stickerSetId.id = stickerSet.set.id;
+					stickerSetId.accessHash = stickerSet.set.accessHash;
+
+					inputStickerSet = stickerSetId;
 				}
 				else {
-					inputStickerSet = new TLRPC.TL_inputStickerSetShortName();
-					inputStickerSet.short_name = stickerSet.set.short_name;
+					var stickerSetShortName = new TLRPC.TLInputStickerSetShortName();
+					stickerSetShortName.shortName = stickerSet.set.shortName;
+
+					inputStickerSet = stickerSetShortName;
 				}
-				inputStickerSet.access_hash = stickerSet.set.access_hash;
+
 				StickersAlert stickersAlert = new StickersAlert(getParentActivity(), FeaturedStickersActivity.this, inputStickerSet, null, null);
 				stickersAlert.setInstallDelegate(new StickersAlert.StickersAlertInstallDelegate() {
 					@Override

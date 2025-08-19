@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui
 
@@ -60,9 +60,10 @@ import kotlinx.coroutines.launch
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
+import org.telegram.messenger.BuildConfig
 import org.telegram.messenger.BuildVars
 import org.telegram.messenger.ChatObject.isLeftFromChat
-import org.telegram.messenger.ChatObject.isOnlineCourse
+import org.telegram.messenger.ChatObject.isMasterclass
 import org.telegram.messenger.ChatObject.isPaidChannel
 import org.telegram.messenger.ContactsController
 import org.telegram.messenger.ContactsLoadingObserver
@@ -100,64 +101,67 @@ import org.telegram.messenger.voip.VoIPPreNotificationService
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.ElloRpc.subscribeRequest
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC
 import org.telegram.tgnet.TLRPC.Chat
+import org.telegram.tgnet.TLRPC.ChatInvite
 import org.telegram.tgnet.TLRPC.InputStickerSet
-import org.telegram.tgnet.TLRPC.TL_account_authorizationForm
-import org.telegram.tgnet.TLRPC.TL_account_getAuthorizationForm
-import org.telegram.tgnet.TLRPC.TL_account_getPassword
-import org.telegram.tgnet.TLRPC.TL_account_getWallPaper
-import org.telegram.tgnet.TLRPC.TL_account_sendConfirmPhoneCode
-import org.telegram.tgnet.TLRPC.TL_account_updateEmojiStatus
-import org.telegram.tgnet.TLRPC.TL_attachMenuBotsBot
-import org.telegram.tgnet.TLRPC.TL_auth_acceptLoginToken
-import org.telegram.tgnet.TLRPC.TL_authorization
-import org.telegram.tgnet.TLRPC.TL_boolTrue
-import org.telegram.tgnet.TLRPC.TL_channels_getChannels
-import org.telegram.tgnet.TLRPC.TL_chatAdminRights
-import org.telegram.tgnet.TLRPC.TL_codeSettings
-import org.telegram.tgnet.TLRPC.TL_contact
-import org.telegram.tgnet.TLRPC.TL_contacts_resolvePhone
-import org.telegram.tgnet.TLRPC.TL_contacts_resolveUsername
-import org.telegram.tgnet.TLRPC.TL_contacts_resolvedPeer
-import org.telegram.tgnet.TLRPC.TL_emojiStatus
-import org.telegram.tgnet.TLRPC.TL_emojiStatusEmpty
-import org.telegram.tgnet.TLRPC.TL_emojiStatusUntil
-import org.telegram.tgnet.TLRPC.TL_help_deepLinkInfo
-import org.telegram.tgnet.TLRPC.TL_help_getDeepLinkInfo
-import org.telegram.tgnet.TLRPC.TL_help_termsOfService
-import org.telegram.tgnet.TLRPC.TL_inputChannel
-import org.telegram.tgnet.TLRPC.TL_inputGameShortName
-import org.telegram.tgnet.TLRPC.TL_inputInvoiceSlug
-import org.telegram.tgnet.TLRPC.TL_inputMediaGame
-import org.telegram.tgnet.TLRPC.TL_inputStickerSetShortName
-import org.telegram.tgnet.TLRPC.TL_inputWallPaperSlug
-import org.telegram.tgnet.TLRPC.TL_langPackLanguage
-import org.telegram.tgnet.TLRPC.TL_langpack_getLanguage
-import org.telegram.tgnet.TLRPC.TL_messages_chats
-import org.telegram.tgnet.TLRPC.TL_messages_checkChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_checkHistoryImport
-import org.telegram.tgnet.TLRPC.TL_messages_discussionMessage
-import org.telegram.tgnet.TLRPC.TL_messages_getAttachMenuBot
-import org.telegram.tgnet.TLRPC.TL_messages_getDiscussionMessage
-import org.telegram.tgnet.TLRPC.TL_messages_historyImportParsed
-import org.telegram.tgnet.TLRPC.TL_messages_importChatInvite
-import org.telegram.tgnet.TLRPC.TL_messages_toggleBotInAttachMenu
-import org.telegram.tgnet.TLRPC.TL_payments_getPaymentForm
-import org.telegram.tgnet.TLRPC.TL_payments_paymentForm
-import org.telegram.tgnet.TLRPC.TL_payments_paymentReceipt
-import org.telegram.tgnet.TLRPC.TL_wallPaper
-import org.telegram.tgnet.TLRPC.TL_wallPaperSettings
-import org.telegram.tgnet.TLRPC.TL_webPage
+import org.telegram.tgnet.TLRPC.TLAccountAuthorizationForm
+import org.telegram.tgnet.TLRPC.TLAccountGetAuthorizationForm
+import org.telegram.tgnet.TLRPC.TLAccountGetPassword
+import org.telegram.tgnet.TLRPC.TLAccountGetWallPaper
+import org.telegram.tgnet.TLRPC.TLAccountSendConfirmPhoneCode
+import org.telegram.tgnet.TLRPC.TLAccountUpdateEmojiStatus
+import org.telegram.tgnet.TLRPC.TLAttachMenuBotsBot
+import org.telegram.tgnet.TLRPC.TLAuthAcceptLoginToken
+import org.telegram.tgnet.TLRPC.TLAuthorization
+import org.telegram.tgnet.TLRPC.TLBoolTrue
+import org.telegram.tgnet.TLRPC.TLChannelsGetChannels
+import org.telegram.tgnet.TLRPC.TLChatAdminRights
+import org.telegram.tgnet.TLRPC.TLChatBannedRights
+import org.telegram.tgnet.TLRPC.TLChatInvitePeek
+import org.telegram.tgnet.TLRPC.TLCodeSettings
+import org.telegram.tgnet.TLRPC.TLContact
+import org.telegram.tgnet.TLRPC.TLContactsResolvePhone
+import org.telegram.tgnet.TLRPC.TLContactsResolveUsername
+import org.telegram.tgnet.TLRPC.TLContactsResolvedPeer
+import org.telegram.tgnet.TLRPC.TLEmojiStatus
+import org.telegram.tgnet.TLRPC.TLEmojiStatusEmpty
+import org.telegram.tgnet.TLRPC.TLEmojiStatusUntil
+import org.telegram.tgnet.TLRPC.TLError
+import org.telegram.tgnet.TLRPC.TLHelpDeepLinkInfo
+import org.telegram.tgnet.TLRPC.TLHelpGetDeepLinkInfo
+import org.telegram.tgnet.TLRPC.TLHelpTermsOfService
+import org.telegram.tgnet.TLRPC.TLInputChannel
+import org.telegram.tgnet.TLRPC.TLInputGameShortName
+import org.telegram.tgnet.TLRPC.TLInputMediaGame
+import org.telegram.tgnet.TLRPC.TLInputStickerSetShortName
+import org.telegram.tgnet.TLRPC.TLInputWallPaperSlug
+import org.telegram.tgnet.TLRPC.TLLangPackLanguage
+import org.telegram.tgnet.TLRPC.TLLangpackGetLanguage
+import org.telegram.tgnet.TLRPC.TLMessagesChats
+import org.telegram.tgnet.TLRPC.TLMessagesCheckChatInvite
+import org.telegram.tgnet.TLRPC.TLMessagesCheckHistoryImport
+import org.telegram.tgnet.TLRPC.TLMessagesDiscussionMessage
+import org.telegram.tgnet.TLRPC.TLMessagesGetAttachMenuBot
+import org.telegram.tgnet.TLRPC.TLMessagesGetDiscussionMessage
+import org.telegram.tgnet.TLRPC.TLMessagesHistoryImportParsed
+import org.telegram.tgnet.TLRPC.TLMessagesImportChatInvite
+import org.telegram.tgnet.TLRPC.TLMessagesToggleBotInAttachMenu
+import org.telegram.tgnet.TLRPC.TLWallPaper
+import org.telegram.tgnet.TLRPC.TLWallPaperSettings
+import org.telegram.tgnet.TLRPC.TLWebPage
 import org.telegram.tgnet.TLRPC.Updates
-import org.telegram.tgnet.TLRPC.account_Password
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.tgnet.WalletHelper
-import org.telegram.tgnet.tlrpc.ChatInvite
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.tlrpc.TL_chatInvitePeek
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.bot
+import org.telegram.tgnet.botAttachMenu
+import org.telegram.tgnet.botNochats
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.emojiStatus
+import org.telegram.tgnet.isSelf
+import org.telegram.tgnet.rtmpStream
+import org.telegram.tgnet.userId
 import org.telegram.ui.ActionBar.ActionBarLayout
 import org.telegram.ui.ActionBar.ActionBarLayout.ActionBarLayoutDelegate
 import org.telegram.ui.ActionBar.AlertDialog
@@ -201,8 +205,6 @@ import org.telegram.ui.Components.VerticalPositionAutoAnimator
 import org.telegram.ui.Components.voip.VoIPHelper.startCall
 import org.telegram.ui.DialogsActivity.DialogsActivityDelegate
 import org.telegram.ui.LauncherIconController.LauncherIcon
-import org.telegram.ui.PaymentFormActivity.InvoiceStatus
-import org.telegram.ui.PaymentFormActivity.PaymentFormCallback
 import org.telegram.ui.SelectAnimatedEmojiDialog.SelectAnimatedEmojiDialogWindow
 import org.telegram.ui.WallpapersListActivity.ColorWallpaper
 import org.telegram.ui.channel.ChannelCreateActivity
@@ -210,6 +212,7 @@ import org.telegram.ui.channel.SubscriptionResultFragment
 import org.telegram.ui.feed.FeedFragment
 import org.telegram.ui.group.GroupCallActivity
 import org.telegram.ui.group.GroupCreateFinalActivity
+import org.telegram.ui.profile.EmailSentFragment
 import org.webrtc.voiceengine.WebRtcAudioTrack
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -222,7 +225,6 @@ import kotlin.math.max
 import kotlin.math.min
 
 class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, NotificationCenterDelegate, DialogsActivityDelegate {
-	private val onUserLeaveHintListeners = mutableListOf<Runnable>()
 	private val requestedPermissions = SparseIntArray()
 	private var backgroundTablet: SizeNotifierFrameLayout? = null
 	private var contactsToSend: MutableList<User>? = null
@@ -265,12 +267,14 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 	private var themeSwitchSunView: View? = null
 	private var videoPath: String? = null
 	private var visibleActionMode: ActionMode? = null
-	private var visibleDialog: AlertDialog? = null
 	private var wasMutedByAdminRaisedHand = false
 	private var bottomNavigationPanel: BottomNavigationPanel? = null
 	private var forYouTab = 0
 	private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 	private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+	var visibleDialog: AlertDialog? = null
+		private set
 
 	@JvmField
 	var drawerLayoutContainer: DrawerLayoutContainer? = null
@@ -288,7 +292,9 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		private set
 
 	override fun onCreate(savedInstanceState: Bundle?) {
-		StrictMode.setVmPolicy(VmPolicy.Builder(StrictMode.getVmPolicy()).detectLeakedClosableObjects().build())
+		if (BuildConfig.DEBUG) {
+			StrictMode.setVmPolicy(VmPolicy.Builder(StrictMode.getVmPolicy()).detectLeakedClosableObjects().build())
+		}
 
 		ApplicationLoader.postInitApplication()
 
@@ -441,7 +447,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			}
 		}
 
-		bottomNavigationPanel = BottomNavigationPanel(this, section)
+		bottomNavigationPanel = BottomNavigationPanel(this, section, showTitles = true)
 
 		bottomNavigationPanel?.listener = BottomNavigationListener {
 			when (it) {
@@ -863,14 +869,6 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		}
 	}
 
-	fun addOnUserLeaveHintListener(callback: Runnable) {
-		onUserLeaveHintListeners.add(callback)
-	}
-
-	fun removeOnUserLeaveHintListener(callback: Runnable) {
-		onUserLeaveHintListeners.remove(callback)
-	}
-
 //	private val clientNotActivatedFragment: BaseFragment
 //		get() = IntroActivity()
 
@@ -888,32 +886,32 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 		val popupLayout = object : SelectAnimatedEmojiDialog(fragment, this@LaunchActivity, true, xoff, TYPE_EMOJI_STATUS) {
 			override fun onEmojiSelected(view: View, documentId: Long?, document: TLRPC.Document?, until: Int?) {
-				val req = TL_account_updateEmojiStatus()
+				val req = TLAccountUpdateEmojiStatus()
 
 				if (documentId == null) {
-					req.emoji_status = TL_emojiStatusEmpty()
+					req.emojiStatus = TLEmojiStatusEmpty()
 				}
 				else if (until != null) {
-					req.emoji_status = TL_emojiStatusUntil()
-					(req.emoji_status as TL_emojiStatusUntil).document_id = documentId
-					(req.emoji_status as TL_emojiStatusUntil).until = until
+					req.emojiStatus = TLEmojiStatusUntil()
+					(req.emojiStatus as TLEmojiStatusUntil).documentId = documentId
+					(req.emojiStatus as TLEmojiStatusUntil).until = until
 				}
 				else {
-					req.emoji_status = TL_emojiStatus()
-					(req.emoji_status as TL_emojiStatus).document_id = documentId
+					req.emojiStatus = TLEmojiStatus()
+					(req.emojiStatus as TLEmojiStatus).documentId = documentId
 				}
 
 				@Suppress("NAME_SHADOWING") val user = MessagesController.getInstance(currentAccount).getUser(UserConfig.getInstance(currentAccount).getClientUserId())
 
 				if (user != null) {
-					user.emoji_status = req.emoji_status
+					user.emojiStatus = req.emojiStatus
 
 					NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.userEmojiStatusUpdated, user)
-					MessagesController.getInstance(currentAccount).updateEmojiStatusUntilUpdate(user.id, user.emoji_status)
+					MessagesController.getInstance(currentAccount).updateEmojiStatusUntilUpdate(user.id, user.emojiStatus)
 				}
 
 				ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
-					if (response !is TL_boolTrue) {
+					if (response !is TLBoolTrue) {
 						// TODO: reject
 					}
 				}
@@ -925,8 +923,8 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			}
 		}
 
-		if (user != null && user.emoji_status is TL_emojiStatusUntil && (user.emoji_status as TL_emojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
-			popupLayout.setExpireDateHint((user.emoji_status as TL_emojiStatusUntil).until)
+		if (user != null && user.emojiStatus is TLEmojiStatusUntil && (user.emojiStatus as TLEmojiStatusUntil).until > (System.currentTimeMillis() / 1000).toInt()) {
+			popupLayout.setExpireDateHint((user.emojiStatus as TLEmojiStatusUntil).until)
 		}
 
 		popupLayout.setSelected(if (scrimDrawable != null && scrimDrawable.drawable is AnimatedEmojiDrawable) (scrimDrawable.drawable as AnimatedEmojiDrawable).documentId else null)
@@ -1014,7 +1012,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			layersActionBarLayout?.gone()
 		}
 
-		bottomNavigationPanel?.reset(BottomNavigationPanel.Item.SETTINGS, true)
+		bottomNavigationPanel?.reset(bottomNavigationPanel?.getCurrentItem() ?: BottomNavigationPanel.Item.SETTINGS, true)
 
 		if (!ApplicationLoader.mainInterfacePaused) {
 			ConnectionsManager.getInstance(currentAccount).setAppPaused(value = false, byScreenState = false)
@@ -1169,7 +1167,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		}
 	}
 
-	private fun showTosActivity(account: Int, tos: TL_help_termsOfService?) {
+	private fun showTosActivity(account: Int, tos: TLHelpTermsOfService?) {
 		if (termsOfServiceView == null) {
 			termsOfServiceView = TermsOfServiceView(this)
 			termsOfServiceView?.alpha = 0f
@@ -1745,7 +1743,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						var lang: String? = null
 						var theme: String? = null
 						var code: String? = null
-						var wallPaper: TL_wallPaper? = null
+						var wallPaper: TLWallPaper? = null
 						var inputInvoiceSlug: String? = null
 						var messageId: Int? = null
 						var channelId: Long? = null
@@ -1767,14 +1765,12 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 									if (host == getString(R.string.domain) || isPrefix) {
 										if (isPrefix) {
-											data = Uri.parse(String.format(Locale.getDefault(), "https://%s/", getString(R.string.domain)) + prefixMatcher.group(1) + (if (TextUtils.isEmpty(data.path)) "" else data.path) + if (data.query.isNullOrEmpty()) "" else "?" + data.query)
+											data = Uri.parse(String.format(Locale.getDefault(), "https://%s/", getString(R.string.domain)) + /*prefixMatcher.group(1) + */ (if (TextUtils.isEmpty(data.path)) "" else data.path) + if (data.query.isNullOrEmpty()) "" else "?" + data.query)
 										}
 
-										var path = data?.path
+										val path = data?.path?.trim('/')
 
 										if (path != null && path.length > 1) {
-											path = path.substring(1)
-
 											if (path.startsWith("$")) {
 												inputInvoiceSlug = path.substring(1)
 											}
@@ -1782,15 +1778,15 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 												inputInvoiceSlug = path.substring(path.indexOf('/') + 1)
 											}
 											else if (path.startsWith("bg/")) {
-												wallPaper = TL_wallPaper()
-												wallPaper.settings = TL_wallPaperSettings()
+												wallPaper = TLWallPaper()
+												wallPaper.settings = TLWallPaperSettings()
 												wallPaper.slug = path.replace("bg/", "")
 
 												var ok = false
 
-												if (wallPaper.slug != null && wallPaper.slug.length == 6) {
+												if (wallPaper.slug != null && wallPaper.slug!!.length == 6) {
 													try {
-														wallPaper.settings.background_color = wallPaper.slug.toInt(16) or -0x1000000
+														wallPaper.settings!!.backgroundColor = wallPaper.slug!!.toInt(16) or -0x1000000
 														wallPaper.slug = null
 														ok = true
 													}
@@ -1798,24 +1794,24 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 														// ignored
 													}
 												}
-												else if (wallPaper.slug != null && wallPaper.slug.length >= 13 && AndroidUtilities.isValidWallChar(wallPaper.slug[6])) {
+												else if (wallPaper.slug != null && wallPaper.slug!!.length >= 13 && AndroidUtilities.isValidWallChar(wallPaper.slug!![6])) {
 													try {
-														wallPaper.settings.background_color = wallPaper.slug.substring(0, 6).toInt(16) or -0x1000000
-														wallPaper.settings.second_background_color = wallPaper.slug.substring(7, 13).toInt(16) or -0x1000000
+														wallPaper.settings?.backgroundColor = wallPaper.slug!!.substring(0, 6).toInt(16) or -0x1000000
+														wallPaper.settings?.secondBackgroundColor = wallPaper.slug!!.substring(7, 13).toInt(16) or -0x1000000
 
-														if (wallPaper.slug.length >= 20 && AndroidUtilities.isValidWallChar(wallPaper.slug[13])) {
-															wallPaper.settings.third_background_color = wallPaper.slug.substring(14, 20).toInt(16) or -0x1000000
+														if (wallPaper.slug!!.length >= 20 && AndroidUtilities.isValidWallChar(wallPaper.slug!![13])) {
+															wallPaper.settings?.thirdBackgroundColor = wallPaper.slug!!.substring(14, 20).toInt(16) or -0x1000000
 														}
 
-														if (wallPaper.slug.length == 27 && AndroidUtilities.isValidWallChar(wallPaper.slug[20])) {
-															wallPaper.settings.fourth_background_color = wallPaper.slug.substring(21).toInt(16) or -0x1000000
+														if (wallPaper.slug!!.length == 27 && AndroidUtilities.isValidWallChar(wallPaper.slug!![20])) {
+															wallPaper.settings?.fourthBackgroundColor = wallPaper.slug!!.substring(21).toInt(16) or -0x1000000
 														}
 
 														try {
 															val rotation = data?.getQueryParameter("rotation")
 
 															if (!rotation.isNullOrEmpty()) {
-																wallPaper.settings.rotation = Utilities.parseInt(rotation)
+																wallPaper.settings?.rotation = Utilities.parseInt(rotation)
 															}
 														}
 														catch (e: Exception) {
@@ -1842,10 +1838,10 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 														if (modes.isNotEmpty()) {
 															for (s in modes) {
 																if ("blur" == s) {
-																	wallPaper.settings.blur = true
+																	wallPaper.settings?.blur = true
 																}
 																else if ("motion" == s) {
-																	wallPaper.settings.motion = true
+																	wallPaper.settings?.motion = true
 																}
 															}
 														}
@@ -1854,32 +1850,32 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 													val intensity = data?.getQueryParameter("intensity")
 
 													if (!intensity.isNullOrEmpty()) {
-														wallPaper.settings.intensity = Utilities.parseInt(intensity)
+														wallPaper.settings?.intensity = Utilities.parseInt(intensity)
 													}
 													else {
-														wallPaper.settings.intensity = 50
+														wallPaper.settings?.intensity = 50
 													}
 
 													try {
 														val bgColor = data?.getQueryParameter("bg_color")
 
 														if (!bgColor.isNullOrEmpty()) {
-															wallPaper.settings.background_color = bgColor.substring(0, 6).toInt(16) or -0x1000000
+															wallPaper.settings?.backgroundColor = bgColor.substring(0, 6).toInt(16) or -0x1000000
 
 															if (bgColor.length >= 13) {
-																wallPaper.settings.second_background_color = bgColor.substring(7, 13).toInt(16) or -0x1000000
+																wallPaper.settings?.secondBackgroundColor = bgColor.substring(7, 13).toInt(16) or -0x1000000
 
 																if (bgColor.length >= 20 && AndroidUtilities.isValidWallChar(bgColor[13])) {
-																	wallPaper.settings.third_background_color = bgColor.substring(14, 20).toInt(16) or -0x1000000
+																	wallPaper.settings?.thirdBackgroundColor = bgColor.substring(14, 20).toInt(16) or -0x1000000
 																}
 
 																if (bgColor.length == 27 && AndroidUtilities.isValidWallChar(bgColor[20])) {
-																	wallPaper.settings.fourth_background_color = bgColor.substring(21).toInt(16) or -0x1000000
+																	wallPaper.settings?.fourthBackgroundColor = bgColor.substring(21).toInt(16) or -0x1000000
 																}
 															}
 														}
 														else {
-															wallPaper.settings.background_color = -0x1
+															wallPaper.settings?.backgroundColor = -0x1
 														}
 													}
 													catch (e: Exception) {
@@ -1890,7 +1886,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 														val rotation = data?.getQueryParameter("rotation")
 
 														if (!rotation.isNullOrEmpty()) {
-															wallPaper.settings.rotation = Utilities.parseInt(rotation)
+															wallPaper.settings?.rotation = Utilities.parseInt(rotation)
 														}
 													}
 													catch (e: Exception) {
@@ -1979,6 +1975,45 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 														if (it is LoginActivity) {
 															REFERRAL_CODE = referralCode
 															it.setReferralCode(referralCode)
+														}
+													}
+												}
+											}
+											else if (path.startsWith("auth")) {
+												val hash = data?.getQueryParameter("hash")
+												val username = data?.getQueryParameter("username")
+
+												actionBarLayout?.fragmentsStack?.find { it is LoginActivity }?.let {
+													if (it is LoginActivity) {
+														if (username != null) {
+															it.setSignIn(hash, username)
+														}
+													}
+												}
+											}
+											else if (path.startsWith("account/email")) {
+												setIntent(null)
+
+												val hash = data.getQueryParameter("hash")
+												val email = data.getQueryParameter("email")
+
+												actionBarLayout?.fragmentsStack?.find { it is EmailSentFragment }?.let {
+													if (it is EmailSentFragment) {
+														if (email != null) {
+															it.changeEmail(hash, email)
+														}
+													}
+												}
+											}
+											else if (path.startsWith("account/delete")) {
+												setIntent(null)
+
+												val hash = data.getQueryParameter("hash")
+
+												actionBarLayout?.fragmentsStack?.find { it is EmailSentFragment }?.let {
+													if (it is EmailSentFragment) {
+														if (hash != null) {
+															it.deleteAccount(hash)
 														}
 													}
 												}
@@ -2107,6 +2142,67 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 											}
 										}
 									}
+									else if (url.startsWith("elloapp:auth") || url.startsWith("elloapp://auth")) {
+										url = url.replace("elloapp:auth", "elloapp://auth")
+
+										if (url.contains("/hash=")) {
+											url = url.replaceFirst("/hash=", "?hash=")
+										}
+
+										val data = Uri.parse(url)
+
+										val hash = data.getQueryParameter("hash")
+										val username = data.getQueryParameter("username")
+
+										actionBarLayout?.fragmentsStack?.find { it is LoginActivity }?.let {
+											if (it is LoginActivity) {
+												if (username != null) {
+													it.setSignIn(hash, username)
+												}
+											}
+										}
+									}
+									else if (url.startsWith("elloapp:account/email") || url.startsWith("elloapp://account/email")) {
+										url = url.replace("elloapp:account/email", "elloapp://account/email")
+
+										if (url.contains("/hash=")) {
+											url = url.replaceFirst("/hash=", "?hash=")
+										}
+
+										val data = Uri.parse(url)
+
+										val hash = data.getQueryParameter("hash")
+										val email = data.getQueryParameter("email")
+
+										actionBarLayout?.fragmentsStack?.find { it is EmailSentFragment }?.let {
+											if (it is EmailSentFragment) {
+												if (email != null) {
+													setIntent(null)
+													it.changeEmail(hash, email)
+												}
+											}
+										}
+									}
+									else if (url.startsWith("elloapp:account/delete") || url.startsWith("elloapp://account/delete")) {
+										url = url.replace("elloapp:account/delete", "elloapp://account/delete")
+
+										if (url.contains("/hash=")) {
+											url = url.replaceFirst("/hash=", "?hash=")
+										}
+
+										val data = Uri.parse(url)
+
+										val hash = data.getQueryParameter("hash")
+
+										actionBarLayout?.fragmentsStack?.find { it is EmailSentFragment }?.let {
+											if (it is EmailSentFragment) {
+												if (hash != null) {
+													setIntent(null)
+													it.deleteAccount(hash)
+												}
+											}
+										}
+									}
 									else if (url.startsWith("elloapp:invoice") || url.startsWith("elloapp://invoice")) {
 										url = url.replace("elloapp:invoice", "elloapp://invoice")
 										data = Uri.parse(url)
@@ -2139,8 +2235,8 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 										url = url.replace("elloapp:bg", "elloapp://ello.team").replace("elloapp://bg", "elloapp://ello.team")
 										data = Uri.parse(url)
 
-										wallPaper = TL_wallPaper()
-										wallPaper.settings = TL_wallPaperSettings()
+										wallPaper = TLWallPaper()
+										wallPaper.settings = TLWallPaperSettings()
 										wallPaper.slug = data.getQueryParameter("slug")
 
 										if (wallPaper.slug == null) {
@@ -2149,9 +2245,9 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 										var ok = false
 
-										if (wallPaper.slug != null && wallPaper.slug.length == 6) {
+										if (wallPaper.slug != null && wallPaper.slug!!.length == 6) {
 											try {
-												wallPaper.settings.background_color = wallPaper.slug.toInt(16) or -0x1000000
+												wallPaper.settings?.backgroundColor = wallPaper.slug!!.toInt(16) or -0x1000000
 												wallPaper.slug = null
 												ok = true
 											}
@@ -2159,24 +2255,24 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 												// ignored
 											}
 										}
-										else if (wallPaper.slug != null && wallPaper.slug.length >= 13 && AndroidUtilities.isValidWallChar(wallPaper.slug[6])) {
+										else if (wallPaper.slug != null && wallPaper.slug!!.length >= 13 && AndroidUtilities.isValidWallChar(wallPaper.slug!![6])) {
 											try {
-												wallPaper.settings.background_color = wallPaper.slug.substring(0, 6).toInt(16) or -0x1000000
-												wallPaper.settings.second_background_color = wallPaper.slug.substring(7, 13).toInt(16) or -0x1000000
+												wallPaper.settings?.backgroundColor = wallPaper.slug!!.substring(0, 6).toInt(16) or -0x1000000
+												wallPaper.settings?.secondBackgroundColor = wallPaper.slug!!.substring(7, 13).toInt(16) or -0x1000000
 
-												if (wallPaper.slug.length >= 20 && AndroidUtilities.isValidWallChar(wallPaper.slug[13])) {
-													wallPaper.settings.third_background_color = wallPaper.slug.substring(14, 20).toInt(16) or -0x1000000
+												if (wallPaper.slug!!.length >= 20 && AndroidUtilities.isValidWallChar(wallPaper.slug!![13])) {
+													wallPaper.settings?.thirdBackgroundColor = wallPaper.slug!!.substring(14, 20).toInt(16) or -0x1000000
 												}
 
-												if (wallPaper.slug.length == 27 && AndroidUtilities.isValidWallChar(wallPaper.slug[20])) {
-													wallPaper.settings.fourth_background_color = wallPaper.slug.substring(21).toInt(16) or -0x1000000
+												if (wallPaper.slug!!.length == 27 && AndroidUtilities.isValidWallChar(wallPaper.slug!![20])) {
+													wallPaper.settings?.fourthBackgroundColor = wallPaper.slug!!.substring(21).toInt(16) or -0x1000000
 												}
 
 												try {
 													val rotation = data.getQueryParameter("rotation")
 
 													if (!rotation.isNullOrEmpty()) {
-														wallPaper.settings.rotation = Utilities.parseInt(rotation)
+														wallPaper.settings?.rotation = Utilities.parseInt(rotation)
 													}
 												}
 												catch (e: Exception) {
@@ -2203,32 +2299,32 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 												if (modes.isNotEmpty()) {
 													for (s in modes) {
 														if ("blur" == s) {
-															wallPaper.settings.blur = true
+															wallPaper.settings?.blur = true
 														}
 														else if ("motion" == s) {
-															wallPaper.settings.motion = true
+															wallPaper.settings?.motion = true
 														}
 													}
 												}
 											}
 
-											wallPaper.settings.intensity = Utilities.parseInt(data.getQueryParameter("intensity"))
+											wallPaper.settings?.intensity = Utilities.parseInt(data.getQueryParameter("intensity"))
 
 											try {
 												val bgColor = data.getQueryParameter("bg_color")
 
 												if (!bgColor.isNullOrEmpty()) {
-													wallPaper.settings.background_color = bgColor.substring(0, 6).toInt(16) or -0x1000000
+													wallPaper.settings?.backgroundColor = bgColor.substring(0, 6).toInt(16) or -0x1000000
 
 													if (bgColor.length >= 13) {
-														wallPaper.settings.second_background_color = bgColor.substring(8, 13).toInt(16) or -0x1000000
+														wallPaper.settings?.secondBackgroundColor = bgColor.substring(8, 13).toInt(16) or -0x1000000
 
 														if (bgColor.length >= 20 && AndroidUtilities.isValidWallChar(bgColor[13])) {
-															wallPaper.settings.third_background_color = bgColor.substring(14, 20).toInt(16) or -0x1000000
+															wallPaper.settings?.thirdBackgroundColor = bgColor.substring(14, 20).toInt(16) or -0x1000000
 														}
 
 														if (bgColor.length == 27 && AndroidUtilities.isValidWallChar(bgColor[20])) {
-															wallPaper.settings.fourth_background_color = bgColor.substring(21).toInt(16) or -0x1000000
+															wallPaper.settings?.fourthBackgroundColor = bgColor.substring(21).toInt(16) or -0x1000000
 														}
 													}
 												}
@@ -2241,7 +2337,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 												val rotation = data.getQueryParameter("rotation")
 
 												if (!rotation.isNullOrEmpty()) {
-													wallPaper.settings.rotation = Utilities.parseInt(rotation)
+													wallPaper.settings?.rotation = Utilities.parseInt(rotation)
 												}
 											}
 											catch (e: Exception) {
@@ -2407,7 +2503,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 												}
 												else {
 													if (contacts.size == 1) {
-														push_user_id = contacts[0].user_id
+														push_user_id = contacts[0].userId
 													}
 
 													if (push_user_id == 0L) {
@@ -2470,11 +2566,11 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								cancelDeleteProgressDialog.setCanCancel(false)
 								cancelDeleteProgressDialog.show()
 
-								val req = TL_account_sendConfirmPhoneCode()
+								val req = TLAccountSendConfirmPhoneCode()
 								req.hash = phoneHash
-								req.settings = TL_codeSettings()
-								req.settings.allow_flashcall = false
-								req.settings.allow_app_hash = PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices()
+								req.settings = TLCodeSettings()
+								req.settings?.allowFlashcall = false
+								req.settings?.allowAppHash = PushListenerController.GooglePushListenerServiceProvider.INSTANCE.hasServices()
 
 								val params = Bundle()
 								params.putString("phone", phone)
@@ -2485,7 +2581,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 										if (error == null) {
 											// TODO: check
-											// presentFragment(new LoginActivity().cancelAccountDeletion(finalPhone, params, (TLRPC.TL_auth_sentCode)response));
+											// presentFragment(new LoginActivity().cancelAccountDeletion(finalPhone, params, (TLRPC.TLAuthSentCode)response));
 										}
 										else {
 											AlertsCreator.processError(currentAccount, error, actionBarLayout!!.lastFragment, req)
@@ -2669,7 +2765,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						val dialog_id = it.messageObject!!.dialogId
 
 						locationActivity.setDelegate { location, _, notify, scheduleDate ->
-							SendMessagesHelper.getInstance(intentAccount[0]).sendMessage(location, dialog_id, null, null, null, null, notify, scheduleDate, false, null)
+							SendMessagesHelper.getInstance(intentAccount[0]).sendMessage(location, dialog_id, null, null, null, null, notify, scheduleDate)
 						}
 
 						presentFragment(locationActivity)
@@ -2792,7 +2888,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 				contactsFragment.setDelegate { user, _, _ ->
 					val userFull = MessagesController.getInstance(currentAccount).getUserFull(user!!.id)
-					startCall(user, videoCall, userFull != null && userFull.video_calls_available, this@LaunchActivity, userFull, AccountInstance.getInstance(intentAccount[0]))
+					startCall(user, videoCall, userFull != null && userFull.videoCallsAvailable, this@LaunchActivity, userFull, AccountInstance.getInstance(intentAccount[0]))
 				}
 
 				actionBarLayout?.presentFragment(contactsFragment, actionBarLayout?.lastFragment is ContactsActivity, true, true, false)
@@ -2818,7 +2914,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 					val token = Base64.decode(it.substring("elloapp://login?token=".length), Base64.URL_SAFE)
 
-					val req = TL_auth_acceptLoginToken()
+					val req = TLAuthAcceptLoginToken()
 					req.token = token
 
 					ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
@@ -2827,7 +2923,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								progressDialog.dismiss()
 							}
 
-							if (response !is TL_authorization) {
+							if (response !is TLAuthorization) {
 								AndroidUtilities.runOnUIThread {
 									AlertsCreator.showSimpleAlert(fragment, getString(R.string.AuthAnotherClient), "${getString(R.string.ErrorOccurred)}\n${error?.text}")
 								}
@@ -3062,15 +3158,15 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			return 0
 		}
 
-		val req = TL_messages_getDiscussionMessage()
+		val req = TLMessagesGetDiscussionMessage()
 		req.peer = MessagesController.getInputPeer(chat)
-		req.msg_id = if (commentId != null) messageId else (threadId ?: 0)
+		req.msgId = if (commentId != null) messageId else (threadId ?: 0)
 
 		return ConnectionsManager.getInstance(intentAccount).sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
 				var chatOpened = false
 
-				if (response is TL_messages_discussionMessage) {
+				if (response is TLMessagesDiscussionMessage) {
 					MessagesController.getInstance(intentAccount).putUsers(response.users, false)
 					MessagesController.getInstance(intentAccount).putChats(response.chats, false)
 
@@ -3089,7 +3185,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						args.putInt("message_id", max(1, messageId))
 
 						val chatActivity = ChatActivity(args)
-						chatActivity.setThreadMessages(arrayList, chat, req.msg_id, response.read_inbox_max_id, response.read_outbox_max_id)
+						chatActivity.setThreadMessages(arrayList, chat, req.msgId, response.readInboxMaxId, response.readOutboxMaxId)
 
 						if (commentId != null) {
 							chatActivity.setHighlightMessageId(commentId)
@@ -3157,14 +3253,14 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			return
 		}
 
-		val req = TL_messages_checkHistoryImport()
-		req.import_head = content
+		val req = TLMessagesCheckHistoryImport()
+		req.importHead = content
 
 		requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread({
 				if (!this@LaunchActivity.isFinishing) {
 					if (response != null && actionBarLayout != null) {
-						val res = response as TL_messages_historyImportParsed
+						val res = response as TLMessagesHistoryImportParsed
 
 						val args = Bundle()
 						args.putBoolean("onlySelect", true)
@@ -3294,7 +3390,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		bottomNavigationPanel?.setCurrentItem(BottomNavigationPanel.Item.CONTACTS)
 	}
 
-	private fun runLinkRequest(intentAccount: Int, username: String?, group: String?, sticker: String?, emoji: String?, botUser: String?, botChat: String?, botChannel: String?, botChatAdminParams: String?, message: String?, hasUrl: Boolean, messageId: Int?, channelId: Long?, threadId: Int?, commentId: Int?, game: String?, auth: HashMap<String?, String?>?, lang: String?, unsupportedUrl: String?, code: String?, loginToken: String?, wallPaper: TL_wallPaper?, inputInvoiceSlug: String?, theme: String?, voicechat: String?, livestream: String?, state: Int, videoTimestamp: Int, setAsAttachBot: String?, attachMenuBotToOpen: String?, attachMenuBotChoose: String?) {
+	private fun runLinkRequest(intentAccount: Int, username: String?, group: String?, sticker: String?, emoji: String?, botUser: String?, botChat: String?, botChannel: String?, botChatAdminParams: String?, message: String?, hasUrl: Boolean, messageId: Int?, channelId: Long?, threadId: Int?, commentId: Int?, game: String?, auth: HashMap<String?, String?>?, lang: String?, unsupportedUrl: String?, code: String?, loginToken: String?, wallPaper: TLWallPaper?, inputInvoiceSlug: String?, theme: String?, voicechat: String?, livestream: String?, state: Int, videoTimestamp: Int, setAsAttachBot: String?, attachMenuBotToOpen: String?, attachMenuBotChoose: String?) {
 		if (state == 0 && UserConfig.activatedAccountsCount >= 2 && auth != null) {
 			AlertsCreator.createAccountSelectDialog(this) {
 				if (it != intentAccount) {
@@ -3334,63 +3430,64 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		val progressDialog = AlertDialog(this, 3)
 		val requestId = intArrayOf(0)
 
-		if (inputInvoiceSlug != null) {
-			val req = TL_payments_getPaymentForm()
-
-			val invoiceSlug = TL_inputInvoiceSlug()
-			invoiceSlug.slug = inputInvoiceSlug
-			req.invoice = invoiceSlug
-
-			requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req) { response, error ->
-				AndroidUtilities.runOnUIThread {
-					if (error != null) {
-						BulletinFactory.of(mainFragmentsStack[mainFragmentsStack.size - 1]).createErrorBulletin(getString(R.string.PaymentInvoiceLinkInvalid)).show()
-					}
-					else if (!this@LaunchActivity.isFinishing) {
-						var paymentFormActivity: PaymentFormActivity? = null
-
-						if (response is TL_payments_paymentForm) {
-							MessagesController.getInstance(intentAccount).putUsers(response.users, false)
-							paymentFormActivity = PaymentFormActivity(response, inputInvoiceSlug, actionBarLayout!!.lastFragment)
-						}
-						else if (response is TL_payments_paymentReceipt) {
-							paymentFormActivity = PaymentFormActivity(response as TL_payments_paymentReceipt?)
-						}
-
-						if (paymentFormActivity != null) {
-							if (navigateToPremiumGiftCallback != null) {
-								val callback = navigateToPremiumGiftCallback
-
-								navigateToPremiumGiftCallback = null
-
-								paymentFormActivity.setPaymentFormCallback(PaymentFormCallback {
-									if (it == InvoiceStatus.PAID) {
-										callback?.run()
-									}
-								})
-							}
-
-							presentFragment(paymentFormActivity)
-						}
-					}
-
-					try {
-						progressDialog.dismiss()
-					}
-					catch (e: Exception) {
-						FileLog.e(e)
-					}
-				}
-			}
-		}
-		else if (username != null) {
+//		if (inputInvoiceSlug != null) {
+//			val req = TLRPC.TLPaymentsGetPaymentForm()
+//
+//			val invoiceSlug = TLInputInvoiceSlug()
+//			invoiceSlug.slug = inputInvoiceSlug
+//			req.invoice = invoiceSlug
+//
+//			requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req) { response, error ->
+//				AndroidUtilities.runOnUIThread {
+//					if (error != null) {
+//						BulletinFactory.of(mainFragmentsStack[mainFragmentsStack.size - 1]).createErrorBulletin(getString(R.string.PaymentInvoiceLinkInvalid)).show()
+//					}
+//					else if (!this@LaunchActivity.isFinishing) {
+//						var paymentFormActivity: PaymentFormActivity? = null
+//
+//						if (response is TLPaymentsPaymentForm) {
+//							MessagesController.getInstance(intentAccount).putUsers(response.users, false)
+//							paymentFormActivity = PaymentFormActivity(response, inputInvoiceSlug, actionBarLayout!!.lastFragment)
+//						}
+//						else if (response is TLPaymentsPaymentReceipt) {
+//							paymentFormActivity = PaymentFormActivity(response as TLPaymentsPaymentReceipt?)
+//						}
+//
+//						if (paymentFormActivity != null) {
+//							if (navigateToPremiumGiftCallback != null) {
+//								val callback = navigateToPremiumGiftCallback
+//
+//								navigateToPremiumGiftCallback = null
+//
+//								paymentFormActivity.setPaymentFormCallback(PaymentFormCallback {
+//									if (it == InvoiceStatus.PAID) {
+//										callback?.run()
+//									}
+//								})
+//							}
+//
+//							presentFragment(paymentFormActivity)
+//						}
+//					}
+//
+//					try {
+//						progressDialog.dismiss()
+//					}
+//					catch (e: Exception) {
+//						FileLog.e(e)
+//					}
+//				}
+//			}
+//		}
+//		else
+		if (username != null) {
 			val req = if (AndroidUtilities.isNumeric(username)) {
-				val resolvePhone = TL_contacts_resolvePhone()
+				val resolvePhone = TLContactsResolvePhone()
 				resolvePhone.phone = username
 				resolvePhone
 			}
 			else {
-				val resolveUsername = TL_contacts_resolveUsername()
+				val resolveUsername = TLContactsResolveUsername()
 				resolveUsername.username = username
 				resolveUsername
 			}
@@ -3399,7 +3496,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 				AndroidUtilities.runOnUIThread(Runnable {
 					if (!this@LaunchActivity.isFinishing) {
 						var hideProgressDialog = true
-						val res = response as TL_contacts_resolvedPeer?
+						val res = response as TLContactsResolvedPeer?
 
 						if (error == null && actionBarLayout != null && (game == null && voicechat == null || game != null && res!!.users.isNotEmpty() || voicechat != null && res!!.chats.isNotEmpty() || livestream != null && res!!.chats.isNotEmpty())) {
 							MessagesController.getInstance(intentAccount).putUsers(res!!.users, false)
@@ -3407,16 +3504,16 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							MessagesStorage.getInstance(intentAccount).putUsersAndChats(res.users, res.chats, false, true)
 
 							if (setAsAttachBot != null && attachMenuBotToOpen == null) {
-								val user = MessagesController.getInstance(intentAccount).getUser(res.peer.user_id)
+								val user = MessagesController.getInstance(intentAccount).getUser(res.peer.userId)
 
 								if (user != null && user.bot) {
-									if (user.bot_attach_menu) {
-										val getAttachMenuBot = TL_messages_getAttachMenuBot()
-										getAttachMenuBot.bot = MessagesController.getInstance(intentAccount).getInputUser(res.peer.user_id)
+									if (user.botAttachMenu) {
+										val getAttachMenuBot = TLMessagesGetAttachMenuBot()
+										getAttachMenuBot.bot = MessagesController.getInstance(intentAccount).getInputUser(res.peer.userId)
 
 										ConnectionsManager.getInstance(intentAccount).sendRequest(getAttachMenuBot) { response1, _ ->
 											AndroidUtilities.runOnUIThread {
-												if (response1 is TL_attachMenuBotsBot) {
+												if (response1 is TLAttachMenuBotsBot) {
 													MessagesController.getInstance(intentAccount).putUsers(response1.users, false)
 
 													val attachMenuBot = response1.bot
@@ -3476,7 +3573,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 														dialogsActivity = null
 													}
 
-													if (!attachMenuBot.inactive) {
+													if (attachMenuBot?.inactive != true) {
 														dialogsActivity?.let {
 															presentFragment(it)
 														} ?: if (lastFragment is ChatActivity) {
@@ -3498,13 +3595,13 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 														introTopView.setAttachBot(attachMenuBot)
 
 														AlertDialog.Builder(this@LaunchActivity).setTopView(introTopView).setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("BotRequestAttachPermission", R.string.BotRequestAttachPermission, UserObject.getUserName(user)))).setPositiveButton(getString(R.string.BotAddToMenu)) { _, _ ->
-															val botRequest = TL_messages_toggleBotInAttachMenu()
-															botRequest.bot = MessagesController.getInstance(intentAccount).getInputUser(res.peer.user_id)
+															val botRequest = TLMessagesToggleBotInAttachMenu()
+															botRequest.bot = MessagesController.getInstance(intentAccount).getInputUser(res.peer.userId)
 															botRequest.enabled = true
 
 															ConnectionsManager.getInstance(intentAccount).sendRequest(botRequest, { response2, _ ->
 																AndroidUtilities.runOnUIThread {
-																	if (response2 is TL_boolTrue) {
+																	if (response2 is TLBoolTrue) {
 																		MediaDataController.getInstance(intentAccount).loadAttachMenuBots(cache = false, force = true)
 
 																		if (dialogsActivity != null) {
@@ -3553,10 +3650,12 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 								fragment.setDelegate { fragment1, dids, _, _ ->
 									val did = dids[0]
 
-									val inputMediaGame = TL_inputMediaGame()
-									inputMediaGame.id = TL_inputGameShortName()
-									inputMediaGame.id.short_name = game
-									inputMediaGame.id.bot_id = MessagesController.getInstance(intentAccount).getInputUser(res.users[0])
+									val inputMediaGame = TLInputMediaGame()
+
+									inputMediaGame.id = TLInputGameShortName().also {
+										it.shortName = game
+										it.botId = MessagesController.getInstance(intentAccount).getInputUser(res.users[0])
+									}
 
 									SendMessagesHelper.getInstance(intentAccount).sendGame(MessagesController.getInstance(intentAccount).getInputPeer(did), inputMediaGame, 0, 0)
 
@@ -3613,7 +3712,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							else if (botChat != null || botChannel != null) {
 								val user = if (res.users.isNotEmpty()) res.users[0] else null
 
-								if (user == null || user.bot && user.bot_nochats) {
+								if (user == null || user.bot && user.botNochats) {
 									try {
 										if (mainFragmentsStack.isNotEmpty()) {
 											BulletinFactory.of(mainFragmentsStack[mainFragmentsStack.size - 1]).createErrorBulletin(getString(R.string.BotCantJoinGroups)).show()
@@ -3642,33 +3741,33 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 									val did = dids[0]
 									val chat = MessagesController.getInstance(currentAccount).getChat(-did)
 
-									if (chat != null && (chat.creator || chat.admin_rights != null && chat.admin_rights.add_admins)) {
+									if (chat != null && (chat.creator || chat.adminRights != null && chat.adminRights!!.addAdmins)) {
 										MessagesController.getInstance(intentAccount).checkIsInChat(chat, user) { isInChatAlready, currentRights, currentRank ->
 											AndroidUtilities.runOnUIThread {
-												var requestingRights: TL_chatAdminRights? = null
+												var requestingRights: TLChatAdminRights? = null
 
 												if (botChatAdminParams != null) {
 													val adminParams = botChatAdminParams.split("[+ ]".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-													requestingRights = TL_chatAdminRights()
+													requestingRights = TLChatAdminRights()
 
 													for (adminParam in adminParams) {
 														when (adminParam) {
-															"change_info" -> requestingRights.change_info = true
-															"post_messages" -> requestingRights.post_messages = true
-															"edit_messages" -> requestingRights.edit_messages = true
-															"add_admins", "promote_members" -> requestingRights.add_admins = true
-															"delete_messages" -> requestingRights.delete_messages = true
-															"ban_users", "restrict_members" -> requestingRights.ban_users = true
-															"invite_users" -> requestingRights.invite_users = true
-															"pin_messages" -> requestingRights.pin_messages = true
-															"manage_video_chats", "manage_call" -> requestingRights.manage_call = true
+															"change_info" -> requestingRights.changeInfo = true
+															"post_messages" -> requestingRights.postMessages = true
+															"edit_messages" -> requestingRights.editMessages = true
+															"add_admins", "promote_members" -> requestingRights.addAdmins = true
+															"delete_messages" -> requestingRights.deleteMessages = true
+															"ban_users", "restrict_members" -> requestingRights.banUsers = true
+															"invite_users" -> requestingRights.inviteUsers = true
+															"pin_messages" -> requestingRights.pinMessages = true
+															"manage_video_chats", "manage_call" -> requestingRights.manageCall = true
 															"manage_chat", "other" -> requestingRights.other = true
 															"anonymous" -> requestingRights.anonymous = true
 														}
 													}
 												}
 
-												var editRights: TL_chatAdminRights? = null
+												var editRights: TLChatAdminRights? = null
 
 												if (requestingRights != null || currentRights != null) {
 													if (requestingRights == null) {
@@ -3679,15 +3778,15 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 													}
 													else {
 														editRights = currentRights
-														editRights.change_info = requestingRights.change_info || editRights.change_info
-														editRights.post_messages = requestingRights.post_messages || editRights.post_messages
-														editRights.edit_messages = requestingRights.edit_messages || editRights.edit_messages
-														editRights.add_admins = requestingRights.add_admins || editRights.add_admins
-														editRights.delete_messages = requestingRights.delete_messages || editRights.delete_messages
-														editRights.ban_users = requestingRights.ban_users || editRights.ban_users
-														editRights.invite_users = requestingRights.invite_users || editRights.invite_users
-														editRights.pin_messages = requestingRights.pin_messages || editRights.pin_messages
-														editRights.manage_call = requestingRights.manage_call || editRights.manage_call
+														editRights.changeInfo = requestingRights.changeInfo || editRights.changeInfo
+														editRights.postMessages = requestingRights.postMessages || editRights.postMessages
+														editRights.editMessages = requestingRights.editMessages || editRights.editMessages
+														editRights.addAdmins = requestingRights.addAdmins || editRights.addAdmins
+														editRights.deleteMessages = requestingRights.deleteMessages || editRights.deleteMessages
+														editRights.banUsers = requestingRights.banUsers || editRights.banUsers
+														editRights.inviteUsers = requestingRights.inviteUsers || editRights.inviteUsers
+														editRights.pinMessages = requestingRights.pinMessages || editRights.pinMessages
+														editRights.manageCall = requestingRights.manageCall || editRights.manageCall
 														editRights.anonymous = requestingRights.anonymous || editRights.anonymous
 														editRights.other = requestingRights.other || editRights.other
 													}
@@ -3716,7 +3815,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 													val editRightsActivity = ChatRightsEditActivity(user.id, -did, editRights, null, null, currentRank, ChatRightsEditActivity.TYPE_ADD_BOT, true, !isInChatAlready, botHash)
 
 													editRightsActivity.setDelegate(object : ChatRightsEditActivityDelegate {
-														override fun didSetRights(rights: Int, rightsAdmin: TL_chatAdminRights?, rightsBanned: TL_chatBannedRights?, rank: String?) {
+														override fun didSetRights(rights: Int, rightsAdmin: TLChatAdminRights?, rightsBanned: TLChatBannedRights?, rank: String?) {
 															fragment.removeSelfFromStack()
 															NotificationCenter.getInstance(intentAccount).postNotificationName(NotificationCenter.closeChats)
 														}
@@ -3842,7 +3941,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 															val cachedCall = accountInstance.messagesController.getGroupCall(-dialogId, false)
 
 															if (cachedCall != null) {
-																startCall(accountInstance.messagesController.getChat(-dialogId)!!, null, false, cachedCall.call?.rtmp_stream != true, this@LaunchActivity, voipLastFragment, accountInstance)
+																startCall(accountInstance.messagesController.getChat(-dialogId)!!, null, false, cachedCall.call?.rtmpStream != true, this@LaunchActivity, voipLastFragment, accountInstance)
 															}
 															else {
 																val chatFull = accountInstance.messagesController.getChatFull(-dialogId)
@@ -3857,7 +3956,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 																		accountInstance.messagesController.getGroupCall(-dialogId, true) {
 																			AndroidUtilities.runOnUIThread {
 																				val call = accountInstance.messagesController.getGroupCall(-dialogId, false)
-																				startCall(accountInstance.messagesController.getChat(-dialogId)!!, null, false, call == null || !call.call!!.rtmp_stream, this@LaunchActivity, voipLastFragment, accountInstance)
+																				startCall(accountInstance.messagesController.getChat(-dialogId)!!, null, false, call == null || !call.call!!.rtmpStream, this@LaunchActivity, voipLastFragment, accountInstance)
 																			}
 																		}
 																	}
@@ -3923,7 +4022,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		}
 		else if (group != null) {
 			if (state == 0) {
-				val req = TL_messages_checkChatInvite()
+				val req = TLMessagesCheckChatInvite()
 				req.hash = group
 
 				requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req, { response, error ->
@@ -3934,7 +4033,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							if (error == null && actionBarLayout != null) {
 								val invite = response as? ChatInvite
 
-								if (invite?.chat != null && (!isLeftFromChat(invite.chat) || invite.chat?.kicked != true && (!invite.chat?.username.isNullOrEmpty() || invite is TL_chatInvitePeek || invite.chat!!.has_geo))) {
+								if (invite?.chat != null && (!isLeftFromChat(invite.chat) || /*invite.chat?.kicked != true && */ (!invite.chat?.username.isNullOrEmpty() || invite is TLChatInvitePeek || invite.chat!!.hasGeo))) {
 									MessagesController.getInstance(intentAccount).putChat(invite.chat, false)
 
 									MessagesStorage.getInstance(intentAccount).putUsersAndChats(null, listOf(invite.chat!!), false, true)
@@ -3964,7 +4063,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 												val fragment = ChatActivity(args)
 
-												if (invite is TL_chatInvitePeek) {
+												if (invite is TLChatInvitePeek) {
 													fragment.setChatInvite(invite)
 												}
 
@@ -4048,7 +4147,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 												}, subscribeClickListener = object : OnClickListener {
 													override fun onClick(v: View) {
 														if (!isPaidChannel(inviteChat)) {
-															@Suppress("NAME_SHADOWING") val req = TL_messages_importChatInvite()
+															@Suppress("NAME_SHADOWING") val req = TLMessagesImportChatInvite()
 															req.hash = group
 
 															ConnectionsManager.getInstance(intentAccount).sendRequest(req, { response, error ->
@@ -4068,7 +4167,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 																		if (updates.chats.isNotEmpty()) {
 																			val chat = updates.chats[0]
 																			chat.left = false
-																			chat.kicked = false
+//																			chat.kicked = false
 
 																			MessagesController.getInstance(currentAccount).putUsers(updates.users, false)
 																			MessagesController.getInstance(currentAccount).putChats(updates.chats, false)
@@ -4097,7 +4196,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 														ioScope.launch {
 															val request = subscribeRequest(inviteChat.id)
 															val resp = ConnectionsManager.getInstance(intentAccount).performRequest(request)
-															@Suppress("NAME_SHADOWING") val error = resp as? TL_error
+															@Suppress("NAME_SHADOWING") val error = resp as? TLError
 
 															mainScope.launch {
 																fragment.visibleDialog?.setOnDismissListener {
@@ -4114,7 +4213,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 																	else {
 																		args.putInt(SubscriptionResultFragment.IMAGE_RES_ID, if (error == null) R.drawable.panda_success else R.drawable.panda_error)
 
-																		if (isOnlineCourse(inviteChat)) {
+																		if (isMasterclass(inviteChat)) {
 																			args.putString(SubscriptionResultFragment.DESCRIPTION, if (error == null) v.context.getString(R.string.online_course_success) else (error.text ?: ""))
 																		}
 																		else {
@@ -4186,7 +4285,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 				}, ConnectionsManager.RequestFlagFailOnServerErrors)
 			}
 			else if (state == 1) {
-				val req = TL_messages_importChatInvite()
+				val req = TLMessagesImportChatInvite()
 				req.hash = group
 
 				ConnectionsManager.getInstance(intentAccount).sendRequest(req, { response, error ->
@@ -4210,7 +4309,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 									updates?.chats?.firstOrNull()?.let { chat ->
 										chat.left = false
-										chat.kicked = false
+//										chat.kicked = false
 
 										MessagesController.getInstance(intentAccount).putUsers(updates.users, false)
 										MessagesController.getInstance(intentAccount).putChats(updates.chats, false)
@@ -4251,8 +4350,8 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		}
 		else if (sticker != null) {
 			if (mainFragmentsStack.isNotEmpty()) {
-				val stickerset = TL_inputStickerSetShortName()
-				stickerset.short_name = sticker
+				val stickerset = TLInputStickerSetShortName()
+				stickerset.shortName = sticker
 
 				val fragment = mainFragmentsStack[mainFragmentsStack.size - 1]
 				val alert: StickersAlert
@@ -4274,9 +4373,9 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		}
 		else if (emoji != null) {
 			if (mainFragmentsStack.isNotEmpty()) {
-				val stickerset = TL_inputStickerSetShortName()
+				val stickerset = TLInputStickerSetShortName()
 
-				stickerset.short_name = sticker ?: emoji
+				stickerset.shortName = sticker ?: emoji
 
 				val sets = ArrayList<InputStickerSet>(1)
 				sets.add(stickerset)
@@ -4341,16 +4440,14 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			val nonce = auth["nonce"]
 			val callbackUrl = auth["callback_url"]
 
-			val req = TL_account_getAuthorizationForm()
-			req.bot_id = bot_id.toLong()
+			val req = TLAccountGetAuthorizationForm()
+			req.botId = bot_id.toLong()
 			req.scope = auth["scope"]
-			req.public_key = auth["public_key"]
+			req.publicKey = auth["public_key"]
 
 			requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req) { response, error ->
-				val authorizationForm = response as TL_account_authorizationForm?
-
-				if (authorizationForm != null) {
-					val req2 = TL_account_getPassword()
+				if (response is TLAccountAuthorizationForm) {
+					val req2 = TLAccountGetPassword()
 
 					requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req2) { response1, _ ->
 						AndroidUtilities.runOnUIThread {
@@ -4362,9 +4459,9 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							}
 
 							if (response1 != null) {
-								val accountPassword = response1 as account_Password
-								MessagesController.getInstance(intentAccount).putUsers(authorizationForm.users, false)
-								presentFragment(PassportActivity(PassportActivity.TYPE_PASSWORD, req.bot_id, req.scope, req.public_key, payload, nonce, callbackUrl, authorizationForm, accountPassword))
+								val accountPassword = response1 as TLRPC.TLAccountPassword
+								MessagesController.getInstance(intentAccount).putUsers(response.users, false)
+								presentFragment(PassportActivity(PassportActivity.TYPE_PASSWORD, req.botId, req.scope, req.publicKey, payload, nonce, callbackUrl, response, accountPassword))
 							}
 						}
 					}
@@ -4391,7 +4488,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			}
 		}
 		else if (unsupportedUrl != null) {
-			val req = TL_help_getDeepLinkInfo()
+			val req = TLHelpGetDeepLinkInfo()
 			req.path = unsupportedUrl
 
 			requestId[0] = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, _ ->
@@ -4403,16 +4500,16 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						FileLog.e(e)
 					}
 
-					if (response is TL_help_deepLinkInfo) {
-						AlertsCreator.showUpdateAppAlert(this@LaunchActivity, response.message, response.update_app)
+					if (response is TLHelpDeepLinkInfo) {
+						AlertsCreator.showUpdateAppAlert(this@LaunchActivity, response.message, response.updateApp)
 					}
 				}
 			}
 		}
 		else if (lang != null) {
-			val req = TL_langpack_getLanguage()
-			req.lang_code = lang
-			req.lang_pack = "android"
+			val req = TLLangpackGetLanguage()
+			req.langCode = lang
+			req.langPack = "android"
 
 			requestId[0] = ConnectionsManager.getInstance(currentAccount).sendRequest(req) { response, error ->
 				AndroidUtilities.runOnUIThread {
@@ -4423,7 +4520,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						FileLog.e(e)
 					}
 
-					if (response is TL_langPackLanguage) {
+					if (response is TLLangPackLanguage) {
 						showAlertDialog(AlertsCreator.createLanguageAlert(this@LaunchActivity, response))
 					}
 					else if (error != null) {
@@ -4441,31 +4538,35 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			var ok = false
 
 			if (wallPaper.slug.isNullOrEmpty()) {
-				try {
-					val colorWallpaper = if (wallPaper.settings.third_background_color != 0) {
-						ColorWallpaper(Theme.COLOR_BACKGROUND_SLUG, wallPaper.settings.background_color, wallPaper.settings.second_background_color, wallPaper.settings.third_background_color, wallPaper.settings.fourth_background_color)
-					}
-					else {
-						ColorWallpaper(Theme.COLOR_BACKGROUND_SLUG, wallPaper.settings.background_color, wallPaper.settings.second_background_color, AndroidUtilities.getWallpaperRotation(wallPaper.settings.rotation, false))
-					}
+				val settings = wallPaper.settings
 
-					val wallpaperActivity = ThemePreviewActivity(colorWallpaper, null, true, false)
+				if (settings != null) {
+					try {
+						val colorWallpaper = if (settings.thirdBackgroundColor != 0) {
+							ColorWallpaper(Theme.COLOR_BACKGROUND_SLUG, settings.backgroundColor, settings.secondBackgroundColor, settings.thirdBackgroundColor, settings.fourthBackgroundColor)
+						}
+						else {
+							ColorWallpaper(Theme.COLOR_BACKGROUND_SLUG, settings.backgroundColor, settings.secondBackgroundColor, AndroidUtilities.getWallpaperRotation(settings.rotation, false))
+						}
 
-					AndroidUtilities.runOnUIThread {
-						presentFragment(wallpaperActivity)
+						val wallpaperActivity = ThemePreviewActivity(colorWallpaper, null, true, false)
+
+						AndroidUtilities.runOnUIThread {
+							presentFragment(wallpaperActivity)
+						}
+
+						ok = true
 					}
-
-					ok = true
-				}
-				catch (e: Exception) {
-					FileLog.e(e)
+					catch (e: Exception) {
+						FileLog.e(e)
+					}
 				}
 			}
 
 			if (!ok) {
-				val req = TL_account_getWallPaper()
+				val req = TLAccountGetWallPaper()
 
-				val inputWallPaperSlug = TL_inputWallPaperSlug()
+				val inputWallPaperSlug = TLInputWallPaperSlug()
 				inputWallPaperSlug.slug = wallPaper.slug
 
 				req.wallpaper = inputWallPaperSlug
@@ -4479,20 +4580,24 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							FileLog.e(e)
 						}
 
-						if (response is TL_wallPaper) {
-							val `object`: Any = if (response.pattern) {
-								val colorWallpaper = ColorWallpaper(response.slug, wallPaper.settings.background_color, wallPaper.settings.second_background_color, wallPaper.settings.third_background_color, wallPaper.settings.fourth_background_color, AndroidUtilities.getWallpaperRotation(wallPaper.settings.rotation, false), wallPaper.settings.intensity / 100.0f, wallPaper.settings.motion, null)
-								colorWallpaper.pattern = response
-								colorWallpaper
-							}
-							else {
-								response
-							}
+						if (response is TLWallPaper) {
+							val settings = wallPaper.settings
 
-							val wallpaperActivity = ThemePreviewActivity(`object`, null, true, false)
-							wallpaperActivity.setInitialModes(wallPaper.settings.blur, wallPaper.settings.motion)
+							if (settings != null) {
+								val `object`: Any = if (response.pattern) {
+									val colorWallpaper = ColorWallpaper(response.slug, settings.backgroundColor, settings.secondBackgroundColor, settings.thirdBackgroundColor, settings.fourthBackgroundColor, AndroidUtilities.getWallpaperRotation(settings.rotation, false), settings.intensity / 100.0f, settings.motion, null)
+									colorWallpaper.pattern = response
+									colorWallpaper
+								}
+								else {
+									response
+								}
 
-							presentFragment(wallpaperActivity)
+								val wallpaperActivity = ThemePreviewActivity(`object`, null, true, false)
+								wallpaperActivity.setInitialModes(settings.blur, settings.motion)
+
+								presentFragment(wallpaperActivity)
+							}
 						}
 						else {
 							showAlertDialog(AlertsCreator.createSimpleAlert(this@LaunchActivity, "${getString(R.string.ErrorOccurred)}\n${error?.text}"))
@@ -4509,10 +4614,10 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					requestId[0] = runCommentRequest(intentAccount, progressDialog, messageId, commentId, threadId, chat)
 				}
 				else {
-					val req = TL_channels_getChannels()
+					val req = TLChannelsGetChannels()
 
-					val inputChannel = TL_inputChannel()
-					inputChannel.channel_id = channelId
+					val inputChannel = TLInputChannel()
+					inputChannel.channelId = channelId
 
 					req.id.add(inputChannel)
 
@@ -4520,7 +4625,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						AndroidUtilities.runOnUIThread {
 							var notFound = true
 
-							if (response is TL_messages_chats) {
+							if (response is TLMessagesChats) {
 								if (response.chats.isNotEmpty()) {
 									notFound = false
 									MessagesController.getInstance(currentAccount).putChats(response.chats, false)
@@ -4552,10 +4657,10 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 				if (lastFragment == null || MessagesController.getInstance(intentAccount).checkCanOpenChat(args, lastFragment)) {
 					AndroidUtilities.runOnUIThread {
 						if (!actionBarLayout!!.presentFragment(ChatActivity(args))) {
-							val req = TL_channels_getChannels()
+							val req = TLChannelsGetChannels()
 
-							val inputChannel = TL_inputChannel()
-							inputChannel.channel_id = channelId
+							val inputChannel = TLInputChannel()
+							inputChannel.channelId = channelId
 
 							req.id.add(inputChannel)
 
@@ -4570,7 +4675,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 									var notFound = true
 
-									if (response is TL_messages_chats) {
+									if (response is TLMessagesChats) {
 										if (response.chats.isNotEmpty()) {
 											notFound = false
 
@@ -4604,11 +4709,11 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		}
 	}
 
-	private fun findContacts(userName: String?): List<TL_contact> {
+	private fun findContacts(userName: String?): List<TLContact> {
 		val messagesController = MessagesController.getInstance(currentAccount)
 		val contactsController = ContactsController.getInstance(currentAccount)
-		val contacts: List<TL_contact> = ArrayList(contactsController.contacts)
-		val foundContacts: MutableList<TL_contact> = ArrayList()
+		val contacts: List<TLContact> = ArrayList(contactsController.contacts)
+		val foundContacts: MutableList<TLContact> = ArrayList()
 
 		if (userName != null) {
 			val query1 = userName.trim().lowercase()
@@ -4623,15 +4728,15 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 				val queries = arrayOf<String?>(query1, query2)
 
 				for (contact in contacts) {
-					val user = messagesController.getUser(contact.user_id)
+					val user = messagesController.getUser(contact.userId)
 
 					if (user != null) {
-						if (user.self) {
+						if (user.isSelf) {
 							continue
 						}
 
 						val names = arrayOfNulls<String>(3)
-						names[0] = ContactsController.formatName(user.first_name, user.last_name).lowercase(Locale.getDefault())
+						names[0] = ContactsController.formatName(user.firstName, user.lastName).lowercase(Locale.getDefault())
 						names[1] = LocaleController.getInstance().getTranslitString(names[0])
 
 						if (names[0] == names[1]) {
@@ -4641,7 +4746,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 						if (UserObject.isReplyUser(user)) {
 							names[2] = getString(R.string.RepliesTitle).lowercase()
 						}
-						else if (user.self) {
+						else if (user.isSelf) {
 							names[2] = getString(R.string.SavedMessages).lowercase()
 						}
 
@@ -4882,7 +4987,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 					for (i in dids.indices) {
 						val did = dids[i]
-						SendMessagesHelper.getInstance(account).sendMessage(user, did, null, null, null, null, notify2, scheduleDate, false, null)
+						SendMessagesHelper.getInstance(account).sendMessage(user, did, null, null, null, null, notify2, scheduleDate)
 
 						if (!message.isNullOrEmpty()) {
 							SendMessagesHelper.prepareSendingText(accountInstance, message.toString(), did, notify, 0)
@@ -4928,7 +5033,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 							val arrayList = listOf(videoPath!!)
 
-							SendMessagesHelper.prepareSendingDocuments(accountInstance, arrayList, arrayList, null, captionToSend, null, did, null, null, null, null, notify, 0, false, null)
+							SendMessagesHelper.prepareSendingDocuments(accountInstance, arrayList, arrayList, null, captionToSend, null, did, null, null, null, null, notify, 0)
 						}
 					}
 					if (photoPathsArray != null && !photosEditorOpened) {
@@ -4937,7 +5042,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							sendingText = null
 						}
 
-						SendMessagesHelper.prepareSendingMedia(accountInstance, photoPathsArray!!, did, null, null, null, forceDocument = false, groupMedia = false, editingMessageObject = null, notify = notify, scheduleDate = 0, updateStickersOrder = false, isMediaSale = false, mediaSaleHash = null)
+						SendMessagesHelper.prepareSendingMedia(accountInstance, photoPathsArray!!, did, null, null, null, forceDocument = false, groupMedia = false, editingMessageObject = null, notify = notify, scheduleDate = 0, updateStickersOrder = false)
 					}
 
 					if (documentsPathsArray != null || documentsUrisArray != null) {
@@ -4946,7 +5051,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 							sendingText = null
 						}
 
-						SendMessagesHelper.prepareSendingDocuments(accountInstance, documentsPathsArray, documentsOriginalPathsArray, documentsUrisArray?.toList()?.let { ArrayList(it) }, captionToSend, documentsMimeType, did, null, null, null, null, notify, 0, false, null)
+						SendMessagesHelper.prepareSendingDocuments(accountInstance, documentsPathsArray, documentsOriginalPathsArray, documentsUrisArray?.toList()?.let { ArrayList(it) }, captionToSend, documentsMimeType, did, null, null, null, null, notify, 0)
 					}
 
 					if (sendingText != null) {
@@ -4956,7 +5061,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					if (!contactsToSend.isNullOrEmpty()) {
 						for (a in contactsToSend!!.indices) {
 							val user = contactsToSend!![a]
-							SendMessagesHelper.getInstance(account).sendMessage(user, did, null, null, null, null, notify, 0, false, null)
+							SendMessagesHelper.getInstance(account).sendMessage(user, did, null, null, null, null, notify, 0)
 						}
 					}
 
@@ -5031,6 +5136,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		return actionBarLayout?.presentFragment(fragment, removeLast, forceWithoutAnimation, true, false) == true
 	}
 
+	@Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
 	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
 		if (SharedConfig.passcodeHash.isNotEmpty() && SharedConfig.lastPauseTime != 0) {
 			SharedConfig.lastPauseTime = 0
@@ -5252,10 +5358,6 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 	}
 
 	override fun onUserLeaveHint() {
-		for (callback in onUserLeaveHintListeners) {
-			callback.run()
-		}
-
 		actionBarLayout?.onUserLeaveHint()
 	}
 
@@ -5451,7 +5553,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					return
 				}
 				else if (reason == AlertDialog.AlertReason.TERMS_UPDATED) {
-					showTosActivity(account, args[1] as TL_help_termsOfService)
+					showTosActivity(account, args[1] as TLHelpTermsOfService)
 					return
 				}
 
@@ -5466,7 +5568,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 					}
 
 					builder.setNegativeButton(getString(R.string.Retry)) { _, _ ->
-						ConnectionsManager.getInstance(currentAccount).resumeNetwork()
+						ConnectionsManager.getInstance(currentAccount).resumeNetworkMaybe()
 					}
 				}
 				else {
@@ -5542,7 +5644,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 					fragment.setDelegate { location, _, notify, scheduleDate ->
 						for ((_, messageObject) in waitingForLocation) {
-							SendMessagesHelper.getInstance(account).sendMessage(location, messageObject.dialogId, messageObject, null, null, null, notify, scheduleDate, false, null)
+							SendMessagesHelper.getInstance(account).sendMessage(location, messageObject.dialogId, messageObject, null, null, null, notify, scheduleDate)
 						}
 					}
 
@@ -5592,7 +5694,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 				}
 
 				ArticleViewer.getInstance().setParentActivity(this, mainFragmentsStack[mainFragmentsStack.size - 1])
-				ArticleViewer.getInstance().open(args[0] as TL_webPage, args[1] as String)
+				ArticleViewer.getInstance().open(args[0] as TLWebPage, args[1] as String)
 			}
 
 			NotificationCenter.didSetNewTheme -> {
@@ -5646,7 +5748,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 			NotificationCenter.historyImportProgressChanged -> {
 				if (args.size > 1 && mainFragmentsStack.isNotEmpty()) {
-					AlertsCreator.processError(currentAccount, args[2] as TL_error, mainFragmentsStack[mainFragmentsStack.size - 1], args[1] as TLObject)
+					AlertsCreator.processError(currentAccount, args[2] as TLError, mainFragmentsStack[mainFragmentsStack.size - 1], args[1] as TLObject)
 				}
 			}
 
@@ -5812,14 +5914,14 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			val peer = voIPService.getGroupCallPeer()
 
 			val did = if (peer != null) {
-				if (peer.user_id != 0L) {
-					peer.user_id
+				if (peer.userId != 0L) {
+					peer.userId
 				}
-				else if (peer.chat_id != 0L) {
-					-peer.chat_id
+				else if (peer.chatId != 0L) {
+					-peer.chatId
 				}
 				else {
-					-peer.channel_id
+					-peer.channelId
 				}
 			}
 			else {
@@ -5827,9 +5929,9 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 			}
 
 			val participant = call?.participants?.get(did)
-			val mutedByAdmin = participant != null && !participant.can_self_unmute && participant.muted
+			val mutedByAdmin = participant != null && !participant.canSelfUnmute && participant.muted
 
-			wasMutedByAdminRaisedHand = mutedByAdmin && participant!!.raise_hand_rating != 0L
+			wasMutedByAdminRaisedHand = mutedByAdmin && participant!!.raiseHandRating != 0L
 
 			if (!checkOnly && wasMuted && !wasMutedByAdminRaisedHand && !mutedByAdmin && GroupCallActivity.groupCallInstance == null) {
 				showVoiceChatTooltip(UndoView.ACTION_VOIP_CAN_NOW_SPEAK)
@@ -6152,16 +6254,23 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 		}
 	}
 
+	override fun onTrimMemory(level: Int) {
+		super.onTrimMemory(level)
+		cleanupMemory()
+	}
+
+	@Deprecated("Deprecated in Java")
 	override fun onLowMemory() {
 		super.onLowMemory()
+		cleanupMemory()
+	}
 
-		if (actionBarLayout != null) {
-			actionBarLayout?.onLowMemory()
+	private fun cleanupMemory() {
+		actionBarLayout?.onLowMemory()
 
-			if (AndroidUtilities.isTablet()) {
-				rightActionBarLayout?.onLowMemory()
-				layersActionBarLayout?.onLowMemory()
-			}
+		if (AndroidUtilities.isTablet()) {
+			rightActionBarLayout?.onLowMemory()
+			layersActionBarLayout?.onLowMemory()
 		}
 	}
 
@@ -6609,7 +6718,7 @@ class LaunchActivity : BasePermissionsActivity(), ActionBarLayoutDelegate, Notif
 
 	companion object {
 		@JvmField
-		val PREFIX_ELLOAPP_PATTERN: Pattern = Pattern.compile("^(?:http(?:s|)://|)([A-z0-9-]+?)\\.elloapp\\.me")
+		val PREFIX_ELLOAPP_PATTERN = Pattern.compile("^(?:http(?:s|)://|)([A-z0-9-]+?)\\.ello\\.team")
 
 		var REFERRAL_CODE: String? = null
 		const val SCREEN_CAPTURE_REQUEST_CODE = 520

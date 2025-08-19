@@ -4,14 +4,13 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
-import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -65,7 +64,6 @@ import org.telegram.ui.Components.LayoutHelper;
 import java.util.ArrayList;
 
 public class ThemeSetUrlActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
-
 	private final static int done_button = 1;
 	private EditTextBoldCursor linkField;
 	private EditTextBoldCursor nameField;
@@ -83,13 +81,12 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 	private int checkReqId;
 	private String lastCheckName;
 	private Runnable checkRunnable;
-	private boolean lastNameAvailable;
 	private boolean ignoreCheck;
 	private CharSequence infoText;
-	private boolean creatingNewTheme;
-	private Theme.ThemeInfo themeInfo;
-	private Theme.ThemeAccent themeAccent;
-	private TLRPC.TL_theme info;
+	private final boolean creatingNewTheme;
+	private final Theme.ThemeInfo themeInfo;
+	private final Theme.ThemeAccent themeAccent;
+	private final TLRPC.TLTheme info;
 
 	public ThemeSetUrlActivity(Theme.ThemeInfo theme, Theme.ThemeAccent accent, boolean newTheme) {
 		super();
@@ -184,7 +181,7 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 
 		divider = new View(context) {
 			@Override
-			protected void onDraw(Canvas canvas) {
+			protected void onDraw(@NonNull Canvas canvas) {
 				canvas.drawLine(LocaleController.isRTL ? 0 : AndroidUtilities.dp(20), getMeasuredHeight() - 1, getMeasuredWidth() - (LocaleController.isRTL ? AndroidUtilities.dp(20) : 0), getMeasuredHeight() - 1, Theme.dividerPaint);
 			}
 		};
@@ -296,7 +293,7 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 
 		if (creatingNewTheme) {
 			helpInfoCell.setBackgroundDrawable(Theme.getThemedDrawable(context, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
-			messagesCell = new ThemePreviewMessagesCell(context, parentLayout, 1);
+			messagesCell = new ThemePreviewMessagesCell(context, 1);
 			linearLayout.addView(messagesCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
 			createCell = new TextSettingsCell(context);
@@ -416,7 +413,6 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 				ConnectionsManager.getInstance(currentAccount).cancelRequest(checkReqId, true);
 			}
 		}
-		lastNameAvailable = false;
 		if (url != null) {
 			if (url.startsWith("_") || url.endsWith("_")) {
 				setCheckText(LocaleController.getString("SetUrlInvalid", R.string.SetUrlInvalid), Theme.key_windowBackgroundWhiteRedText4);
@@ -473,20 +469,19 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 			setCheckText(LocaleController.getString("SetUrlChecking", R.string.SetUrlChecking), Theme.key_windowBackgroundWhiteGrayText8);
 			lastCheckName = url;
 			checkRunnable = () -> {
-				TLRPC.TL_account_createTheme req = new TLRPC.TL_account_createTheme();
+				var req = new TLRPC.TLAccountCreateTheme();
 				req.slug = url;
 				req.title = "";
-				req.document = new TLRPC.TL_inputDocumentEmpty();
+				req.document = new TLRPC.TLInputDocumentEmpty();
+
 				checkReqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 					checkReqId = 0;
 					if (lastCheckName != null && lastCheckName.equals(url)) {
 						if (error == null || !"THEME_SLUG_INVALID".equals(error.text) && !"THEME_SLUG_OCCUPIED".equals(error.text)) {
 							setCheckText(LocaleController.formatString("SetUrlAvailable", R.string.SetUrlAvailable, url), Theme.key_windowBackgroundWhiteGreenText);
-							lastNameAvailable = true;
 						}
 						else {
 							setCheckText(LocaleController.getString("SetUrlInUse", R.string.SetUrlInUse), Theme.key_windowBackgroundWhiteRedText4);
-							lastNameAvailable = false;
 						}
 					}
 				}), ConnectionsManager.RequestFlagFailOnServerErrors);
@@ -554,10 +549,10 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 
 		progressDialog = new AlertDialog(getParentActivity(), 3);
 
-		final TLRPC.TL_account_updateTheme req = new TLRPC.TL_account_updateTheme();
-		TLRPC.TL_inputTheme inputTheme = new TLRPC.TL_inputTheme();
+		final var req = new TLRPC.TLAccountUpdateTheme();
+		var inputTheme = new TLRPC.TLInputTheme();
 		inputTheme.id = info.id;
-		inputTheme.access_hash = info.access_hash;
+		inputTheme.accessHash = info.accessHash;
 		req.theme = inputTheme;
 		req.format = "android";
 		req.slug = newUrl;
@@ -567,8 +562,7 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 		req.flags |= 2;
 
 		final int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
-			if (response instanceof TLRPC.TL_theme) {
-				TLRPC.TL_theme theme = (TLRPC.TL_theme)response;
+			if (response instanceof TLRPC.TLTheme theme) {
 				AndroidUtilities.runOnUIThread(() -> {
 					try {
 						progressDialog.dismiss();
@@ -708,20 +702,20 @@ public class ThemeSetUrlActivity extends BaseFragment implements NotificationCen
 
 	public class LinkSpan extends ClickableSpan {
 
-		private String url;
+		private final String url;
 
 		public LinkSpan(String value) {
 			url = value;
 		}
 
 		@Override
-		public void updateDrawState(TextPaint ds) {
+		public void updateDrawState(@NonNull TextPaint ds) {
 			super.updateDrawState(ds);
 			ds.setUnderlineText(false);
 		}
 
 		@Override
-		public void onClick(View widget) {
+		public void onClick(@NonNull View widget) {
 			try {
 				android.content.ClipboardManager clipboard = (android.content.ClipboardManager)ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
 				android.content.ClipData clip = android.content.ClipData.newPlainText("label", url);

@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
  * Copyright Mykhailo Mykytyn, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.ActionBar;
 
@@ -58,7 +58,6 @@ import android.os.SystemClock;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.util.Base64;
-import android.util.Log;
 import android.util.LongSparseArray;
 import android.util.SparseArray;
 import android.util.StateSet;
@@ -88,7 +87,7 @@ import org.telegram.messenger.time.SunDate;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.tgnet.tlrpc.Vector;
+import org.telegram.tgnet.Vector;
 import org.telegram.ui.Components.AudioVisualizerDrawable;
 import org.telegram.ui.Components.BackgroundGradientDrawable;
 import org.telegram.ui.Components.ChoosingStickerStatusDrawable;
@@ -154,7 +153,7 @@ public class Theme {
 	public static class PatternsLoader implements NotificationCenter.NotificationCenterDelegate {
 
 		private static class LoadingPattern {
-			public TLRPC.TL_wallPaper pattern;
+			public TLRPC.TLWallPaper pattern;
 			public ArrayList<ThemeAccent> accents = new ArrayList<>();
 		}
 
@@ -231,9 +230,9 @@ public class Theme {
 				if (slugs == null) {
 					return;
 				}
-				TLRPC.TL_account_getMultiWallPapers req = new TLRPC.TL_account_getMultiWallPapers();
+				TLRPC.TLAccountGetMultiWallPapers req = new TLRPC.TLAccountGetMultiWallPapers();
 				for (int a = 0, N = slugs.size(); a < N; a++) {
-					TLRPC.TL_inputWallPaperSlug slug = new TLRPC.TL_inputWallPaperSlug();
+					TLRPC.TLInputWallPaperSlug slug = new TLRPC.TLInputWallPaperSlug();
 					slug.slug = slugs.get(a);
 					req.wallpapers.add(slug);
 				}
@@ -243,10 +242,10 @@ public class Theme {
 						ArrayList<ThemeAccent> createdAccents = null;
 						for (int b = 0, N2 = res.objects.size(); b < N2; b++) {
 							TLRPC.WallPaper object = (TLRPC.WallPaper)res.objects.get(b);
-							if (!(object instanceof TLRPC.TL_wallPaper)) {
+							if (!(object instanceof TLRPC.TLWallPaper)) {
 								continue;
 							}
-							TLRPC.TL_wallPaper wallPaper = (TLRPC.TL_wallPaper)object;
+							TLRPC.TLWallPaper wallPaper = (TLRPC.TLWallPaper)object;
 							if (wallPaper.pattern) {
 								File patternPath = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(wallPaper.document, true);
 								Boolean exists = null;
@@ -258,7 +257,7 @@ public class Theme {
 											exists = patternPath.exists();
 										}
 										if (patternBitmap != null || exists) {
-											patternBitmap = createWallpaperForAccent(patternBitmap, "application/x-tgwallpattern".equals(wallPaper.document.mime_type), patternPath, accent);
+											patternBitmap = createWallpaperForAccent(patternBitmap, "application/x-tgwallpattern".equals(wallPaper.document.mimeType), patternPath, accent);
 											if (createdAccents == null) {
 												createdAccents = new ArrayList<>();
 											}
@@ -434,13 +433,13 @@ public class Theme {
 				if (loadingPattern != null) {
 					Utilities.globalQueue.postRunnable(() -> {
 						ArrayList<ThemeAccent> createdAccents = null;
-						TLRPC.TL_wallPaper wallPaper = loadingPattern.pattern;
+						TLRPC.TLWallPaper wallPaper = loadingPattern.pattern;
 						File patternPath = FileLoader.getInstance(UserConfig.selectedAccount).getPathToAttach(wallPaper.document, true);
 						Bitmap patternBitmap = null;
 						for (int a = 0, N = loadingPattern.accents.size(); a < N; a++) {
 							ThemeAccent accent = loadingPattern.accents.get(a);
 							if (accent.patternSlug.equals(wallPaper.slug)) {
-								patternBitmap = createWallpaperForAccent(patternBitmap, "application/x-tgwallpattern".equals(wallPaper.document.mime_type), patternPath, accent);
+								patternBitmap = createWallpaperForAccent(patternBitmap, "application/x-tgwallpattern".equals(wallPaper.document.mimeType), patternPath, accent);
 								if (createdAccents == null) {
 									createdAccents = new ArrayList<>();
 									createdAccents.add(accent);
@@ -484,8 +483,8 @@ public class Theme {
 		public float patternIntensity;
 		public boolean patternMotion;
 
-		public TLRPC.TL_theme info;
-		public TLRPC.TL_wallPaper pattern;
+		public TLRPC.TLTheme info;
+		public TLRPC.TLWallPaper pattern;
 		public int account;
 
 		public String pathToFile;
@@ -1200,7 +1199,7 @@ public class Theme {
 
 		public int account;
 
-		public TLRPC.TL_theme info;
+		public TLRPC.TLTheme info;
 		public boolean loaded = true;
 
 		public String uploadingThumb;
@@ -1548,7 +1547,7 @@ public class Theme {
 				if (object.has("info")) {
 					try {
 						SerializedData serializedData = new SerializedData(Utilities.hexToBytes(object.getString("info")));
-						themeInfo.info = (TLRPC.TL_theme)TLRPC.Theme.TLdeserialize(serializedData, serializedData.readInt32(true), true);
+						themeInfo.info = (TLRPC.TLTheme)TLRPC.TLTheme.deserialize(serializedData, serializedData.readInt32(true), true);
 					}
 					catch (Throwable e) {
 						FileLog.e(e);
@@ -1676,14 +1675,14 @@ public class Theme {
 			}
 		}
 
-		public static boolean accentEquals(ThemeAccent accent, TLRPC.ThemeSettings settings) {
-			int bottomColor = settings.message_colors.size() > 0 ? settings.message_colors.get(0) | 0xff000000 : 0;
-			int myMessagesGradientAccentColor1 = settings.message_colors.size() > 1 ? settings.message_colors.get(1) | 0xff000000 : 0;
+		public static boolean accentEquals(ThemeAccent accent, TLRPC.TLThemeSettings settings) {
+			int bottomColor = settings.messageColors.size() > 0 ? settings.messageColors.get(0) | 0xff000000 : 0;
+			int myMessagesGradientAccentColor1 = settings.messageColors.size() > 1 ? settings.messageColors.get(1) | 0xff000000 : 0;
 			if (bottomColor == myMessagesGradientAccentColor1) {
 				myMessagesGradientAccentColor1 = 0;
 			}
-			int myMessagesGradientAccentColor2 = settings.message_colors.size() > 2 ? settings.message_colors.get(2) | 0xff000000 : 0;
-			int myMessagesGradientAccentColor3 = settings.message_colors.size() > 3 ? settings.message_colors.get(3) | 0xff000000 : 0;
+			int myMessagesGradientAccentColor2 = settings.messageColors.size() > 2 ? settings.messageColors.get(2) | 0xff000000 : 0;
+			int myMessagesGradientAccentColor3 = settings.messageColors.size() > 3 ? settings.messageColors.get(3) | 0xff000000 : 0;
 			int backgroundOverrideColor = 0;
 			long backgroundGradientOverrideColor1 = 0;
 			long backgroundGradientOverrideColor2 = 0;
@@ -1692,95 +1691,101 @@ public class Theme {
 			String patternSlug = null;
 			float patternIntensity = 0;
 			if (settings.wallpaper != null && settings.wallpaper.settings != null) {
-				backgroundOverrideColor = getWallpaperColor(settings.wallpaper.settings.background_color);
-				if (settings.wallpaper.settings.second_background_color == 0) {
+				backgroundOverrideColor = getWallpaperColor(settings.wallpaper.settings.backgroundColor);
+				if (settings.wallpaper.settings.secondBackgroundColor == 0) {
 					backgroundGradientOverrideColor1 = 0x100000000L;
 				}
 				else {
-					backgroundGradientOverrideColor1 = getWallpaperColor(settings.wallpaper.settings.second_background_color);
+					backgroundGradientOverrideColor1 = getWallpaperColor(settings.wallpaper.settings.secondBackgroundColor);
 				}
-				if (settings.wallpaper.settings.third_background_color == 0) {
+				if (settings.wallpaper.settings.thirdBackgroundColor == 0) {
 					backgroundGradientOverrideColor2 = 0x100000000L;
 				}
 				else {
-					backgroundGradientOverrideColor2 = getWallpaperColor(settings.wallpaper.settings.third_background_color);
+					backgroundGradientOverrideColor2 = getWallpaperColor(settings.wallpaper.settings.thirdBackgroundColor);
 				}
-				if (settings.wallpaper.settings.fourth_background_color == 0) {
+				if (settings.wallpaper.settings.fourthBackgroundColor == 0) {
 					backgroundGradientOverrideColor3 = 0x100000000L;
 				}
 				else {
-					backgroundGradientOverrideColor3 = getWallpaperColor(settings.wallpaper.settings.fourth_background_color);
+					backgroundGradientOverrideColor3 = getWallpaperColor(settings.wallpaper.settings.fourthBackgroundColor);
 				}
 				backgroundRotation = AndroidUtilities.getWallpaperRotation(settings.wallpaper.settings.rotation, false);
-				if (!(settings.wallpaper instanceof TLRPC.TL_wallPaperNoFile) && settings.wallpaper.pattern) {
-					patternSlug = settings.wallpaper.slug;
-					patternIntensity = settings.wallpaper.settings.intensity / 100.0f;
+				if (settings.wallpaper instanceof TLRPC.TLWallPaper wallpaper) {
+					if (wallpaper.pattern) {
+						patternSlug = wallpaper.slug;
+						patternIntensity = settings.wallpaper.settings.intensity / 100.0f;
+					}
 				}
 			}
-			return settings.accent_color == accent.accentColor && settings.outbox_accent_color == accent.accentColor2 && bottomColor == accent.myMessagesAccentColor && myMessagesGradientAccentColor1 == accent.myMessagesGradientAccentColor1 && myMessagesGradientAccentColor2 == accent.myMessagesGradientAccentColor2 && myMessagesGradientAccentColor3 == accent.myMessagesGradientAccentColor3 && settings.message_colors_animated == accent.myMessagesAnimated && backgroundOverrideColor == accent.backgroundOverrideColor && backgroundGradientOverrideColor1 == accent.backgroundGradientOverrideColor1 && backgroundGradientOverrideColor2 == accent.backgroundGradientOverrideColor2 && backgroundGradientOverrideColor3 == accent.backgroundGradientOverrideColor3 && backgroundRotation == accent.backgroundRotation && TextUtils.equals(patternSlug, accent.patternSlug) && Math.abs(patternIntensity - accent.patternIntensity) < 0.001;
+			return settings.accentColor == accent.accentColor && settings.outboxAccentColor == accent.accentColor2 && bottomColor == accent.myMessagesAccentColor && myMessagesGradientAccentColor1 == accent.myMessagesGradientAccentColor1 && myMessagesGradientAccentColor2 == accent.myMessagesGradientAccentColor2 && myMessagesGradientAccentColor3 == accent.myMessagesGradientAccentColor3 && settings.messageColorsAnimated == accent.myMessagesAnimated && backgroundOverrideColor == accent.backgroundOverrideColor && backgroundGradientOverrideColor1 == accent.backgroundGradientOverrideColor1 && backgroundGradientOverrideColor2 == accent.backgroundGradientOverrideColor2 && backgroundGradientOverrideColor3 == accent.backgroundGradientOverrideColor3 && backgroundRotation == accent.backgroundRotation && TextUtils.equals(patternSlug, accent.patternSlug) && Math.abs(patternIntensity - accent.patternIntensity) < 0.001;
 		}
 
-		public static void fillAccentValues(ThemeAccent themeAccent, TLRPC.ThemeSettings settings) {
-			themeAccent.accentColor = settings.accent_color;
-			themeAccent.accentColor2 = settings.outbox_accent_color;
-			themeAccent.myMessagesAccentColor = settings.message_colors.size() > 0 ? settings.message_colors.get(0) | 0xff000000 : 0;
-			themeAccent.myMessagesGradientAccentColor1 = settings.message_colors.size() > 1 ? settings.message_colors.get(1) | 0xff000000 : 0;
+		public static void fillAccentValues(ThemeAccent themeAccent, TLRPC.TLThemeSettings settings) {
+			themeAccent.accentColor = settings.accentColor;
+			themeAccent.accentColor2 = settings.outboxAccentColor;
+			themeAccent.myMessagesAccentColor = settings.messageColors.size() > 0 ? settings.messageColors.get(0) | 0xff000000 : 0;
+			themeAccent.myMessagesGradientAccentColor1 = settings.messageColors.size() > 1 ? settings.messageColors.get(1) | 0xff000000 : 0;
 			if (themeAccent.myMessagesAccentColor == themeAccent.myMessagesGradientAccentColor1) {
 				themeAccent.myMessagesGradientAccentColor1 = 0;
 			}
-			themeAccent.myMessagesGradientAccentColor2 = settings.message_colors.size() > 2 ? settings.message_colors.get(2) | 0xff000000 : 0;
-			themeAccent.myMessagesGradientAccentColor3 = settings.message_colors.size() > 3 ? settings.message_colors.get(3) | 0xff000000 : 0;
-			themeAccent.myMessagesAnimated = settings.message_colors_animated;
+			themeAccent.myMessagesGradientAccentColor2 = settings.messageColors.size() > 2 ? settings.messageColors.get(2) | 0xff000000 : 0;
+			themeAccent.myMessagesGradientAccentColor3 = settings.messageColors.size() > 3 ? settings.messageColors.get(3) | 0xff000000 : 0;
+			themeAccent.myMessagesAnimated = settings.messageColorsAnimated;
 			if (settings.wallpaper != null && settings.wallpaper.settings != null) {
-				if (settings.wallpaper.settings.background_color == 0) {
+				if (settings.wallpaper.settings.backgroundColor == 0) {
 					themeAccent.backgroundOverrideColor = 0x100000000L;
 				}
 				else {
-					themeAccent.backgroundOverrideColor = getWallpaperColor(settings.wallpaper.settings.background_color);
+					themeAccent.backgroundOverrideColor = getWallpaperColor(settings.wallpaper.settings.backgroundColor);
 				}
-				if ((settings.wallpaper.settings.flags & 16) != 0 && settings.wallpaper.settings.second_background_color == 0) {
+				if ((settings.wallpaper.settings.flags & 16) != 0 && settings.wallpaper.settings.secondBackgroundColor == 0) {
 					themeAccent.backgroundGradientOverrideColor1 = 0x100000000L;
 				}
 				else {
-					themeAccent.backgroundGradientOverrideColor1 = getWallpaperColor(settings.wallpaper.settings.second_background_color);
+					themeAccent.backgroundGradientOverrideColor1 = getWallpaperColor(settings.wallpaper.settings.secondBackgroundColor);
 				}
-				if ((settings.wallpaper.settings.flags & 32) != 0 && settings.wallpaper.settings.third_background_color == 0) {
+				if ((settings.wallpaper.settings.flags & 32) != 0 && settings.wallpaper.settings.thirdBackgroundColor == 0) {
 					themeAccent.backgroundGradientOverrideColor2 = 0x100000000L;
 				}
 				else {
-					themeAccent.backgroundGradientOverrideColor2 = getWallpaperColor(settings.wallpaper.settings.third_background_color);
+					themeAccent.backgroundGradientOverrideColor2 = getWallpaperColor(settings.wallpaper.settings.thirdBackgroundColor);
 				}
-				if ((settings.wallpaper.settings.flags & 64) != 0 && settings.wallpaper.settings.fourth_background_color == 0) {
+				if ((settings.wallpaper.settings.flags & 64) != 0 && settings.wallpaper.settings.fourthBackgroundColor == 0) {
 					themeAccent.backgroundGradientOverrideColor3 = 0x100000000L;
 				}
 				else {
-					themeAccent.backgroundGradientOverrideColor3 = getWallpaperColor(settings.wallpaper.settings.fourth_background_color);
+					themeAccent.backgroundGradientOverrideColor3 = getWallpaperColor(settings.wallpaper.settings.fourthBackgroundColor);
 				}
+
 				themeAccent.backgroundRotation = AndroidUtilities.getWallpaperRotation(settings.wallpaper.settings.rotation, false);
-				if (!(settings.wallpaper instanceof TLRPC.TL_wallPaperNoFile) && settings.wallpaper.pattern) {
-					themeAccent.patternSlug = settings.wallpaper.slug;
-					themeAccent.patternIntensity = settings.wallpaper.settings.intensity / 100.0f;
-					themeAccent.patternMotion = settings.wallpaper.settings.motion;
+
+				if (settings.wallpaper instanceof TLRPC.TLWallPaper wallpaper) {
+					if (wallpaper.pattern) {
+						themeAccent.patternSlug = wallpaper.slug;
+						themeAccent.patternIntensity = wallpaper.settings.intensity / 100.0f;
+						themeAccent.patternMotion = wallpaper.settings.motion;
+					}
 				}
 			}
 		}
 
-		public ThemeAccent createNewAccent(TLRPC.ThemeSettings settings) {
+		public ThemeAccent createNewAccent(TLRPC.TLThemeSettings settings) {
 			ThemeAccent themeAccent = new ThemeAccent();
 			fillAccentValues(themeAccent, settings);
 			themeAccent.parentTheme = this;
 			return themeAccent;
 		}
 
-		public ThemeAccent createNewAccent(TLRPC.TL_theme info, int account) {
+		public ThemeAccent createNewAccent(TLRPC.TLTheme info, int account) {
 			return createNewAccent(info, account, false, 0);
 		}
 
-		public ThemeAccent createNewAccent(TLRPC.TL_theme info, int account, boolean ignoreThemeInfoId, int settingsIndex) {
+		public ThemeAccent createNewAccent(TLRPC.TLTheme info, int account, boolean ignoreThemeInfoId, int settingsIndex) {
 			if (info == null) {
 				return null;
 			}
-			TLRPC.ThemeSettings settings = null;
+			TLRPC.TLThemeSettings settings = null;
 			if (settingsIndex < info.settings.size()) {
 				settings = info.settings.get(settingsIndex);
 			}
@@ -1936,13 +1941,13 @@ public class Theme {
 										patternIntensity = themeInfo.patternIntensity;
 										newPathToWallpaper = themeInfo.pathToWallpaper;
 
-										TLRPC.TL_account_getWallPaper req = new TLRPC.TL_account_getWallPaper();
-										TLRPC.TL_inputWallPaperSlug inputWallPaperSlug = new TLRPC.TL_inputWallPaperSlug();
+										TLRPC.TLAccountGetWallPaper req = new TLRPC.TLAccountGetWallPaper();
+										TLRPC.TLInputWallPaperSlug inputWallPaperSlug = new TLRPC.TLInputWallPaperSlug();
 										inputWallPaperSlug.slug = themeInfo.slug;
 										req.wallpaper = inputWallPaperSlug;
 										ConnectionsManager.getInstance(themeInfo.account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-											if (response instanceof TLRPC.TL_wallPaper) {
-												TLRPC.TL_wallPaper wallPaper = (TLRPC.TL_wallPaper)response;
+											if (response instanceof TLRPC.TLWallPaper) {
+												TLRPC.TLWallPaper wallPaper = (TLRPC.TLWallPaper)response;
 												loadingThemeWallpaperName = FileLoader.getAttachFileName(wallPaper.document);
 												addObservers();
 												FileLoader.getInstance(themeInfo.account).loadFile(wallPaper.document, wallPaper, FileLoader.PRIORITY_NORMAL, 1);
@@ -4598,7 +4603,7 @@ public class Theme {
 									if (version >= 5) {
 										if (data.readBool(true)) {
 											accent.account = data.readInt32(true);
-											accent.info = (TLRPC.TL_theme)TLRPC.Theme.TLdeserialize(data, data.readInt32(true), true);
+											accent.info = (TLRPC.TLTheme)TLRPC.TLTheme.deserialize(data, data.readInt32(true), true);
 										}
 									}
 									if (accent.info != null) {
@@ -5894,7 +5899,7 @@ public class Theme {
 		}
 	}
 
-	public static ThemeInfo fillThemeValues(File file, String themeName, TLRPC.TL_theme theme) {
+	public static ThemeInfo fillThemeValues(File file, String themeName, TLRPC.TLTheme theme) {
 		try {
 			ThemeInfo themeInfo = new ThemeInfo();
 			themeInfo.name = themeName;
@@ -5981,7 +5986,7 @@ public class Theme {
 		return null;
 	}
 
-	public static ThemeInfo applyThemeFile(File file, String themeName, TLRPC.TL_theme theme, boolean temporary) {
+	public static ThemeInfo applyThemeFile(File file, String themeName, TLRPC.TLTheme theme, boolean temporary) {
 		try {
 			if (!themeName.toLowerCase().endsWith(".attheme")) {
 				themeName += ".attheme";
@@ -7176,7 +7181,7 @@ public class Theme {
 				continue;
 			}
 			ThemeAccent accent = themeInfo.getAccent(false);
-			TLRPC.TL_theme info;
+			TLRPC.TLTheme info;
 			int account;
 			if (themeInfo.info != null) {
 				info = themeInfo.info;
@@ -7194,19 +7199,19 @@ public class Theme {
 			}
 
 			loadingCurrentTheme++;
-			TLRPC.TL_account_getTheme req = new TLRPC.TL_account_getTheme();
-			req.document_id = info.document.id;
+			TLRPC.TLAccountGetTheme req = new TLRPC.TLAccountGetTheme();
+			req.documentId = info.document.id;
 			req.format = "android";
-			TLRPC.TL_inputTheme inputTheme = new TLRPC.TL_inputTheme();
-			inputTheme.access_hash = info.access_hash;
+			TLRPC.TLInputTheme inputTheme = new TLRPC.TLInputTheme();
+			inputTheme.accessHash = info.accessHash;
 			inputTheme.id = info.id;
 			req.theme = inputTheme;
 			ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 				loadingCurrentTheme--;
 				boolean changed = false;
-				if (response instanceof TLRPC.TL_theme) {
-					TLRPC.TL_theme theme = (TLRPC.TL_theme)response;
-					TLRPC.ThemeSettings settings = null;
+				if (response instanceof TLRPC.TLTheme) {
+					TLRPC.TLTheme theme = (TLRPC.TLTheme)response;
+					TLRPC.TLThemeSettings settings = null;
 					if (theme.settings.size() > 0) {
 						settings = theme.settings.get(0);
 					}
@@ -7251,21 +7256,21 @@ public class Theme {
 			return;
 		}
 		loadingRemoteThemes[currentAccount] = true;
-		TLRPC.TL_account_getThemes req = new TLRPC.TL_account_getThemes();
+		TLRPC.TLAccountGetThemes req = new TLRPC.TLAccountGetThemes();
 		req.format = "android";
 		if (!MediaDataController.getInstance(currentAccount).defaultEmojiThemes.isEmpty()) {
 			req.hash = remoteThemesHash[currentAccount];
 		}
 		if (BuildConfig.DEBUG) {
-			Log.i("theme", "loading remote themes, hash " + req.hash);
+			FileLog.d("loading remote themes, hash " + req.hash);
 		}
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
 			loadingRemoteThemes[currentAccount] = false;
-			if (response instanceof TLRPC.TL_account_themes) {
-				TLRPC.TL_account_themes res = (TLRPC.TL_account_themes)response;
+			if (response instanceof TLRPC.TLAccountThemes) {
+				TLRPC.TLAccountThemes res = (TLRPC.TLAccountThemes)response;
 				remoteThemesHash[currentAccount] = res.hash;
 				lastLoadingThemesTime[currentAccount] = (int)(System.currentTimeMillis() / 1000);
-				ArrayList<TLRPC.TL_theme> emojiPreviewThemes = new ArrayList<>();
+				ArrayList<TLRPC.TLTheme> emojiPreviewThemes = new ArrayList<>();
 				ArrayList<Object> oldServerThemes = new ArrayList<>();
 				for (int a = 0, N = themes.size(); a < N; a++) {
 					ThemeInfo info = themes.get(a);
@@ -7284,17 +7289,17 @@ public class Theme {
 				boolean loadPatterns = false;
 				boolean added = false;
 				for (int a = 0, N = res.themes.size(); a < N; a++) {
-					TLRPC.TL_theme t = res.themes.get(a);
-					if (!(t instanceof TLRPC.TL_theme)) {
+					TLRPC.TLTheme t = res.themes.get(a);
+					if (!(t instanceof TLRPC.TLTheme)) {
 						continue;
 					}
-					TLRPC.TL_theme theme = t;
+					TLRPC.TLTheme theme = t;
 					if (theme.isDefault) {
 						emojiPreviewThemes.add(theme);
 					}
 					if (theme.settings != null && theme.settings.size() > 0) {
 						for (int i = 0; i < theme.settings.size(); i++) {
-							TLRPC.ThemeSettings settings = theme.settings.get(i);
+							TLRPC.TLThemeSettings settings = theme.settings.get(i);
 							if (settings != null) {
 								String key = getBaseThemeKey(settings);
 								if (key == null) {
@@ -7397,20 +7402,20 @@ public class Theme {
 		}));
 	}
 
-	public static String getBaseThemeKey(TLRPC.ThemeSettings settings) {
-		if (settings.base_theme instanceof TLRPC.TL_baseThemeClassic) {
+	public static String getBaseThemeKey(TLRPC.TLThemeSettings settings) {
+		if (settings.baseTheme instanceof TLRPC.TLBaseThemeClassic) {
 			return "Blue";
 		}
-		else if (settings.base_theme instanceof TLRPC.TL_baseThemeDay) {
+		else if (settings.baseTheme instanceof TLRPC.TLBaseThemeDay) {
 			return "Day";
 		}
-		else if (settings.base_theme instanceof TLRPC.TL_baseThemeTinted) {
+		else if (settings.baseTheme instanceof TLRPC.TLBaseThemeTinted) {
 			return "Dark Blue";
 		}
-		else if (settings.base_theme instanceof TLRPC.TL_baseThemeArctic) {
+		else if (settings.baseTheme instanceof TLRPC.TLBaseThemeArctic) {
 			return "Arctic Blue";
 		}
-		else if (settings.base_theme instanceof TLRPC.TL_baseThemeNight) {
+		else if (settings.baseTheme instanceof TLRPC.TLBaseThemeNight) {
 			return "Night";
 		}
 		return null;
@@ -7418,29 +7423,29 @@ public class Theme {
 
 	public static TLRPC.BaseTheme getBaseThemeByKey(String key) {
 		if ("Blue".equals(key)) {
-			return new TLRPC.TL_baseThemeClassic();
+			return new TLRPC.TLBaseThemeClassic();
 		}
 		else if ("Day".equals(key)) {
-			return new TLRPC.TL_baseThemeDay();
+			return new TLRPC.TLBaseThemeDay();
 		}
 		else if ("Dark Blue".equals(key)) {
-			return new TLRPC.TL_baseThemeTinted();
+			return new TLRPC.TLBaseThemeTinted();
 		}
 		else if ("Arctic Blue".equals(key)) {
-			return new TLRPC.TL_baseThemeArctic();
+			return new TLRPC.TLBaseThemeArctic();
 		}
 		else if ("Night".equals(key)) {
-			return new TLRPC.TL_baseThemeNight();
+			return new TLRPC.TLBaseThemeNight();
 		}
 		return null;
 	}
 
-	public static void setThemeFileReference(TLRPC.TL_theme info) {
+	public static void setThemeFileReference(TLRPC.TLTheme info) {
 		for (int a = 0, N = themes.size(); a < N; a++) {
 			ThemeInfo themeInfo = themes.get(a);
 			if (themeInfo.info != null && themeInfo.info.id == info.id) {
-				if (themeInfo.info.document != null && info.document != null) {
-					themeInfo.info.document.file_reference = info.document.file_reference;
+				if (themeInfo.info.document instanceof TLRPC.TLDocument themeInfoDocument && info.document instanceof TLRPC.TLDocument infoDocument) {
+					themeInfoDocument.fileReference = infoDocument.fileReference;
 					saveOtherThemes(true);
 				}
 				break;
@@ -7452,11 +7457,11 @@ public class Theme {
 		return themeInfo != null && themesDict.get(themeInfo.getKey()) != null;
 	}
 
-	public static void setThemeUploadInfo(ThemeInfo theme, ThemeAccent accent, TLRPC.TL_theme info, int account, boolean update) {
+	public static void setThemeUploadInfo(ThemeInfo theme, ThemeAccent accent, TLRPC.TLTheme info, int account, boolean update) {
 		if (info == null) {
 			return;
 		}
-		TLRPC.ThemeSettings settings = null;
+		TLRPC.TLThemeSettings settings = null;
 		if (info.settings.size() > 0) {
 			settings = info.settings.get(0);
 		}
@@ -9528,10 +9533,10 @@ public class Theme {
 
 		if (drawable == dialogs_checkDrawable || drawable == dialogs_checkReadDrawable || drawable == dialogs_halfCheckDrawable) {
 			setDrawableColor(drawable, 0xff0A49A5);
-		} else  {
+		}
+		else {
 			setDrawableColor(drawable, getColor(key));
 		}
-
 	}
 
 	public static void setEmojiDrawableColor(Drawable drawable, int color, boolean selected) {
@@ -9677,12 +9682,12 @@ public class Theme {
 		if (accent != null) {
 			wallpaperFile = accent.getPathToWallpaper();
 			wallpaperMotion = accent.patternMotion;
-			TLRPC.ThemeSettings settings = null;
+			TLRPC.TLThemeSettings settings = null;
 			if (accent.info != null && accent.info.settings.size() > 0) {
 				settings = accent.info.settings.get(0);
 			}
-			if (accent.info != null && settings != null && settings.wallpaper != null) {
-				wallpaperDocument = settings.wallpaper.document;
+			if (accent.info != null && settings != null && settings.wallpaper instanceof TLRPC.TLWallPaper settingsWallpaper) {
+				wallpaperDocument = settingsWallpaper.document;
 			}
 		}
 		else {

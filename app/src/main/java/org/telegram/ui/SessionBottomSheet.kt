@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui
 
@@ -31,8 +31,8 @@ import org.telegram.messenger.ApplicationLoader
 import org.telegram.messenger.LocaleController
 import org.telegram.messenger.R
 import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC.TL_account_changeAuthorizationSettings
-import org.telegram.tgnet.TLRPC.TL_authorization
+import org.telegram.tgnet.TLRPC.TLAccountChangeAuthorizationSettings
+import org.telegram.tgnet.TLRPC.TLAuthorization
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.BottomSheet
@@ -41,10 +41,9 @@ import org.telegram.ui.Components.BulletinFactory
 import org.telegram.ui.Components.LayoutHelper
 import org.telegram.ui.Components.RLottieImageView
 import org.telegram.ui.Components.Switch
-import java.util.Locale
 
-class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_authorization, isCurrentSession: Boolean, callback: Callback) : BottomSheet(parentFragment.parentActivity, false) {
-	var session: TL_authorization
+class SessionBottomSheet(private val parentFragment: BaseFragment, session: TLAuthorization, isCurrentSession: Boolean, callback: Callback) : BottomSheet(parentFragment.parentActivity, false) {
+	var session: TLAuthorization
 	var imageView: RLottieImageView
 
 	init {
@@ -90,26 +89,27 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 			context.getString(R.string.Online)
 		}
 		else {
-			LocaleController.formatDateTime(session.date_active.toLong())
+			LocaleController.formatDateTime(session.dateActive.toLong())
 		}
 
 		timeView.text = timeText
 
 		nameView.text = buildString {
-			if (session.device_model.isNotEmpty()) {
-				append(session.device_model)
+			if (!session.deviceModel.isNullOrEmpty()) {
+				append(session.deviceModel)
 			}
 
 			if (isEmpty()) {
-				if (session.platform.isNotEmpty()) {
+				if (!session.platform.isNullOrEmpty()) {
 					append(session.platform)
 				}
-				if (session.system_version.isNotEmpty()) {
-					if (session.platform.isNotEmpty()) {
+
+				if (!session.systemVersion.isNullOrEmpty()) {
+					if (!session.platform.isNullOrEmpty()) {
 						append(" ")
 					}
 
-					append(session.system_version)
+					append(session.systemVersion)
 				}
 			}
 		}
@@ -118,9 +118,9 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 		val applicationItemView = ItemView(context, false)
 
 		applicationItemView.valueText.text = buildString {
-			append(session.app_name)
+			append(session.appName)
 			append(" ")
-			append(session.app_version)
+			append(session.appVersion)
 		}
 
 		var drawable = ContextCompat.getDrawable(context, R.drawable.menu_devices)?.mutate()
@@ -201,12 +201,12 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 //			drawable?.colorFilter = PorterDuffColorFilter(ResourcesCompat.getColor(context.resources, R.color.dark_gray, null), PorterDuff.Mode.SRC_IN)
 //
 //			acceptSecretChats.iconView.setImageDrawable(drawable)
-//			acceptSecretChats.switchView?.setChecked(!session.encrypted_requests_disabled, false)
+//			acceptSecretChats.switchView?.setChecked(!session.encryptedRequestsDisabled, false)
 //			acceptSecretChats.background = Theme.createSelectorDrawable(ResourcesCompat.getColor(context.resources, R.color.light_background, null), 7)
 //
 //			acceptSecretChats.setOnClickListener {
 //				acceptSecretChats.switchView?.setChecked(acceptSecretChats.switchView?.isChecked?.not() ?: false, true)
-//				session.encrypted_requests_disabled = acceptSecretChats.switchView?.isChecked?.not() ?: false
+//				session.encryptedRequestsDisabled = acceptSecretChats.switchView?.isChecked?.not() ?: false
 //				uploadSessionSettings()
 //			}
 //
@@ -278,14 +278,14 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 		setCustomView(scrollView)
 	}
 
-//	private fun secretChatsEnabled(session: TL_authorization): Boolean {
+//	private fun secretChatsEnabled(session: TLAuthorization): Boolean {
 //		return !(session.api_id == 2040 || session.api_id == 2496)
 //	}
 
 	private fun uploadSessionSettings() {
-		val req = TL_account_changeAuthorizationSettings()
-		req.encrypted_requests_disabled = session.encrypted_requests_disabled
-		req.call_requests_disabled = session.call_requests_disabled
+		val req = TLAccountChangeAuthorizationSettings()
+		req.encryptedRequestsDisabled = session.encryptedRequestsDisabled
+		req.callRequestsDisabled = session.callRequestsDisabled
 		req.flags = 1 or 2
 		req.hash = session.hash
 
@@ -306,14 +306,14 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 	}
 
 	@SuppressLint("ResourceType")
-	private fun setAnimation(session: TL_authorization, imageView: RLottieImageView) {
-		var platform = session.platform.lowercase()
+	private fun setAnimation(session: TLAuthorization, imageView: RLottieImageView) {
+		var platform = session.platform?.lowercase() ?: ""
 
 		if (platform.isEmpty()) {
-			platform = session.system_version.lowercase()
+			platform = session.systemVersion?.lowercase() ?: ""
 		}
 
-		val deviceModel = session.device_model.lowercase()
+		val deviceModel = session.deviceModel?.lowercase() ?: ""
 
 		val iconId: Int
 		val colorKey: String
@@ -367,7 +367,7 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 			colorKey = Theme.key_avatar_backgroundGreen
 		}
 		else {
-			if (session.app_name.lowercase(Locale.getDefault()).contains("desktop")) {
+			if (session.appName?.lowercase()?.contains("desktop") == true) {
 				iconId = R.raw.windows_30
 				colorKey = Theme.key_avatar_backgroundCyan
 			}
@@ -389,14 +389,13 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 	}
 
 	private class ItemView(context: Context, needSwitch: Boolean) : FrameLayout(context) {
-		val iconView: ImageView
+		val iconView = ImageView(context)
 		val valueText: TextView
 		val descriptionText: TextView
 		var switchView: Switch? = null
 		var needDivider = false
 
 		init {
-			iconView = ImageView(context)
 
 			addView(iconView, LayoutHelper.createFrame(28, 28f, 0, 16f, 8f, 0f, 0f))
 
@@ -450,7 +449,7 @@ class SessionBottomSheet(private val parentFragment: BaseFragment, session: TL_a
 	}
 
 	fun interface Callback {
-		fun onSessionTerminated(session: TL_authorization)
+		fun onSessionTerminated(session: TLAuthorization)
 	}
 
 	override fun show() {

@@ -4,9 +4,9 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
  * Copyright Mykhailo Mykytyn, Ello 2023.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.Cells
 
@@ -38,7 +38,6 @@ import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.RippleDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -74,6 +73,12 @@ import android.view.animation.Interpolator
 import android.widget.Toast
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withSave
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withTranslation
+import androidx.core.net.toUri
+import androidx.core.util.size
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -116,13 +121,8 @@ import org.telegram.messenger.messageobject.TextLayoutBlock
 import org.telegram.messenger.utils.dp
 import org.telegram.messenger.utils.isYouTubeShortsLink
 import org.telegram.messenger.video.VideoPlayerRewinder
-import org.telegram.tgnet.ConnectionsManager
-import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.*
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.MessageDrawable
 import org.telegram.ui.ActionBar.MessageDrawable.PathDrawParams
 import org.telegram.ui.ActionBar.Theme
@@ -511,9 +511,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 	private var voteRisingCircleLength = false
 	private var voteCurrentProgressTime = 0f
 	private var pressedVoteButton = 0
-	private var lastPoll: TLRPC.Poll? = null
+	private var lastPoll: TLRPC.TLPoll? = null
 	private var timerTransitionProgress = 0f
-	private var lastPollResults: ArrayList<TLRPC.TL_pollAnswerVoters>? = null
+	private var lastPollResults: List<TLRPC.TLPollAnswerVoters>? = null
 	private var lastPollResultsVoters = 0
 	private var timerParticles: TimerParticles? = null
 	private var pollHintX = 0
@@ -522,7 +522,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 	private var hintButtonVisible = false
 	private var hintButtonProgress = 0f
 	private var lastPostAuthor: String? = null
-	private var lastReplyMessage: Message? = null
+	private var lastReplyMessage: TLRPC.Message? = null
 	private var hasPsaHint = false
 	private var psaHelpX = 0
 	private var psaHelpY = 0
@@ -794,12 +794,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				avatarImage.setImageBitmap(messageObject.customAvatarDrawable)
 			}
 			else if (currentUser != null) {
-				currentPhoto = currentUser?.photo?.photo_small
+				currentPhoto = currentUser?.photo?.photoSmall
 				avatarDrawable.setInfo(currentUser)
 				avatarImage.setForUserOrChat(currentUser, avatarDrawable, null, true)
 			}
 			else if (currentChat != null) {
-				currentPhoto = currentChat?.photo?.photo_small
+				currentPhoto = currentChat?.photo?.photoSmall
 				avatarDrawable.setInfo(currentChat)
 				avatarImage.setForUserOrChat(currentChat, avatarDrawable)
 			}
@@ -814,7 +814,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					val photo = messageObject.sponsoredChatInvite?.photo
 
 					if (photo != null) {
-						avatarImage.setImage(ImageLocation.getForPhoto(photo.sizes[0], photo), "50_50", avatarDrawable, null, null, 0)
+						avatarImage.setImage(ImageLocation.getForPhoto(photo.sizes?.firstOrNull(), photo), "50_50", avatarDrawable, null, null, 0)
 					}
 				}
 			}
@@ -1416,7 +1416,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					for (a in botButtons.indices) {
 						val button = botButtons[a]
 
-						if (button.button is TLRPC.TL_keyboardButtonGame) {
+						if (button.button is TLRPC.TLKeyboardButtonGame) {
 							playSoundEffect(SoundEffectConstants.CLICK)
 							delegate?.didPressBotButton(this, button.button)
 							invalidate()
@@ -1644,9 +1644,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					else if (documentAttachType != DOCUMENT_ATTACH_TYPE_DOCUMENT && drawPhotoImage && photoImage.isInsideImage(x.toFloat(), y.toFloat())) {
 						linkPreviewPressed = true
 
-						val webPage = MessageObject.getMedia(currentMessageObject!!.messageOwner)?.webpage
+						val webPage = MessageObject.getMedia(currentMessageObject?.messageOwner)?.webpage
 
-						if (documentAttachType == DOCUMENT_ATTACH_TYPE_GIF && buttonState == -1 && SharedConfig.autoplayGifs && (photoImage.animation == null || !webPage?.embed_url.isNullOrEmpty())) {
+						if (documentAttachType == DOCUMENT_ATTACH_TYPE_GIF && buttonState == -1 && SharedConfig.autoplayGifs && (photoImage.animation == null || !webPage?.embedUrl.isNullOrEmpty())) {
 							linkPreviewPressed = false
 							return false
 						}
@@ -1738,7 +1738,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						}
 						else {
 							val webPage = MessageObject.getMedia(currentMessageObject?.messageOwner)?.webpage
-							val url = webPage?.embed_url
+							val url = webPage?.embedUrl
 
 							if (!url.isNullOrEmpty()) {
 								// MARK: remove this check to open YouTube Shorts inside the app
@@ -1746,7 +1746,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 									Browser.openUrl(context, webPage.url)
 								}
 								else {
-									delegate?.needOpenWebView(currentMessageObject, webPage.embed_url, webPage.site_name, webPage.title, webPage.url, webPage.embed_width, webPage.embed_height)
+									delegate?.needOpenWebView(currentMessageObject, webPage.embedUrl, webPage.siteName, webPage.title, webPage.url, webPage.embedWidth, webPage.embedHeight)
 								}
 							}
 							else if (buttonState == -1 || buttonState == 3) {
@@ -1853,7 +1853,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						val answer = button.answer
 
 						if (pollVoted || pollClosed) {
-							val answers = ArrayList<TLRPC.TL_pollAnswer>()
+							val answers = ArrayList<TLRPC.TLPollAnswer>()
 
 							if (answer != null) {
 								answers.add(answer)
@@ -1862,7 +1862,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							delegate?.didPressVoteButtons(this, answers, button.count, button.x + AndroidUtilities.dp(50f), button.y + namesOffset)
 						}
 						else {
-							if (lastPoll?.multiple_choice == true) {
+							if (lastPoll?.multipleChoice == true) {
 								if (currentMessageObject?.checkedVotes?.contains(answer) == true) {
 									currentMessageObject?.checkedVotes?.remove(answer)
 									pollCheckBox?.get(pressedVoteButton)?.setChecked(checked = false, animated = true)
@@ -1884,7 +1884,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								voteCurrentCircleLength = 360f
 								voteRisingCircleLength = false
 
-								val answers = ArrayList<TLRPC.TL_pollAnswer>()
+								val answers = ArrayList<TLRPC.TLPollAnswer>()
 
 								if (answer != null) {
 									answers.add(answer)
@@ -2315,7 +2315,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					}
 
 					if (currentMessageObject?.type == MessageObject.TYPE_CONTACT) {
-						val uid = MessageObject.getMedia(currentMessageObject?.messageOwner)?.user_id
+						val uid = (MessageObject.getMedia(currentMessageObject?.messageOwner) as? TLRPC.TLMessageMediaContact)?.userId
 						var user: User? = null
 
 						if (uid != 0L) {
@@ -2958,12 +2958,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								val id: Int
 								var chat = currentChat
 
-								if (currentMessageObject?.messageOwner?.fwd_from != null) {
-									if (currentMessageObject!!.messageOwner!!.fwd_from!!.flags and 16 != 0) {
-										id = currentMessageObject!!.messageOwner!!.fwd_from!!.saved_from_msg_id
+								if (currentMessageObject?.messageOwner?.fwdFrom != null) {
+									if (currentMessageObject!!.messageOwner!!.fwdFrom!!.flags and 16 != 0) {
+										id = currentMessageObject!!.messageOwner!!.fwdFrom!!.savedFromMsgId
 									}
 									else {
-										id = currentMessageObject!!.messageOwner!!.fwd_from?.channel_post ?: 0
+										id = currentMessageObject!!.messageOwner!!.fwdFrom?.channelPost ?: 0
 										chat = currentForwardChannel
 									}
 								}
@@ -3004,7 +3004,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 						if (delegate != null) {
 							if (currentForwardChannel != null) {
-								delegate?.didPressChannelAvatar(this, currentForwardChannel, currentMessageObject!!.messageOwner!!.fwd_from?.channel_post ?: 0, lastTouchX, lastTouchY)
+								delegate?.didPressChannelAvatar(this, currentForwardChannel, currentMessageObject!!.messageOwner!!.fwdFrom?.channelPost ?: 0, lastTouchX, lastTouchY)
 							}
 							else if (currentForwardUser != null) {
 								delegate?.didPressUserAvatar(this, currentForwardUser, lastTouchX, lastTouchY)
@@ -3027,12 +3027,13 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					if (event.action == MotionEvent.ACTION_UP) {
 						forwardBotPressed = false
 						playSoundEffect(SoundEffectConstants.CLICK)
+
 						if (delegate != null) {
-							if (currentViaBotUser?.bot_inline_placeholder == null) {
+							if ((currentViaBotUser as? TLRPC.TLUser)?.botInlinePlaceholder == null) {
 								delegate?.didPressViaBotNotInline(this, currentViaBotUser?.id ?: 0)
 							}
 							else {
-								delegate?.didPressViaBot(this, currentViaBotUser?.username ?: currentMessageObject?.messageOwner?.via_bot_name)
+								delegate?.didPressViaBot(this, currentViaBotUser?.username) // MARK: uncomment to enable secret chats  ?: currentMessageObject?.messageOwner?.viaBotName)
 							}
 						}
 					}
@@ -3061,7 +3062,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						if (replyPanelIsForward) {
 							if (delegate != null) {
 								if (currentForwardChannel != null) {
-									delegate?.didPressChannelAvatar(this, currentForwardChannel, currentMessageObject!!.messageOwner!!.fwd_from?.channel_post ?: 0, lastTouchX, lastTouchY)
+									delegate?.didPressChannelAvatar(this, currentForwardChannel, currentMessageObject!!.messageOwner!!.fwdFrom?.channelPost ?: 0, lastTouchX, lastTouchY)
 								}
 								else if (currentForwardUser != null) {
 									delegate?.didPressUserAvatar(this, currentForwardUser, lastTouchX, lastTouchY)
@@ -3326,17 +3327,17 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 		}
 		else if (isRoundVideo) {
-			var duration = 0
-			val document = currentMessageObject.document!!
+			var duration = (currentMessageObject.document as? TLRPC.TLDocument)?.attributes?.firstOrNull { it is TLRPC.TLDocumentAttributeVideo }?.duration ?: 0
+//			val document = currentMessageObject.document as? TLRPC.TLDocument
 
-			for (a in document.attributes.indices) {
-				val attribute = document.attributes[a]
-
-				if (attribute is TLRPC.TL_documentAttributeVideo) {
-					duration = attribute.duration
-					break
-				}
-			}
+//			for (a in document.attributes.indices) {
+//				val attribute = document.attributes[a]
+//
+//				if (attribute is TLRPC.TLDocumentAttributeVideo) {
+//					duration = attribute.duration
+//					break
+//				}
+//			}
 
 			if (MediaController.getInstance().isPlayingMessage(currentMessageObject)) {
 				duration = max(0, duration - currentMessageObject.audioProgressSec)
@@ -3378,7 +3379,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			if (documentAttachType == DOCUMENT_ATTACH_TYPE_AUDIO) {
 				duration = if (!MediaController.getInstance().isPlayingMessage(currentMessageObject)) {
-					documentAttach?.attributes?.firstOrNull { it is TLRPC.TL_documentAttributeAudio }?.let { (it as TLRPC.TL_documentAttributeAudio).duration } ?: 0
+					(documentAttach as? TLRPC.TLDocument)?.attributes?.firstOrNull { it is TLRPC.TLDocumentAttributeAudio }?.duration ?: 0
 				}
 				else {
 					currentMessageObject.audioProgressSec
@@ -3521,8 +3522,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		val currentMessageObject = currentMessageObject ?: return
 
 		if (currentMessageObject.type == MessageObject.TYPE_EXTENDED_MEDIA_PREVIEW) {
-			if (currentMessageObject.messageOwner?.media?.extended_media != null && currentMessageObject.messageOwner?.reply_markup != null) {
-				for (row in currentMessageObject.messageOwner!!.reply_markup!!.rows) {
+			if (currentMessageObject.messageOwner?.media?.extendedMedia != null && currentMessageObject.messageOwner?.replyMarkup != null) {
+				for (row in currentMessageObject.messageOwner!!.replyMarkup!!.rows) {
 					for (button in row.buttons) {
 						delegate?.didPressExtendedMediaPreview(this, button)
 						return
@@ -3539,7 +3540,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 		}
 		else if (currentMessageObject.type == MessageObject.TYPE_CONTACT) {
-			val uid = MessageObject.getMedia(currentMessageObject.messageOwner)?.user_id
+			val uid = MessageObject.getMedia(currentMessageObject.messageOwner)?.userId
 			var user: User? = null
 
 			if (uid != 0L) {
@@ -3604,8 +3605,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				val webPage = MessageObject.getMedia(currentMessageObject.messageOwner)?.webpage
 
 				if (webPage != null) {
-					if (!webPage.embed_url.isNullOrEmpty()) {
-						delegate?.needOpenWebView(currentMessageObject, webPage.embed_url, webPage.site_name, webPage.description, webPage.url, webPage.embed_width, webPage.embed_height)
+					if (!webPage.embedUrl.isNullOrEmpty()) {
+						delegate?.needOpenWebView(currentMessageObject, webPage.embedUrl, webPage.siteName, webPage.description, webPage.url, webPage.embedWidth, webPage.embedHeight)
 					}
 					else {
 						Browser.openUrl(context, webPage.url)
@@ -3658,7 +3659,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 
 			var lat = `object`.messageOwner?.media?.geo?.lat ?: 0.0
-			val lon = `object`.messageOwner?.media?.geo?._long ?: 0.0
+			val lon = `object`.messageOwner?.media?.geo?.lon ?: 0.0
 			val url: String
 
 			val provider = if (`object`.dialogId.toInt() == 0) {
@@ -3673,7 +3674,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				MessagesController.MAP_PROVIDER_UNDEFINED
 			}
 
-			if (`object`.messageOwner?.media is TLRPC.TL_messageMediaGeoLive) {
+			if (`object`.messageOwner?.media is TLRPC.TLMessageMediaGeoLive) {
 				val photoWidth = backgroundWidth - AndroidUtilities.dp(21f)
 				val photoHeight = AndroidUtilities.dp(195f)
 				val offset = 268435456
@@ -3698,7 +3699,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			return url != currentUrl
 		}
-		else if (currentPhotoObject == null || currentPhotoObject?.location is TLRPC.TL_fileLocationUnavailable) {
+		else if (currentPhotoObject == null || currentPhotoObject?.location is TLRPC.TLFileLocationUnavailable) {
 			return `object`?.type == MessageObject.TYPE_PHOTO || `object`?.type == MessageObject.TYPE_EXTENDED_MEDIA_PREVIEW || `object`?.type == MessageObject.TYPE_ROUND_VIDEO || `object`?.type == MessageObject.TYPE_VIDEO || `object`?.type == MessageObject.TYPE_GIF || `object`?.isAnyKindOfSticker == true
 		}
 		else if (currentMessageObject != null && photoNotSet) {
@@ -3713,7 +3714,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		get() = currentMessagesGroup?.messages?.firstOrNull()?.repliesCount ?: currentMessageObject?.repliesCount ?: 0
 
 	private val recentRepliers: List<TLRPC.Peer>?
-		get() = currentMessagesGroup?.messages?.firstOrNull()?.messageOwner?.replies?.recent_repliers ?: currentMessageObject?.messageOwner?.replies?.recent_repliers
+		get() = currentMessagesGroup?.messages?.firstOrNull()?.messageOwner?.replies?.recentRepliers ?: currentMessageObject?.messageOwner?.replies?.recentRepliers
 
 	fun updateAnimatedEmojis() {
 		if (!imageReceiversAttachState) {
@@ -3741,7 +3742,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 	private val isUserDataChanged: Boolean
 		get() {
-			if (currentMessageObject != null && !hasLinkPreview && MessageObject.getMedia(currentMessageObject!!.messageOwner) != null && MessageObject.getMedia(currentMessageObject!!.messageOwner)?.webpage is TLRPC.TL_webPage) {
+			if (currentMessageObject != null && !hasLinkPreview && MessageObject.getMedia(currentMessageObject!!.messageOwner) != null && MessageObject.getMedia(currentMessageObject!!.messageOwner)?.webpage is TLRPC.TLWebPage) {
 				return true
 			}
 
@@ -3749,7 +3750,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				return false
 			}
 
-			if (lastSendState != currentMessageObject!!.messageOwner!!.send_state) {
+			if (lastSendState != currentMessageObject!!.messageOwner!!.sendState) {
 				return true
 			}
 
@@ -3770,16 +3771,16 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			var newPhoto: TLRPC.FileLocation? = null
 
 			if (isAvatarVisible) {
-				newPhoto = currentUser?.photo?.photo_small ?: currentChat?.photo?.photo_small
+				newPhoto = currentUser?.photo?.photoSmall ?: currentChat?.photo?.photoSmall
 			}
 
 			if (replyTextLayout == null && currentMessageObject!!.replyMessageObject != null) {
-				if (!isThreadChat || currentMessageObject!!.replyMessageObject?.messageOwner?.fwd_from == null || currentMessageObject!!.replyMessageObject?.messageOwner?.fwd_from?.channel_post == 0) {
+				if (!isThreadChat || currentMessageObject!!.replyMessageObject?.messageOwner?.fwdFrom == null || currentMessageObject!!.replyMessageObject?.messageOwner?.fwdFrom?.channelPost == 0) {
 					return true
 				}
 			}
 
-			if (currentPhoto == null && newPhoto != null || currentPhoto != null && newPhoto == null || currentPhoto != null && (currentPhoto!!.local_id != newPhoto!!.local_id || currentPhoto!!.volume_id != newPhoto.volume_id)) {
+			if (currentPhoto == null && newPhoto != null || currentPhoto != null && newPhoto == null || currentPhoto != null && (currentPhoto!!.localId != newPhoto!!.localId || currentPhoto!!.volumeId != newPhoto.volumeId)) {
 				return true
 			}
 
@@ -4086,7 +4087,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		val newReply = if (messageObject.hasValidReplyMessageObject()) messageObject.replyMessageObject?.messageOwner else null
 		val messageIdChanged = currentMessageObject == null || currentMessageObject?.id != messageObject.id
 		val messageChanged = currentMessageObject !== messageObject || messageObject.forceUpdate || isRoundVideo && isPlayingRound != (MediaController.getInstance().isPlayingMessage(currentMessageObject) && delegate != null && !delegate!!.keyboardIsOpened())
-		var dataChanged = currentMessageObject != null && currentMessageObject!!.id == messageObject.id && lastSendState == MessageObject.MESSAGE_SEND_STATE_EDITING && messageObject.isSent || currentMessageObject === messageObject && (isUserDataChanged || photoNotSet) || lastPostAuthor !== messageObject.messageOwner?.post_author || wasPinned != isPinned || newReply !== lastReplyMessage
+		var dataChanged = currentMessageObject != null && currentMessageObject!!.id == messageObject.id && lastSendState == MessageObject.MESSAGE_SEND_STATE_EDITING && messageObject.isSent || currentMessageObject === messageObject && (isUserDataChanged || photoNotSet) || lastPostAuthor !== messageObject.messageOwner?.postAuthor || wasPinned != isPinned || newReply !== lastReplyMessage
 		var groupChanged = groupedMessages !== currentMessagesGroup
 		var pollChanged = false
 
@@ -4105,15 +4106,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		}
 
 		if (!messageChanged && messageObject.isPoll) {
-			var newResults: ArrayList<TLRPC.TL_pollAnswerVoters?>? = null
-			var newPoll: TLRPC.Poll? = null
+			var newResults: List<TLRPC.TLPollAnswerVoters>? = null
+			var newPoll: TLRPC.TLPoll? = null
 			var newVoters = 0
 
-			if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TL_messageMediaPoll) {
-				val mediaPoll = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TL_messageMediaPoll
-				newResults = mediaPoll.results.results
+			if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaPoll) {
+				val mediaPoll = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TLMessageMediaPoll
+				newResults = mediaPoll.results?.results
 				newPoll = mediaPoll.poll
-				newVoters = mediaPoll.results.total_voters
+				newVoters = mediaPoll.results?.totalVoters ?: 0
 			}
 
 			if (newResults != null && lastPollResults != null && newVoters != lastPollResultsVoters) {
@@ -4146,17 +4147,17 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 
 			if (!messageIdChanged && newPoll != null && lastPoll!!.quiz && newPoll.quiz && currentMessageObject != null && !pollVoted && messageObject.isVoted) {
-				val mediaPoll = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TL_messageMediaPoll
+				val mediaPoll = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TLMessageMediaPoll
 
-				if (mediaPoll.results != null && mediaPoll.results.results.isNotEmpty()) {
-					var chosenAnswer: TLRPC.TL_pollAnswerVoters? = null
-					val count = mediaPoll.results.results.size
+				if (!mediaPoll.results?.results.isNullOrEmpty()) {
+					var chosenAnswer: TLRPC.TLPollAnswerVoters? = null
+					val count = mediaPoll.results?.results?.size ?: 0
 					var a = 0
 
 					while (a < count) {
-						val answer = mediaPoll.results.results[a]
+						val answer = mediaPoll.results?.results?.get(a)
 
-						if (answer.chosen) {
+						if (answer?.chosen == true) {
 							chosenAnswer = answer
 							break
 						}
@@ -4189,7 +4190,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			currentMessageObject = messageObject
 			currentMessagesGroup = groupedMessages
 			lastTime = -2
-			lastPostAuthor = messageObject.messageOwner?.post_author
+			lastPostAuthor = messageObject.messageOwner?.postAuthor
 			isHighlightedAnimated = false
 			widthBeforeNewTimeLine = -1
 
@@ -4220,7 +4221,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			photoImage.setCrossfadeDuration(ImageReceiver.DEFAULT_CROSSFADE_DURATION)
 			photoImage.setGradientBitmap(null)
 
-			lastSendState = messageObject.messageOwner!!.send_state
+			lastSendState = messageObject.messageOwner!!.sendState
 			lastDeleteDate = messageObject.messageOwner!!.destroyTime
 			lastViewsCount = messageObject.messageOwner!!.views
 			lastRepliesCount = repliesCount
@@ -4234,7 +4235,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			sideButtonPressed = false
 			hasNewLineForTime = false
 			flipImage = false
-			isThreadPost = isThreadChat && messageObject.messageOwner?.fwd_from != null && messageObject.messageOwner?.fwd_from?.channel_post != 0
+			isThreadPost = isThreadChat && messageObject.messageOwner?.fwdFrom != null && messageObject.messageOwner?.fwdFrom?.channelPost != 0
 			isAvatarVisible = !isThreadPost && isChat && !messageObject.isOutOwner && messageObject.needDrawAvatar() && (currentPosition == null || currentPosition!!.edge)
 
 			var drawAvatar = isChat && !isThreadPost && !messageObject.isOutOwner && messageObject.needDrawAvatar()
@@ -4257,7 +4258,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			else {
 				drawSideButton = if (!isRepliesChat && checkNeedDrawShareButton(messageObject) && (currentPosition == null || currentPosition!!.last)) 1 else 0
 
-				if (isPinnedChat || drawSideButton == 1 && messageObject.messageOwner?.fwd_from != null && !messageObject.isOutOwner && messageObject.messageOwner?.fwd_from?.saved_from_peer != null && messageObject.dialogId == getInstance(currentAccount).getClientUserId()) {
+				if (isPinnedChat || drawSideButton == 1 && messageObject.messageOwner?.fwdFrom != null && !messageObject.isOutOwner && messageObject.messageOwner?.fwdFrom?.savedFromPeer != null && messageObject.dialogId == getInstance(currentAccount).getClientUserId()) {
 					drawSideButton = 2
 				}
 			}
@@ -4383,7 +4384,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			imageBackgroundSideColor = 0
 			mediaBackground = false
 			photoImage.animatedFileDrawableRepeatMaxCount = 0
-			hasPsaHint = !messageObject.messageOwner?.fwd_from?.psa_type.isNullOrEmpty()
+			hasPsaHint = !messageObject.messageOwner?.fwdFrom?.psaType.isNullOrEmpty()
 
 			if (hasPsaHint) {
 				createSelectorDrawable(0)
@@ -4481,7 +4482,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				val commentCount = repliesCount
 
 				if (!messageObject.shouldDrawWithoutBackground() && !messageObject.isAnimatedEmoji) {
-					drawCommentButton = true
+					//MARK: If you want to show the comment button again, make drawCommentButton = true
+					drawCommentButton = false
 
 					var avatarsOffset = 0
 					val comment: String
@@ -4623,7 +4625,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						min(getParentWidth(), AndroidUtilities.displaySize.y) - AndroidUtilities.dp(80f)
 					}
 
-					drawName = (isPinnedChat || messageObject.messageOwner?.peer_id?.channel_id != 0L && (!messageObject.isOutOwner || messageObject.isSupergroup) || messageObject.isImportedForward) && messageObject.messageOwner?.fwd_from?.from_id == null
+					drawName = (isPinnedChat || messageObject.messageOwner?.peerId?.channelId != 0L && (!messageObject.isOutOwner || messageObject.isSupergroup) || messageObject.isImportedForward) && messageObject.messageOwner?.fwdFrom?.fromId == null
 				}
 
 				availableTimeWidth = maxWidth
@@ -4642,19 +4644,19 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				timeMore += extraTimeX
 
-				hasGamePreview = MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TL_messageMediaGame && MessageObject.getMedia(messageObject.messageOwner)?.game is TLRPC.TL_game
-				hasInvoicePreview = MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TL_messageMediaInvoice
-				hasLinkPreview = !messageObject.isRestrictedMessage && MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TL_messageMediaWebPage && MessageObject.getMedia(messageObject.messageOwner)?.webpage is TLRPC.TL_webPage
-				drawInstantView = hasLinkPreview && MessageObject.getMedia(messageObject.messageOwner)?.webpage?.cached_page != null
+				hasGamePreview = MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaGame && MessageObject.getMedia(messageObject.messageOwner)?.game is TLRPC.TLGame
+				hasInvoicePreview = MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaInvoice
+				hasLinkPreview = !messageObject.isRestrictedMessage && MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaWebPage && MessageObject.getMedia(messageObject.messageOwner)?.webpage is TLRPC.TLWebPage
+				drawInstantView = hasLinkPreview && MessageObject.getMedia(messageObject.messageOwner)?.webpage?.cachedPage != null
 
-				var siteName = if (hasLinkPreview) MessageObject.getMedia(messageObject.messageOwner)?.webpage?.site_name else null
+				var siteName = if (hasLinkPreview) MessageObject.getMedia(messageObject.messageOwner)?.webpage?.siteName else null
 
-				hasEmbed = hasLinkPreview && !TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.webpage?.embed_url) && !messageObject.isGif && !"instagram".equals(siteName, ignoreCase = true) // MARK: was `instangram`
+				hasEmbed = hasLinkPreview && !TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.webpage?.embedUrl) && !messageObject.isGif && !"instagram".equals(siteName, ignoreCase = true) // MARK: was `instangram`
 
 				var slideshow = false
 				val webpageType = if (hasLinkPreview) MessageObject.getMedia(messageObject.messageOwner)?.webpage?.type else null
 				var androidThemeDocument: TLRPC.Document? = null
-				var androidThemeSettings: TLRPC.ThemeSettings? = null
+				var androidThemeSettings: TLRPC.TLThemeSettings? = null
 
 				if (!drawInstantView) {
 					if ("telegram_livestream" == webpageType) {
@@ -4686,15 +4688,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						val n2 = MessageObject.getMedia(messageObject.messageOwner)?.webpage?.attributes?.size ?: 0
 
 						while (b < n2) {
-							val attribute = MessageObject.getMedia(messageObject.messageOwner)!!.webpage.attributes[b]
-							val documents = attribute.documents
+							val attribute = MessageObject.getMedia(messageObject.messageOwner)?.webpage?.attributes?.getOrNull(b)
+							val documents = attribute?.documents
 							var a = 0
-							val n = documents.size
+							val n = documents?.size ?: 0
 
 							while (a < n) {
-								val document = documents[a]
+								val document = documents?.get(a)
 
-								if ("application/x-tgtheme-android" == document.mime_type) {
+								if ("application/x-tgtheme-android" == document?.mimeType) {
 									drawInstantView = true
 									drawInstantViewType = 7
 									androidThemeDocument = document
@@ -4708,7 +4710,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								break
 							}
 
-							if (attribute.settings != null) {
+							if (attribute?.settings != null) {
 								drawInstantView = true
 								drawInstantViewType = 7
 								androidThemeSettings = attribute.settings
@@ -4723,12 +4725,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						drawInstantViewType = 6
 
 						try {
-							val url = Uri.parse(MessageObject.getMedia(messageObject.messageOwner)!!.webpage.url)
+							val url = MessageObject.getMedia(messageObject.messageOwner)?.webpage?.url?.toUri()
 
-							imageBackgroundIntensity = Utilities.parseInt(url.getQueryParameter("intensity")).toFloat()
+							imageBackgroundIntensity = Utilities.parseInt(url?.getQueryParameter("intensity")).toFloat()
 
-							var bgColor = url.getQueryParameter("bg_color")
-							val rotation = url.getQueryParameter("rotation")
+							var bgColor = url?.getQueryParameter("bg_color")
+							val rotation = url?.getQueryParameter("rotation")
 
 							if (rotation != null) {
 								imageBackgroundGradientRotation = Utilities.parseInt(rotation)
@@ -4737,7 +4739,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							if (bgColor.isNullOrEmpty()) {
 								val document = messageObject.document
 
-								if (document != null && "image/png" == document.mime_type) {
+								if (document != null && "image/png" == document.mimeType) {
 									bgColor = "ffffff"
 								}
 
@@ -4775,7 +4777,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								photoImage.alpha = abs(imageBackgroundIntensity) / 100.0f
 							}
 							else {
-								val color = url.lastPathSegment
+								val color = url?.lastPathSegment
 
 								if (color != null && color.length >= 6) {
 									imageBackgroundColor = color.substring(0, 6).toInt(16) or -0x1000000
@@ -4792,11 +4794,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 										imageBackgroundGradientColor3 = color.substring(21).toInt(16) or -0x1000000
 									}
 
-									currentPhotoObject = TLRPC.TL_photoSizeEmpty()
+									currentPhotoObject = TLRPC.TLPhotoSizeEmpty()
 									currentPhotoObject?.type = "s"
 									currentPhotoObject?.w = AndroidUtilities.dp(180f)
 									currentPhotoObject?.h = AndroidUtilities.dp(150f)
-									currentPhotoObject?.location = TLRPC.TL_fileLocationUnavailable()
+									currentPhotoObject?.location = TLRPC.TLFileLocationUnavailable()
 								}
 							}
 						}
@@ -4805,24 +4807,26 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					}
 				}
 				else if (siteName != null) {
-					siteName = siteName.lowercase(Locale.getDefault())
+					siteName = siteName.lowercase()
 
-					if (siteName == "instagram" || siteName == "twitter" || "telegram_album" == webpageType && MessageObject.getMedia(messageObject.messageOwner)?.webpage?.cached_page is TLRPC.TL_page && (MessageObject.getMedia(messageObject.messageOwner)?.webpage?.photo is TL_photo || MessageObject.isVideoDocument(MessageObject.getMedia(messageObject.messageOwner)?.webpage?.document))) {
+					if (siteName == "instagram" || siteName == "twitter" || "telegram_album" == webpageType && MessageObject.getMedia(messageObject.messageOwner)?.webpage?.cachedPage is TLRPC.TLPage && (MessageObject.getMedia(messageObject.messageOwner)?.webpage?.photo is TLRPC.TLPhoto || MessageObject.isVideoDocument(MessageObject.getMedia(messageObject.messageOwner)?.webpage?.document))) {
 						drawInstantView = false
 
 						slideshow = true
 
-						val blocks = MessageObject.getMedia(messageObject.messageOwner)!!.webpage.cached_page.blocks
+						val blocks = MessageObject.getMedia(messageObject.messageOwner)?.webpage?.cachedPage?.blocks
 						var count = 1
 
-						for (a in blocks.indices) {
-							val block = blocks[a]
+						if (blocks != null) {
+							for (a in blocks.indices) {
+								val block = blocks[a]
 
-							if (block is TLRPC.TL_pageBlockSlideshow) {
-								count = block.items.size
-							}
-							else if (block is TLRPC.TL_pageBlockCollage) {
-								count = block.items.size
+								if (block is TLRPC.TLPageBlockSlideshow) {
+									count = block.items.size
+								}
+								else if (block is TLRPC.TLPageBlockCollage) {
+									count = block.items.size
+								}
 							}
 						}
 
@@ -4932,8 +4936,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					val smallSideMargin = AndroidUtilities.dp(10f)
 
 					if (hasLinkPreview) {
-						val webPage = MessageObject.getMedia(messageObject.messageOwner)!!.webpage as TLRPC.TL_webPage
-						site_name = webPage.site_name
+						val webPage = MessageObject.getMedia(messageObject.messageOwner)!!.webpage as TLRPC.TLWebPage
+						site_name = webPage.siteName
 						title = if (drawInstantViewType != 6 && drawInstantViewType != 7) webPage.title else null
 						author = if (drawInstantViewType != 6 && drawInstantViewType != 7) webPage.author else null
 						description = if (drawInstantViewType != 6 && drawInstantViewType != 7) webPage.description else null
@@ -4960,7 +4964,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						isSmallImage = smallImage && type != null && currentMessageObject?.photoThumbs != null
 					}
 					else if (hasInvoicePreview) {
-						val invoice = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TL_messageMediaInvoice
+						val invoice = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TLMessageMediaInvoice
 						site_name = MessageObject.getMedia(messageObject.messageOwner)?.title
 						title = null
 						description = null
@@ -4968,7 +4972,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						author = null
 						document = null
 
-						webDocument = if (invoice.photo is TLRPC.TL_webDocument) {
+						webDocument = if (invoice.photo is TLRPC.TLWebDocument) {
 							WebFile.createWithWebDocument(invoice.photo)
 						}
 						else {
@@ -4982,14 +4986,14 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						smallImage = false
 					}
 					else {
-						val game = MessageObject.getMedia(messageObject.messageOwner)!!.game
-						site_name = game.title
+						val game = MessageObject.getMedia(messageObject.messageOwner)?.game
+						site_name = game?.title
 						title = null
 						webDocument = null
-						description = if (TextUtils.isEmpty(messageObject.messageText)) game.description else null
-						photo = game.photo
+						description = if (TextUtils.isEmpty(messageObject.messageText)) game?.description else null
+						photo = game?.photo
 						author = null
-						document = game.document
+						document = game?.document
 						duration = 0
 						type = "game"
 						isSmallImage = false
@@ -5295,7 +5299,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 					var maxPhotoWidth = if (smallImage) smallImageSide else linkPreviewMaxWidth
 
-					if (document != null) {
+					if (document is TLRPC.TLDocument) {
 						if (MessageObject.isRoundVideoDocument(document)) {
 							currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90)
 							photoParentObject = document
@@ -5322,7 +5326,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								for (a in document.attributes.indices) {
 									val attribute = document.attributes[a]
 
-									if (attribute is TLRPC.TL_documentAttributeImageSize || attribute is TLRPC.TL_documentAttributeVideo) {
+									if (attribute is TLRPC.TLDocumentAttributeImageSize || attribute is TLRPC.TLDocumentAttributeVideo) {
 										currentPhotoObject?.w = attribute.w
 										currentPhotoObject?.h = attribute.h
 										break
@@ -5361,17 +5365,17 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							}
 
 							if (currentPhotoObject == null) {
-								currentPhotoObject = TLRPC.TL_photoSize()
+								currentPhotoObject = TLRPC.TLPhotoSize()
 								currentPhotoObject?.type = "s"
-								currentPhotoObject?.location = TLRPC.TL_fileLocationUnavailable()
+								currentPhotoObject?.location = TLRPC.TLFileLocationUnavailable()
 							}
 
-							if (currentPhotoObject != null && (currentPhotoObject?.w == 0 || currentPhotoObject?.h == 0 || currentPhotoObject is TLRPC.TL_photoStrippedSize)) {
+							if (currentPhotoObject != null && (currentPhotoObject?.w == 0 || currentPhotoObject?.h == 0 || currentPhotoObject is TLRPC.TLPhotoStrippedSize)) {
 								for (a in document.attributes.indices) {
 									val attribute = document.attributes[a]
 
-									if (attribute is TLRPC.TL_documentAttributeVideo) {
-										if (currentPhotoObject is TLRPC.TL_photoStrippedSize) {
+									if (attribute is TLRPC.TLDocumentAttributeVideo) {
+										if (currentPhotoObject is TLRPC.TLPhotoStrippedSize) {
 											val scale = max(attribute.w, attribute.w) / 50.0f
 											currentPhotoObject?.w = (attribute.w / scale).toInt()
 											currentPhotoObject?.h = (attribute.h / scale).toInt()
@@ -5399,7 +5403,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								for (a in document.attributes.indices) {
 									val attribute = document.attributes[a]
 
-									if (attribute is TLRPC.TL_documentAttributeImageSize) {
+									if (attribute is TLRPC.TLDocumentAttributeImageSize) {
 										currentPhotoObject?.w = attribute.w
 										currentPhotoObject?.h = attribute.h
 										break
@@ -5423,7 +5427,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								for (a in document.attributes.indices) {
 									val attribute = document.attributes[a]
 
-									if (attribute is TLRPC.TL_documentAttributeImageSize) {
+									if (attribute is TLRPC.TLDocumentAttributeImageSize) {
 										currentPhotoObject?.w = attribute.w
 										currentPhotoObject?.h = attribute.h
 										break
@@ -5460,7 +5464,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								for (a in document.attributes.indices) {
 									val attribute = document.attributes[a]
 
-									if (attribute is TLRPC.TL_documentAttributeImageSize) {
+									if (attribute is TLRPC.TLDocumentAttributeImageSize) {
 										currentPhotoObject?.w = attribute.w
 										currentPhotoObject?.h = attribute.h
 										break
@@ -5583,7 +5587,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							if (imageBackgroundSideColor != 0) {
 								maxPhotoWidth = AndroidUtilities.dp(208f)
 							}
-							else if (currentPhotoObject is TLRPC.TL_photoSizeEmpty && currentPhotoObject!!.w != 0) {
+							else if (currentPhotoObject is TLRPC.TLPhotoSizeEmpty && currentPhotoObject!!.w != 0) {
 								maxPhotoWidth = currentPhotoObject!!.w
 							}
 							else if (documentAttachType == DOCUMENT_ATTACH_TYPE_STICKER || documentAttachType == DOCUMENT_ATTACH_TYPE_WALLPAPER || documentAttachType == DOCUMENT_ATTACH_TYPE_THEME) {
@@ -5635,7 +5639,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 										while (a < n) {
 											val attribute = webDocument?.attributes?.get(a)
 
-											if (attribute is TLRPC.TL_documentAttributeImageSize) {
+											if (attribute is TLRPC.TLDocumentAttributeImageSize) {
 												width = attribute.w
 												height = attribute.h
 												break
@@ -5774,7 +5778,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 											photoImage.setImage(ImageLocation.getForObject(currentPhotoObject, photoParentObject), currentPhotoFilter, ImageLocation.getForObject(currentPhotoObjectThumb, photoParentObject), currentPhotoFilterThumb, currentPhotoObjectThumbStripped, 0, null, messageObject, 0)
 										}
 										else {
-											photoImage.setImage(null, null, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TL_photoStrippedSize || "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, currentPhotoObjectThumbStripped, 0, null, messageObject, 0)
+											photoImage.setImage(null, null, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TLPhotoStrippedSize || "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, currentPhotoObjectThumbStripped, 0, null, messageObject, 0)
 										}
 									}
 								}
@@ -5792,7 +5796,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 										autoDownload = DownloadController.getInstance(currentAccount).canDownloadMedia(currentMessageObject)
 									}
 
-									val filter = if (currentPhotoObject is TLRPC.TL_photoStrippedSize || "s" == currentPhotoObject!!.type) currentPhotoFilterThumb!! else currentPhotoFilter!!
+									val filter = if (currentPhotoObject is TLRPC.TLPhotoStrippedSize || "s" == currentPhotoObject!!.type) currentPhotoFilterThumb!! else currentPhotoFilter!!
 
 									if (messageObject.mediaExists || autoDownload) {
 										autoPlayingMedia = true
@@ -5842,7 +5846,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								var showGameOverlay = true
 
 								try {
-									val botId = if (messageObject.messageOwner?.via_bot_id != 0L) messageObject.messageOwner!!.via_bot_id else (messageObject.messageOwner?.from_id?.user_id ?: 0L)
+									val botId = if (messageObject.messageOwner?.viaBotId != 0L) messageObject.messageOwner!!.viaBotId else (messageObject.messageOwner?.fromId?.userId ?: 0L)
 
 									if (botId != 0L) {
 										val botUser = MessagesController.getInstance(currentAccount).getUser(botId)
@@ -5881,7 +5885,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								}
 							}
 
-							val price = LocaleController.getInstance().formatCurrencyString(MessageObject.getMedia(messageObject.messageOwner)!!.total_amount, MessageObject.getMedia(messageObject.messageOwner)!!.currency)
+							val price = LocaleController.getInstance().formatCurrencyString(MessageObject.getMedia(messageObject.messageOwner)!!.totalAmount, MessageObject.getMedia(messageObject.messageOwner)!!.currency ?: "")
 
 							val stringBuilder = SpannableStringBuilder("$price $str")
 							stringBuilder.setSpan(TypefaceSpan(Theme.TYPEFACE_BOLD), 0, price.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -5941,8 +5945,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 
 				var time = LocaleController.getInstance().formatterDay.format(messageObject.messageOwner!!.date.toLong() * 1000)
-				val call = messageObject.messageOwner!!.action as TLRPC.TL_messageActionPhoneCall
-				val isMissed = call.reason is TLRPC.TL_phoneCallDiscardReasonMissed
+				val call = messageObject.messageOwner!!.action as TLRPC.TLMessageActionPhoneCall
+				val isMissed = call.reason is TLRPC.TLPhoneCallDiscardReasonMissed
 
 				val text = if (messageObject.isOutOwner) {
 					if (isMissed) {
@@ -5971,7 +5975,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							context.getString(R.string.CallMessageIncomingMissed)
 						}
 					}
-					else if (call.reason is TLRPC.TL_phoneCallDiscardReasonBusy) {
+					else if (call.reason is TLRPC.TLPhoneCallDiscardReasonBusy) {
 						if (call.video) {
 							context.getString(R.string.CallMessageVideoIncomingDeclined)
 						}
@@ -6009,7 +6013,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else if (messageObject.type == MessageObject.TYPE_CONTACT) {
-				drawName = messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwd_from?.from_id == null
+				drawName = messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwdFrom?.fromId == null
 				drawForwardedName = !isRepliesChat
 				drawPhotoImage = true
 
@@ -6026,14 +6030,14 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				availableTimeWidth = backgroundWidth - AndroidUtilities.dp(31f)
 
-				val uid = MessageObject.getMedia(messageObject.messageOwner)?.user_id ?: 0L
+				val uid = MessageObject.getMedia(messageObject.messageOwner)?.userId ?: 0L
 				var user: User? = null
 
 				if (uid != 0L) {
 					user = MessagesController.getInstance(currentAccount).getUser(uid)
 
 					if (user == null) {
-						MessagesController.getInstance(currentAccount).loadFullUser(TLRPC.TL_user().apply { id = uid }, classGuid, true)
+						MessagesController.getInstance(currentAccount).loadFullUser(TLRPC.TLUser().apply { id = uid }, classGuid, true)
 					}
 				}
 
@@ -6049,8 +6053,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					contactAvatarDrawable.setInfo(user)
 					true
 				}
-				else if (!TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.first_name) || !TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.last_name)) {
-					contactAvatarDrawable.setInfo(MessageObject.getMedia(messageObject.messageOwner)!!.first_name, MessageObject.getMedia(messageObject.messageOwner)!!.last_name)
+				else if (!TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.firstName) || !TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.lastName)) {
+					contactAvatarDrawable.setInfo(MessageObject.getMedia(messageObject.messageOwner)!!.firstName, MessageObject.getMedia(messageObject.messageOwner)!!.lastName)
 					true
 				}
 				else {
@@ -6067,17 +6071,17 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					drawInstantViewType = 5
 				}
 				else {
-					phone = MessageObject.getMedia(messageObject.messageOwner)?.phone_number
+					phone = MessageObject.getMedia(messageObject.messageOwner)?.phoneNumber
 
 					if (phone.isNullOrEmpty()) {
 						phone = context.getString(R.string.NumberUnknown)
 					}
 				}
 
-				var currentNameString: String? = ContactsController.formatName(MessageObject.getMedia(messageObject.messageOwner)?.first_name, MessageObject.getMedia(messageObject.messageOwner)?.last_name).replace('\n', ' ')
+				var currentNameString: String? = ContactsController.formatName(MessageObject.getMedia(messageObject.messageOwner)?.firstName, MessageObject.getMedia(messageObject.messageOwner)?.lastName).replace('\n', ' ')
 
 				if (currentNameString.isNullOrEmpty()) {
-					currentNameString = MessageObject.getMedia(messageObject.messageOwner)?.phone_number
+					currentNameString = MessageObject.getMedia(messageObject.messageOwner)?.phoneNumber
 
 					if (currentNameString == null) {
 						currentNameString = ""
@@ -6136,7 +6140,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 			else if (messageObject.type == MessageObject.TYPE_VOICE) {
 				drawForwardedName = !isRepliesChat
-				drawName = messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwd_from?.from_id == null
+				drawName = messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwdFrom?.fromId == null
 
 				val maxWidth: Int
 
@@ -6197,7 +6201,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else if (messageObject.type == MessageObject.TYPE_MUSIC) {
-				drawName = (messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwd_from?.from_id == null) && (currentPosition == null || currentPosition!!.flags and MessageObject.POSITION_FLAG_TOP != 0)
+				drawName = (messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwdFrom?.fromId == null) && (currentPosition == null || currentPosition!!.flags and MessageObject.POSITION_FLAG_TOP != 0)
 
 				val maxWidth: Int
 
@@ -6273,17 +6277,17 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				backgroundWidth = maxWidth + AndroidUtilities.dp(31f)
 
-				val media = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TL_messageMediaPoll
+				val media = MessageObject.getMedia(messageObject.messageOwner) as TLRPC.TLMessageMediaPoll
 
-				timerTransitionProgress = if (media.poll.close_date - ConnectionsManager.getInstance(currentAccount).currentTime < 60) 0.0f else 1.0f
-				pollClosed = media.poll.closed
+				timerTransitionProgress = if ((media.poll?.closeDate ?: 0) - ConnectionsManager.getInstance(currentAccount).currentTime < 60) 0.0f else 1.0f
+				pollClosed = media.poll?.closed == true
 				pollVoted = messageObject.isVoted
 
 				if (pollVoted) {
 					messageObject.checkedVotes?.clear()
 				}
 
-				titleLayout = StaticLayout(Emoji.replaceEmoji(media.poll.question, Theme.chat_audioTitlePaint.fontMetricsInt, false), Theme.chat_audioTitlePaint, maxWidth + AndroidUtilities.dp(2f) - extraTextX * 2, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
+				titleLayout = StaticLayout(Emoji.replaceEmoji(media.poll?.question, Theme.chat_audioTitlePaint.fontMetricsInt, false), Theme.chat_audioTitlePaint, maxWidth + AndroidUtilities.dp(2f) - extraTextX * 2, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
 
 				var titleRtl = false
 
@@ -6305,15 +6309,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					context.getString(R.string.FinalResults)
 				}
 				else {
-					if (media.poll.quiz) {
-						if (media.poll.public_voters) {
+					if (media.poll?.quiz == true) {
+						if (media.poll?.publicVoters == true) {
 							context.getString(R.string.QuizPoll)
 						}
 						else {
 							context.getString(R.string.AnonymousQuizPoll)
 						}
 					}
-					else if (media.poll.public_voters) {
+					else if (media.poll?.publicVoters == true) {
 						context.getString(R.string.PublicPoll)
 					}
 					else {
@@ -6338,18 +6342,19 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				val w = maxWidth - AndroidUtilities.dp(if (messageObject.isOutOwner) 28f else 8f)
 
 				if (!isBot) {
-					val textPaint = if (!media.poll.public_voters && !media.poll.multiple_choice) Theme.chat_livePaint else Theme.chat_locationAddressPaint
+					val textPaint = if (media.poll?.publicVoters != true && media.poll?.multipleChoice != true) Theme.chat_livePaint else Theme.chat_locationAddressPaint
 
-					val votes = if (media.poll.quiz) {
-						TextUtils.ellipsize(if (media.results.total_voters == 0) context.getString(R.string.NoVotesQuiz) else LocaleController.formatPluralString("Answer", media.results.total_voters), textPaint, w.toFloat(), TextUtils.TruncateAt.END)
+					val votes = if (media.poll?.quiz == true) {
+						TextUtils.ellipsize(if (media.results?.totalVoters == 0) context.getString(R.string.NoVotesQuiz) else LocaleController.formatPluralString("Answer", media.results?.totalVoters ?: 0), textPaint, w.toFloat(), TextUtils.TruncateAt.END)
 					}
 					else {
-						TextUtils.ellipsize(if (media.results.total_voters == 0) context.getString(R.string.NoVotes) else LocaleController.formatPluralString("Vote", media.results.total_voters), textPaint, w.toFloat(), TextUtils.TruncateAt.END)
+						TextUtils.ellipsize(if (media.results?.totalVoters == 0) context.getString(R.string.NoVotes) else LocaleController.formatPluralString("Vote", media.results?.totalVoters ?: 0), textPaint, w.toFloat(), TextUtils.TruncateAt.END)
 					}
+
 					infoLayout = StaticLayout(votes, textPaint, w, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
 
 					if (infoLayout != null) {
-						if (!media.poll.public_voters && !media.poll.multiple_choice) {
+						if (media.poll?.publicVoters != true && media.poll?.multipleChoice != true) {
 							infoX = ceil(if (infoLayout!!.lineCount > 0) -infoLayout!!.getLineLeft(0) else 0f).toInt()
 							availableTimeWidth = (maxWidth - infoLayout!!.getLineWidth(0) - AndroidUtilities.dp(16f)).toInt()
 						}
@@ -6363,29 +6368,29 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				measureTime(messageObject)
 
 				lastPoll = media.poll
-				lastPollResults = media.results.results
-				lastPollResultsVoters = media.results.total_voters
+				lastPollResults = media.results?.results
+				lastPollResultsVoters = media.results?.totalVoters ?: 0
 
-				if (media.poll.multiple_choice && !pollVoted && !pollClosed || !isBot && (media.poll.public_voters && pollVoted || pollClosed && media.results != null && media.results.total_voters != 0 && media.poll.public_voters)) {
+				if (media.poll?.multipleChoice == true && !pollVoted && !pollClosed || !isBot && (media.poll?.publicVoters == true && pollVoted || pollClosed && media.results != null && media.results?.totalVoters != 0 && media.poll?.publicVoters == true)) {
 					drawInstantView = true
 					drawInstantViewType = 8
 					createInstantViewButton()
 				}
 
-				if (media.poll.multiple_choice) {
+				if (media.poll?.multipleChoice == true) {
 					createPollUI()
 				}
 
 				if (media.results != null) {
 					createPollUI()
 
-					val size = media.results.recent_voters.size
+					val size = media.results!!.recentVoters.size
 
 					for (a in pollAvatarImages!!.indices) {
 						if (!isBot && a < size) {
 							pollAvatarImages!![a]!!.setImageCoordinates(0f, 0f, AndroidUtilities.dp(16f).toFloat(), AndroidUtilities.dp(16f).toFloat())
 
-							val id = media.results.recent_voters[a]
+							val id = media.results!!.recentVoters[a]
 							val user = MessagesController.getInstance(currentAccount).getUser(id)
 
 							if (user != null) {
@@ -6463,12 +6468,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				var hasDifferent = false
 				var previousPercent = 0
 				var a = 0
-				val n = media.poll.answers.size
+				val n = media.poll?.answers?.size ?: 0
 
 				while (a < n) {
 					val button = PollButton()
-					button.answer = media.poll.answers[a]
-
+					button.answer = media.poll?.answers?.get(a)
 					button.title = StaticLayout(Emoji.replaceEmoji(button.answer!!.text, Theme.chat_audioPerformerPaint.fontMetricsInt, false), Theme.chat_audioPerformerPaint, maxWidth - AndroidUtilities.dp(33f), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
 					button.y = height + AndroidUtilities.dp(52f)
 					button.height = button.title!!.height
@@ -6479,19 +6483,20 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 					height += button.height + AndroidUtilities.dp(26f)
 
-					if (media.results.results.isNotEmpty()) {
+					if (!media.results?.results.isNullOrEmpty()) {
 						var b = 0
-						val n2 = media.results.results.size
+						val n2 = media.results!!.results.size
+
 						while (b < n2) {
-							val answer = media.results.results[b]
+							val answer = media.results!!.results[b]
 
 							if (button.answer?.option?.contentEquals(answer.option) == true) {
 								button.chosen = answer.chosen
 								button.count = answer.voters
 								button.correct = answer.correct
 
-								if ((pollVoted || pollClosed) && media.results.total_voters > 0) {
-									button.decimal = 100 * (answer.voters / media.results.total_voters.toFloat())
+								if ((pollVoted || pollClosed) && media.results!!.totalVoters > 0) {
+									button.decimal = 100 * (answer.voters / media.results!!.totalVoters.toFloat())
 									button.percent = button.decimal.toInt()
 									button.decimal -= button.percent.toFloat()
 								}
@@ -6535,7 +6540,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						}
 					}
 
-					if (votingFor != null && button.answer!!.option.isNotEmpty() && Arrays.binarySearch(votingFor, button.answer!!.option[0]) >= 0) {
+					if (votingFor != null && button.answer?.option?.isNotEmpty() == true && Arrays.binarySearch(votingFor, button.answer!!.option!![0]) >= 0) {
 						pollVoteInProgressNum = a
 						pollVoteInProgress = true
 						vibrateOnPollVote = true
@@ -6591,7 +6596,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				if (isBot && !drawInstantView) {
 					height -= AndroidUtilities.dp(10f)
 				}
-				else if (media.poll.public_voters || media.poll.multiple_choice) {
+				else if (media.poll?.publicVoters == true || media.poll?.multipleChoice == true) {
 					height += AndroidUtilities.dp(13f)
 				}
 
@@ -6607,7 +6612,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				instantTextNewLine = false
 
-				if (media.poll.public_voters || media.poll.multiple_choice) {
+				if (media.poll?.publicVoters == true || media.poll?.multipleChoice == true) {
 					var instantTextWidth = 0
 
 					for (@Suppress("NAME_SHADOWING") a in 0..2) {
@@ -6644,10 +6649,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else {
-				drawForwardedName = messageObject.messageOwner?.fwd_from != null && !(messageObject.isAnyKindOfSticker && messageObject.isDice)
+				drawForwardedName = messageObject.messageOwner?.fwdFrom != null && !(messageObject.isAnyKindOfSticker && messageObject.isDice)
 
 				if (!messageObject.isAnyKindOfSticker && messageObject.type != MessageObject.TYPE_ROUND_VIDEO) {
-					drawName = (messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwd_from?.from_id == null) && (currentPosition == null || currentPosition!!.flags and MessageObject.POSITION_FLAG_TOP != 0)
+					drawName = (messageObject.isFromGroup && messageObject.isSupergroup || messageObject.isImportedForward && messageObject.messageOwner?.fwdFrom?.fromId == null) && (currentPosition == null || currentPosition!!.flags and MessageObject.POSITION_FLAG_TOP != 0)
 				}
 
 				mediaBackground = messageObject.type != MessageObject.TYPE_DOCUMENT
@@ -6846,9 +6851,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					}
 				}
 				else if (messageObject.type == MessageObject.TYPE_GEO) {
-					val point = MessageObject.getMedia(messageObject.messageOwner)!!.geo
-					var lat = point.lat
-					val lon = point._long
+					val point = MessageObject.getMedia(messageObject.messageOwner)?.geo
+					var lat = point?.lat ?: 0.0
+					val lon = point?.lon ?: 0.0
 
 					val provider = if (messageObject.dialogId.toInt() == 0) {
 						when (SharedConfig.mapPreviewType) {
@@ -6862,7 +6867,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						MessagesController.MAP_PROVIDER_UNDEFINED
 					}
 
-					if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TL_messageMediaGeoLive) {
+					if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaGeoLive) {
 						backgroundWidth = if (AndroidUtilities.isTablet()) {
 							min(AndroidUtilities.getMinTabletSide() - AndroidUtilities.dp(if (drawAvatar) 102f else 50f), AndroidUtilities.dp((252 + 37).toFloat()))
 						}
@@ -6894,7 +6899,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 						lastWebFile = currentWebFile
 
-						currentWebFile = WebFile.createWithGeoPoint(lat, lon, point.access_hash, (photoWidth / AndroidUtilities.density).toInt(), (photoHeight / AndroidUtilities.density).toInt(), 15, min(2, ceil(AndroidUtilities.density.toDouble()).toInt()))
+						currentWebFile = WebFile.createWithGeoPoint(lat, lon, point?.accessHash ?: 0, (photoWidth / AndroidUtilities.density).toInt(), (photoHeight / AndroidUtilities.density).toInt(), 15, min(2, ceil(AndroidUtilities.density.toDouble()).toInt()))
 
 						if (!isCurrentLocationTimeExpired(messageObject).also { locationExpired = it }) {
 							photoImage.setCrossfadeWithOldImage(true)
@@ -6917,7 +6922,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						}
 						else if (currentChat != null) {
 							if (currentChat?.photo != null) {
-								currentPhoto = currentChat?.photo?.photo_small
+								currentPhoto = currentChat?.photo?.photoSmall
 							}
 
 							contactAvatarDrawable.setInfo(currentChat)
@@ -6927,7 +6932,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							locationImageReceiver.setImage(null, null, contactAvatarDrawable, null, null, 0)
 						}
 
-						infoLayout = StaticLayout(TextUtils.ellipsize(LocaleController.formatLocationUpdateDate(if (messageObject.messageOwner?.edit_date != 0) messageObject.messageOwner!!.edit_date.toLong() else messageObject.messageOwner!!.date.toLong()), Theme.chat_locationAddressPaint, (maxWidth + AndroidUtilities.dp(2f)).toFloat(), TextUtils.TruncateAt.END), Theme.chat_locationAddressPaint, maxWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
+						infoLayout = StaticLayout(TextUtils.ellipsize(LocaleController.formatLocationUpdateDate(if (messageObject.messageOwner?.editDate != 0) messageObject.messageOwner!!.editDate.toLong() else messageObject.messageOwner!!.date.toLong()), Theme.chat_locationAddressPaint, (maxWidth + AndroidUtilities.dp(2f)).toFloat(), TextUtils.TruncateAt.END), Theme.chat_locationAddressPaint, maxWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
 					}
 					else if (!TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.title)) {
 						backgroundWidth = if (AndroidUtilities.isTablet()) {
@@ -6954,8 +6959,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						docTitleLayout = StaticLayoutEx.createStaticLayout(MessageObject.getMedia(messageObject.messageOwner)!!.title, Theme.chat_locationTitlePaint, maxWidth + AndroidUtilities.dp(4f), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false, TextUtils.TruncateAt.END, maxWidth, 1)
 						additionHeight += AndroidUtilities.dp(50f)
 
-						if (!TextUtils.isEmpty(MessageObject.getMedia(messageObject.messageOwner)?.address)) {
-							infoLayout = StaticLayoutEx.createStaticLayout(MessageObject.getMedia(messageObject.messageOwner)!!.address, Theme.chat_locationAddressPaint, maxWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false, TextUtils.TruncateAt.END, maxWidth, 1)
+						val address = MessageObject.getMedia(messageObject.messageOwner)?.address
+
+						if (!address.isNullOrEmpty()) {
+							infoLayout = StaticLayoutEx.createStaticLayout(address, Theme.chat_locationAddressPaint, maxWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false, TextUtils.TruncateAt.END, maxWidth, 1)
 							measureTime(messageObject)
 
 							val timeLeft = backgroundWidth - ceil(infoLayout!!.getLineWidth(0).toDouble()).toInt() - AndroidUtilities.dp(24f)
@@ -7071,19 +7078,19 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					drawBackground = false
 
 					val isWebpSticker = messageObject.type == MessageObject.TYPE_STICKER
-					val stickerDocument = messageObject.document
+					val stickerDocument = messageObject.document as? TLRPC.TLDocument
 
 					if (stickerDocument != null) {
 						for (a in stickerDocument.attributes.indices) {
 							val attribute = stickerDocument.attributes[a]
 
-							if (attribute is TLRPC.TL_documentAttributeImageSize) {
+							if (attribute is TLRPC.TLDocumentAttributeImageSize) {
 								photoWidth = attribute.w
 								photoHeight = attribute.h
 								break
 							}
 
-							if (attribute is TLRPC.TL_documentAttributeVideo) {
+							if (attribute is TLRPC.TLDocumentAttributeVideo) {
 								photoWidth = attribute.w
 								photoHeight = attribute.h
 								break
@@ -7347,24 +7354,24 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						var imageH = 0
 
 						if (messageObject.hasExtendedMediaPreview()) {
-							val preview = messageObject.messageOwner?.media?.extended_media as TLRPC.TL_messageExtendedMediaPreview
+							val preview = messageObject.messageOwner?.media?.extendedMedia as TLRPC.TLMessageExtendedMediaPreview
 
 							if (preview.w != 0 && preview.h != 0) {
 								imageW = preview.w
 								imageH = preview.h
 							}
 							else if (preview.thumb != null) {
-								imageW = preview.thumb.w
-								imageH = preview.thumb.h
+								imageW = preview.thumb!!.w
+								imageH = preview.thumb!!.h
 							}
 						}
-						else if (size != null && size !is TLRPC.TL_photoStrippedSize) {
+						else if (size != null && size !is TLRPC.TLPhotoStrippedSize) {
 							imageW = size.w
 							imageH = size.h
 						}
 						else if (documentAttach != null) {
-							documentAttach?.attributes?.forEach {
-								if (it is TLRPC.TL_documentAttributeVideo) {
+							(documentAttach as? TLRPC.TLDocument)?.attributes?.forEach {
+								if (it is TLRPC.TLDocumentAttributeVideo) {
 									imageW = it.w
 									imageH = it.h
 								}
@@ -7403,13 +7410,13 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					}
 
 					if ((w == 0 || h == 0) && messageObject.type == MessageObject.TYPE_GIF) {
-						val document = messageObject.document
+						val document = messageObject.document as? TLRPC.TLDocument
 
 						if (document != null) {
 							for (a in document.attributes.indices) {
 								val attribute = document.attributes[a]
 
-								if (attribute is TLRPC.TL_documentAttributeImageSize || attribute is TLRPC.TL_documentAttributeVideo) {
+								if (attribute is TLRPC.TLDocumentAttributeImageSize || attribute is TLRPC.TLDocumentAttributeVideo) {
 									val scale = attribute.w.toFloat() / photoWidth.toFloat()
 
 									w = (attribute.w / scale).toInt()
@@ -7550,11 +7557,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 							h += (currentPosition!!.maxY - currentPosition!!.minY) * (7 * AndroidUtilities.density).roundToInt() //TODO fix
 						}
 						else {
-							if (messageObject.isRoundVideo) {
-								h = w
+							h = if (messageObject.isRoundVideo) {
+								w
 							}
 							else {
-								h = ceil((maxHeight * currentPosition!!.ph).toDouble()).toInt()
+								ceil((maxHeight * currentPosition!!.ph).toDouble()).toInt()
 							}
 						}
 
@@ -8207,11 +8214,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				val webPage = MessageObject.getMedia(currentMessageObject!!.messageOwner)!!.webpage
 
 				try {
-					siteNameWidth = ceil((Theme.chat_replyNamePaint.measureText(webPage.site_name) + 1).toDouble()).toInt()
+					siteNameWidth = ceil((Theme.chat_replyNamePaint.measureText(webPage?.siteName) + 1).toDouble()).toInt()
 
 					val width = siteNameWidth
 
-					siteNameLayout = StaticLayout(webPage.site_name, Theme.chat_replyNamePaint, min(width, linkPreviewMaxWidth), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
+					siteNameLayout = StaticLayout(webPage?.siteName, Theme.chat_replyNamePaint, min(width, linkPreviewMaxWidth), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
 					siteNameRtl = siteNameLayout!!.getLineLeft(0) != 0f
 
 					val height = siteNameLayout!!.getLineBottom(siteNameLayout!!.lineCount - 1)
@@ -8230,7 +8237,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						totalHeight += AndroidUtilities.dp(2f)
 					}
 
-					descriptionLayout = StaticLayoutEx.createStaticLayout(webPage.description, Theme.chat_replyTextPaint, linkPreviewMaxWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, AndroidUtilities.dp(1f).toFloat(), false, TextUtils.TruncateAt.END, linkPreviewMaxWidth, 6)
+					descriptionLayout = StaticLayoutEx.createStaticLayout(webPage?.description, Theme.chat_replyTextPaint, linkPreviewMaxWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, AndroidUtilities.dp(1f).toFloat(), false, TextUtils.TruncateAt.END, linkPreviewMaxWidth, 6)
 
 					val height = descriptionLayout!!.getLineBottom(descriptionLayout!!.lineCount - 1)
 
@@ -8283,10 +8290,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				drawInstantViewType = if (messageObject.sponsoredChannelPost != 0) 12 else 1
 
-				val id = MessageObject.getPeerId(messageObject.messageOwner?.from_id)
+				val id = MessageObject.getPeerId(messageObject.messageOwner?.fromId)
 
 				if (id > 0) {
-					val user = MessagesController.getInstance(currentAccount).getUser(id)
+					val user = MessagesController.getInstance(currentAccount).getUser(id) as? TLRPC.TLUser
 
 					if (user != null && user.bot) {
 						drawInstantViewType = 10
@@ -8304,9 +8311,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				botButtonsLayout = null
 			}
 
-			if (!messageObject.isRestrictedMessage && (currentPosition == null || messageObject.isMediaSale) && messageObject.messageOwner?.reply_markup is TLRPC.TL_replyInlineMarkup && !messageObject.hasExtendedMedia()) {
-				val rows = if (messageObject.messageOwner?.reply_markup is TLRPC.TL_replyInlineMarkup) {
-					messageObject.messageOwner?.reply_markup?.rows?.size ?: 0
+			if (!messageObject.isRestrictedMessage && (currentPosition == null) && messageObject.messageOwner?.replyMarkup is TLRPC.TLReplyInlineMarkup && !messageObject.hasExtendedMedia()) {
+				val rows = if (messageObject.messageOwner?.replyMarkup is TLRPC.TLReplyInlineMarkup) {
+					messageObject.messageOwner?.replyMarkup?.rows?.size ?: 0
 				}
 				else {
 					1
@@ -8346,9 +8353,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				botButtonsByData.clear()
 
-				if (messageObject.messageOwner?.reply_markup is TLRPC.TL_replyInlineMarkup) {
+				if (messageObject.messageOwner?.replyMarkup is TLRPC.TLReplyInlineMarkup) {
 					for (a in 0 until rows) {
-						val row = messageObject.messageOwner?.reply_markup?.rows?.get(a)
+						val row = messageObject.messageOwner?.replyMarkup?.rows?.get(a)
 
 						val buttonsCount = row?.buttons?.size ?: continue
 
@@ -8395,7 +8402,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								color = context.getColor(R.color.dark_fixed)
 							}
 
-							if (botButton.button is TLRPC.TL_keyboardButtonBuy && MessageObject.getMedia(messageObject.messageOwner)!!.flags and 4 != 0) {
+							if (botButton.button is TLRPC.TLKeyboardButtonBuy && MessageObject.getMedia(messageObject.messageOwner)!!.flags and 4 != 0) {
 								buttonText = context.getString(R.string.PaymentReceipt)
 							}
 							else {
@@ -8412,11 +8419,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								maxButtonsWidth = max(maxButtonsWidth, botButton.x + botButton.width)
 							}
 
-							if (messageObject.isFromUser && botButton.button is TLRPC.TL_keyboardButtonUrl) {
+							if (messageObject.isFromUser && botButton.button is TLRPC.TLKeyboardButtonUrl) {
 								runCatching {
 									botButton.button?.url?.let {
-										val uri = Uri.parse(it)
-										val host = uri.host?.lowercase(Locale.getDefault())
+										val uri = it.toUri()
+										val host = uri.host?.lowercase()
 
 										botButton.isInviteButton = uri.getQueryParameter("startgroup") != null && ("http" == uri.scheme || "https" == uri.scheme && ApplicationLoader.applicationContext.getString(R.string.domain) == host || "tg2" == uri.scheme && ((botButton.button?.url?.startsWith("tg2:resolve") == true) || (botButton.button?.url?.startsWith("tg2://resolve") == true)))
 									}
@@ -8630,7 +8637,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 		if (noBackground(messageObject)) {
 			// MARK: temporary solution to return background for single media so reactions are displayed correctly
-			drawBackground = ChatObject.isChannelAndNotMegaGroup(currentChat)
+			drawBackground = if (messageObject.isRoundVideo) {
+				false
+			}
+			else {
+				ChatObject.isChannelAndNotMegaGroup(currentChat)
+			}
 		}
 	}
 
@@ -8827,12 +8839,12 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					}
 				}
 				else if (currentChat != null) {
-					val id = if (currentMessageObject?.messageOwner?.fwd_from != null) {
-						if (currentMessageObject!!.messageOwner!!.fwd_from!!.flags and 16 != 0) {
-							currentMessageObject!!.messageOwner!!.fwd_from!!.saved_from_msg_id
+					val id = if (currentMessageObject?.messageOwner?.fwdFrom != null) {
+						if (currentMessageObject!!.messageOwner!!.fwdFrom!!.flags and 16 != 0) {
+							currentMessageObject!!.messageOwner!!.fwdFrom!!.savedFromMsgId
 						}
 						else {
-							currentMessageObject!!.messageOwner!!.fwd_from?.channel_post ?: 0
+							currentMessageObject!!.messageOwner!!.fwdFrom?.channelPost ?: 0
 						}
 					}
 					else {
@@ -9049,22 +9061,26 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			return
 		}
 
-		for (a in documentAttach!!.attributes.indices) {
-			val attribute = documentAttach?.attributes?.get(a)
+		val documentAttach = documentAttach
 
-			if (attribute is TLRPC.TL_documentAttributeAudio) {
-				if (attribute.waveform == null || attribute.waveform.isEmpty()) {
-					MediaController.getInstance().generateWaveform(currentMessageObject)
+		if (documentAttach is TLRPC.TLDocument) {
+			for (a in documentAttach.attributes.indices) {
+				val attribute = documentAttach.attributes[a]
+
+				if (attribute is TLRPC.TLDocumentAttributeAudio) {
+					if (attribute.waveform == null || attribute.waveform?.isEmpty() == true) {
+						MediaController.getInstance().generateWaveform(currentMessageObject)
+					}
+
+					useSeekBarWaveform = attribute.waveform != null
+					seekBarWaveform.setWaveform(attribute.waveform)
+
+					break
 				}
-
-				useSeekBarWaveform = attribute.waveform != null
-				seekBarWaveform.setWaveform(attribute.waveform)
-
-				break
 			}
 		}
 
-		useTranscribeButton = currentMessageObject.isVoice && useSeekBarWaveform && currentMessageObject.messageOwner != null && MessageObject.getMedia(currentMessageObject.messageOwner) !is TLRPC.TL_messageMediaWebPage && getInstance(currentAccount).isPremium
+		useTranscribeButton = currentMessageObject.isVoice && useSeekBarWaveform && currentMessageObject.messageOwner != null && MessageObject.getMedia(currentMessageObject.messageOwner) !is TLRPC.TLMessageMediaWebPage && getInstance(currentAccount).isPremium
 
 		updateSeekBarWaveformWidth()
 	}
@@ -9101,7 +9117,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		return if (MessageObject.isVoiceDocument(documentAttach)) {
 			documentAttachType = DOCUMENT_ATTACH_TYPE_AUDIO
 
-			val duration = documentAttach?.attributes?.firstOrNull { it is TLRPC.TL_documentAttributeAudio }?.let { (it as TLRPC.TL_documentAttributeAudio).duration } ?: 0
+			val duration = (documentAttach as? TLRPC.TLDocument)?.attributes?.firstOrNull { it is TLRPC.TLDocumentAttributeAudio }?.duration ?: 0
 
 			widthBeforeNewTimeLine = maxWidth - AndroidUtilities.dp((76 + 18).toFloat()) - ceil(Theme.chat_audioTimePaint.measureText("00:00").toDouble()).toInt()
 			availableTimeWidth = maxWidth - AndroidUtilities.dp(18f)
@@ -9157,7 +9173,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				performerX = -ceil(performerLayout!!.getLineLeft(0).toDouble()).toInt()
 			}
 
-			val duration = documentAttach?.attributes?.firstOrNull { it is TLRPC.TL_documentAttributeAudio }?.let { (it as TLRPC.TL_documentAttributeAudio).duration } ?: 0
+			val duration = (documentAttach as? TLRPC.TLDocument)?.attributes?.firstOrNull { it is TLRPC.TLDocumentAttributeAudio }?.duration ?: 0
 			val durationWidth = ceil(Theme.chat_audioTimePaint.measureText(AndroidUtilities.formatShortDuration(duration, duration)).toDouble()).toInt()
 
 			widthBeforeNewTimeLine = backgroundWidth - AndroidUtilities.dp((10 + 76).toFloat()) - durationWidth
@@ -9183,7 +9199,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			0
 		}
 		else {
-			drawPhotoImage = documentAttach?.mime_type != null && (documentAttach!!.mime_type.lowercase(Locale.getDefault()).startsWith("image/") || documentAttach!!.mime_type.lowercase(Locale.getDefault()).startsWith("video/mp4")) || MessageObject.isDocumentHasThumb(documentAttach)
+			drawPhotoImage = documentAttach?.mimeType != null && (documentAttach?.mimeType?.lowercase()?.startsWith("image/") == true || documentAttach?.mimeType?.lowercase()?.startsWith("video/mp4") == true) || MessageObject.isDocumentHasThumb(documentAttach)
 
 			if (!drawPhotoImage) {
 				maxWidth += AndroidUtilities.dp(30f)
@@ -9309,7 +9325,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			return
 		}
 
-		text = text.lowercase(Locale.getDefault())
+		text = text.lowercase()
 
 		val message = messageObject.messageOwner?.message?.lowercase() ?: ""
 		var start = -1
@@ -9658,7 +9674,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else if (drawInstantViewType == 9 || drawInstantViewType == 11) {
-				val webPage = MessageObject.getMedia(currentMessageObject!!.messageOwner)?.webpage as? TLRPC.TL_webPage
+				val webPage = MessageObject.getMedia(currentMessageObject!!.messageOwner)?.webpage as? TLRPC.TLWebPage
 
 				if (webPage?.url?.contains("voicechat=") == true) {
 					context.getString(R.string.VoipGroupJoinAsSpeaker)
@@ -9885,10 +9901,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			if (currentMessageObject!!.type == MessageObject.TYPE_EXTENDED_MEDIA_PREVIEW && currentUnlockString != null) {
 				unlockLayout = StaticLayout(currentUnlockString, Theme.chat_unlockExtendedMediaTextPaint, unlockTextWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, 0.0f, false)
 
-				val preview = currentMessageObject?.messageOwner?.media?.extended_media as? TLRPC.TL_messageExtendedMediaPreview
+				val preview = currentMessageObject?.messageOwner?.media?.extendedMedia as? TLRPC.TLMessageExtendedMediaPreview
 
-				if (preview != null && preview.video_duration != 0) {
-					val str = AndroidUtilities.formatDuration(preview.video_duration, false)
+				if (preview != null && preview.videoDuration != 0) {
+					val str = AndroidUtilities.formatDuration(preview.videoDuration, false)
 					durationWidth = ceil(Theme.chat_durationPaint.measureText(str).toDouble()).toInt()
 					videoInfoLayout = StaticLayout(str, Theme.chat_durationPaint, durationWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
 				}
@@ -10450,23 +10466,22 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 
 				if (transitionParams.animateChangeProgress != 1.0f && transitionParams.animateMessageText) {
-					canvas.save()
+					canvas.withSave {
+						if (currentBackgroundDrawable != null) {
+							val r = currentBackgroundDrawable!!.bounds
 
-					if (currentBackgroundDrawable != null) {
-						val r = currentBackgroundDrawable!!.bounds
+							if (currentMessageObject!!.isOutOwner && !mediaBackground && !isPinnedBottom) {
+								clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(10f), r.bottom - AndroidUtilities.dp(4f))
+							}
+							else {
+								clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(4f), r.bottom - AndroidUtilities.dp(4f))
+							}
+						}
 
-						if (currentMessageObject!!.isOutOwner && !mediaBackground && !isPinnedBottom) {
-							canvas.clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(10f), r.bottom - AndroidUtilities.dp(4f))
-						}
-						else {
-							canvas.clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(4f), r.bottom - AndroidUtilities.dp(4f))
-						}
+						drawMessageText(this, transitionParams.animateOutTextBlocks, false, 1.0f - transitionParams.animateChangeProgress, false)
+						drawMessageText(this, currentMessageObject!!.textLayoutBlocks, true, transitionParams.animateChangeProgress, false)
+
 					}
-
-					drawMessageText(canvas, transitionParams.animateOutTextBlocks, false, 1.0f - transitionParams.animateChangeProgress, false)
-					drawMessageText(canvas, currentMessageObject!!.textLayoutBlocks, true, transitionParams.animateChangeProgress, false)
-
-					canvas.restore()
 				}
 				else {
 					drawMessageText(canvas, currentMessageObject!!.textLayoutBlocks, true, 1.0f, false)
@@ -10570,10 +10585,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						photoImage.setSkipUpdateFrame(drawForBlur)
 
 						if (flipImage) {
-							canvas.save()
-							canvas.scale(-1f, 1f, photoImage.centerX, photoImage.centerY)
-							imageDrawn = photoImage.draw(canvas)
-							canvas.restore()
+							canvas.withScale(-1f, 1f, photoImage.centerX, photoImage.centerY) {
+								imageDrawn = photoImage.draw(this)
+							}
 						}
 						else {
 							imageDrawn = photoImage.draw(canvas)
@@ -10766,12 +10780,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				canvas.restore()
 			}
 
-			canvas.save()
-			canvas.translate(timeAudioX.toFloat(), (AndroidUtilities.dp(57f) + namesOffset + mediaOffsetY).toFloat())
-
-			durationLayout?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(timeAudioX.toFloat(), (AndroidUtilities.dp(57f) + namesOffset + mediaOffsetY).toFloat()) {
+				durationLayout?.draw(this)
+			}
 
 			//MARK: Here I have hidden the menu for the audio format, if you ever need it, just uncomment the code
 //			if (shouldDrawMenuDrawable()) {
@@ -10835,52 +10846,46 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				timeAudioX -= offset
 			}
 
-			canvas.save()
-
-			if (useSeekBarWaveform) {
-				canvas.translate((seekBarX + AndroidUtilities.dp(13f)).toFloat(), seekBarY.toFloat())
-				seekBarWaveform.draw(canvas, this)
+			canvas.withSave {
+				if (useSeekBarWaveform) {
+					translate((seekBarX + AndroidUtilities.dp(13f)).toFloat(), seekBarY.toFloat())
+					seekBarWaveform.draw(this, this@ChatMessageCell)
+				}
+				else {
+					translate(seekBarX.toFloat(), seekBarY.toFloat())
+					seekBar.draw(this)
+				}
 			}
-			else {
-				canvas.translate(seekBarX.toFloat(), seekBarY.toFloat())
-				seekBar.draw(canvas)
-			}
-
-			canvas.restore()
 
 			if (useTranscribeButton) {
-				canvas.save()
+				canvas.withSave {
+					var backgroundWidth = backgroundWidth
 
-				var backgroundWidth = backgroundWidth
+					if (transitionParams.animateBackgroundBoundsInner && documentAttachType == DOCUMENT_ATTACH_TYPE_AUDIO) {
+						backgroundWidth = (this@ChatMessageCell.backgroundWidth - transitionParams.deltaLeft + transitionParams.deltaRight).toInt()
+					}
 
-				if (transitionParams.animateBackgroundBoundsInner && documentAttachType == DOCUMENT_ATTACH_TYPE_AUDIO) {
-					backgroundWidth = (this.backgroundWidth - transitionParams.deltaLeft + transitionParams.deltaRight).toInt()
+					val seekBarWidth = backgroundWidth - AndroidUtilities.dp((92 + (if (hasLinkPreview) 10 else 0) + 36).toFloat())
+
+					translate((seekBarX + AndroidUtilities.dp((13 + 8).toFloat()) + seekBarWidth.also {
+						transcribeX = it.toFloat()
+					}).toFloat(), seekBarY.also { transcribeY = it.toFloat() }.toFloat())
+
+					if (transcribeButton == null) {
+						transcribeButton = TranscribeButton(this@ChatMessageCell, seekBarWaveform)
+						transcribeButton?.setOpen(currentMessageObject!!.messageOwner != null && currentMessageObject!!.messageOwner!!.voiceTranscriptionOpen && currentMessageObject!!.messageOwner!!.voiceTranscriptionFinal, false)
+						transcribeButton?.setLoading(TranscribeButton.isTranscribing(currentMessageObject), false)
+					}
+
+					transcribeButton?.setColor(currentMessageObject!!.isOut, ResourcesCompat.getColor(resources, if (currentMessageObject?.isOutOwner == true) R.color.white else R.color.brand, null), ResourcesCompat.getColor(resources, R.color.dark_gray, null))
+					transcribeButton?.draw(this)
+
 				}
-
-				val seekBarWidth = backgroundWidth - AndroidUtilities.dp((92 + (if (hasLinkPreview) 10 else 0) + 36).toFloat())
-
-				canvas.translate((seekBarX + AndroidUtilities.dp((13 + 8).toFloat()) + seekBarWidth.also {
-					transcribeX = it.toFloat()
-				}).toFloat(), seekBarY.also { transcribeY = it.toFloat() }.toFloat())
-
-				if (transcribeButton == null) {
-					transcribeButton = TranscribeButton(this, seekBarWaveform)
-					transcribeButton?.setOpen(currentMessageObject!!.messageOwner != null && currentMessageObject!!.messageOwner!!.voiceTranscriptionOpen && currentMessageObject!!.messageOwner!!.voiceTranscriptionFinal, false)
-					transcribeButton?.setLoading(TranscribeButton.isTranscribing(currentMessageObject), false)
-				}
-
-				transcribeButton?.setColor(currentMessageObject!!.isOut, ResourcesCompat.getColor(resources, if (currentMessageObject?.isOutOwner == true) R.color.white else R.color.brand, null), ResourcesCompat.getColor(resources, R.color.dark_gray, null))
-				transcribeButton?.draw(canvas)
-
-				canvas.restore()
 			}
 
-			canvas.save()
-			canvas.translate(timeAudioX.toFloat(), (AndroidUtilities.dp(44f) + namesOffset + mediaOffsetY).toFloat())
-
-			durationLayout?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(timeAudioX.toFloat(), (AndroidUtilities.dp(44f) + namesOffset + mediaOffsetY).toFloat()) {
+				durationLayout?.draw(this)
+			}
 
 			if (currentMessageObject!!.type != 0 && currentMessageObject!!.isContentUnread) {
 				val dotColor = if (currentMessageObject!!.isOutOwner) {
@@ -10925,20 +10930,18 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			if (siteNameLayout != null) {
 				Theme.chat_replyNamePaint.color = ResourcesCompat.getColor(resources, if (currentMessageObject?.isOutOwner == true) R.color.white else R.color.brand, null)
 
-				canvas.save()
+				canvas.withSave {
+					val x = if (siteNameRtl) {
+						backgroundWidth - siteNameWidth - AndroidUtilities.dp(32f)
+					}
+					else {
+						if (hasInvoicePreview) 0 else AndroidUtilities.dp(10f)
+					}
 
-				val x = if (siteNameRtl) {
-					backgroundWidth - siteNameWidth - AndroidUtilities.dp(32f)
+					translate((linkX + x).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat())
+
+					siteNameLayout?.draw(this)
 				}
-				else {
-					if (hasInvoicePreview) 0 else AndroidUtilities.dp(10f)
-				}
-
-				canvas.translate((linkX + x).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat())
-
-				siteNameLayout!!.draw(canvas)
-
-				canvas.restore()
 
 				linkPreviewY += siteNameLayout!!.getLineBottom(siteNameLayout!!.lineCount - 1)
 			}
@@ -10957,14 +10960,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				descriptionY = linkPreviewY - AndroidUtilities.dp(3f)
 
-				canvas.save()
-				canvas.translate((linkX + AndroidUtilities.dp(10f) + descriptionX).toFloat(), descriptionY.toFloat())
-
-				descriptionLayout?.draw(canvas)
-
-				AnimatedEmojiSpan.drawAnimatedEmojis(canvas, descriptionLayout, animatedEmojiDescriptionStack, 0f, null, 0f, 0f, 0f, 1f)
-
-				canvas.restore()
+				canvas.withTranslation((linkX + AndroidUtilities.dp(10f) + descriptionX).toFloat(), descriptionY.toFloat()) {
+					descriptionLayout?.draw(this)
+					AnimatedEmojiSpan.drawAnimatedEmojis(this, descriptionLayout, animatedEmojiDescriptionStack, 0f, null, 0f, 0f, 0f, 1f)
+				}
 			}
 
 			drawTime = true
@@ -11085,12 +11084,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 //			}
 			try {
 				if (docTitleLayout != null) {
-					canvas.save()
-					canvas.translate(x + docTitleOffsetX, titleY.toFloat())
-
-					docTitleLayout?.draw(canvas)
-
-					canvas.restore()
+					canvas.withTranslation(x + docTitleOffsetX, titleY.toFloat()) {
+						docTitleLayout?.draw(this)
+					}
 				}
 			}
 			catch (e: Exception) {
@@ -11099,17 +11095,14 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			try {
 				if (infoLayout != null) {
-					canvas.save()
-					canvas.translate(x, subtitleY.toFloat())
-
-					if (buttonState == 1 && loadingProgressLayout != null) {
-						loadingProgressLayout?.draw(canvas)
+					canvas.withTranslation(x, subtitleY.toFloat()) {
+						if (buttonState == 1 && loadingProgressLayout != null) {
+							loadingProgressLayout?.draw(this)
+						}
+						else {
+							infoLayout?.draw(this)
+						}
 					}
-					else {
-						infoLayout?.draw(canvas)
-					}
-
-					canvas.restore()
 				}
 			}
 			catch (e: Exception) {
@@ -11117,7 +11110,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 		}
 
-		if (currentMessageObject?.type == MessageObject.TYPE_GEO && MessageObject.getMedia(currentMessageObject!!.messageOwner) !is TLRPC.TL_messageMediaGeoLive && currentMapProvider == MessagesController.MAP_PROVIDER_ELLO && photoImage.hasNotThumb()) {
+		if (currentMessageObject?.type == MessageObject.TYPE_GEO && MessageObject.getMedia(currentMessageObject!!.messageOwner) !is TLRPC.TLMessageMediaGeoLive && currentMapProvider == MessagesController.MAP_PROVIDER_ELLO && photoImage.hasNotThumb()) {
 			val w = (Theme.chat_redLocationIcon.intrinsicWidth * 0.8f).toInt()
 			val h = (Theme.chat_redLocationIcon.intrinsicHeight * 0.8f).toInt()
 			val x = (photoImage.imageX + (photoImage.imageWidth - w) / 2).toInt()
@@ -11145,7 +11138,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else {
-				if (currentMessageObject?.isOutOwner == true) {
+				if (currentMessageObject.isOutOwner) {
 					reactionsLayoutInBubble.x = getCurrentBackgroundLeft() + AndroidUtilities.dp(11f)
 				}
 				else {
@@ -11170,7 +11163,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			reactionsLayoutInBubble.y += reactionsLayoutInBubble.positionOffsetY
 
-			if (currentMessageObject?.isMediaEmpty == false && currentMessagesGroup == null && !currentMessageObject?.messageOwner?.message.isNullOrEmpty()) {
+			if (currentMessageObject?.isMediaEmpty != true && currentMessagesGroup == null && !currentMessageObject?.messageOwner?.message.isNullOrEmpty()) {
 				reactionsLayoutInBubble.y -= AndroidUtilities.dp(12f)
 			}
 		}
@@ -11250,26 +11243,24 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				Theme.chat_replyNamePaint.alpha = (alpha * Theme.chat_replyLinePaint.alpha).toInt()
 			}
 
-			canvas.save()
+			canvas.withSave {
+				var x: Int
 
-			var x: Int
+				if (siteNameRtl) {
+					x = backgroundWidth - siteNameWidth - AndroidUtilities.dp(32f)
 
-			if (siteNameRtl) {
-				x = backgroundWidth - siteNameWidth - AndroidUtilities.dp(32f)
-
-				if (isSmallImage) {
-					x -= AndroidUtilities.dp((48 + 6).toFloat())
+					if (isSmallImage) {
+						x -= AndroidUtilities.dp((48 + 6).toFloat())
+					}
 				}
+				else {
+					x = if (hasInvoicePreview) 0 else AndroidUtilities.dp(10f)
+				}
+
+				translate((linkX + x).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat())
+
+				siteNameLayout?.draw(this)
 			}
-			else {
-				x = if (hasInvoicePreview) 0 else AndroidUtilities.dp(10f)
-			}
-
-			canvas.translate((linkX + x).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat())
-
-			siteNameLayout?.draw(canvas)
-
-			canvas.restore()
 
 			linkPreviewY += siteNameLayout!!.getLineBottom(siteNameLayout!!.lineCount - 1)
 		}
@@ -11396,12 +11387,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				smallImageStartY = linkPreviewY - AndroidUtilities.dp(1f)
 			}
 
-			canvas.save()
-			canvas.translate((linkX + AndroidUtilities.dp(10f) + titleX).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat())
-
-			titleLayout?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation((linkX + AndroidUtilities.dp(10f) + titleX).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat()) {
+				titleLayout?.draw(this)
+			}
 
 			linkPreviewY += titleLayout!!.getLineBottom(titleLayout!!.lineCount - 1)
 		}
@@ -11415,12 +11403,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				smallImageStartY = linkPreviewY - AndroidUtilities.dp(1f)
 			}
 
-			canvas.save()
-			canvas.translate((linkX + AndroidUtilities.dp(10f) + authorX).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat())
-
-			authorLayout?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation((linkX + AndroidUtilities.dp(10f) + authorX).toFloat(), (linkPreviewY - AndroidUtilities.dp(3f)).toFloat()) {
+				authorLayout?.draw(this)
+			}
 
 			linkPreviewY += authorLayout!!.getLineBottom(authorLayout!!.lineCount - 1)
 		}
@@ -11436,24 +11421,21 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			descriptionY = linkPreviewY - AndroidUtilities.dp(3f)
 
-			canvas.save()
-			canvas.translate((linkX + (if (hasInvoicePreview) 0 else AndroidUtilities.dp(10f)) + descriptionX).toFloat(), descriptionY.toFloat())
-
-			if (linkBlockNum == -10) {
-				if (links.draw(canvas)) {
-					invalidate()
+			canvas.withTranslation((linkX + (if (hasInvoicePreview) 0 else AndroidUtilities.dp(10f)) + descriptionX).toFloat(), descriptionY.toFloat()) {
+				if (linkBlockNum == -10) {
+					if (links.draw(this)) {
+						invalidate()
+					}
 				}
+
+				if (delegate != null && delegate?.textSelectionHelper != null && delegate?.textSelectionHelper?.isSelected(currentMessageObject) == true) {
+					delegate?.textSelectionHelper?.drawDescription(currentMessageObject!!.isOutOwner, descriptionLayout, this)
+				}
+
+				descriptionLayout?.draw(this)
+
+				AnimatedEmojiSpan.drawAnimatedEmojis(this, descriptionLayout, animatedEmojiDescriptionStack, 0f, null, 0f, 0f, 0f, 1f)
 			}
-
-			if (delegate != null && delegate?.textSelectionHelper != null && delegate?.textSelectionHelper?.isSelected(currentMessageObject) == true) {
-				delegate?.textSelectionHelper?.drawDescription(currentMessageObject!!.isOutOwner, descriptionLayout, canvas)
-			}
-
-			descriptionLayout?.draw(canvas)
-
-			AnimatedEmojiSpan.drawAnimatedEmojis(canvas, descriptionLayout, animatedEmojiDescriptionStack, 0f, null, 0f, 0f, 0f, 1f)
-
-			canvas.restore()
 
 			linkPreviewY += descriptionLayout!!.getLineBottom(descriptionLayout!!.lineCount - 1)
 		}
@@ -11521,13 +11503,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			timeBackgroundPaint.alpha = oldAlpha
 
-			canvas.save()
-
-			canvas.translate(x.toFloat(), y.toFloat())
-
-			photosCountLayout!!.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(x.toFloat(), y.toFloat()) {
+				photosCountLayout?.draw(this)
+			}
 
 			Theme.chat_durationPaint.alpha = 255
 		}
@@ -11561,26 +11539,23 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				canvas.drawRoundRect(rect, AndroidUtilities.dp(4f).toFloat(), AndroidUtilities.dp(4f).toFloat(), getThemedPaint(Theme.key_paint_chatTimeBackground))
 			}
 
-			canvas.save()
-			canvas.translate(x.toFloat(), y.toFloat())
-
-			if (hasInvoicePreview) {
-				if (drawPhotoImage) {
-					Theme.chat_shipmentPaint.color = getThemedColor(Theme.key_chat_previewGameText)
-				}
-				else {
-					if (currentMessageObject!!.isOutOwner) {
-						Theme.chat_shipmentPaint.color = ResourcesCompat.getColor(resources, R.color.white, null)
+			canvas.withTranslation(x.toFloat(), y.toFloat()) {
+				if (hasInvoicePreview) {
+					if (drawPhotoImage) {
+						Theme.chat_shipmentPaint.color = getThemedColor(Theme.key_chat_previewGameText)
 					}
 					else {
-						Theme.chat_shipmentPaint.color = ResourcesCompat.getColor(resources, R.color.text, null)
+						if (currentMessageObject!!.isOutOwner) {
+							Theme.chat_shipmentPaint.color = ResourcesCompat.getColor(resources, R.color.white, null)
+						}
+						else {
+							Theme.chat_shipmentPaint.color = ResourcesCompat.getColor(resources, R.color.text, null)
+						}
 					}
 				}
+
+				videoInfoLayout?.draw(this)
 			}
-
-			videoInfoLayout?.draw(canvas)
-
-			canvas.restore()
 		}
 
 		if (drawInstantView) {
@@ -11617,10 +11592,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 
 			if (instantViewLayout != null) {
-				canvas.save()
-				canvas.translate((linkX + instantTextX).toFloat(), (instantY + AndroidUtilities.dp(10.5f)).toFloat())
-				instantViewLayout?.draw(canvas)
-				canvas.restore()
+				canvas.withTranslation((linkX + instantTextX).toFloat(), (instantY + AndroidUtilities.dp(10.5f)).toFloat()) {
+					instantViewLayout?.draw(this)
+				}
 			}
 		}
 	}
@@ -11669,19 +11643,16 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), getThemedPaint(if (a == pressedBotButton) Theme.key_paint_chatActionBackgroundSelected else Theme.key_paint_chatActionBackground))
 
 			if (hasGradientService()) {
-				//TODO: animate color transition
+				// TODO: animate color transition
 				if (a == pressedBotButton) canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), botButtonSelectedPaint)
 				else canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), botButtonDefaultPaint)
 			}
 
-			canvas.save()
-			canvas.translate((button.x + addX + AndroidUtilities.dp(5f)).toFloat(), y + (AndroidUtilities.dp(44f) - button.title!!.getLineBottom(button.title!!.lineCount - 1)) / 2)
+			canvas.withTranslation((button.x + addX + AndroidUtilities.dp(5f)).toFloat(), y + (AndroidUtilities.dp(44f) - button.title!!.getLineBottom(button.title!!.lineCount - 1)) / 2) {
+				button.title?.draw(this)
+			}
 
-			button.title?.draw(canvas)
-
-			canvas.restore()
-
-			if (button.button is TLRPC.TL_keyboardButtonWebView) {
+			if (button.button is TLRPC.TLKeyboardButtonWebView) {
 				val drawable = getThemedDrawable(Theme.key_drawable_botWebView)
 				val x = button.x + button.width - AndroidUtilities.dp(3f) - drawable.intrinsicWidth + addX
 
@@ -11689,7 +11660,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				drawable.draw(canvas)
 			}
-			else if (button.button is TLRPC.TL_keyboardButtonUrl) {
+			else if (button.button is TLRPC.TLKeyboardButtonUrl) {
 				val drawable = if (button.isInviteButton) {
 					getThemedDrawable(Theme.key_drawable_botInvite)
 				}
@@ -11703,7 +11674,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				drawable.draw(canvas)
 			}
-			else if (button.button is TLRPC.TL_keyboardButtonSwitchInline) {
+			else if (button.button is TLRPC.TLKeyboardButtonSwitchInline) {
 				val drawable = getThemedDrawable(Theme.key_drawable_botInline)
 				val x = button.x + button.width - AndroidUtilities.dp(3f) - drawable.intrinsicWidth + addX
 
@@ -11711,8 +11682,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				drawable.draw(canvas)
 			}
-			else if (button.button is TLRPC.TL_keyboardButtonCallback || button.button is TLRPC.TL_keyboardButtonRequestGeoLocation || button.button is TLRPC.TL_keyboardButtonGame || button.button is TLRPC.TL_keyboardButtonBuy || button.button is TLRPC.TL_keyboardButtonUrlAuth) {
-				if (button.button is TLRPC.TL_keyboardButtonBuy) {
+			else if (button.button is TLRPC.TLKeyboardButtonCallback || button.button is TLRPC.TLKeyboardButtonRequestGeoLocation || button.button is TLRPC.TLKeyboardButtonGame || button.button is TLRPC.TLKeyboardButtonBuy || button.button is TLRPC.TLKeyboardButtonUrlAuth) {
+				if (button.button is TLRPC.TLKeyboardButtonBuy) {
 					val x = button.x + button.width - AndroidUtilities.dp(5f) - Theme.chat_botCardDrawable.intrinsicWidth + addX
 
 					setDrawableBounds(Theme.chat_botCardDrawable, x.toFloat(), y + AndroidUtilities.dp(4f))
@@ -11721,14 +11692,14 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 
 //				MARK: This condition draws a small progress bar in the upper right corner of the bot button, if you ever need it, just uncomment this code
-//				val drawProgress = (button.button is TLRPC.TL_keyboardButtonCallback || button.button is TLRPC.TL_keyboardButtonGame || button.button is TLRPC.TL_keyboardButtonBuy || button.button is TLRPC.TL_keyboardButtonUrlAuth) && SendMessagesHelper.getInstance(currentAccount).isSendingCallback(currentMessageObject, button.button) || button.button is TLRPC.TL_keyboardButtonRequestGeoLocation && SendMessagesHelper.getInstance(currentAccount).isSendingCurrentLocation(currentMessageObject, button.button)
+//				val drawProgress = (button.button is TLRPC.TLKeyboardButtonCallback || button.button is TLRPC.TLKeyboardButtonGame || button.button is TLRPC.TLKeyboardButtonBuy || button.button is TLRPC.TLKeyboardButtonUrlAuth) && SendMessagesHelper.getInstance(currentAccount).isSendingCallback(currentMessageObject, button.button) || button.button is TLRPC.TLKeyboardButtonRequestGeoLocation && SendMessagesHelper.getInstance(currentAccount).isSendingCurrentLocation(currentMessageObject, button.button)
 
 //				if (drawProgress || button.progressAlpha != 0f) {
 //					Theme.chat_botProgressPaint.alpha = min(255, (button.progressAlpha * 255).toInt())
 //
 //					val x = button.x + button.width - AndroidUtilities.dp((9 + 3).toFloat()) + addX
 //
-//					if (button.button is TLRPC.TL_keyboardButtonBuy) {
+//					if (button.button is TLRPC.TLKeyboardButtonBuy) {
 //						y += AndroidUtilities.dp(26f).toFloat()
 //					}
 //
@@ -11850,35 +11821,32 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				val block = textLayoutBlocks[a]
 
-				canvas.save()
-				canvas.translate((textX - if (block.isRtl) ceil(currentMessageObject!!.textXOffset.toDouble()).toInt() else 0).toFloat(), textY + block.textYOffset + transitionYOffsetForDrawables)
+				canvas.withTranslation((textX - if (block.isRtl) ceil(currentMessageObject!!.textXOffset.toDouble()).toInt() else 0).toFloat(), textY + block.textYOffset + transitionYOffsetForDrawables) {
+					if (a == linkBlockNum && !drawOnlyText) {
+						if (links.draw(this)) {
+							invalidate()
+						}
+					}
 
-				if (a == linkBlockNum && !drawOnlyText) {
-					if (links.draw(canvas)) {
-						invalidate()
+					if (a == linkSelectionBlockNum && urlPathSelection.isNotEmpty() && !drawOnlyText) {
+						for (b in urlPathSelection.indices) {
+							drawPath(urlPathSelection[b], Theme.chat_textSearchSelectionPaint)
+						}
+					}
+
+					if (delegate?.textSelectionHelper != null && transitionParams.animateChangeProgress == 1f && !drawOnlyText) {
+						delegate?.textSelectionHelper?.draw(currentMessageObject, block, this)
+					}
+
+					try {
+						Emoji.emojiDrawingYOffset = -transitionYOffsetForDrawables
+						SpoilerEffect.renderWithRipple(this@ChatMessageCell, invalidateSpoilersParent, spoilersColor, 0, block.spoilersPatchedTextLayout, block.textLayout, block.spoilers, this, false)
+						Emoji.emojiDrawingYOffset = 0f
+					}
+					catch (e: Exception) {
+						FileLog.e(e)
 					}
 				}
-
-				if (a == linkSelectionBlockNum && urlPathSelection.isNotEmpty() && !drawOnlyText) {
-					for (b in urlPathSelection.indices) {
-						canvas.drawPath(urlPathSelection[b], Theme.chat_textSearchSelectionPaint)
-					}
-				}
-
-				if (delegate?.textSelectionHelper != null && transitionParams.animateChangeProgress == 1f && !drawOnlyText) {
-					delegate?.textSelectionHelper?.draw(currentMessageObject, block, canvas)
-				}
-
-				try {
-					Emoji.emojiDrawingYOffset = -transitionYOffsetForDrawables
-					SpoilerEffect.renderWithRipple(this, invalidateSpoilersParent, spoilersColor, 0, block.spoilersPatchedTextLayout, block.textLayout, block.spoilers, canvas, false)
-					Emoji.emojiDrawingYOffset = 0f
-				}
-				catch (e: Exception) {
-					FileLog.e(e)
-				}
-
-				canvas.restore()
 			}
 
 			if (needRestoreColor) {
@@ -12184,7 +12152,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			fileExists = currentMessageObject!!.mediaExists
 		}
 
-		val autoDownload = if (documentAttach != null && documentAttach!!.dc_id == Int.MIN_VALUE) {
+		val autoDownload = if (documentAttach != null && documentAttach?.dcId == Int.MIN_VALUE) {
 			false
 		}
 		else {
@@ -12734,7 +12702,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				if (currentPhotoObject != null && (photoImage.hasNotThumb() || currentPhotoObjectThumb == null)) {
 					thumb = currentPhotoObject
-					thumbFilter = if (thumb is TLRPC.TL_photoStrippedSize || "s" == thumb!!.type) currentPhotoFilterThumb else currentPhotoFilter
+					thumbFilter = if (thumb is TLRPC.TLPhotoStrippedSize || "s" == thumb!!.type) currentPhotoFilterThumb else currentPhotoFilter
 				}
 				else {
 					thumb = currentPhotoObjectThumb
@@ -12948,7 +12916,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			if (!currentMessageObject!!.needDrawBluredPreview() && !autoPlayingMedia && documentAttach != null) {
 				if (documentAttachType == DOCUMENT_ATTACH_TYPE_ROUND) {
-					photoImage.setImage(ImageLocation.getForDocument(documentAttach), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TL_photoStrippedSize || currentPhotoObject != null && "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, ImageLocation.getForObject(currentPhotoObjectThumb, photoParentObject), currentPhotoFilterThumb, currentPhotoObjectThumbStripped, documentAttach!!.size, null, currentMessageObject, 0)
+					photoImage.setImage(ImageLocation.getForDocument(documentAttach), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TLPhotoStrippedSize || currentPhotoObject != null && "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, ImageLocation.getForObject(currentPhotoObjectThumb, photoParentObject), currentPhotoFilterThumb, currentPhotoObjectThumbStripped, documentAttach!!.size, null, currentMessageObject, 0)
 					photoImage.allowStartAnimation = true
 					photoImage.startAnimation()
 					autoPlayingMedia = true
@@ -12956,7 +12924,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				else if (SharedConfig.autoplayVideo && documentAttachType == DOCUMENT_ATTACH_TYPE_VIDEO && (currentPosition == null || currentPosition!!.flags and MessageObject.POSITION_FLAG_LEFT != 0 && currentPosition!!.flags and MessageObject.POSITION_FLAG_RIGHT != 0)) {
 					animatingNoSound = 2
 
-					photoImage.setImage(ImageLocation.getForDocument(documentAttach), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TL_photoStrippedSize || currentPhotoObject != null && "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, ImageLocation.getForObject(currentPhotoObjectThumb, photoParentObject), currentPhotoFilterThumb, currentPhotoObjectThumbStripped, documentAttach!!.size, null, currentMessageObject, 0)
+					photoImage.setImage(ImageLocation.getForDocument(documentAttach), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TLPhotoStrippedSize || currentPhotoObject != null && "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, ImageLocation.getForObject(currentPhotoObjectThumb, photoParentObject), currentPhotoFilterThumb, currentPhotoObjectThumbStripped, documentAttach!!.size, null, currentMessageObject, 0)
 
 					if (!PhotoViewer.isPlayingMessage(currentMessageObject)) {
 						photoImage.allowStartAnimation = true
@@ -12969,7 +12937,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					autoPlayingMedia = true
 				}
 				else if (documentAttachType == DOCUMENT_ATTACH_TYPE_GIF) {
-					photoImage.setImage(ImageLocation.getForDocument(documentAttach), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TL_photoStrippedSize || currentPhotoObject != null && "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, ImageLocation.getForObject(currentPhotoObjectThumb, photoParentObject), currentPhotoFilterThumb, currentPhotoObjectThumbStripped, documentAttach!!.size, null, currentMessageObject, 0)
+					photoImage.setImage(ImageLocation.getForDocument(documentAttach), ImageLoader.AUTOPLAY_FILTER, ImageLocation.getForObject(currentPhotoObject, photoParentObject), if (currentPhotoObject is TLRPC.TLPhotoStrippedSize || currentPhotoObject != null && "s" == currentPhotoObject!!.type) currentPhotoFilterThumb else currentPhotoFilter, ImageLocation.getForObject(currentPhotoObjectThumb, photoParentObject), currentPhotoFilterThumb, currentPhotoObjectThumbStripped, documentAttach!!.size, null, currentMessageObject, 0)
 
 					if (SharedConfig.autoplayGifs) {
 						photoImage.allowStartAnimation = true
@@ -13282,30 +13250,30 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		else if (ChatObject.isChannel(currentChat)) {
 			null
 		}
-		else if (messageObject.messageOwner?.post_author != null) {
+		else if (messageObject.messageOwner?.postAuthor != null) {
 			if (isMegagroup && messageObject.fromChatId == messageObject.dialogId) {
 				null
 			}
 			else {
-				messageObject.messageOwner?.post_author?.replace("\n", "")
+				messageObject.messageOwner?.postAuthor?.replace("\n", "")
 			}
 		}
-		else if (messageObject.messageOwner?.fwd_from?.post_author != null) {
-			messageObject.messageOwner?.fwd_from?.post_author?.replace("\n", "")
+		else if (messageObject.messageOwner?.fwdFrom?.postAuthor != null) {
+			messageObject.messageOwner?.fwdFrom?.postAuthor?.replace("\n", "")
 		}
-		else if (messageObject.messageOwner?.fwd_from?.imported == true) {
-			if (messageObject.messageOwner?.fwd_from?.date == messageObject.messageOwner?.date) {
+		else if (messageObject.messageOwner?.fwdFrom?.imported == true) {
+			if (messageObject.messageOwner?.fwdFrom?.date == messageObject.messageOwner?.date) {
 				context.getString(R.string.ImportedMessage)
 			}
 			else {
-				LocaleController.formatImportedDate(messageObject.messageOwner?.fwd_from?.date?.toLong() ?: 0) + " " + context.getString(R.string.ImportedMessage)
+				LocaleController.formatImportedDate(messageObject.messageOwner?.fwdFrom?.date?.toLong() ?: 0) + " " + context.getString(R.string.ImportedMessage)
 			}
 		}
 		else if (!messageObject.isOutOwner && fromId > 0 && messageObject.messageOwner?.post == true) {
 			val signUser = MessagesController.getInstance(currentAccount).getUser(fromId)
 
 			if (signUser != null) {
-				ContactsController.formatName(signUser.first_name, signUser.last_name).replace('\n', ' ')
+				ContactsController.formatName(signUser.firstName, signUser.lastName).replace('\n', ' ')
 			}
 			else {
 				null
@@ -13323,7 +13291,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 		var hasReplies = messageObject.hasReplies()
 
-		if (messageObject.scheduled || messageObject.isLiveLocation || messageObject.messageOwner?.edit_hide == true || messageObject.dialogId == BuildConfig.NOTIFICATIONS_BOT_ID || messageObject.messageOwner?.via_bot_id != 0L || messageObject.messageOwner?.via_bot_name != null || author != null && author.bot) {
+		if (messageObject.scheduled || messageObject.isLiveLocation || messageObject.messageOwner?.editHide == true || messageObject.dialogId == BuildConfig.NOTIFICATIONS_BOT_ID || messageObject.messageOwner?.viaBotId != 0L || /* MARK: uncomment to enable secret chats  messageObject.messageOwner?.viaBotName != null || */ (author as? TLRPC.TLUser)?.bot == true) {
 			edited = false
 		}
 		else if (currentPosition == null || currentMessagesGroup?.messages.isNullOrEmpty()) {
@@ -13334,7 +13302,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			hasReplies = currentMessagesGroup!!.messages[0].hasReplies()
 
-			if (!currentMessagesGroup!!.messages[0].messageOwner!!.edit_hide) {
+			if (!currentMessagesGroup!!.messages[0].messageOwner!!.editHide) {
 				var a = 0
 				val size = currentMessagesGroup!!.messages.size
 
@@ -13367,7 +13335,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		}
 
 		currentTimeString = if (signString != null) {
-			if (messageObject.messageOwner?.fwd_from?.imported == true) {
+			if (messageObject.messageOwner?.fwdFrom?.imported == true) {
 				" $timeString"
 			}
 			else {
@@ -13392,7 +13360,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		}
 
 		if (messageObject.type == MessageObject.TYPE_EXTENDED_MEDIA_PREVIEW) {
-			val str = LocaleController.formatString(R.string.PaymentCheckoutPay, LocaleController.getInstance().formatCurrencyString(messageObject.messageOwner?.media?.total_amount ?: 0, messageObject.messageOwner?.media?.currency ?: ""))
+			val str = LocaleController.formatString(R.string.PaymentCheckoutPay, LocaleController.getInstance().formatCurrencyString(messageObject.messageOwner?.media?.totalAmount ?: 0, messageObject.messageOwner?.media?.currency ?: ""))
 			currentUnlockString = if (str.length >= 2) str.substring(0, 1).uppercase() + str.substring(1).lowercase() else str
 			unlockTextWidth = ceil(Theme.chat_unlockExtendedMediaTextPaint.measureText(currentUnlockString).toDouble()).toInt()
 		}
@@ -13414,7 +13382,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			if (messageObject.isSendError) {
 				timeWidth += AndroidUtilities.dp(18f)
 			}
-			else if (messageObject.isSending && messageObject.messageOwner?.peer_id?.channel_id != 0L && !messageObject.isSupergroup) {
+			else if (messageObject.isSending && messageObject.messageOwner?.peerId?.channelId != 0L && !messageObject.isSupergroup) {
 				timeWidth += AndroidUtilities.dp(18f)
 			}
 		}
@@ -13483,7 +13451,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 	}
 
 	private fun isOpenChatByShare(messageObject: MessageObject): Boolean {
-		return messageObject.messageOwner?.fwd_from?.saved_from_peer != null
+		return messageObject.messageOwner?.fwdFrom?.savedFromPeer != null
 	}
 
 	private fun checkNeedDrawShareButton(messageObject: MessageObject?): Boolean {
@@ -13507,56 +13475,56 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 	private fun updateCurrentUserAndChat() {
 		val messagesController = MessagesController.getInstance(currentAccount)
-		val fwdFrom = currentMessageObject!!.messageOwner?.fwd_from
+		val fwdFrom = currentMessageObject!!.messageOwner?.fwdFrom
 		val currentUserId = getInstance(currentAccount).getClientUserId()
 
-		if (fwdFrom != null && fwdFrom.from_id is TLRPC.TL_peerChannel && currentMessageObject!!.dialogId == currentUserId) {
-			currentChat = MessagesController.getInstance(currentAccount).getChat(fwdFrom.from_id.channel_id)
+		if (fwdFrom != null && fwdFrom.fromId is TLRPC.TLPeerChannel && currentMessageObject!!.dialogId == currentUserId) {
+			currentChat = MessagesController.getInstance(currentAccount).getChat(fwdFrom.fromId.channelId)
 		}
-		else if (fwdFrom?.saved_from_peer != null) {
-			if (fwdFrom.saved_from_peer.user_id != 0L) {
-				currentUser = if (fwdFrom.from_id is TLRPC.TL_peerUser) {
-					messagesController.getUser(fwdFrom.from_id.user_id)
+		else if (fwdFrom?.savedFromPeer != null) {
+			if (fwdFrom.savedFromPeer.userId != 0L) {
+				currentUser = if (fwdFrom.fromId is TLRPC.TLPeerUser) {
+					messagesController.getUser(fwdFrom.fromId.userId)
 				}
 				else {
-					messagesController.getUser(fwdFrom.saved_from_peer.user_id)
+					messagesController.getUser(fwdFrom.savedFromPeer.userId)
 				}
 			}
-			else if (fwdFrom.saved_from_peer.channel_id != 0L) {
-				if (currentMessageObject!!.isSavedFromMegagroup && fwdFrom.from_id is TLRPC.TL_peerUser) {
-					currentUser = messagesController.getUser(fwdFrom.from_id.user_id)
+			else if (fwdFrom.savedFromPeer.channelId != 0L) {
+				if (currentMessageObject!!.isSavedFromMegagroup && fwdFrom.fromId is TLRPC.TLPeerUser) {
+					currentUser = messagesController.getUser(fwdFrom.fromId.userId)
 				}
 				else {
-					currentChat = messagesController.getChat(fwdFrom.saved_from_peer.channel_id)
+					currentChat = messagesController.getChat(fwdFrom.savedFromPeer.channelId)
 				}
 			}
-			else if (fwdFrom.saved_from_peer.chat_id != 0L) {
-				if (fwdFrom.from_id is TLRPC.TL_peerUser) {
-					currentUser = messagesController.getUser(fwdFrom.from_id.user_id)
+			else if (fwdFrom.savedFromPeer.chatId != 0L) {
+				if (fwdFrom.fromId is TLRPC.TLPeerUser) {
+					currentUser = messagesController.getUser(fwdFrom.fromId.userId)
 				}
 				else {
-					currentChat = messagesController.getChat(fwdFrom.saved_from_peer.chat_id)
+					currentChat = messagesController.getChat(fwdFrom.savedFromPeer.chatId)
 				}
 			}
 		}
-		else if (fwdFrom != null && fwdFrom.from_id is TLRPC.TL_peerUser && (fwdFrom.imported || currentMessageObject!!.dialogId == currentUserId)) {
-			currentUser = messagesController.getUser(fwdFrom.from_id.user_id)
+		else if (fwdFrom != null && fwdFrom.fromId is TLRPC.TLPeerUser && (fwdFrom.imported || currentMessageObject!!.dialogId == currentUserId)) {
+			currentUser = messagesController.getUser(fwdFrom.fromId.userId)
 		}
-		else if (fwdFrom != null && !TextUtils.isEmpty(fwdFrom.from_name) && (fwdFrom.imported || currentMessageObject!!.dialogId == currentUserId)) {
-			currentUser = TLRPC.TL_user()
-			currentUser?.first_name = fwdFrom.from_name
+		else if (fwdFrom != null && !TextUtils.isEmpty(fwdFrom.fromName) && (fwdFrom.imported || currentMessageObject!!.dialogId == currentUserId)) {
+			currentUser = TLRPC.TLUser()
+			currentUser?.firstName = fwdFrom.fromName
 		}
 		else {
 			val fromId = currentMessageObject!!.fromChatId
 
-			if (DialogObject.isUserDialog(fromId) && (!currentMessageObject!!.messageOwner!!.post || ChatObject.isMegagroup(messagesController.getChat(currentMessageObject?.messageOwner?.peer_id?.channel_id)))) {
+			if (DialogObject.isUserDialog(fromId) && (!currentMessageObject!!.messageOwner!!.post || ChatObject.isMegagroup(messagesController.getChat(currentMessageObject?.messageOwner?.peerId?.channelId)))) {
 				currentUser = messagesController.getUser(fromId)
 			}
 			else if (DialogObject.isChatDialog(fromId)) {
 				currentChat = messagesController.getChat(-fromId)
 			}
 			else if (currentMessageObject!!.messageOwner!!.post) {
-				currentChat = messagesController.getChat(currentMessageObject?.messageOwner?.peer_id?.channel_id)
+				currentChat = messagesController.getChat(currentMessageObject?.messageOwner?.peerId?.channelId)
 			}
 		}
 	}
@@ -13578,8 +13546,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		var viaUsername: String? = null
 		var viaString: CharSequence? = null
 
-		if (messageObject.messageOwner?.via_bot_id != 0L) {
-			val botUser = MessagesController.getInstance(currentAccount).getUser(messageObject.messageOwner?.via_bot_id)
+		if (messageObject.messageOwner?.viaBotId != 0L) {
+			val botUser = MessagesController.getInstance(currentAccount).getUser(messageObject.messageOwner?.viaBotId)
 
 			if (botUser != null && !TextUtils.isEmpty(botUser.username)) {
 				viaUsername = "@" + botUser.username
@@ -13588,14 +13556,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				currentViaBotUser = botUser
 			}
 		}
-		else if (!messageObject.messageOwner?.via_bot_name.isNullOrEmpty()) {
-			viaUsername = "@" + messageObject.messageOwner!!.via_bot_name
-			viaString = AndroidUtilities.replaceTags(String.format(" %s <b>%s</b>", context.getString(R.string.ViaBot), viaUsername))
-			viaWidth = ceil(Theme.chat_replyNamePaint.measureText(viaString, 0, viaString.length).toDouble()).toInt()
-		}
+		// MARK: uncomment to enable secret chats
+//		else if (!messageObject.messageOwner?.viaBotName.isNullOrEmpty()) {
+//			viaUsername = "@" + messageObject.messageOwner!!.viaBotName
+//			viaString = AndroidUtilities.replaceTags(String.format(" %s <b>%s</b>", context.getString(R.string.ViaBot), viaUsername))
+//			viaWidth = ceil(Theme.chat_replyNamePaint.measureText(viaString, 0, viaString.length).toDouble()).toInt()
+//		}
 
 		val needAuthorName = isNeedAuthorName
-		val viaBot = (messageObject.messageOwner?.fwd_from == null || messageObject.type == MessageObject.TYPE_MUSIC) && viaUsername != null
+		val viaBot = (messageObject.messageOwner?.fwdFrom == null || messageObject.type == MessageObject.TYPE_MUSIC) && viaUsername != null
 
 		if (!hasPsaHint && (needAuthorName || viaBot)) {
 			drawNameLayout = true
@@ -13609,8 +13578,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			val adminString: String?
 			var adminLabel: String? = null
 
-			if (isMegagroup && currentChat != null && messageObject.messageOwner?.post_author != null && currentChat!!.id == -currentMessageObject!!.fromChatId) {
-				adminString = messageObject.messageOwner?.post_author?.replace("\n", "")
+			if (isMegagroup && currentChat != null && messageObject.messageOwner?.postAuthor != null && currentChat!!.id == -currentMessageObject!!.fromChatId) {
+				adminString = messageObject.messageOwner?.postAuthor?.replace("\n", "")
 				adminWidth = ceil(Theme.chat_adminPaint.measureText(adminString).toDouble()).toInt()
 				nameWidth -= adminWidth
 			}
@@ -13772,24 +13741,24 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		forwardedNameWidth = 0
 
 		if (messageObject.isForwarded) {
-			when (messageObject.messageOwner?.fwd_from?.from_id) {
-				is TLRPC.TL_peerChannel -> {
-					currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwd_from?.from_id?.channel_id)
+			when (messageObject.messageOwner?.fwdFrom?.fromId) {
+				is TLRPC.TLPeerChannel -> {
+					currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwdFrom?.fromId?.channelId)
 				}
 
-				is TLRPC.TL_peerChat -> {
-					currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwd_from?.from_id?.chat_id)
+				is TLRPC.TLPeerChat -> {
+					currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwdFrom?.fromId?.chatId)
 				}
 
-				is TLRPC.TL_peerUser -> {
-					currentForwardUser = MessagesController.getInstance(currentAccount).getUser(messageObject.messageOwner?.fwd_from?.from_id?.user_id)
+				is TLRPC.TLPeerUser -> {
+					currentForwardUser = MessagesController.getInstance(currentAccount).getUser(messageObject.messageOwner?.fwdFrom?.fromId?.userId)
 				}
 			}
 		}
 
 		if (drawForwardedName && messageObject.needDrawForwarded() && (currentPosition == null || currentPosition!!.minY.toInt() == 0)) {
-			if (messageObject.messageOwner?.fwd_from?.from_name != null) {
-				currentForwardName = messageObject.messageOwner?.fwd_from?.from_name
+			if (messageObject.messageOwner?.fwdFrom?.fromName != null) {
+				currentForwardName = messageObject.messageOwner?.fwdFrom?.fromName
 			}
 
 			if (currentForwardUser != null || currentForwardChannel != null || currentForwardName != null) {
@@ -13797,8 +13766,8 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					if (currentForwardUser != null) {
 						String.format("%s (%s)", currentForwardChannel!!.title, getUserName(currentForwardUser))
 					}
-					else if (!messageObject.messageOwner?.fwd_from?.post_author.isNullOrEmpty()) {
-						String.format("%s (%s)", currentForwardChannel!!.title, messageObject.messageOwner?.fwd_from?.post_author)
+					else if (!messageObject.messageOwner?.fwdFrom?.postAuthor.isNullOrEmpty()) {
+						String.format("%s (%s)", currentForwardChannel!!.title, messageObject.messageOwner?.fwdFrom?.postAuthor)
 					}
 					else {
 						currentForwardChannel!!.title
@@ -13846,7 +13815,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				forwardNameCenterX = fromWidth + ceil(Theme.chat_forwardNamePaint.measureText(name, 0, name.length).toDouble()).toInt() / 2
 
-				if (idx >= 0 && (currentForwardName == null || messageObject.messageOwner?.fwd_from?.from_id != null)) {
+				if (idx >= 0 && (currentForwardName == null || messageObject.messageOwner?.fwdFrom?.fromId != null)) {
 					stringBuilder.setSpan(TypefaceSpan(Theme.TYPEFACE_BOLD), idx, idx + name.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 				}
 
@@ -13886,7 +13855,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 		}
 
-		if ((!isThreadChat || messageObject.replyTopMsgId != 0) && messageObject.hasValidReplyMessageObject() || messageObject.messageOwner?.fwd_from != null && messageObject.isDice) {
+		if ((!isThreadChat || messageObject.replyTopMsgId != 0) && messageObject.hasValidReplyMessageObject() || messageObject.messageOwner?.fwdFrom != null && messageObject.isDice) {
 			if (currentPosition == null || currentPosition!!.minY.toInt() == 0) {
 				if (!messageObject.isAnyKindOfSticker && messageObject.type != 5) {
 					namesOffset += AndroidUtilities.dp(42f)
@@ -13964,15 +13933,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 					if (messageObject.hideSendersName) {
 						if (messageObject.sendAsPeer != null) {
-							if (messageObject.sendAsPeer?.channel_id != 0L) {
-								val chat = MessagesController.getInstance(currentAccount).getChat(messageObject.sendAsPeer?.channel_id)
+							if (messageObject.sendAsPeer?.channelId != 0L) {
+								val chat = MessagesController.getInstance(currentAccount).getChat(messageObject.sendAsPeer?.channelId)
 
 								if (chat != null) {
 									name = chat.title
 								}
 							}
 							else {
-								val user = MessagesController.getInstance(currentAccount).getUser(messageObject.sendAsPeer?.user_id)
+								val user = MessagesController.getInstance(currentAccount).getUser(messageObject.sendAsPeer?.userId)
 								name = getUserName(user)
 							}
 						}
@@ -14004,7 +13973,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								}
 							}
 							else {
-								val chat = MessagesController.getInstance(currentAccount).getChat(messageObject.replyMessageObject?.messageOwner?.peer_id?.channel_id)
+								val chat = MessagesController.getInstance(currentAccount).getChat(messageObject.replyMessageObject?.messageOwner?.peerId?.channelId)
 
 								if (chat != null) {
 									name = chat.title
@@ -14017,11 +13986,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						name = context.getString(R.string.Loading)
 					}
 
-					if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TL_messageMediaGame) {
-						stringFinalText = Emoji.replaceEmoji(MessageObject.getMedia(messageObject.messageOwner)!!.game.title, Theme.chat_replyTextPaint.fontMetricsInt, false)
+					if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaGame) {
+						stringFinalText = Emoji.replaceEmoji(MessageObject.getMedia(messageObject.messageOwner)?.game?.title, Theme.chat_replyTextPaint.fontMetricsInt, false)
 						stringFinalText = TextUtils.ellipsize(stringFinalText, Theme.chat_replyTextPaint, maxWidth.toFloat(), TextUtils.TruncateAt.END)
 					}
-					else if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TL_messageMediaInvoice) {
+					else if (MessageObject.getMedia(messageObject.messageOwner) is TLRPC.TLMessageMediaInvoice) {
 						stringFinalText = Emoji.replaceEmoji(MessageObject.getMedia(messageObject.messageOwner)!!.title, Theme.chat_replyTextPaint.fontMetricsInt, false)
 						stringFinalText = TextUtils.ellipsize(stringFinalText, Theme.chat_replyTextPaint, maxWidth.toFloat(), TextUtils.TruncateAt.END)
 					}
@@ -14073,22 +14042,22 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					needReplyImage = false
 					replyPanelIsForward = true
 
-					when (messageObject.messageOwner?.fwd_from?.from_id) {
-						is TLRPC.TL_peerChannel -> {
-							currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwd_from?.from_id?.channel_id)
+					when (messageObject.messageOwner?.fwdFrom?.fromId) {
+						is TLRPC.TLPeerChannel -> {
+							currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwdFrom?.fromId?.channelId)
 						}
 
-						is TLRPC.TL_peerChat -> {
-							currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwd_from?.from_id?.chat_id)
+						is TLRPC.TLPeerChat -> {
+							currentForwardChannel = MessagesController.getInstance(currentAccount).getChat(messageObject.messageOwner?.fwdFrom?.fromId?.chatId)
 						}
 
-						is TLRPC.TL_peerUser -> {
-							currentForwardUser = MessagesController.getInstance(currentAccount).getUser(messageObject.messageOwner?.fwd_from?.from_id?.user_id)
+						is TLRPC.TLPeerUser -> {
+							currentForwardUser = MessagesController.getInstance(currentAccount).getUser(messageObject.messageOwner?.fwdFrom?.fromId?.userId)
 						}
 					}
 
-					if (messageObject.messageOwner?.fwd_from?.from_name != null) {
-						currentForwardName = messageObject.messageOwner?.fwd_from?.from_name
+					if (messageObject.messageOwner?.fwdFrom?.fromName != null) {
+						currentForwardName = messageObject.messageOwner?.fwdFrom?.fromName
 					}
 
 					if (currentForwardUser != null || currentForwardChannel != null || currentForwardName != null) {
@@ -14117,7 +14086,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						val ellipsizedText = TextUtils.ellipsize(text, Theme.chat_replyNamePaint, (maxWidth - fromWidth).toFloat(), TextUtils.TruncateAt.END)
 						val stringBuilder = SpannableStringBuilder(String.format(fromFormattedString, ellipsizedText))
 
-						if (idx >= 0 && (currentForwardName == null || messageObject.messageOwner?.fwd_from?.from_id != null)) {
+						if (idx >= 0 && (currentForwardName == null || messageObject.messageOwner?.fwdFrom?.fromId != null)) {
 							stringBuilder.setSpan(TypefaceSpan(Theme.TYPEFACE_BOLD), idx, idx + ellipsizedText.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 						}
 
@@ -14195,7 +14164,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 		}
 		else if (!isThreadChat && messageObject.replyMsgId != 0) {
-			if (messageObject.replyMessageObject?.messageOwner !is TLRPC.TL_messageEmpty) {
+			if (messageObject.replyMessageObject?.messageOwner !is TLRPC.TLMessageEmpty) {
 				if (!messageObject.isAnyKindOfSticker && messageObject.type != 5) {
 					namesOffset += AndroidUtilities.dp(42f)
 
@@ -14228,7 +14197,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 	}
 
 	private val isNeedAuthorName: Boolean
-		get() = isPinnedChat && currentMessageObject?.type == MessageObject.TYPE_COMMON || (!isPinnedTop || ChatObject.isChannel(currentChat) && currentChat?.megagroup == false) && drawName && isChat && (currentMessageObject?.isOutOwner == false || currentMessageObject?.isSupergroup == true && currentMessageObject?.isFromGroup == true) || currentMessageObject?.isImportedForward == true && currentMessageObject?.messageOwner?.fwd_from?.from_id == null
+		get() = isPinnedChat && currentMessageObject?.type == MessageObject.TYPE_COMMON || (!isPinnedTop || ChatObject.isChannel(currentChat) && currentChat?.megagroup == false) && drawName && isChat && (currentMessageObject?.isOutOwner == false || currentMessageObject?.isSupergroup == true && currentMessageObject?.isFromGroup == true) || currentMessageObject?.isImportedForward == true && currentMessageObject?.messageOwner?.fwdFrom?.fromId == null
 
 	private val authorName: String
 		get() {
@@ -14236,7 +14205,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				return getUserName(currentUser)
 			}
 			else if (currentChat != null) {
-				return currentChat!!.title
+				return currentChat?.title ?: ""
 			}
 			else if (currentMessageObject != null && currentMessageObject!!.isSponsored) {
 				return currentMessageObject?.sponsoredChatInvite?.title ?: currentMessageObject?.sponsoredChatInvite?.chat?.title ?: ""
@@ -14246,11 +14215,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		}
 
 	//		if (currentUser != null) {
-//			if (currentUser.emoji_status instanceof TLRPC.TL_emojiStatusUntil && ((TLRPC.TL_emojiStatusUntil)currentUser.emoji_status).until > (int)(System.currentTimeMillis() / 1000)) {
-//				return ((TLRPC.TL_emojiStatusUntil)currentUser.emoji_status).document_id;
+//			if (currentUser.emoji_status instanceof TLRPC.TLEmojiStatusUntil && ((TLRPC.TLEmojiStatusUntil)currentUser.emoji_status).until > (int)(System.currentTimeMillis() / 1000)) {
+//				return ((TLRPC.TLEmojiStatusUntil)currentUser.emoji_status).document_id;
 //			}
-//			else if (currentUser.emoji_status instanceof TLRPC.TL_emojiStatus) {
-//				return ((TLRPC.TL_emojiStatus)currentUser.emoji_status).document_id;
+//			else if (currentUser.emoji_status instanceof TLRPC.TLEmojiStatus) {
+//				return ((TLRPC.TLEmojiStatus)currentUser.emoji_status).document_id;
 //			}
 //			else if (currentUser.premium) {
 //				return ContextCompat.getDrawable(ApplicationLoader.applicationContext, R.drawable.msg_premium_liststar).mutate();
@@ -14259,11 +14228,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 	val authorStatus: Any?
 		get() =//		if (currentUser != null) {
-//			if (currentUser.emoji_status instanceof TLRPC.TL_emojiStatusUntil && ((TLRPC.TL_emojiStatusUntil)currentUser.emoji_status).until > (int)(System.currentTimeMillis() / 1000)) {
-//				return ((TLRPC.TL_emojiStatusUntil)currentUser.emoji_status).document_id;
+//			if (currentUser.emoji_status instanceof TLRPC.TLEmojiStatusUntil && ((TLRPC.TLEmojiStatusUntil)currentUser.emoji_status).until > (int)(System.currentTimeMillis() / 1000)) {
+//				return ((TLRPC.TLEmojiStatusUntil)currentUser.emoji_status).document_id;
 //			}
-//			else if (currentUser.emoji_status instanceof TLRPC.TL_emojiStatus) {
-//				return ((TLRPC.TL_emojiStatus)currentUser.emoji_status).document_id;
+//			else if (currentUser.emoji_status instanceof TLRPC.TLEmojiStatus) {
+//				return ((TLRPC.TLEmojiStatus)currentUser.emoji_status).document_id;
 //			}
 //			else if (currentUser.premium) {
 //				return ContextCompat.getDrawable(ApplicationLoader.applicationContext, R.drawable.msg_premium_liststar).mutate();
@@ -14273,7 +14242,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 	private fun getForwardedMessageText(messageObject: MessageObject?): String {
 		return if (hasPsaHint) {
-			var forwardedString = LocaleController.getString("PsaMessage_" + messageObject?.messageOwner?.fwd_from?.psa_type)
+			var forwardedString = LocaleController.getString("PsaMessage_" + messageObject?.messageOwner?.fwdFrom?.psaType)
 
 			if (forwardedString == null) {
 				forwardedString = context.getString(R.string.PsaMessageDefault)
@@ -14319,22 +14288,20 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 	fun drawCheckBox(canvas: Canvas) {
 		if (currentMessageObject != null && !currentMessageObject!!.isSending && !currentMessageObject!!.isSendError && checkBox != null && (checkBoxVisible || checkBoxAnimationInProgress) && (currentPosition == null || currentPosition!!.flags and MessageObject.POSITION_FLAG_BOTTOM != 0 && currentPosition!!.flags and MessageObject.POSITION_FLAG_LEFT != 0)) {
-			canvas.save()
+			canvas.withSave {
+				var y = y
 
-			var y = y
+				if (currentMessagesGroup != null && currentMessagesGroup!!.messages.size > 1) {
+					y = top + currentMessagesGroup!!.transitionParams.offsetTop - translationY
+				}
+				else {
+					y += transitionParams.deltaTop
+				}
 
-			if (currentMessagesGroup != null && currentMessagesGroup!!.messages.size > 1) {
-				y = top + currentMessagesGroup!!.transitionParams.offsetTop - translationY
+				translate(0f, y + transitionYOffsetForDrawables)
+
+				checkBox?.draw(this)
 			}
-			else {
-				y += transitionParams.deltaTop
-			}
-
-			canvas.translate(0f, y + transitionYOffsetForDrawables)
-
-			checkBox?.draw(canvas)
-
-			canvas.restore()
 		}
 	}
 
@@ -14673,10 +14640,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			selectionOverlayPaint!!.alpha = (wasAlpha * getHighlightAlpha() * alpha).toInt()
 
 			if (selectionOverlayPaint!!.alpha > 0) {
-				canvas.save()
-				canvas.clipRect(0, 0, measuredWidth, measuredHeight - getAdditionalHeight())
-				currentBackgroundDrawable!!.drawCached(canvas, backgroundCacheParams, selectionOverlayPaint)
-				canvas.restore()
+				canvas.withClip(0, 0, measuredWidth, measuredHeight - getAdditionalHeight()) {
+					currentBackgroundDrawable?.drawCached(this, backgroundCacheParams, selectionOverlayPaint)
+				}
 			}
 
 			selectionOverlayPaint!!.alpha = wasAlpha
@@ -15089,32 +15055,30 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						val rect = currentBackgroundDrawable!!.bounds
 
 						drawable.setBounds(rect.left, rect.top, rect.right + AndroidUtilities.dp(6f), rect.bottom)
-						canvas.save()
-						canvas.clipRect(rect.right - AndroidUtilities.dp(12f), rect.bottom - AndroidUtilities.dp(16f), rect.right + AndroidUtilities.dp(12f), rect.bottom)
 
-						var w = parentWidth
-						var h = parentHeight
+						canvas.withClip(rect.right - AndroidUtilities.dp(12f), rect.bottom - AndroidUtilities.dp(16f), rect.right + AndroidUtilities.dp(12f), rect.bottom) {
+							var w = parentWidth
+							var h = parentHeight
 
-						if (h == 0) {
-							w = getParentWidth()
-							h = AndroidUtilities.displaySize.y
+							if (h == 0) {
+								w = getParentWidth()
+								h = AndroidUtilities.displaySize.y
 
-							if (parent is View) {
-								val view = parent as View
-								w = view.measuredWidth
-								h = view.measuredHeight
+								if (parent is View) {
+									val view = parent as View
+									w = view.measuredWidth
+									h = view.measuredHeight
+								}
 							}
+
+							drawable.setTop((y + parentViewTopOffset).toInt(), w, h, parentViewTopOffset.toInt(), blurredViewTopOffset, isPinnedTop, isPinnedBottom)
+
+							val alpha = if (!mediaBackground && !isPinnedBottom) transitionParams.changePinnedBottomProgress else 1f - transitionParams.changePinnedBottomProgress
+
+							drawable.alpha = (255 * alpha).toInt()
+							drawable.draw(this)
+							drawable.alpha = 255
 						}
-
-						drawable.setTop((y + parentViewTopOffset).toInt(), w, h, parentViewTopOffset.toInt(), blurredViewTopOffset, isPinnedTop, isPinnedBottom)
-
-						val alpha = if (!mediaBackground && !isPinnedBottom) transitionParams.changePinnedBottomProgress else 1f - transitionParams.changePinnedBottomProgress
-
-						drawable.alpha = (255 * alpha).toInt()
-						drawable.draw(canvas)
-						drawable.alpha = 255
-
-						canvas.restore()
 					}
 					else {
 						val drawable = if (transitionParams.drawPinnedBottomBackground) {
@@ -15132,13 +15096,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 						drawable.setBounds(rect.left - AndroidUtilities.dp(6f), rect.top, rect.right, rect.bottom)
 
-						canvas.save()
-						canvas.clipRect(rect.left - AndroidUtilities.dp(6f), rect.bottom - AndroidUtilities.dp(16f), rect.left + AndroidUtilities.dp(6f), rect.bottom)
-
-						drawable.draw(canvas)
-						drawable.alpha = 255
-
-						canvas.restore()
+						canvas.withClip(rect.left - AndroidUtilities.dp(6f), rect.bottom - AndroidUtilities.dp(16f), rect.left + AndroidUtilities.dp(6f), rect.bottom) {
+							drawable.draw(this)
+							drawable.alpha = 255
+						}
 					}
 				}
 			}
@@ -15224,22 +15185,19 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			if (transitionParams.animateComments) {
 				if (transitionParams.animateCommentsLayout != null) {
-					canvas.save()
-					Theme.chat_stickerCommentCountPaint.alpha = (255 * (1.0 - transitionParams.animateChangeProgress) * alpha).toInt()
-					canvas.translate(sideStartX + (AndroidUtilities.dp(32f) - transitionParams.animateTotalCommentWidth) / 2, sideStartY + AndroidUtilities.dp(30f))
-					transitionParams.animateCommentsLayout!!.draw(canvas)
-					canvas.restore()
+					canvas.withSave {
+						Theme.chat_stickerCommentCountPaint.alpha = (255 * (1.0 - transitionParams.animateChangeProgress) * alpha).toInt()
+						translate(sideStartX + (AndroidUtilities.dp(32f) - transitionParams.animateTotalCommentWidth) / 2, sideStartY + AndroidUtilities.dp(30f))
+						transitionParams.animateCommentsLayout?.draw(this)
+					}
 				}
 
 				Theme.chat_stickerCommentCountPaint.alpha = (255 * transitionParams.animateChangeProgress).toInt()
 			}
 
-			canvas.save()
-			canvas.translate(sideStartX + (AndroidUtilities.dp(32f) - totalCommentWidth) / 2, sideStartY + AndroidUtilities.dp(30f))
-
-			commentLayout?.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(sideStartX + (AndroidUtilities.dp(32f) - totalCommentWidth) / 2, sideStartY + AndroidUtilities.dp(30f)) {
+				commentLayout?.draw(this)
+			}
 		}
 	}
 
@@ -15352,23 +15310,21 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 	private fun drawAnimatedEmojiMessageText(canvas: Canvas, alpha: Float) {
 		if (transitionParams.animateChangeProgress != 1.0f && transitionParams.animateMessageText) {
-			canvas.save()
+			canvas.withSave {
+				if (currentBackgroundDrawable != null) {
+					val r = currentBackgroundDrawable!!.bounds
 
-			if (currentBackgroundDrawable != null) {
-				val r = currentBackgroundDrawable!!.bounds
+					if (currentMessageObject!!.isOutOwner && !mediaBackground && !isPinnedBottom) {
+						clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(10f), r.bottom - AndroidUtilities.dp(4f))
+					}
+					else {
+						clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(4f), r.bottom - AndroidUtilities.dp(4f))
+					}
+				}
 
-				if (currentMessageObject!!.isOutOwner && !mediaBackground && !isPinnedBottom) {
-					canvas.clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(10f), r.bottom - AndroidUtilities.dp(4f))
-				}
-				else {
-					canvas.clipRect(r.left + AndroidUtilities.dp(4f), r.top + AndroidUtilities.dp(4f), r.right - AndroidUtilities.dp(4f), r.bottom - AndroidUtilities.dp(4f))
-				}
+				drawAnimatedEmojiMessageText(this, transitionParams.animateOutTextBlocks, transitionParams.animateOutAnimateEmoji, false, alpha * (1.0f - transitionParams.animateChangeProgress))
+				drawAnimatedEmojiMessageText(this, currentMessageObject!!.textLayoutBlocks, animatedEmojiStack, true, alpha * transitionParams.animateChangeProgress)
 			}
-
-			drawAnimatedEmojiMessageText(canvas, transitionParams.animateOutTextBlocks, transitionParams.animateOutAnimateEmoji, false, alpha * (1.0f - transitionParams.animateChangeProgress))
-			drawAnimatedEmojiMessageText(canvas, currentMessageObject!!.textLayoutBlocks, animatedEmojiStack, true, alpha * transitionParams.animateChangeProgress)
-
-			canvas.restore()
 		}
 		else {
 			drawAnimatedEmojiMessageText(canvas, currentMessageObject!!.textLayoutBlocks, animatedEmojiStack, true, alpha)
@@ -15414,21 +15370,19 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			val block = textLayoutBlocks[a]
 
-			canvas.save()
-			canvas.translate((textX - if (block.isRtl) ceil(currentMessageObject!!.textXOffset.toDouble()).toInt() else 0).toFloat(), textY + block.textYOffset + transitionYOffsetForDrawables)
+			canvas.withTranslation((textX - if (block.isRtl) ceil(currentMessageObject!!.textXOffset.toDouble()).toInt() else 0).toFloat(), textY + block.textYOffset + transitionYOffsetForDrawables) {
+				val drawingYOffset = textY + block.textYOffset + transitionYOffsetForDrawables
+				var top = 0f // parentBoundsTop - getY() - drawingYOffset + AndroidUtilities.dp(20);
+				var bottom = 0f // parentBoundsBottom - getY() - drawingYOffset - AndroidUtilities.dp(20);
 
-			val drawingYOffset = textY + block.textYOffset + transitionYOffsetForDrawables
-			var top = 0f // parentBoundsTop - getY() - drawingYOffset + AndroidUtilities.dp(20);
-			var bottom = 0f // parentBoundsBottom - getY() - drawingYOffset - AndroidUtilities.dp(20);
+				if (transitionParams.messageEntering) {
+					bottom = 0f
+					top = bottom
+				}
 
-			if (transitionParams.messageEntering) {
-				bottom = 0f
-				top = bottom
+				AnimatedEmojiSpan.drawAnimatedEmojis(this, block.textLayout, stack, 0f, block.spoilers, top, bottom, drawingYOffset, alpha)
+
 			}
-
-			AnimatedEmojiSpan.drawAnimatedEmojis(canvas, block.textLayout, stack, 0f, block.spoilers, top, bottom, drawingYOffset, alpha)
-
-			canvas.restore()
 		}
 	}
 
@@ -15447,45 +15401,44 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			return
 		}
 
-		canvas.save()
+		canvas.withSave {
+			var renderingAlpha = alpha
 
-		var renderingAlpha = alpha
-
-		if (currentMessagesGroup != null) {
-			renderingAlpha = currentMessagesGroup!!.transitionParams.captionEnterProgress * alpha
-		}
-
-		if (renderingAlpha == 0f) {
-			return
-		}
-
-		var captionY = captionY
-		var captionX = captionX
-
-		if (transitionParams.animateBackgroundBoundsInner) {
-			if (transitionParams.transformGroupToSingleMessage) {
-				captionY -= translationY
-				captionX += transitionParams.deltaLeft
+			if (currentMessagesGroup != null) {
+				renderingAlpha = currentMessagesGroup!!.transitionParams.captionEnterProgress * alpha
 			}
-			else if (transitionParams.moveCaption) {
-				captionX = this.captionX * transitionParams.animateChangeProgress + transitionParams.captionFromX * (1f - transitionParams.animateChangeProgress)
-				captionY = this.captionY * transitionParams.animateChangeProgress + transitionParams.captionFromY * (1f - transitionParams.animateChangeProgress)
+
+			if (renderingAlpha == 0f) {
+				return
 			}
-			else if (!currentMessageObject!!.isVoice || !TextUtils.isEmpty(currentMessageObject!!.caption)) {
-				captionX += transitionParams.deltaLeft
+
+			var captionY = captionY
+			var captionX = captionX
+
+			if (transitionParams.animateBackgroundBoundsInner) {
+				if (transitionParams.transformGroupToSingleMessage) {
+					captionY -= translationY
+					captionX += transitionParams.deltaLeft
+				}
+				else if (transitionParams.moveCaption) {
+					captionX = this@ChatMessageCell.captionX * transitionParams.animateChangeProgress + transitionParams.captionFromX * (1f - transitionParams.animateChangeProgress)
+					captionY = this@ChatMessageCell.captionY * transitionParams.animateChangeProgress + transitionParams.captionFromY * (1f - transitionParams.animateChangeProgress)
+				}
+				else if (!currentMessageObject!!.isVoice || !TextUtils.isEmpty(currentMessageObject!!.caption)) {
+					captionX += transitionParams.deltaLeft
+				}
 			}
-		}
 
-		canvas.translate(captionX, captionY)
+			translate(captionX, captionY)
 
-		try {
-			AnimatedEmojiSpan.drawAnimatedEmojis(canvas, layout, stack, 0f, captionSpoilers, 0f, 0f, captionY, renderingAlpha)
-		}
-		catch (e: Exception) {
-			FileLog.e(e)
-		}
+			try {
+				AnimatedEmojiSpan.drawAnimatedEmojis(this, layout, stack, 0f, captionSpoilers, 0f, 0f, captionY, renderingAlpha)
+			}
+			catch (e: Exception) {
+				FileLog.e(e)
+			}
 
-		canvas.restore()
+		}
 	}
 
 	private fun drawSideButton(canvas: Canvas) {
@@ -15731,7 +15684,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 	}
 
 	fun isAdminLayoutChanged(): Boolean {
-		return !TextUtils.equals(lastPostAuthor, currentMessageObject?.messageOwner?.post_author)
+		return !TextUtils.equals(lastPostAuthor, currentMessageObject?.messageOwner?.postAuthor)
 	}
 
 	fun drawNamesLayout(canvas: Canvas, alpha: Float) {
@@ -15758,113 +15711,112 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		val replyForwardAlpha = max(0f, min(1f, if (currentMessageObject!!.type == MessageObject.TYPE_ROUND_VIDEO) 1f - (photoImage.imageWidth - AndroidUtilities.roundMessageSize) / (AndroidUtilities.roundPlayingMessageSize - AndroidUtilities.roundMessageSize) else 1f))
 
 		if (drawNameLayout && nameLayout != null) {
-			canvas.save()
+			canvas.withSave {
+				val oldAlpha: Int
 
-			val oldAlpha: Int
+				if (currentMessageObject!!.shouldDrawWithoutBackground()) {
+					Theme.chat_namePaint.color = getThemedColor(Theme.key_chat_stickerNameText)
 
-			if (currentMessageObject!!.shouldDrawWithoutBackground()) {
-				Theme.chat_namePaint.color = getThemedColor(Theme.key_chat_stickerNameText)
-
-				nameX = if (currentMessageObject!!.isOutOwner) {
-					AndroidUtilities.dp(28f).toFloat()
-				}
-				else {
-					backgroundDrawableLeft + transitionParams.deltaLeft + backgroundDrawableRight + AndroidUtilities.dp(22f)
-				}
-
-				nameY = (layoutHeight - AndroidUtilities.dp(38f)).toFloat()
-
-				val alphaProgress = if (currentMessageObject!!.isOut && (checkBoxVisible || checkBoxAnimationInProgress)) 1.0f - checkBoxAnimationProgress else 1.0f
-
-				rect.set((nameX.toInt() - AndroidUtilities.dp(12f)).toFloat(), (nameY.toInt() - AndroidUtilities.dp(5f)).toFloat(), (nameX.toInt() + AndroidUtilities.dp(12f) + nameWidth).toFloat(), (nameY.toInt() + AndroidUtilities.dp(22f)).toFloat())
-
-				val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
-
-				oldAlpha = paint.alpha
-
-				paint.alpha = (alphaProgress * oldAlpha * replyForwardAlpha).toInt()
-
-				applyServiceShaderMatrix()
-
-				canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
-
-				if (hasGradientService()) {
-					val oldAlpha2 = Theme.chat_actionBackgroundGradientDarkenPaint.alpha
-					Theme.chat_actionBackgroundGradientDarkenPaint.alpha = (oldAlpha2 * timeAlpha * replyForwardAlpha).toInt()
-					canvas.drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), Theme.chat_actionBackgroundGradientDarkenPaint)
-					Theme.chat_actionBackgroundGradientDarkenPaint.alpha = oldAlpha2
-				}
-
-				if (viaSpan1 != null || viaSpan2 != null) {
-					var color = getThemedColor(Theme.key_chat_stickerViaBotNameText)
-					color = getThemedColor(Theme.key_chat_stickerViaBotNameText) and 0x00ffffff or ((Color.alpha(color) * alphaProgress).toInt() shl 24)
-
-					viaSpan1?.setColor(color)
-					viaSpan2?.setColor(color)
-				}
-
-				nameX -= nameOffsetX
-
-				paint.alpha = oldAlpha
-			}
-			else {
-				nameX = if (mediaBackground || currentMessageObject!!.isOutOwner) {
-					backgroundDrawableLeft + transitionParams.deltaLeft + AndroidUtilities.dp(11f) - nameOffsetX + extraTextX
-				}
-				else {
-					backgroundDrawableLeft + transitionParams.deltaLeft + AndroidUtilities.dp(if (!mediaBackground && drawPinnedBottom) 11f else 17f) - nameOffsetX + extraTextX
-				}
-
-				if (currentUser != null) {
-					Theme.chat_namePaint.color = getThemedColor(getNameColorNameForId(currentUser!!.id))
-				}
-				else if (currentChat != null) {
-					if (currentMessageObject!!.isOutOwner && ChatObject.isChannel(currentChat)) {
-						Theme.chat_namePaint.color = getThemedColor(Theme.key_chat_outForwardedNameText)
-					}
-					else if (ChatObject.isChannel(currentChat) && !currentChat!!.megagroup) {
-						Theme.chat_namePaint.color = Theme.changeColorAccent(getThemedColor(getNameColorNameForId(5)))
-					}
-					else if (currentMessageObject!!.isOutOwner) {
-						Theme.chat_namePaint.color = getThemedColor(Theme.key_chat_outForwardedNameText)
+					nameX = if (currentMessageObject!!.isOutOwner) {
+						AndroidUtilities.dp(28f).toFloat()
 					}
 					else {
-						Theme.chat_namePaint.color = getThemedColor(getNameColorNameForId(currentChat!!.id))
+						backgroundDrawableLeft + transitionParams.deltaLeft + backgroundDrawableRight + AndroidUtilities.dp(22f)
 					}
+
+					nameY = (layoutHeight - AndroidUtilities.dp(38f)).toFloat()
+
+					val alphaProgress = if (currentMessageObject!!.isOut && (checkBoxVisible || checkBoxAnimationInProgress)) 1.0f - checkBoxAnimationProgress else 1.0f
+
+					rect.set((nameX.toInt() - AndroidUtilities.dp(12f)).toFloat(), (nameY.toInt() - AndroidUtilities.dp(5f)).toFloat(), (nameX.toInt() + AndroidUtilities.dp(12f) + nameWidth).toFloat(), (nameY.toInt() + AndroidUtilities.dp(22f)).toFloat())
+
+					val paint = getThemedPaint(Theme.key_paint_chatActionBackground)
+
+					oldAlpha = paint.alpha
+
+					paint.alpha = (alphaProgress * oldAlpha * replyForwardAlpha).toInt()
+
+					applyServiceShaderMatrix()
+
+					drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), paint)
+
+					if (hasGradientService()) {
+						val oldAlpha2 = Theme.chat_actionBackgroundGradientDarkenPaint.alpha
+						Theme.chat_actionBackgroundGradientDarkenPaint.alpha = (oldAlpha2 * timeAlpha * replyForwardAlpha).toInt()
+						drawRoundRect(rect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), Theme.chat_actionBackgroundGradientDarkenPaint)
+						Theme.chat_actionBackgroundGradientDarkenPaint.alpha = oldAlpha2
+					}
+
+					if (viaSpan1 != null || viaSpan2 != null) {
+						var color = getThemedColor(Theme.key_chat_stickerViaBotNameText)
+						color = getThemedColor(Theme.key_chat_stickerViaBotNameText) and 0x00ffffff or ((Color.alpha(color) * alphaProgress).toInt() shl 24)
+
+						viaSpan1?.setColor(color)
+						viaSpan2?.setColor(color)
+					}
+
+					nameX -= nameOffsetX
+
+					paint.alpha = oldAlpha
 				}
 				else {
-					Theme.chat_namePaint.color = getThemedColor(getNameColorNameForId(0))
+					nameX = if (mediaBackground || currentMessageObject!!.isOutOwner) {
+						backgroundDrawableLeft + transitionParams.deltaLeft + AndroidUtilities.dp(11f) - nameOffsetX + extraTextX
+					}
+					else {
+						backgroundDrawableLeft + transitionParams.deltaLeft + AndroidUtilities.dp(if (!mediaBackground && drawPinnedBottom) 11f else 17f) - nameOffsetX + extraTextX
+					}
+
+					if (currentUser != null) {
+						Theme.chat_namePaint.color = getThemedColor(getNameColorNameForId(currentUser!!.id))
+					}
+					else if (currentChat != null) {
+						if (currentMessageObject!!.isOutOwner && ChatObject.isChannel(currentChat)) {
+							Theme.chat_namePaint.color = getThemedColor(Theme.key_chat_outForwardedNameText)
+						}
+						else if (ChatObject.isChannel(currentChat) && !currentChat!!.megagroup) {
+							Theme.chat_namePaint.color = Theme.changeColorAccent(getThemedColor(getNameColorNameForId(5)))
+						}
+						else if (currentMessageObject!!.isOutOwner) {
+							Theme.chat_namePaint.color = getThemedColor(Theme.key_chat_outForwardedNameText)
+						}
+						else {
+							Theme.chat_namePaint.color = getThemedColor(getNameColorNameForId(currentChat!!.id))
+						}
+					}
+					else {
+						Theme.chat_namePaint.color = getThemedColor(getNameColorNameForId(0))
+					}
+
+					nameY = AndroidUtilities.dp(if (drawPinnedTop) 9f else 10f).toFloat()
+
+					if (viaSpan1 != null || viaSpan2 != null) {
+						val color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outViaBotNameText else Theme.key_chat_inViaBotNameText)
+						viaSpan1?.setColor(color)
+						viaSpan2?.setColor(color)
+					}
 				}
 
-				nameY = AndroidUtilities.dp(if (drawPinnedTop) 9f else 10f).toFloat()
-
-				if (viaSpan1 != null || viaSpan2 != null) {
-					val color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outViaBotNameText else Theme.key_chat_inViaBotNameText)
-					viaSpan1?.setColor(color)
-					viaSpan2?.setColor(color)
+				if (currentMessagesGroup != null && currentMessagesGroup!!.transitionParams.backgroundChangeBounds) {
+					nameX += currentMessagesGroup!!.transitionParams.offsetLeft
+					nameY += currentMessagesGroup!!.transitionParams.offsetTop - translationY
 				}
+
+				nameX += animationOffsetX
+				nameY += transitionParams.deltaTop
+
+				val nx = if (transitionParams.animateSign) {
+					transitionParams.animateNameX + (nameX - transitionParams.animateNameX) * transitionParams.animateChangeProgress
+				}
+				else {
+					nameX
+				}
+
+				translate(nx, nameY)
+
+				nameLayout?.draw(this)
+
 			}
-
-			if (currentMessagesGroup != null && currentMessagesGroup!!.transitionParams.backgroundChangeBounds) {
-				nameX += currentMessagesGroup!!.transitionParams.offsetLeft
-				nameY += currentMessagesGroup!!.transitionParams.offsetTop - translationY
-			}
-
-			nameX += animationOffsetX
-			nameY += transitionParams.deltaTop
-
-			val nx = if (transitionParams.animateSign) {
-				transitionParams.animateNameX + (nameX - transitionParams.animateNameX) * transitionParams.animateChangeProgress
-			}
-			else {
-				nameX
-			}
-
-			canvas.translate(nx, nameY)
-
-			nameLayout?.draw(canvas)
-
-			canvas.restore()
 
 			if (adminLayout != null) {
 				val color = if (currentMessageObject!!.shouldDrawWithoutBackground()) {
@@ -15879,64 +15831,63 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				Theme.chat_adminPaint.color = color
 
-				canvas.save()
+				canvas.withSave {
+					var ax: Float
 
-				var ax: Float
+					if (currentMessagesGroup != null && !currentMessagesGroup!!.isDocuments) {
+						val dWidth = groupPhotosWidth
+						var firstLineWidth = 0
 
-				if (currentMessagesGroup != null && !currentMessagesGroup!!.isDocuments) {
-					val dWidth = groupPhotosWidth
-					var firstLineWidth = 0
+						for (a in currentMessagesGroup!!.posArray.indices) {
+							val position = currentMessagesGroup!!.posArray[a]
 
-					for (a in currentMessagesGroup!!.posArray.indices) {
-						val position = currentMessagesGroup!!.posArray[a]
+							firstLineWidth += if (position.minY.toInt() == 0) {
+								ceil(((position.pw + position.leftSpanOffset) / 1000.0f * dWidth).toDouble()).toInt()
+							}
+							else {
+								break
+							}
+						}
 
-						firstLineWidth += if (position.minY.toInt() == 0) {
-							ceil(((position.pw + position.leftSpanOffset) / 1000.0f * dWidth).toDouble()).toInt()
+						ax = if (!mediaBackground && currentMessageObject!!.isOutOwner) {
+							backgroundDrawableLeft + firstLineWidth - AndroidUtilities.dp(17f) - adminLayout!!.getLineWidth(0)
 						}
 						else {
-							break
+							backgroundDrawableLeft + firstLineWidth - AndroidUtilities.dp(11f) - adminLayout!!.getLineWidth(0)
+						}
+
+						ax -= (extraTextX + AndroidUtilities.dp(8f)).toFloat()
+
+						if (!currentMessageObject!!.isOutOwner) {
+							ax -= AndroidUtilities.dp(48f).toFloat()
 						}
 					}
-
-					ax = if (!mediaBackground && currentMessageObject!!.isOutOwner) {
-						backgroundDrawableLeft + firstLineWidth - AndroidUtilities.dp(17f) - adminLayout!!.getLineWidth(0)
-					}
 					else {
-						backgroundDrawableLeft + firstLineWidth - AndroidUtilities.dp(11f) - adminLayout!!.getLineWidth(0)
-					}
-
-					ax -= (extraTextX + AndroidUtilities.dp(8f)).toFloat()
-
-					if (!currentMessageObject!!.isOutOwner) {
-						ax -= AndroidUtilities.dp(48f).toFloat()
-					}
-				}
-				else {
-					ax = if (currentMessageObject!!.shouldDrawWithoutBackground()) {
-						if (currentMessageObject!!.isOutOwner) {
-							AndroidUtilities.dp(28f) + nameWidth - adminLayout!!.getLineWidth(0)
+						ax = if (currentMessageObject!!.shouldDrawWithoutBackground()) {
+							if (currentMessageObject!!.isOutOwner) {
+								AndroidUtilities.dp(28f) + nameWidth - adminLayout!!.getLineWidth(0)
+							}
+							else {
+								backgroundDrawableLeft + transitionParams.deltaLeft + backgroundDrawableRight + AndroidUtilities.dp(22f) + nameWidth - adminLayout!!.getLineWidth(0)
+							}
+						}
+						else if (!mediaBackground && currentMessageObject!!.isOutOwner) {
+							backgroundDrawableLeft + backgroundDrawableRight - AndroidUtilities.dp(17f) - adminLayout!!.getLineWidth(0)
 						}
 						else {
-							backgroundDrawableLeft + transitionParams.deltaLeft + backgroundDrawableRight + AndroidUtilities.dp(22f) + nameWidth - adminLayout!!.getLineWidth(0)
+							backgroundDrawableLeft + backgroundDrawableRight - AndroidUtilities.dp(11f) - adminLayout!!.getLineWidth(0)
 						}
 					}
-					else if (!mediaBackground && currentMessageObject!!.isOutOwner) {
-						backgroundDrawableLeft + backgroundDrawableRight - AndroidUtilities.dp(17f) - adminLayout!!.getLineWidth(0)
+
+					translate(ax, nameY + AndroidUtilities.dp(0.5f))
+
+					if (transitionParams.animateSign) {
+						Theme.chat_adminPaint.alpha = (Color.alpha(color) * transitionParams.animateChangeProgress).toInt()
 					}
-					else {
-						backgroundDrawableLeft + backgroundDrawableRight - AndroidUtilities.dp(11f) - adminLayout!!.getLineWidth(0)
-					}
+
+					adminLayout?.draw(this)
+
 				}
-
-				canvas.translate(ax, nameY + AndroidUtilities.dp(0.5f))
-
-				if (transitionParams.animateSign) {
-					Theme.chat_adminPaint.alpha = (Color.alpha(color) * transitionParams.animateChangeProgress).toInt()
-				}
-
-				adminLayout?.draw(canvas)
-
-				canvas.restore()
 			}
 		}
 
@@ -16092,20 +16043,18 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 
 			for (a in 0..1) {
-				canvas.save()
-				canvas.translate(forwardNameXLocal - forwardNameOffsetX[a], (forwardNameY + AndroidUtilities.dp(16f) * a).toFloat())
+				canvas.withTranslation(forwardNameXLocal - forwardNameOffsetX[a], (forwardNameY + AndroidUtilities.dp(16f) * a).toFloat()) {
+					if (animatingAlpha != 1f || replyForwardAlpha != 1f) {
+						val oldAlpha = forwardedNameLayoutLocal[a]!!.paint.alpha
+						forwardedNameLayoutLocal[a]!!.paint.alpha = (oldAlpha * animatingAlpha * replyForwardAlpha).toInt()
+						forwardedNameLayoutLocal[a]!!.draw(this)
+						forwardedNameLayoutLocal[a]!!.paint.alpha = oldAlpha
+					}
+					else {
+						forwardedNameLayoutLocal[a]!!.draw(this)
+					}
 
-				if (animatingAlpha != 1f || replyForwardAlpha != 1f) {
-					val oldAlpha = forwardedNameLayoutLocal[a]!!.paint.alpha
-					forwardedNameLayoutLocal[a]!!.paint.alpha = (oldAlpha * animatingAlpha * replyForwardAlpha).toInt()
-					forwardedNameLayoutLocal[a]!!.draw(canvas)
-					forwardedNameLayoutLocal[a]!!.paint.alpha = oldAlpha
 				}
-				else {
-					forwardedNameLayoutLocal[a]!!.draw(canvas)
-				}
-
-				canvas.restore()
 			}
 
 			if (clipContent) {
@@ -16125,10 +16074,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					drawable.draw(canvas)
 
 					if (selectorDrawable[0] != null && selectorDrawableMaskType[0] == 3) {
-						canvas.save()
-						canvas.scale(psaButtonProgress, psaButtonProgress, selectorDrawable[0]!!.bounds.centerX().toFloat(), selectorDrawable[0]!!.bounds.centerY().toFloat())
-						selectorDrawable[0]!!.draw(canvas)
-						canvas.restore()
+						canvas.withScale(psaButtonProgress, psaButtonProgress, selectorDrawable[0]!!.bounds.centerX().toFloat(), selectorDrawable[0]!!.bounds.centerY().toFloat()) {
+							selectorDrawable[0]!!.draw(this)
+						}
 					}
 				}
 
@@ -16224,7 +16172,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					Theme.chat_replyLinePaint.color = ResourcesCompat.getColor(resources, R.color.white, null)
 					Theme.chat_replyNamePaint.color = ResourcesCompat.getColor(resources, R.color.white, null)
 
-					if (currentMessageObject!!.hasValidReplyMessageObject() && (currentMessageObject!!.replyMessageObject?.type == MessageObject.TYPE_COMMON || !TextUtils.isEmpty(currentMessageObject!!.replyMessageObject?.caption)) && !(MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TL_messageMediaGame || MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TL_messageMediaInvoice)) {
+					if (currentMessageObject!!.hasValidReplyMessageObject() && (currentMessageObject!!.replyMessageObject?.type == MessageObject.TYPE_COMMON || !TextUtils.isEmpty(currentMessageObject!!.replyMessageObject?.caption)) && !(MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TLMessageMediaGame || MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TLMessageMediaInvoice)) {
 						Theme.chat_replyTextPaint.color = ResourcesCompat.getColor(resources, R.color.white, null)
 					}
 					else {
@@ -16235,7 +16183,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					Theme.chat_replyLinePaint.color = ResourcesCompat.getColor(resources, R.color.brand, null)
 					Theme.chat_replyNamePaint.color = ResourcesCompat.getColor(resources, R.color.brand, null)
 
-					if (currentMessageObject!!.hasValidReplyMessageObject() && (currentMessageObject!!.replyMessageObject?.type == MessageObject.TYPE_COMMON || !TextUtils.isEmpty(currentMessageObject!!.replyMessageObject?.caption)) && !(MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TL_messageMediaGame || MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TL_messageMediaInvoice)) {
+					if (currentMessageObject!!.hasValidReplyMessageObject() && (currentMessageObject!!.replyMessageObject?.type == MessageObject.TYPE_COMMON || !TextUtils.isEmpty(currentMessageObject!!.replyMessageObject?.caption)) && !(MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TLMessageMediaGame || MessageObject.getMedia(currentMessageObject!!.replyMessageObject?.messageOwner) is TLRPC.TLMessageMediaInvoice)) {
 						Theme.chat_replyTextPaint.color = ResourcesCompat.getColor(resources, R.color.text, null)
 					}
 					else {
@@ -16258,19 +16206,17 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 
 				if (replyNameLayout != null) {
-					canvas.save()
-					canvas.translate(replyStartX - replyNameOffset + AndroidUtilities.dp((10 + if (needReplyImage) 44 else 0).toFloat()), replyStartY)
-					replyNameLayout?.draw(canvas)
-					canvas.restore()
+					canvas.withTranslation(replyStartX - replyNameOffset + AndroidUtilities.dp((10 + if (needReplyImage) 44 else 0).toFloat()), replyStartY) {
+						replyNameLayout?.draw(this)
+					}
 				}
 
 				if (replyTextLayout != null) {
-					canvas.save()
-					canvas.translate(forwardNameX, replyStartY + AndroidUtilities.dp(19f))
-					val spoilersColor = if (currentMessageObject!!.isOut && !ChatObject.isChannelAndNotMegaGroup(currentMessageObject!!.chatId, currentAccount)) getThemedColor(Theme.key_chat_outTimeText) else replyTextLayout!!.paint.color
-					SpoilerEffect.renderWithRipple(this, invalidateSpoilersParent, spoilersColor, -AndroidUtilities.dp(2f), spoilersPatchedReplyTextLayout, replyTextLayout, replySpoilers, canvas, false)
-					AnimatedEmojiSpan.drawAnimatedEmojis(canvas, replyTextLayout, animatedEmojiReplyStack, 0f, replySpoilers, 0f, 0f, 0f, alpha)
-					canvas.restore()
+					canvas.withTranslation(forwardNameX, replyStartY + AndroidUtilities.dp(19f)) {
+						val spoilersColor = if (currentMessageObject!!.isOut && !ChatObject.isChannelAndNotMegaGroup(currentMessageObject!!.chatId, currentAccount)) getThemedColor(Theme.key_chat_outTimeText) else replyTextLayout!!.paint.color
+						SpoilerEffect.renderWithRipple(this@ChatMessageCell, invalidateSpoilersParent, spoilersColor, -AndroidUtilities.dp(2f), spoilersPatchedReplyTextLayout, replyTextLayout, replySpoilers, this, false)
+						AnimatedEmojiSpan.drawAnimatedEmojis(this, replyTextLayout, animatedEmojiReplyStack, 0f, replySpoilers, 0f, 0f, 0f, alpha)
+					}
 				}
 			}
 		}
@@ -16430,10 +16376,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				reactionsLayoutInBubble.draw(canvas, if (transitionParams.animateChange) transitionParams.animateChangeProgress else 1f, null)
 			}
 			else {
-				canvas.save()
-				canvas.clipRect(0f, 0f, measuredWidth.toFloat(), getBackgroundDrawableBottom() + transitionParams.deltaBottom)
-				reactionsLayoutInBubble.draw(canvas, if (transitionParams.animateChange) transitionParams.animateChangeProgress else 1f, null)
-				canvas.restore()
+				canvas.withClip(0f, 0f, measuredWidth.toFloat(), getBackgroundDrawableBottom() + transitionParams.deltaBottom) {
+					reactionsLayoutInBubble.draw(this, if (transitionParams.animateChange) transitionParams.animateChangeProgress else 1f, null)
+				}
 			}
 		}
 	}
@@ -16591,60 +16536,57 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 					if (transitionParams.animateComments) {
 						if (transitionParams.animateCommentsLayout != null) {
-							canvas.save()
+							canvas.withSave {
+								Theme.chat_replyNamePaint.alpha = (prevAlpha * (1.0 - transitionParams.animateChangeProgress)).toInt()
 
-							Theme.chat_replyNamePaint.alpha = (prevAlpha * (1.0 - transitionParams.animateChangeProgress)).toInt()
+								val cx = transitionParams.animateCommentX + (commentX - transitionParams.animateCommentX) * transitionParams.animateChangeProgress
 
-							val cx = transitionParams.animateCommentX + (commentX - transitionParams.animateCommentX) * transitionParams.animateChangeProgress
+								translate(cx, y - AndroidUtilities.dp(0.1f) + if (isPinnedBottom) AndroidUtilities.dp(2f) else 0)
 
-							canvas.translate(cx, y - AndroidUtilities.dp(0.1f) + if (isPinnedBottom) AndroidUtilities.dp(2f) else 0)
+								transitionParams.animateCommentsLayout!!.draw(this)
 
-							transitionParams.animateCommentsLayout!!.draw(canvas)
-
-							canvas.restore()
-						}
-					}
-
-					canvas.save()
-					canvas.translate((x + AndroidUtilities.dp((33 + avatarsOffset).toFloat())).toFloat(), y - AndroidUtilities.dp(0.1f) + if (isPinnedBottom) AndroidUtilities.dp(2f) else 0)
-
-					if (!currentMessageObject!!.isSent) {
-						Theme.chat_replyNamePaint.alpha = 127
-						Theme.chat_commentArrowDrawable.alpha = 127
-						leaveCommentIcon?.alpha = 127
-					}
-					else {
-						Theme.chat_commentArrowDrawable.alpha = 255
-						leaveCommentIcon?.alpha = 255
-					}
-
-					if (drawCommentNumber || transitionParams.animateComments && transitionParams.animateDrawCommentNumber) {
-						if (drawCommentNumber && transitionParams.animateComments) {
-							if (transitionParams.animateDrawCommentNumber) {
-								Theme.chat_replyNamePaint.alpha = prevAlpha
-							}
-							else {
-								Theme.chat_replyNamePaint.alpha = (prevAlpha * transitionParams.animateChangeProgress).toInt()
 							}
 						}
+					}
 
-						commentNumberLayout!!.draw(canvas)
-
-						if (drawCommentNumber) {
-							canvas.translate((commentNumberWidth + AndroidUtilities.dp(4f)).toFloat(), 0f)
+					canvas.withTranslation((x + AndroidUtilities.dp((33 + avatarsOffset).toFloat())).toFloat(), y - AndroidUtilities.dp(0.1f) + if (isPinnedBottom) AndroidUtilities.dp(2f) else 0) {
+						if (!currentMessageObject!!.isSent) {
+							Theme.chat_replyNamePaint.alpha = 127
+							Theme.chat_commentArrowDrawable.alpha = 127
+							leaveCommentIcon?.alpha = 127
 						}
-					}
+						else {
+							Theme.chat_commentArrowDrawable.alpha = 255
+							leaveCommentIcon?.alpha = 255
+						}
 
-					if (transitionParams.animateComments && transitionParams.animateCommentsLayout != null) {
-						Theme.chat_replyNamePaint.alpha = (prevAlpha * transitionParams.animateChangeProgress).toInt()
-					}
-					else {
-						Theme.chat_replyNamePaint.alpha = (prevAlpha * alpha).toInt()
-					}
+						if (drawCommentNumber || transitionParams.animateComments && transitionParams.animateDrawCommentNumber) {
+							if (drawCommentNumber && transitionParams.animateComments) {
+								if (transitionParams.animateDrawCommentNumber) {
+									Theme.chat_replyNamePaint.alpha = prevAlpha
+								}
+								else {
+									Theme.chat_replyNamePaint.alpha = (prevAlpha * transitionParams.animateChangeProgress).toInt()
+								}
+							}
 
-					commentLayout?.draw(canvas)
+							commentNumberLayout!!.draw(this)
 
-					canvas.restore()
+							if (drawCommentNumber) {
+								translate((commentNumberWidth + AndroidUtilities.dp(4f)).toFloat(), 0f)
+							}
+						}
+
+						if (transitionParams.animateComments && transitionParams.animateCommentsLayout != null) {
+							Theme.chat_replyNamePaint.alpha = (prevAlpha * transitionParams.animateChangeProgress).toInt()
+						}
+						else {
+							Theme.chat_replyNamePaint.alpha = (prevAlpha * alpha).toInt()
+						}
+
+						commentLayout?.draw(this)
+
+					}
 
 					commentUnreadX = x + commentWidth + AndroidUtilities.dp((33 + avatarsOffset).toFloat()) + AndroidUtilities.dp(9f)
 
@@ -16652,7 +16594,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						commentUnreadX += commentNumberWidth + AndroidUtilities.dp(4f)
 					}
 
-					var replies: TLRPC.MessageReplies? = null
+					var replies: TLRPC.TLMessageReplies? = null
 
 					if (currentMessagesGroup != null && currentMessagesGroup!!.messages.isNotEmpty()) {
 						val messageObject = currentMessagesGroup!!.messages[0]
@@ -16667,7 +16609,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						}
 					}
 
-					if ((replies != null && replies.read_max_id != 0 && replies.read_max_id < replies.max_id).also { commentDrawUnread = it }) {
+					if ((replies != null && replies.readMaxId != 0 && replies.readMaxId < replies.maxId).also { commentDrawUnread = it }) {
 						val color = getThemedColor(Theme.key_chat_inInstant)
 
 						Theme.chat_docBackPaint.color = color
@@ -16780,88 +16722,86 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			Theme.chat_msgTextPaint.linkColor = linkInColor // getThemedColor(Theme.key_chat_messageLinkIn);
 		}
 
-		canvas.save()
+		canvas.withSave {
+			var renderingAlpha = alpha
 
-		var renderingAlpha = alpha
-
-		if (currentMessagesGroup != null) {
-			renderingAlpha = currentMessagesGroup!!.transitionParams.captionEnterProgress * alpha
-		}
-		if (renderingAlpha == 0f) {
-			return
-		}
-
-		var captionY = captionY
-		var captionX = captionX
-
-		if (transitionParams.animateBackgroundBoundsInner) {
-			if (transitionParams.transformGroupToSingleMessage) {
-				captionY -= translationY
-				captionX += transitionParams.deltaLeft
+			if (currentMessagesGroup != null) {
+				renderingAlpha = currentMessagesGroup!!.transitionParams.captionEnterProgress * alpha
 			}
-			else if (transitionParams.moveCaption) {
-				captionX = this.captionX * transitionParams.animateChangeProgress + transitionParams.captionFromX * (1f - transitionParams.animateChangeProgress)
-				captionY = this.captionY * transitionParams.animateChangeProgress + transitionParams.captionFromY * (1f - transitionParams.animateChangeProgress)
+			if (renderingAlpha == 0f) {
+				return
 			}
-			else if (!currentMessageObject!!.isVoice || !TextUtils.isEmpty(currentMessageObject!!.caption)) {
-				captionX += transitionParams.deltaLeft
-			}
-		}
 
-		var restore = Int.MIN_VALUE
+			var captionY = captionY
+			var captionX = captionX
 
-		if (renderingAlpha != 1.0f) {
-			rect.set(captionX, captionY, captionX + captionLayout.width, captionY + captionLayout.height)
-			restore = canvas.saveLayerAlpha(rect, (255 * renderingAlpha).toInt())
-		}
-
-		if (transitionParams.animateBackgroundBoundsInner && currentBackgroundDrawable != null && currentMessagesGroup == null) {
-			val bottomOffset = (if (drawCommentButton) commentButtonRect.height() else 0) + if (!reactionsLayoutInBubble.isSmall) reactionsLayoutInBubble.height else 0
-
-			if (currentMessageObject!!.isOutOwner && !mediaBackground && !isPinnedBottom) {
-				canvas.clipRect(getBackgroundDrawableLeft() + transitionParams.deltaLeft + AndroidUtilities.dp(4f), getBackgroundDrawableTop() + transitionParams.deltaTop + AndroidUtilities.dp(4f), getBackgroundDrawableRight() + transitionParams.deltaRight - AndroidUtilities.dp(10f), getBackgroundDrawableBottom() + transitionParams.deltaBottom - AndroidUtilities.dp(4f) - bottomOffset)
-			}
-			else {
-				canvas.clipRect(getBackgroundDrawableLeft() + transitionParams.deltaLeft + AndroidUtilities.dp(4f), getBackgroundDrawableTop() + transitionParams.deltaTop + AndroidUtilities.dp(4f), getBackgroundDrawableRight() + transitionParams.deltaRight - AndroidUtilities.dp(4f), getBackgroundDrawableBottom() + transitionParams.deltaBottom - AndroidUtilities.dp(4f) - bottomOffset)
-			}
-		}
-
-		canvas.translate(captionX, captionY)
-
-		if (links.draw(canvas)) {
-			invalidate()
-		}
-
-		if (urlPathSelection.isNotEmpty()) {
-			for (b in urlPathSelection.indices) {
-				canvas.drawPath(urlPathSelection[b], Theme.chat_textSearchSelectionPaint)
-			}
-		}
-
-		if (!selectionOnly) {
-			try {
-				if (delegate?.textSelectionHelper?.isSelected(currentMessageObject) == true) {
-					delegate?.textSelectionHelper?.drawCaption(currentMessageObject!!.isOutOwner, captionLayout, canvas)
+			if (transitionParams.animateBackgroundBoundsInner) {
+				if (transitionParams.transformGroupToSingleMessage) {
+					captionY -= translationY
+					captionX += transitionParams.deltaLeft
 				}
-
-				Emoji.emojiDrawingYOffset = -transitionYOffsetForDrawables
-
-				val spoilersColor = if (currentMessageObject!!.isOut && !ChatObject.isChannelAndNotMegaGroup(currentMessageObject!!.chatId, currentAccount)) getThemedColor(Theme.key_chat_outTimeText) else captionLayout.paint.color
-
-				SpoilerEffect.renderWithRipple(this, invalidateSpoilersParent, spoilersColor, 0, captionPatchedSpoilersLayout, captionLayout, captionSpoilers, canvas, currentMessagesGroup != null)
-
-				Emoji.emojiDrawingYOffset = 0f
+				else if (transitionParams.moveCaption) {
+					captionX = this@ChatMessageCell.captionX * transitionParams.animateChangeProgress + transitionParams.captionFromX * (1f - transitionParams.animateChangeProgress)
+					captionY = this@ChatMessageCell.captionY * transitionParams.animateChangeProgress + transitionParams.captionFromY * (1f - transitionParams.animateChangeProgress)
+				}
+				else if (!currentMessageObject!!.isVoice || !TextUtils.isEmpty(currentMessageObject!!.caption)) {
+					captionX += transitionParams.deltaLeft
+				}
 			}
-			catch (e: Exception) {
-				FileLog.e(e)
+
+			var restore = Int.MIN_VALUE
+
+			if (renderingAlpha != 1.0f) {
+				rect.set(captionX, captionY, captionX + captionLayout.width, captionY + captionLayout.height)
+				restore = saveLayerAlpha(rect, (255 * renderingAlpha).toInt())
+			}
+
+			if (transitionParams.animateBackgroundBoundsInner && currentBackgroundDrawable != null && currentMessagesGroup == null) {
+				val bottomOffset = (if (drawCommentButton) commentButtonRect.height() else 0) + if (!reactionsLayoutInBubble.isSmall) reactionsLayoutInBubble.height else 0
+
+				if (currentMessageObject!!.isOutOwner && !mediaBackground && !isPinnedBottom) {
+					clipRect(getBackgroundDrawableLeft() + transitionParams.deltaLeft + AndroidUtilities.dp(4f), getBackgroundDrawableTop() + transitionParams.deltaTop + AndroidUtilities.dp(4f), getBackgroundDrawableRight() + transitionParams.deltaRight - AndroidUtilities.dp(10f), getBackgroundDrawableBottom() + transitionParams.deltaBottom - AndroidUtilities.dp(4f) - bottomOffset)
+				}
+				else {
+					clipRect(getBackgroundDrawableLeft() + transitionParams.deltaLeft + AndroidUtilities.dp(4f), getBackgroundDrawableTop() + transitionParams.deltaTop + AndroidUtilities.dp(4f), getBackgroundDrawableRight() + transitionParams.deltaRight - AndroidUtilities.dp(4f), getBackgroundDrawableBottom() + transitionParams.deltaBottom - AndroidUtilities.dp(4f) - bottomOffset)
+				}
+			}
+
+			translate(captionX, captionY)
+
+			if (links.draw(this)) {
+				invalidate()
+			}
+
+			if (urlPathSelection.isNotEmpty()) {
+				for (b in urlPathSelection.indices) {
+					drawPath(urlPathSelection[b], Theme.chat_textSearchSelectionPaint)
+				}
+			}
+
+			if (!selectionOnly) {
+				try {
+					if (delegate?.textSelectionHelper?.isSelected(currentMessageObject) == true) {
+						delegate?.textSelectionHelper?.drawCaption(currentMessageObject!!.isOutOwner, captionLayout, this)
+					}
+
+					Emoji.emojiDrawingYOffset = -transitionYOffsetForDrawables
+
+					val spoilersColor = if (currentMessageObject!!.isOut && !ChatObject.isChannelAndNotMegaGroup(currentMessageObject!!.chatId, currentAccount)) getThemedColor(Theme.key_chat_outTimeText) else captionLayout.paint.color
+
+					SpoilerEffect.renderWithRipple(this@ChatMessageCell, invalidateSpoilersParent, spoilersColor, 0, captionPatchedSpoilersLayout, captionLayout, captionSpoilers, this, currentMessagesGroup != null)
+
+					Emoji.emojiDrawingYOffset = 0f
+				}
+				catch (e: Exception) {
+					FileLog.e(e)
+				}
+			}
+
+			if (restore != Int.MIN_VALUE) {
+				restoreToCount(restore)
 			}
 		}
-
-		if (restore != Int.MIN_VALUE) {
-			canvas.restoreToCount(restore)
-		}
-
-		canvas.restore()
 	}
 
 	fun needDrawTime(): Boolean {
@@ -17140,13 +17080,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 
-			canvas.save()
-
-			canvas.translate(timeTitleTimeX + additionalX.also { drawTimeX = it }, timeY - AndroidUtilities.dp(7.3f) - timeLayout.height.also { drawTimeY = it.toFloat() })
-
-			timeLayout.draw(canvas)
-
-			canvas.restore()
+			canvas.withTranslation(timeTitleTimeX + additionalX.also { drawTimeX = it }, timeY - AndroidUtilities.dp(7.3f) - timeLayout.height.also { drawTimeY = it.toFloat() }) {
+				timeLayout.draw(this)
+			}
 
 			Theme.chat_timePaint.alpha = 255
 		}
@@ -17227,49 +17163,45 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 
-			canvas.save()
+			canvas.withSave {
+				if (transitionParams.animateEditedEnter && transitionParams.animateChangeProgress != 1f) {
+					if (transitionParams.animateEditedLayout != null) {
+						translate(timeTitleTimeX + additionalX, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset)
 
-			if (transitionParams.animateEditedEnter && transitionParams.animateChangeProgress != 1f) {
-				if (transitionParams.animateEditedLayout != null) {
-					canvas.translate(timeTitleTimeX + additionalX, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset)
+						val oldAlpha = Theme.chat_timePaint.alpha
 
-					val oldAlpha = Theme.chat_timePaint.alpha
+						Theme.chat_timePaint.alpha = (oldAlpha * transitionParams.animateChangeProgress).toInt()
 
-					Theme.chat_timePaint.alpha = (oldAlpha * transitionParams.animateChangeProgress).toInt()
+						transitionParams.animateEditedLayout!!.draw(this)
 
-					transitionParams.animateEditedLayout!!.draw(canvas)
+						Theme.chat_timePaint.alpha = oldAlpha
 
-					Theme.chat_timePaint.alpha = oldAlpha
+						transitionParams.animateTimeLayout!!.draw(this)
+					}
+					else {
+						val oldAlpha = Theme.chat_timePaint.alpha
 
-					transitionParams.animateTimeLayout!!.draw(canvas)
+						withTranslation(transitionParams.animateFromTimeX + additionalX, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset) {
+							Theme.chat_timePaint.alpha = (oldAlpha * (1f - transitionParams.animateChangeProgress)).toInt()
+							transitionParams.animateTimeLayout?.draw(this)
+						}
+
+						translate(timeTitleTimeX + additionalX, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset)
+
+						Theme.chat_timePaint.alpha = (oldAlpha * transitionParams.animateChangeProgress).toInt()
+
+						timeLayout.draw(this)
+
+						Theme.chat_timePaint.alpha = oldAlpha
+					}
 				}
 				else {
-					val oldAlpha = Theme.chat_timePaint.alpha
-
-					canvas.save()
-					canvas.translate(transitionParams.animateFromTimeX + additionalX, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset)
-
-					Theme.chat_timePaint.alpha = (oldAlpha * (1f - transitionParams.animateChangeProgress)).toInt()
-
-					transitionParams.animateTimeLayout!!.draw(canvas)
-
-					canvas.restore()
-					canvas.translate(timeTitleTimeX + additionalX, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset)
-
-					Theme.chat_timePaint.alpha = (oldAlpha * transitionParams.animateChangeProgress).toInt()
-
-					timeLayout.draw(canvas)
-
-					Theme.chat_timePaint.alpha = oldAlpha
+					val timeTopOffset = if (currentMessageObject?.isMusic == true) AndroidUtilities.dp(4f) else 0f
+					translate(timeTitleTimeX + additionalX.also { drawTimeX = it }, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset + timeTopOffset.toFloat().also { drawTimeY = it })
+					timeLayout.draw(this)
 				}
-			}
-			else {
-				val timeTopOffset = if (currentMessageObject?.isMusic == true) AndroidUtilities.dp(4f) else 0f
-				canvas.translate(timeTitleTimeX + additionalX.also { drawTimeX = it }, layoutHeight - AndroidUtilities.dp(if (isPinnedBottom || isPinnedTop) 7.5f else 6.5f) - timeLayout.height + timeYOffset + timeTopOffset.toFloat().also { drawTimeY = it })
-				timeLayout.draw(canvas)
-			}
 
-			canvas.restore()
+			}
 		}
 
 		if (currentMessageObject!!.isOutOwner) {
@@ -17407,12 +17339,10 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				rect.set((x - AndroidUtilities.dp(4f)).toFloat(), (y - AndroidUtilities.dp(1.5f)).toFloat(), (x + durationWidth + AndroidUtilities.dp(4f) + AndroidUtilities.dp(if (bigRadius) 2f else 0f)).toFloat(), (y + videoInfoLayout!!.height + AndroidUtilities.dp(1.5f)).toFloat())
 
 				canvas.drawRoundRect(rect, rad, rad, getThemedPaint(Theme.key_paint_chatTimeBackground))
-				canvas.save()
-				canvas.translate((x + if (bigRadius) 2 else 0).toFloat(), y.toFloat())
 
-				videoInfoLayout?.draw(canvas)
-
-				canvas.restore()
+				canvas.withTranslation((x + if (bigRadius) 2 else 0).toFloat(), y.toFloat()) {
+					videoInfoLayout?.draw(this)
+				}
 			}
 		}
 	}
@@ -17630,15 +17560,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			if (transitionParams.animateReplies) {
 				if (replaceAnimation) {
-					canvas.save()
-
-					Theme.chat_timePaint.alpha = (timeAlpha * (1.0 - transitionParams.animateChangeProgress)).toInt()
-
-					canvas.translate(repliesX + repliesDrawable.intrinsicWidth + AndroidUtilities.dp(3f), timeY)
-
-					transitionParams.animateRepliesLayout!!.draw(canvas)
-
-					canvas.restore()
+					canvas.withSave {
+						Theme.chat_timePaint.alpha = (timeAlpha * (1.0 - transitionParams.animateChangeProgress)).toInt()
+						translate(repliesX + repliesDrawable.intrinsicWidth + AndroidUtilities.dp(3f), timeY)
+						transitionParams.animateRepliesLayout!!.draw(this)
+					}
 				}
 
 				Theme.chat_timePaint.alpha = (timeAlpha * repliesAlpha).toInt()
@@ -17728,18 +17654,13 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			viewsDrawable.alpha = 255
 
 			if (transitionParams.animateViewsLayout != null) {
-				canvas.save()
-
-				Theme.chat_timePaint.alpha = (timeAlpha * (1.0 - transitionParams.animateChangeProgress)).toInt()
-
-				canvas.translate(viewsX + viewsDrawable.intrinsicWidth + AndroidUtilities.dp(3f), timeY)
-
-				transitionParams.animateViewsLayout!!.draw(canvas)
-
-				canvas.restore()
+				canvas.withSave {
+					Theme.chat_timePaint.alpha = (timeAlpha * (1.0 - transitionParams.animateChangeProgress)).toInt()
+					translate(viewsX + viewsDrawable.intrinsicWidth + AndroidUtilities.dp(3f), timeY)
+					transitionParams.animateViewsLayout?.draw(this)
+				}
 
 				Theme.chat_timePaint.alpha = (timeAlpha * transitionParams.animateChangeProgress).toInt()
-
 			}
 
 			canvas.save()
@@ -18228,35 +18149,31 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						}
 
 						if (imageW != 0 && (!drawLoadingProgress || drawDocTitleLayout)) {
-							canvas.save()
+							canvas.withSave {
+								Theme.chat_msgNoSoundDrawable.alpha = (255 * animatingNoSoundProgress * animatingNoSoundProgress * controlsAlpha).toInt()
 
-							Theme.chat_msgNoSoundDrawable.alpha = (255 * animatingNoSoundProgress * animatingNoSoundProgress * controlsAlpha).toInt()
+								val size = AndroidUtilities.dp(14 * animatingNoSoundProgress)
+								val y = (AndroidUtilities.dp(14f) - size) / 2
+								val offset = infoWidth + AndroidUtilities.dp(4f)
 
-							val size = AndroidUtilities.dp(14 * animatingNoSoundProgress)
-							val y = (AndroidUtilities.dp(14f) - size) / 2
-							val offset = infoWidth + AndroidUtilities.dp(4f)
+								translate(offset.toFloat(), 0f)
 
-							canvas.translate(offset.toFloat(), 0f)
+								Theme.chat_msgNoSoundDrawable.setBounds(0, y, size, y + size)
+								Theme.chat_msgNoSoundDrawable.draw(this)
 
-							Theme.chat_msgNoSoundDrawable.setBounds(0, y, size, y + size)
-							Theme.chat_msgNoSoundDrawable.draw(canvas)
-
-							noSoundIconCenterX += offset + size / 2
-
-							canvas.restore()
+								noSoundIconCenterX += offset + size / 2
+							}
 						}
 
 						if (drawLoadingProgress && loadingProgressLayout != null) {
-							canvas.save()
+							canvas.withSave() {
+								if (drawDocTitleLayout) {
+									Theme.chat_infoPaint.alpha = (255 * controlsAlpha * alpha).toInt()
+									translate(0f, AndroidUtilities.dp(14.3f * alpha).toFloat())
+								}
 
-							if (drawDocTitleLayout) {
-								Theme.chat_infoPaint.alpha = (255 * controlsAlpha * alpha).toInt()
-								canvas.translate(0f, AndroidUtilities.dp(14.3f * alpha).toFloat())
+								loadingProgressLayout?.draw(this)
 							}
-
-							loadingProgressLayout?.draw(canvas)
-
-							canvas.restore()
 						}
 						else if (drawDocTitleLayout) {
 							Theme.chat_infoPaint.alpha = (255 * controlsAlpha * alpha).toInt()
@@ -18351,7 +18268,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					Theme.chat_locationAddressPaint.color = ResourcesCompat.getColor(resources, R.color.text, null) // getThemedColor(if (isDrawSelectionBackground()) Theme.key_chat_inVenueInfoSelectedText else Theme.key_chat_inVenueInfoText)
 				}
 
-				if (MessageObject.getMedia(currentMessageObject!!.messageOwner) is TLRPC.TL_messageMediaGeoLive) {
+				if (MessageObject.getMedia(currentMessageObject!!.messageOwner) is TLRPC.TLMessageMediaGeoLive) {
 					var cy = (photoImage.imageY2 + AndroidUtilities.dp(30f)).toInt()
 
 					if (!locationExpired || transitionParams.animateLocationIsExpired) {
@@ -18412,16 +18329,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						canvas.drawText(text!!, rect.centerX() - w / 2, (cy + AndroidUtilities.dp(4f)).toFloat(), Theme.chat_livePaint)
 
 						if (docTitleLayout != null && infoLayout != null) {
-							canvas.save()
-							canvas.translate(photoImage.imageX + AndroidUtilities.dp(10f), photoImage.imageY2 + AndroidUtilities.dp(10f))
-
-							docTitleLayout.draw(canvas)
-
-							canvas.translate(0f, AndroidUtilities.dp(23f).toFloat())
-
-							infoLayout.draw(canvas)
-
-							canvas.restore()
+							canvas.withTranslation(photoImage.imageX + AndroidUtilities.dp(10f), photoImage.imageY2 + AndroidUtilities.dp(10f)) {
+								docTitleLayout.draw(this)
+								translate(0f, AndroidUtilities.dp(23f).toFloat())
+								infoLayout.draw(this)
+							}
 						}
 
 						if (alpha != 1f) {
@@ -18454,17 +18366,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					locationImageReceiver.draw(canvas)
 				}
 				else {
-					canvas.save()
-					canvas.translate(photoImage.imageX + AndroidUtilities.dp(6f), photoImage.imageY2 + AndroidUtilities.dp(8f))
+					canvas.withTranslation(photoImage.imageX + AndroidUtilities.dp(6f), photoImage.imageY2 + AndroidUtilities.dp(8f)) {
+						docTitleLayout?.draw(this)
 
-					docTitleLayout?.draw(canvas)
+						if (infoLayout != null) {
+							translate(0f, AndroidUtilities.dp(21f).toFloat())
+							infoLayout?.draw(this)
+						}
 
-					if (infoLayout != null) {
-						canvas.translate(0f, AndroidUtilities.dp(21f).toFloat())
-						infoLayout?.draw(canvas)
 					}
-
-					canvas.restore()
 				}
 			}
 		}
@@ -18495,17 +18405,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			otherX = x
 
 			if (titleLayout != null) {
-				canvas.save()
-				canvas.translate(x.toFloat(), (AndroidUtilities.dp(12f) + namesOffset).toFloat())
-				titleLayout?.draw(canvas)
-				canvas.restore()
+				canvas.withTranslation(x.toFloat(), (AndroidUtilities.dp(12f) + namesOffset).toFloat()) {
+					titleLayout?.draw(this)
+				}
 			}
 
 			if (docTitleLayout != null) {
-				canvas.save()
-				canvas.translate((x + AndroidUtilities.dp(19f)).toFloat(), (AndroidUtilities.dp(37f) + namesOffset).toFloat())
-				docTitleLayout?.draw(canvas)
-				canvas.restore()
+				canvas.withTranslation((x + AndroidUtilities.dp(19f)).toFloat(), (AndroidUtilities.dp(37f) + namesOffset).toFloat()) {
+					docTitleLayout?.draw(this)
+				}
 			}
 
 			val icon: Drawable
@@ -18525,9 +18433,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 			else {
-				val reason = currentMessageObject?.messageOwner?.action?.reason
+				val reason = (currentMessageObject?.messageOwner?.action as? TLRPC.TLMessageActionPhoneCall)?.reason
 
-				icon = if (reason is TLRPC.TL_phoneCallDiscardReasonMissed || reason is TLRPC.TL_phoneCallDiscardReasonBusy) {
+				icon = if (reason is TLRPC.TLPhoneCallDiscardReasonMissed || reason is TLRPC.TLPhoneCallDiscardReasonBusy) {
 					Theme.chat_msgCallDownRedDrawable
 				}
 				else {
@@ -18620,25 +18528,21 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 
 			if (titleLayout != null) {
-				canvas.save()
-				canvas.translate((x + extraTextX).toFloat(), (AndroidUtilities.dp(15f) + namesOffset).toFloat())
-				titleLayout?.draw(canvas)
-				canvas.restore()
+				canvas.withTranslation((x + extraTextX).toFloat(), (AndroidUtilities.dp(15f) + namesOffset).toFloat()) {
+					titleLayout?.draw(this)
+				}
 			}
 
 			val y = (if (titleLayout != null) titleLayout!!.height else 0) + AndroidUtilities.dp(20f) + namesOffset
 
 			if (docTitleLayout != null) {
-				canvas.save()
-				canvas.translate((x + docTitleOffsetX + extraTextX).toFloat(), y.toFloat())
+				canvas.withTranslation((x + docTitleOffsetX + extraTextX).toFloat(), y.toFloat()) {
+					docTitleLayout?.draw(this)
+				}
 
-				docTitleLayout?.draw(canvas)
+				val media = MessageObject.getMedia(currentMessageObject!!.messageOwner) as TLRPC.TLMessageMediaPoll
 
-				canvas.restore()
-
-				val media = MessageObject.getMedia(currentMessageObject!!.messageOwner) as TLRPC.TL_messageMediaPoll
-
-				if (lastPoll!!.quiz && (pollVoted || pollClosed) && !TextUtils.isEmpty(media.results.solution)) {
+				if (lastPoll!!.quiz && (pollVoted || pollClosed) && !TextUtils.isEmpty(media.results?.solution)) {
 					val drawable = getThemedDrawable(if (currentMessageObject!!.isOutOwner) Theme.key_drawable_chat_pollHintDrawableOut else Theme.key_drawable_chat_pollHintDrawableIn)
 
 					if (pollVoteInProgress) {
@@ -18712,9 +18616,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 			}
 
-			if ((!pollClosed && !pollVoted || pollVoteInProgress) && lastPoll!!.quiz && lastPoll!!.close_period != 0) {
+			if ((!pollClosed && !pollVoted || pollVoteInProgress) && lastPoll!!.quiz && lastPoll!!.closePeriod != 0) {
 				val currentTime = ConnectionsManager.getInstance(currentAccount).currentTimeMillis
-				val time = max(0, lastPoll!!.close_date.toLong() * 1000 - currentTime)
+				val time = max(0, lastPoll!!.closeDate.toLong() * 1000 - currentTime)
 
 				if (closeTimeText == null || lastPollCloseTime != time) {
 					closeTimeText = AndroidUtilities.formatDurationNoHours(ceil((time / 1000.0f).toDouble()).toInt(), false)
@@ -18751,7 +18655,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 				if (time <= 60000) {
 					rect.set((tx - rad).toFloat(), (ty - rad).toFloat(), (tx + rad).toFloat(), (ty + rad).toFloat())
-					val radProgress = -360 * (time / (min(60, lastPoll!!.close_period) * 1000.0f))
+					val radProgress = -360 * (time / (min(60, lastPoll!!.closePeriod) * 1000.0f))
 					canvas.drawArc(rect, -90f, radProgress, false, Theme.chat_pollTimerPaint)
 					timerParticles?.draw(canvas, Theme.chat_pollTimerPaint, rect, radProgress, if (pollVoteInProgress) 1.0f - pollAnimationProgress else 1.0f)
 				}
@@ -18798,133 +18702,131 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				val button = pollButtons[a]
 				button.x = x
 
-				canvas.save()
-				canvas.translate((x + AndroidUtilities.dp(35f)).toFloat(), (button.y + namesOffset).toFloat())
+				canvas.withTranslation((x + AndroidUtilities.dp(35f)).toFloat(), (button.y + namesOffset).toFloat()) {
+					button.title?.draw(this)
 
-				button.title?.draw(canvas)
+					val alpha = (if (isAnimatingPollAnswer) 255 * min((if (pollUnvoteInProgress) 1.0f - pollAnimationProgress else pollAnimationProgress) / 0.3f, 1.0f) else 255).toInt()
 
-				val alpha = (if (isAnimatingPollAnswer) 255 * min((if (pollUnvoteInProgress) 1.0f - pollAnimationProgress else pollAnimationProgress) / 0.3f, 1.0f) else 255).toInt()
+					if (pollVoted || pollClosed || isAnimatingPollAnswer) {
+						if (lastPoll!!.quiz && pollVoted && button.chosen) {
+							val key = if (button.correct) {
+								if (currentMessageObject!!.isOutOwner) Theme.key_chat_outPollCorrectAnswer else Theme.key_chat_inPollCorrectAnswer
+							}
+							else {
+								if (currentMessageObject!!.isOutOwner) Theme.key_chat_outPollWrongAnswer else Theme.key_chat_inPollWrongAnswer
+							}
 
-				if (pollVoted || pollClosed || isAnimatingPollAnswer) {
-					if (lastPoll!!.quiz && pollVoted && button.chosen) {
-						val key = if (button.correct) {
-							if (currentMessageObject!!.isOutOwner) Theme.key_chat_outPollCorrectAnswer else Theme.key_chat_inPollCorrectAnswer
-						}
-						else {
-							if (currentMessageObject!!.isOutOwner) Theme.key_chat_outPollWrongAnswer else Theme.key_chat_inPollWrongAnswer
-						}
-
-						if (Theme.hasThemeKey(key)) {
-							Theme.chat_docBackPaint.color = getThemedColor(key)
+							if (Theme.hasThemeKey(key)) {
+								Theme.chat_docBackPaint.color = getThemedColor(key)
+							}
+							else {
+								Theme.chat_docBackPaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outAudioSeekbarFill else Theme.key_chat_inAudioSeekbarFill)
+							}
 						}
 						else {
 							Theme.chat_docBackPaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outAudioSeekbarFill else Theme.key_chat_inAudioSeekbarFill)
 						}
-					}
-					else {
-						Theme.chat_docBackPaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outAudioSeekbarFill else Theme.key_chat_inAudioSeekbarFill)
-					}
-
-					if (isAnimatingPollAnswer) {
-						var oldAlpha = Theme.chat_instantViewPaint.alpha / 255.0f
-						Theme.chat_instantViewPaint.alpha = (alpha * oldAlpha).toInt()
-						oldAlpha = Theme.chat_docBackPaint.alpha / 255.0f
-						Theme.chat_docBackPaint.alpha = (alpha * oldAlpha).toInt()
-					}
-
-					val currentPercent = ceil((button.prevPercent + (button.percent - button.prevPercent) * pollAnimationProgress).toDouble()).toInt()
-					val text = String.format(Locale.getDefault(), "%d%%", currentPercent)
-					var width = ceil(Theme.chat_instantViewPaint.measureText(text).toDouble()).toInt()
-
-					canvas.drawText(text, (-AndroidUtilities.dp(6.5f) - width).toFloat(), AndroidUtilities.dp(14f).toFloat(), Theme.chat_instantViewPaint)
-
-					width = backgroundWidth - AndroidUtilities.dp(76f)
-
-					val currentPercentProgress = button.prevPercentProgress + (button.percentProgress - button.prevPercentProgress) * pollAnimationProgress
-
-					rect.set(0f, (button.height + AndroidUtilities.dp(6f)).toFloat(), width * currentPercentProgress, (button.height + AndroidUtilities.dp(11f)).toFloat())
-
-					canvas.drawRoundRect(rect, AndroidUtilities.dp(2f).toFloat(), AndroidUtilities.dp(2f).toFloat(), Theme.chat_docBackPaint)
-
-					if (button.chosen || button.prevChosen || lastPoll!!.quiz && button.correct && (pollVoted || pollClosed)) {
-						val cx = rect.left - AndroidUtilities.dp(13.5f)
-						val cy = rect.centerY()
-
-						canvas.drawCircle(cx, cy, AndroidUtilities.dp(7f).toFloat(), Theme.chat_docBackPaint)
-
-						val drawable = if (lastPoll!!.quiz && button.chosen && !button.correct) {
-							Theme.chat_pollCrossDrawable[if (currentMessageObject!!.isOutOwner) 1 else 0]
-						}
-						else {
-							Theme.chat_pollCheckDrawable[if (currentMessageObject!!.isOutOwner) 1 else 0]
-						}
-
-						drawable.alpha = alpha
-
-						setDrawableBounds(drawable, cx - drawable.intrinsicWidth / 2, cy - drawable.intrinsicHeight / 2)
-
-						drawable.draw(canvas)
-					}
-				}
-
-				if (!pollVoted && !pollClosed || isAnimatingPollAnswer) {
-					if (isDrawSelectionBackground()) {
-						Theme.chat_replyLinePaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outVoiceSeekbarSelected else Theme.key_chat_inVoiceSeekbarSelected)
-					}
-					else {
-						Theme.chat_replyLinePaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outVoiceSeekbar else Theme.key_chat_inVoiceSeekbar)
-					}
-
-					if (isAnimatingPollAnswer) {
-						val oldAlpha = Theme.chat_replyLinePaint.alpha / 255.0f
-						Theme.chat_replyLinePaint.alpha = ((255 - alpha) * oldAlpha).toInt()
-					}
-
-					canvas.drawLine(-AndroidUtilities.dp(2f).toFloat(), (button.height + AndroidUtilities.dp(13f)).toFloat(), (backgroundWidth - AndroidUtilities.dp(58f)).toFloat(), (button.height + AndroidUtilities.dp(13f)).toFloat(), Theme.chat_replyLinePaint)
-
-					if (pollVoteInProgress && a == pollVoteInProgressNum) {
-						Theme.chat_instantViewRectPaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outAudioSeekbarFill else Theme.key_chat_inAudioSeekbarFill)
 
 						if (isAnimatingPollAnswer) {
-							val oldAlpha = Theme.chat_instantViewRectPaint.alpha / 255.0f
-							Theme.chat_instantViewRectPaint.alpha = ((255 - alpha) * oldAlpha).toInt()
+							var oldAlpha = Theme.chat_instantViewPaint.alpha / 255.0f
+							Theme.chat_instantViewPaint.alpha = (alpha * oldAlpha).toInt()
+							oldAlpha = Theme.chat_docBackPaint.alpha / 255.0f
+							Theme.chat_docBackPaint.alpha = (alpha * oldAlpha).toInt()
 						}
 
-						rect.set((-AndroidUtilities.dp(22f) - AndroidUtilities.dp(8.5f)).toFloat(), (AndroidUtilities.dp(9f) - AndroidUtilities.dp(8.5f)).toFloat(), (-AndroidUtilities.dp(23f) + AndroidUtilities.dp(8.5f)).toFloat(), (AndroidUtilities.dp(9f) + AndroidUtilities.dp(8.5f)).toFloat())
+						val currentPercent = ceil((button.prevPercent + (button.percent - button.prevPercent) * pollAnimationProgress).toDouble()).toInt()
+						val text = String.format(Locale.getDefault(), "%d%%", currentPercent)
+						var width = ceil(Theme.chat_instantViewPaint.measureText(text).toDouble()).toInt()
 
-						canvas.drawArc(rect, voteRadOffset, voteCurrentCircleLength, false, Theme.chat_instantViewRectPaint)
-					}
-					else {
-						if (currentMessageObject!!.isOutOwner) {
-							Theme.chat_instantViewRectPaint.color = getThemedColor(if (isDrawSelectionBackground()) Theme.key_chat_outMenuSelected else Theme.key_chat_outMenu)
-						}
-						else {
-							Theme.chat_instantViewRectPaint.color = getThemedColor(if (isDrawSelectionBackground()) Theme.key_chat_inMenuSelected else Theme.key_chat_inMenu)
-						}
+						drawText(text, (-AndroidUtilities.dp(6.5f) - width).toFloat(), AndroidUtilities.dp(14f).toFloat(), Theme.chat_instantViewPaint)
 
-						if (isAnimatingPollAnswer) {
-							val oldAlpha = Theme.chat_instantViewRectPaint.alpha / 255.0f
-							Theme.chat_instantViewRectPaint.alpha = ((255 - alpha) * oldAlpha).toInt()
-						}
+						width = backgroundWidth - AndroidUtilities.dp(76f)
 
-						canvas.drawCircle(-AndroidUtilities.dp(22f).toFloat(), AndroidUtilities.dp(9f).toFloat(), AndroidUtilities.dp(8.5f).toFloat(), Theme.chat_instantViewRectPaint)
+						val currentPercentProgress = button.prevPercentProgress + (button.percentProgress - button.prevPercentProgress) * pollAnimationProgress
 
-						if (lastPoll!!.multiple_choice) {
-							val size = AndroidUtilities.dp(8.5f)
-							var color = context.getColor(R.color.brand)
+						rect.set(0f, (button.height + AndroidUtilities.dp(6f)).toFloat(), width * currentPercentProgress, (button.height + AndroidUtilities.dp(11f)).toFloat())
 
-							if (currentMessageObject?.isOutOwner == true) {
-								color = context.getColor(R.color.white)
+						drawRoundRect(rect, AndroidUtilities.dp(2f).toFloat(), AndroidUtilities.dp(2f).toFloat(), Theme.chat_docBackPaint)
+
+						if (button.chosen || button.prevChosen || lastPoll!!.quiz && button.correct && (pollVoted || pollClosed)) {
+							val cx = rect.left - AndroidUtilities.dp(13.5f)
+							val cy = rect.centerY()
+
+							drawCircle(cx, cy, AndroidUtilities.dp(7f).toFloat(), Theme.chat_docBackPaint)
+
+							val drawable = if (lastPoll!!.quiz && button.chosen && !button.correct) {
+								Theme.chat_pollCrossDrawable[if (currentMessageObject!!.isOutOwner) 1 else 0]
+							}
+							else {
+								Theme.chat_pollCheckDrawable[if (currentMessageObject!!.isOutOwner) 1 else 0]
 							}
 
-							pollCheckBox!![a]!!.setColor(0, if (currentMessageObject?.isOutOwner == true) context.getColor(R.color.white) else context.getColor(R.color.brand), color)
-							pollCheckBox!![a]!!.setBounds(-AndroidUtilities.dp(22f) - size / 2, AndroidUtilities.dp(9f) - size / 2, size, size)
-							pollCheckBox!![a]!!.draw(canvas)
+							drawable.alpha = alpha
+
+							setDrawableBounds(drawable, cx - drawable.intrinsicWidth / 2, cy - drawable.intrinsicHeight / 2)
+
+							drawable.draw(this)
 						}
 					}
-				}
 
-				canvas.restore()
+					if (!pollVoted && !pollClosed || isAnimatingPollAnswer) {
+						if (isDrawSelectionBackground()) {
+							Theme.chat_replyLinePaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outVoiceSeekbarSelected else Theme.key_chat_inVoiceSeekbarSelected)
+						}
+						else {
+							Theme.chat_replyLinePaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outVoiceSeekbar else Theme.key_chat_inVoiceSeekbar)
+						}
+
+						if (isAnimatingPollAnswer) {
+							val oldAlpha = Theme.chat_replyLinePaint.alpha / 255.0f
+							Theme.chat_replyLinePaint.alpha = ((255 - alpha) * oldAlpha).toInt()
+						}
+
+						drawLine(-AndroidUtilities.dp(2f).toFloat(), (button.height + AndroidUtilities.dp(13f)).toFloat(), (backgroundWidth - AndroidUtilities.dp(58f)).toFloat(), (button.height + AndroidUtilities.dp(13f)).toFloat(), Theme.chat_replyLinePaint)
+
+						if (pollVoteInProgress && a == pollVoteInProgressNum) {
+							Theme.chat_instantViewRectPaint.color = getThemedColor(if (currentMessageObject!!.isOutOwner) Theme.key_chat_outAudioSeekbarFill else Theme.key_chat_inAudioSeekbarFill)
+
+							if (isAnimatingPollAnswer) {
+								val oldAlpha = Theme.chat_instantViewRectPaint.alpha / 255.0f
+								Theme.chat_instantViewRectPaint.alpha = ((255 - alpha) * oldAlpha).toInt()
+							}
+
+							rect.set((-AndroidUtilities.dp(22f) - AndroidUtilities.dp(8.5f)).toFloat(), (AndroidUtilities.dp(9f) - AndroidUtilities.dp(8.5f)).toFloat(), (-AndroidUtilities.dp(23f) + AndroidUtilities.dp(8.5f)).toFloat(), (AndroidUtilities.dp(9f) + AndroidUtilities.dp(8.5f)).toFloat())
+
+							drawArc(rect, voteRadOffset, voteCurrentCircleLength, false, Theme.chat_instantViewRectPaint)
+						}
+						else {
+							if (currentMessageObject!!.isOutOwner) {
+								Theme.chat_instantViewRectPaint.color = getThemedColor(if (isDrawSelectionBackground()) Theme.key_chat_outMenuSelected else Theme.key_chat_outMenu)
+							}
+							else {
+								Theme.chat_instantViewRectPaint.color = getThemedColor(if (isDrawSelectionBackground()) Theme.key_chat_inMenuSelected else Theme.key_chat_inMenu)
+							}
+
+							if (isAnimatingPollAnswer) {
+								val oldAlpha = Theme.chat_instantViewRectPaint.alpha / 255.0f
+								Theme.chat_instantViewRectPaint.alpha = ((255 - alpha) * oldAlpha).toInt()
+							}
+
+							drawCircle(-AndroidUtilities.dp(22f).toFloat(), AndroidUtilities.dp(9f).toFloat(), AndroidUtilities.dp(8.5f).toFloat(), Theme.chat_instantViewRectPaint)
+
+							if (lastPoll!!.multipleChoice) {
+								val size = AndroidUtilities.dp(8.5f)
+								var color = context.getColor(R.color.brand)
+
+								if (currentMessageObject?.isOutOwner == true) {
+									color = context.getColor(R.color.white)
+								}
+
+								pollCheckBox!![a]!!.setColor(0, if (currentMessageObject?.isOutOwner == true) context.getColor(R.color.white) else context.getColor(R.color.brand), color)
+								pollCheckBox!![a]!!.setBounds(-AndroidUtilities.dp(22f) - size / 2, AndroidUtilities.dp(9f) - size / 2, size, size)
+								pollCheckBox!![a]!!.draw(this)
+							}
+						}
+					}
+
+				}
 
 				if (a == n - 1) {
 					lastVoteY = button.y + namesOffset + button.height
@@ -18952,23 +18854,19 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				}
 
 				if (instantViewLayout != null) {
-					canvas.save()
-					canvas.translate((textX + instantTextX).toFloat(), (instantY + AndroidUtilities.dp(14.5f)).toFloat())
-					instantViewLayout!!.draw(canvas)
-					canvas.restore()
+					canvas.withTranslation((textX + instantTextX).toFloat(), (instantY + AndroidUtilities.dp(14.5f)).toFloat()) {
+						instantViewLayout?.draw(this)
+					}
 				}
 			}
 			else if (infoLayout != null) {
-				if (lastPoll!!.public_voters || lastPoll!!.multiple_choice) {
+				if (lastPoll!!.publicVoters || lastPoll!!.multipleChoice) {
 					lastVoteY += AndroidUtilities.dp(6f)
 				}
 
-				canvas.save()
-				canvas.translate((x + infoX).toFloat(), (lastVoteY + AndroidUtilities.dp(22f)).toFloat())
-
-				infoLayout?.draw(canvas)
-
-				canvas.restore()
+				canvas.withTranslation((x + infoX).toFloat(), (lastVoteY + AndroidUtilities.dp(22f)).toFloat()) {
+					infoLayout?.draw(this)
+				}
 			}
 
 			updatePollAnimations(dt)
@@ -18986,17 +18884,15 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 			}
 
 			if (titleLayout != null) {
-				canvas.save()
-				canvas.translate(photoImage.imageX + photoImage.imageWidth + AndroidUtilities.dp(9f), (AndroidUtilities.dp(16f) + namesOffset).toFloat())
-				titleLayout!!.draw(canvas)
-				canvas.restore()
+				canvas.withTranslation(photoImage.imageX + photoImage.imageWidth + AndroidUtilities.dp(9f), (AndroidUtilities.dp(16f) + namesOffset).toFloat()) {
+					titleLayout?.draw(this)
+				}
 			}
 
 			if (docTitleLayout != null) {
-				canvas.save()
-				canvas.translate(photoImage.imageX + photoImage.imageWidth + AndroidUtilities.dp(9f), (AndroidUtilities.dp(39f) + namesOffset).toFloat())
-				docTitleLayout!!.draw(canvas)
-				canvas.restore()
+				canvas.withTranslation(photoImage.imageX + photoImage.imageWidth + AndroidUtilities.dp(9f), (AndroidUtilities.dp(39f) + namesOffset).toFloat()) {
+					docTitleLayout?.draw(this)
+				}
 			}
 
 			val menuDrawable: Drawable
@@ -19047,10 +18943,9 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				canvas.drawRoundRect(instantButtonRect, AndroidUtilities.dp(6f).toFloat(), AndroidUtilities.dp(6f).toFloat(), backPaint)
 
 				if (instantViewLayout != null) {
-					canvas.save()
-					canvas.translate((textX + instantTextX).toFloat(), (instantY + AndroidUtilities.dp(10.5f)).toFloat())
-					instantViewLayout!!.draw(canvas)
-					canvas.restore()
+					canvas.withTranslation((textX + instantTextX).toFloat(), (instantY + AndroidUtilities.dp(10.5f)).toFloat()) {
+						instantViewLayout?.draw(this)
+					}
 				}
 			}
 		}
@@ -19082,7 +18977,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 				canvas.drawArc(deleteProgressRect, -90f, -360 * progress, true, Theme.chat_deleteProgressPaint)
 
 				if (progress != 0f) {
-					val offset = AndroidUtilities.dp(2f)
+					// val offset = AndroidUtilities.dp(2f)
 					// invalidate(deleteProgressRect.left.toInt() - offset, deleteProgressRect.top.toInt() - offset, deleteProgressRect.right.toInt() + offset * 2, deleteProgressRect.bottom.toInt() + offset * 2)
 					invalidate()
 				}
@@ -19208,26 +19103,21 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					val cx = x1 + timeWidthAudio + AndroidUtilities.dp(12f)
 					val cy = y1 + AndroidUtilities.dp(8.3f)
 
-					canvas.save()
-					canvas.scale(1f - roundPlayingDrawableProgress, 1f - roundPlayingDrawableProgress, cx, cy)
+					canvas.withScale(1f - roundPlayingDrawableProgress, 1f - roundPlayingDrawableProgress, cx, cy) {
+						Theme.chat_docBackPaint.color = getThemedColor(Theme.key_chat_serviceText)
+						Theme.chat_docBackPaint.alpha = (255 * timeAlpha * (1f - roundPlayingDrawableProgress)).toInt()
 
-					Theme.chat_docBackPaint.color = getThemedColor(Theme.key_chat_serviceText)
-					Theme.chat_docBackPaint.alpha = (255 * timeAlpha * (1f - roundPlayingDrawableProgress)).toInt()
-
-					canvas.drawCircle(cx, cy, AndroidUtilities.dp(3f).toFloat(), Theme.chat_docBackPaint)
-					canvas.restore()
+						drawCircle(cx, cy, AndroidUtilities.dp(3f).toFloat(), Theme.chat_docBackPaint)
+					}
 				}
 
 				if (roundPlayingDrawableProgress > 0f) {
 					setDrawableBounds(roundVideoPlayingDrawable, x1 + timeWidthAudio + AndroidUtilities.dp(6f), y1 + AndroidUtilities.dp(2.3f))
 
-					canvas.save()
-					canvas.scale(roundPlayingDrawableProgress, roundPlayingDrawableProgress, roundVideoPlayingDrawable.bounds.centerX().toFloat(), roundVideoPlayingDrawable.bounds.centerY().toFloat())
-
-					roundVideoPlayingDrawable.alpha = (255 * roundPlayingDrawableProgress).toInt()
-					roundVideoPlayingDrawable.draw(canvas)
-
-					canvas.restore()
+					canvas.withScale(roundPlayingDrawableProgress, roundPlayingDrawableProgress, roundVideoPlayingDrawable.bounds.centerX().toFloat(), roundVideoPlayingDrawable.bounds.centerY().toFloat()) {
+						roundVideoPlayingDrawable.alpha = (255 * roundPlayingDrawableProgress).toInt()
+						roundVideoPlayingDrawable.draw(this)
+					}
 				}
 
 				x1 += AndroidUtilities.dp(4f).toFloat()
@@ -19240,10 +19130,11 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 			if (durationLayout != null) {
 				Theme.chat_timePaint.alpha = (255 * timeAlpha).toInt()
-				canvas.save()
-				canvas.translate(x1, y1)
-				durationLayout!!.draw(canvas)
-				canvas.restore()
+
+				canvas.withTranslation(x1, y1) {
+					durationLayout?.draw(this)
+				}
+
 				Theme.chat_timePaint.alpha = 255
 			}
 		}
@@ -19321,7 +19212,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		else if (action == R.id.acc_action_open_forwarded_origin) {
 			if (delegate != null) {
 				if (currentForwardChannel != null) {
-					delegate?.didPressChannelAvatar(this@ChatMessageCell, currentForwardChannel, currentMessageObject?.messageOwner?.fwd_from?.channel_post ?: 0, lastTouchX, lastTouchY)
+					delegate?.didPressChannelAvatar(this@ChatMessageCell, currentForwardChannel, currentMessageObject?.messageOwner?.fwdFrom?.channelPost ?: 0, lastTouchX, lastTouchY)
 				}
 				else if (currentForwardUser != null) {
 					delegate?.didPressUserAvatar(this@ChatMessageCell, currentForwardUser, lastTouchX, lastTouchY)
@@ -19361,7 +19252,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		val y = event.y.toInt()
 
 		if (event.action == MotionEvent.ACTION_HOVER_ENTER || event.action == MotionEvent.ACTION_HOVER_MOVE) {
-			for (i in 0 until accessibilityVirtualViewBounds.size()) {
+			for (i in 0 until accessibilityVirtualViewBounds.size) {
 				val rect = accessibilityVirtualViewBounds.valueAt(i)
 
 				if (rect!!.contains(x, y)) {
@@ -19601,7 +19492,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 
 		if (themeDrawable is MessageDrawable) {
 			if (isBot && key == Theme.key_drawable_msgOut) {
-				themeDrawable.setBackgroundColorId(R.color.brand)
+				themeDrawable.setBackgroundColorId(if(currentMessageObject?.dialogId == BuildConfig.SUPPORT_BOT_ID) R.color.avatar_light_blue else R.color.brand)
 			}
 			else {
 				themeDrawable.setBackgroundColorId(0)
@@ -19646,7 +19537,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 		var prevChosen = false
 		var correct = false
 		var title: StaticLayout? = null
-		var answer: TLRPC.TL_pollAnswer? = null
+		var answer: TLRPC.TLPollAnswer? = null
 	}
 
 	private inner class MessageAccessibilityNodeProvider : AccessibilityNodeProvider() {
@@ -19727,14 +19618,14 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						}
 						else {
 							if (lastPoll!!.quiz) {
-								if (lastPoll!!.public_voters) {
+								if (lastPoll!!.publicVoters) {
 									context.getString(R.string.QuizPoll)
 								}
 								else {
 									context.getString(R.string.AnonymousQuizPoll)
 								}
 							}
-							else if (lastPoll!!.public_voters) {
+							else if (lastPoll!!.publicVoters) {
 								context.getString(R.string.PublicPoll)
 							}
 							else {
@@ -19809,7 +19700,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					if (currentMessageObject?.messageOwner?.reactions?.results != null) {
 						if (currentMessageObject?.messageOwner?.reactions?.results?.size == 1) {
 							val reaction = currentMessageObject!!.messageOwner!!.reactions!!.results[0]
-							val emoticon = (reaction.reaction as? TL_reactionEmoji)?.emoticon ?: ""
+							val emoticon = (reaction.reaction as? TLRPC.TLReactionEmoji)?.emoticon ?: ""
 
 							if (reaction.count == 1) {
 								sb.append("\n")
@@ -19821,7 +19712,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 									val recentReaction = currentMessageObject?.messageOwner?.reactions?.recentReactions?.firstOrNull()
 
 									if (recentReaction != null) {
-										val user = MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(recentReaction.peer_id))
+										val user = MessagesController.getInstance(currentAccount).getUser(MessageObject.getPeerId(recentReaction.peerId))
 
 										isMe = isUserSelf(user)
 
@@ -19852,7 +19743,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 								val reactionCount = currentMessageObject?.messageOwner?.reactions?.results?.get(i)
 
 								if (reactionCount != null) {
-									val emoticon = (reactionCount.reaction as? TL_reactionEmoji)?.emoticon ?: ""
+									val emoticon = (reactionCount.reaction as? TLRPC.TLReactionEmoji)?.emoticon ?: ""
 
 									sb.append(emoticon).append(" ").append(reactionCount.count.toString() + "")
 
@@ -20457,7 +20348,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 						val button = pollButtons[buttonIndex]
 
 						if (delegate != null) {
-							val answers = ArrayList<TLRPC.TL_pollAnswer>()
+							val answers = ArrayList<TLRPC.TLPollAnswer>()
 
 							button.answer?.let {
 								answers.add(it)
@@ -20485,7 +20376,7 @@ open class ChatMessageCell(context: Context) : BaseCell(context), SeekBar.SeekBa
 					else if (virtualViewId == Companion.FORWARD) {
 						if (delegate != null) {
 							if (currentForwardChannel != null) {
-								delegate?.didPressChannelAvatar(this@ChatMessageCell, currentForwardChannel, currentMessageObject!!.messageOwner?.fwd_from?.channel_post ?: 0, lastTouchX, lastTouchY)
+								delegate?.didPressChannelAvatar(this@ChatMessageCell, currentForwardChannel, currentMessageObject!!.messageOwner?.fwdFrom?.channelPost ?: 0, lastTouchX, lastTouchY)
 							}
 							else if (currentForwardUser != null) {
 								delegate?.didPressUserAvatar(this@ChatMessageCell, currentForwardUser, lastTouchX, lastTouchY)

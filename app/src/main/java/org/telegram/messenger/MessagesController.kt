@@ -5,8 +5,8 @@
  *
  * Copyright Nikolai Kudashov, 2013-2018.
  * Copyright Telegram, 2013-2024.
- * Copyright Nikita Denin, Ello 2023-2024.
  * Copyright Shamil Afandiyev, Ello 2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -33,8 +33,11 @@ import androidx.collection.LongSparseArray
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.util.Consumer
+import androidx.core.util.isEmpty
 import androidx.core.util.isNotEmpty
+import androidx.core.util.size
 import androidx.core.util.valueIterator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +46,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.telegram.SQLite.SQLiteException
 import org.telegram.messenger.ImageLoader.MessageThumb
 import org.telegram.messenger.MessagesStorage.BooleanCallback
@@ -58,41 +62,69 @@ import org.telegram.tgnet.ConnectionsManager
 import org.telegram.tgnet.NativeByteBuffer
 import org.telegram.tgnet.RequestDelegate
 import org.telegram.tgnet.SerializedData
-import org.telegram.tgnet.TLRPC.*
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.TL_channels_channelParticipants
-import org.telegram.tgnet.tlrpc.TL_channels_editBanned
-import org.telegram.tgnet.tlrpc.TL_chatBannedRights
-import org.telegram.tgnet.tlrpc.TL_config
-import org.telegram.tgnet.tlrpc.TL_error
-import org.telegram.tgnet.tlrpc.TL_folders_editPeerFolders
-import org.telegram.tgnet.tlrpc.TL_inputPhotoEmpty
-import org.telegram.tgnet.tlrpc.TL_message
-import org.telegram.tgnet.tlrpc.TL_messageEntityMentionName
-import org.telegram.tgnet.tlrpc.TL_messages_channelMessages
-import org.telegram.tgnet.tlrpc.TL_messages_chatFull
-import org.telegram.tgnet.tlrpc.TL_messages_dialogs
-import org.telegram.tgnet.tlrpc.TL_messages_getDialogs
-import org.telegram.tgnet.tlrpc.TL_messages_messages
-import org.telegram.tgnet.tlrpc.TL_messages_messagesNotModified
-import org.telegram.tgnet.tlrpc.TL_messages_peerDialogs
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.tlrpc.TL_photos_deletePhotos
-import org.telegram.tgnet.tlrpc.TL_photos_photo
-import org.telegram.tgnet.tlrpc.TL_photos_photos
-import org.telegram.tgnet.tlrpc.TL_photos_updateProfilePhoto
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
-import org.telegram.tgnet.tlrpc.TL_updateMessageReactions
-import org.telegram.tgnet.tlrpc.TL_userProfilePhotoEmpty
-import org.telegram.tgnet.tlrpc.TL_users_userFull
-import org.telegram.tgnet.tlrpc.User
-import org.telegram.tgnet.tlrpc.UserFull
-import org.telegram.tgnet.tlrpc.Vector
-import org.telegram.tgnet.tlrpc.contacts_Blocked
-import org.telegram.tgnet.tlrpc.messages_Dialogs
-import org.telegram.tgnet.tlrpc.messages_Messages
-import org.telegram.tgnet.tlrpc.photos_Photos
+import org.telegram.tgnet.TLObject
+import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.TLRPC.ChannelParticipant
+import org.telegram.tgnet.TLRPC.Chat
+import org.telegram.tgnet.TLRPC.ChatFull
+import org.telegram.tgnet.TLRPC.ChatParticipants
+import org.telegram.tgnet.TLRPC.Dialog
+import org.telegram.tgnet.TLRPC.DialogPeer
+import org.telegram.tgnet.TLRPC.Document
+import org.telegram.tgnet.TLRPC.EncryptedChat
+import org.telegram.tgnet.TLRPC.FileLocation
+import org.telegram.tgnet.TLRPC.InputChatPhoto
+import org.telegram.tgnet.TLRPC.InputFile
+import org.telegram.tgnet.TLRPC.InputPeer
+import org.telegram.tgnet.TLRPC.InputPhoto
+import org.telegram.tgnet.TLRPC.InputUser
+import org.telegram.tgnet.TLRPC.Message
+import org.telegram.tgnet.TLRPC.MessagesMessages
+import org.telegram.tgnet.TLRPC.PeerNotifySettings
+import org.telegram.tgnet.TLRPC.Photo
+import org.telegram.tgnet.TLRPC.TLChat
+import org.telegram.tgnet.TLRPC.TLChatFull
+import org.telegram.tgnet.TLRPC.TLDialog
+import org.telegram.tgnet.TLRPC.TLMessageReplies
+import org.telegram.tgnet.TLRPC.TLPhoto
+import org.telegram.tgnet.TLRPC.TLUpdatesChannelDifference
+import org.telegram.tgnet.TLRPC.TLUser
+import org.telegram.tgnet.TLRPC.TLUserFull
+import org.telegram.tgnet.TLRPC.Update
+import org.telegram.tgnet.TLRPC.Updates
+import org.telegram.tgnet.TLRPC.User
+import org.telegram.tgnet.TLRPC.WebPage
+import org.telegram.tgnet.Vector
+import org.telegram.tgnet.action
+import org.telegram.tgnet.channelId
+import org.telegram.tgnet.chatId
+import org.telegram.tgnet.document
+import org.telegram.tgnet.entities
+import org.telegram.tgnet.expires
+import org.telegram.tgnet.extendedMedia
+import org.telegram.tgnet.folderId
+import org.telegram.tgnet.fromScheduled
+import org.telegram.tgnet.fwdFrom
+import org.telegram.tgnet.groupedId
+import org.telegram.tgnet.media
+import org.telegram.tgnet.message
+import org.telegram.tgnet.migratedTo
+import org.telegram.tgnet.notifySettings
+import org.telegram.tgnet.participants
+import org.telegram.tgnet.photo
+import org.telegram.tgnet.photoBig
+import org.telegram.tgnet.photoSmall
+import org.telegram.tgnet.postDeserialize
+import org.telegram.tgnet.readInboxMaxId
+import org.telegram.tgnet.readOutboxMaxId
+import org.telegram.tgnet.replyMarkup
+import org.telegram.tgnet.unreadCount
+import org.telegram.tgnet.unreadMark
+import org.telegram.tgnet.unreadMentionsCount
+import org.telegram.tgnet.unreadReactionsCount
+import org.telegram.tgnet.userId
+import org.telegram.tgnet.version
+import org.telegram.tgnet.webpage
 import org.telegram.ui.ActionBar.AlertDialog
 import org.telegram.ui.ActionBar.BaseFragment
 import org.telegram.ui.ActionBar.Theme
@@ -101,7 +133,6 @@ import org.telegram.ui.ActionBar.Theme.ThemeAccent
 import org.telegram.ui.ActionBar.Theme.ThemeInfo
 import org.telegram.ui.ChatActivity
 import org.telegram.ui.ChatReactionsEditActivity
-import org.telegram.ui.ChatRightsEditActivity.Companion.emptyAdminRights
 import org.telegram.ui.Components.AlertsCreator
 import org.telegram.ui.Components.AnimatedEmojiDrawable
 import org.telegram.ui.Components.BulletinFactory
@@ -129,7 +160,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MessagesController(num: Int) : BaseController(num), NotificationCenterDelegate {
-	var hintDialogs = ArrayList<RecentMeUrl>()
+	var hintDialogs = ArrayList<TLRPC.RecentMeUrl>()
 	var dialogsForward = ArrayList<Dialog>()
 	var dialogsCanAddUsers = ArrayList<Dialog>()
 	var dialogsMyChannels = ArrayList<Dialog>()
@@ -191,7 +222,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	var diceEmojies: Set<String>? = null
 	var diceSuccess = HashMap<String, DiceFrameSuccess>()
 	var emojiSounds = HashMap<String, EmojiSound>()
-	var emojiInteractions = HashMap<Long, ArrayList<TL_sendMessageEmojiInteraction>>()
+	var emojiInteractions = HashMap<Long, ArrayList<TLRPC.TLSendMessageEmojiInteraction>>()
 	var remoteConfigLoaded: Boolean
 	var authDomains: Set<String>?
 	var reactionsUserMaxDefault: Int
@@ -202,7 +233,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	private val objectsByUsernames = ConcurrentHashMap<String, TLObject>(100, 1.0f, 2)
 	private val activeVoiceChatsMap = HashMap<Long, Chat>()
 	private val joiningToChannels = ArrayList<Long>()
-	private val exportedChats = LongSparseArray<TL_chatInviteExported>()
+	private val exportedChats = LongSparseArray<TLRPC.ExportedChatInvite>()
 	private var dialogsLoadedTillDate = Int.MAX_VALUE
 	private var lastPrintingStringCount = 0
 	private var dialogsInTransaction = false
@@ -238,7 +269,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	private var updatesStartWaitTimeSeq: Long = 0
 	private var updatesStartWaitTimePts: Long = 0
 	private var updatesStartWaitTimeQts: Long = 0
-	private val fullUsers = LongSparseArray<UserFull>()
+	private val fullUsers = LongSparseArray<TLUserFull>()
 	private val fullChats = LongSparseArray<ChatFull>()
 	private val groupCalls = LongSparseArray<ChatObject.Call>()
 	private val groupCallsByChatId = LongSparseArray<ChatObject.Call>()
@@ -279,8 +310,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	private var getDifferenceFirstSync = true
 	private var lastPushRegisterSendTime: Long = 0
 	private var resettingDialogs = false
-	private var resetDialogsPinned: TL_messages_peerDialogs? = null
-	private var resetDialogsAll: messages_Dialogs? = null
+	private var resetDialogsPinned: TLRPC.TLMessagesPeerDialogs? = null
+	private var resetDialogsAll: TLRPC.MessagesDialogs? = null
 	private val loadingPinnedDialogs = SparseIntArray()
 	private var loadingNotificationSettings = 0
 	private var loadingNotificationSignUpSettings = false
@@ -352,7 +383,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	var dialogFiltersLoaded = false
 
 	@JvmField
-	var suggestedFilters = ArrayList<TL_dialogFilterSuggested>()
+	var suggestedFilters = ArrayList<TLRPC.TLDialogFilterSuggested>()
 
 	@JvmField
 	var enableJoined: Boolean
@@ -442,7 +473,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	var groupCallVideoMaxParticipants: Int
 
 	@JvmField
-	var gifSearchEmojies = ArrayList<String>()
+	var gifSearchEmojies = mutableListOf<String>()
 
 	@JvmField
 	var autologinDomains: Set<String>?
@@ -546,10 +577,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val pinnedNum1 = sortingDialogFilter.pinnedDialogs[dialog1!!.id, Int.MIN_VALUE]
 		val pinnedNum2 = sortingDialogFilter.pinnedDialogs[dialog2!!.id, Int.MIN_VALUE]
 
-		if (dialog1 is TL_dialogFolder && dialog2 !is TL_dialogFolder) {
+		if (dialog1 is TLRPC.TLDialogFolder && dialog2 !is TLRPC.TLDialogFolder) {
 			return@Comparator -1
 		}
-		else if (dialog1 !is TL_dialogFolder && dialog2 is TL_dialogFolder) {
+		else if (dialog1 !is TLRPC.TLDialogFolder && dialog2 is TLRPC.TLDialogFolder) {
 			return@Comparator 1
 		}
 		else if (pinnedNum1 == Int.MIN_VALUE && pinnedNum2 != Int.MIN_VALUE) {
@@ -578,10 +609,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	private val dialogComparator = Comparator { dialog1: Dialog?, dialog2: Dialog? ->
-		if (dialog1 is TL_dialogFolder && dialog2 !is TL_dialogFolder) {
+		if (dialog1 is TLRPC.TLDialogFolder && dialog2 !is TLRPC.TLDialogFolder) {
 			return@Comparator -1
 		}
-		else if (dialog1 !is TL_dialogFolder && dialog2 is TL_dialogFolder) {
+		else if (dialog1 !is TLRPC.TLDialogFolder && dialog2 is TLRPC.TLDialogFolder) {
 			return@Comparator 1
 		}
 		else if (!dialog1!!.pinned && dialog2!!.pinned) {
@@ -850,7 +881,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					for (a in 0 until count) {
 						val key = data.readString(true) ?: continue
-						emojiSounds[key] = EmojiSound(data.readInt64(true), data.readInt64(true), data.readByteArray(true))
+						val fr = data.readByteArray(true) ?: continue
+						emojiSounds[key] = EmojiSound(data.readInt64(true), data.readInt64(true), fr)
 					}
 
 					data.cleanup()
@@ -936,13 +968,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 
 			if (needRequest) {
-				val req = TL_messages_getUnreadReactions()
+				val req = TLRPC.TLMessagesGetUnreadReactions()
 				req.peer = messagesController.getInputPeer(dialogId)
 				req.limit = 1
-				req.add_offset = count - 1
+				req.addOffset = count - 1
 
 				connectionsManager.sendRequest(req) { response, _ ->
-					val messageId = (response as? messages_Messages)?.messages?.firstOrNull()?.id ?: 0
+					val messageId = (response as? MessagesMessages)?.messages?.firstOrNull()?.id ?: 0
 
 					AndroidUtilities.runOnUIThread {
 						callback.accept(messageId)
@@ -1024,10 +1056,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		get() = if (userConfig.isPremium) reactionsInChatMax else 1
 
 	fun isPremiumUser(currentUser: User?): Boolean {
-		return !premiumLocked && currentUser?.premium == true
+		return !premiumLocked && (currentUser as? TLUser)?.premium == true
 	}
 
-	fun filterPremiumStickers(stickerSets: MutableList<TL_messages_stickerSet>): MutableList<TL_messages_stickerSet> {
+	fun filterPremiumStickers(stickerSets: MutableList<TLRPC.TLMessagesStickerSet>): MutableList<TLRPC.TLMessagesStickerSet> {
 		if (!premiumLocked) {
 			return stickerSets
 		}
@@ -1051,7 +1083,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		return stickerSets
 	}
 
-	fun filterPremiumStickers(stickerSet: TL_messages_stickerSet?): TL_messages_stickerSet? {
+	fun filterPremiumStickers(stickerSet: TLRPC.TLMessagesStickerSet?): TLRPC.TLMessagesStickerSet? {
 		@Suppress("NAME_SHADOWING") var stickerSet = stickerSet
 
 		if (!premiumLocked || stickerSet == null) {
@@ -1074,11 +1106,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				nativeByteBuffer.position(0)
 
-				val newStickersSet = TL_messages_stickerSet()
+				val newStickersSet = TLRPC.TLMessagesStickerSet()
 
 				nativeByteBuffer.readInt32(true)
 
 				newStickersSet.readParams(nativeByteBuffer, true)
+				newStickersSet.postDeserialize()
 
 				nativeByteBuffer.reuse()
 
@@ -1114,10 +1147,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		lastScheduledServerQueryTime.clear()
 	}
 
-	private fun sendLoadPeersRequest(req: TLObject, requests: ArrayList<TLObject>, pinnedDialogs: messages_Dialogs, pinnedRemoteDialogs: messages_Dialogs, users: ArrayList<User>, chats: ArrayList<Chat>, filtersToSave: ArrayList<DialogFilter>, filtersToDelete: SparseArray<DialogFilter>, filtersOrder: ArrayList<Int>, filterDialogRemovals: HashMap<Int, HashSet<Long>>, filterUserRemovals: HashMap<Int, HashSet<Long>>, filtersUnreadCounterReset: HashSet<Int>) {
+	private fun sendLoadPeersRequest(req: TLObject, requests: ArrayList<TLObject>, pinnedDialogs: TLRPC.MessagesDialogs, pinnedRemoteDialogs: TLRPC.MessagesDialogs, users: ArrayList<User>, chats: ArrayList<Chat>, filtersToSave: ArrayList<DialogFilter>, filtersToDelete: SparseArray<DialogFilter>, filtersOrder: ArrayList<Int>, filterDialogRemovals: HashMap<Int, HashSet<Long>>, filterUserRemovals: HashMap<Int, HashSet<Long>>, filtersUnreadCounterReset: HashSet<Int>) {
 		connectionsManager.sendRequest(req) { response, _ ->
 			when (response) {
-				is TL_messages_chats -> {
+				is TLRPC.TLMessagesChats -> {
 					chats.addAll(response.chats)
 				}
 
@@ -1129,7 +1162,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				is TL_messages_peerDialogs -> {
+				is TLRPC.TLMessagesPeerDialogs -> {
 					pinnedDialogs.dialogs.addAll(response.dialogs)
 					pinnedDialogs.messages.addAll(response.messages)
 
@@ -1149,14 +1182,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun loadFilterPeers(dialogsToLoadMap: HashMap<Long, InputPeer>, usersToLoadMap: HashMap<Long, InputPeer>, chatsToLoadMap: HashMap<Long, InputPeer>, pinnedDialogs: messages_Dialogs, pinnedRemoteDialogs: messages_Dialogs, users: ArrayList<User>, chats: ArrayList<Chat>, filtersToSave: ArrayList<DialogFilter>, filtersToDelete: SparseArray<DialogFilter>, filtersOrder: ArrayList<Int>, filterDialogRemovals: HashMap<Int, HashSet<Long>>, filterUserRemovals: HashMap<Int, HashSet<Long>>, filtersUnreadCounterReset: HashSet<Int>) {
+	fun loadFilterPeers(dialogsToLoadMap: HashMap<Long, InputPeer>, usersToLoadMap: HashMap<Long, InputPeer>, chatsToLoadMap: HashMap<Long, InputPeer>, pinnedDialogs: TLRPC.MessagesDialogs, pinnedRemoteDialogs: TLRPC.MessagesDialogs, users: ArrayList<User>, chats: ArrayList<Chat>, filtersToSave: ArrayList<DialogFilter>, filtersToDelete: SparseArray<DialogFilter>, filtersOrder: ArrayList<Int>, filterDialogRemovals: HashMap<Int, HashSet<Long>>, filterUserRemovals: HashMap<Int, HashSet<Long>>, filtersUnreadCounterReset: HashSet<Int>) {
 		Utilities.stageQueue.postRunnable {
 			val requests = ArrayList<TLObject>()
-			var req: TL_users_getUsers? = null
+			var req: TLRPC.TLUsersGetUsers? = null
 
 			for ((_, value) in usersToLoadMap) {
 				if (req == null) {
-					req = TL_users_getUsers()
+					req = TLRPC.TLUsersGetUsers()
 					requests.add(req)
 				}
 
@@ -1172,13 +1205,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				sendLoadPeersRequest(it, requests, pinnedDialogs, pinnedRemoteDialogs, users, chats, filtersToSave, filtersToDelete, filtersOrder, filterDialogRemovals, filterUserRemovals, filtersUnreadCounterReset)
 			}
 
-			var req2: TL_messages_getChats? = null
-			var req3: TL_channels_getChannels? = null
+			var req2: TLRPC.TLMessagesGetChats? = null
+			var req3: TLRPC.TLChannelsGetChannels? = null
 
 			for ((key, inputPeer) in chatsToLoadMap) {
-				if (inputPeer.chat_id != 0L) {
+				if (inputPeer is TLRPC.TLInputPeerChat && inputPeer.chatId != 0L) {
 					if (req2 == null) {
-						req2 = TL_messages_getChats()
+						req2 = TLRPC.TLMessagesGetChats()
 						requests.add(req2)
 					}
 
@@ -1189,9 +1222,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						req2 = null
 					}
 				}
-				else if (inputPeer.channel_id != 0L) {
+				else if (inputPeer.channelId != 0L) {
 					if (req3 == null) {
-						req3 = TL_channels_getChannels()
+						req3 = TLRPC.TLChannelsGetChannels()
 						requests.add(req3)
 					}
 
@@ -1212,15 +1245,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				sendLoadPeersRequest(it, requests, pinnedDialogs, pinnedRemoteDialogs, users, chats, filtersToSave, filtersToDelete, filtersOrder, filterDialogRemovals, filterUserRemovals, filtersUnreadCounterReset)
 			}
 
-			var req4: TL_messages_getPeerDialogs? = null
+			var req4: TLRPC.TLMessagesGetPeerDialogs? = null
 
 			for ((_, value) in dialogsToLoadMap) {
 				if (req4 == null) {
-					req4 = TL_messages_getPeerDialogs()
+					req4 = TLRPC.TLMessagesGetPeerDialogs()
 					requests.add(req4)
 				}
 
-				val inputDialogPeer = TL_inputDialogPeer()
+				val inputDialogPeer = TLRPC.TLInputDialogPeer()
 				inputDialogPeer.peer = value
 
 				req4.peers.add(inputDialogPeer)
@@ -1237,7 +1270,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun processLoadedDialogFilters(filters: ArrayList<DialogFilter>, pinnedDialogs: messages_Dialogs, pinnedRemoteDialogs: messages_Dialogs?, users: ArrayList<User>?, chats: ArrayList<Chat>?, encryptedChats: ArrayList<EncryptedChat>?, remote: Int) {
+	fun processLoadedDialogFilters(filters: ArrayList<DialogFilter>, pinnedDialogs: TLRPC.MessagesDialogs, pinnedRemoteDialogs: TLRPC.MessagesDialogs?, users: ArrayList<User>?, chats: ArrayList<Chat>?, encryptedChats: ArrayList<EncryptedChat>?, remote: Int) {
 		Utilities.stageQueue.postRunnable {
 			val newDialogsDict = LongSparseArray<Dialog>()
 			val encChatsDict: SparseArray<EncryptedChat?>?
@@ -1267,20 +1300,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val newMessages = mutableListOf<MessageObject>()
 
 			for (message in pinnedDialogs.messages) {
-				val peerId = message.peer_id
+				val peerId = message.peerId
 
 				if (peerId != null) {
-					if (peerId.channel_id != 0L) {
-						val chat = chatsDict[peerId.channel_id]
+					if (peerId.channelId != 0L) {
+						val chat = chatsDict[peerId.channelId]
 
 						if (chat != null && chat.left && (promoDialogId == 0L || promoDialogId != -chat.id)) {
 							continue
 						}
 					}
-					else if (peerId.chat_id != 0L) {
-						val chat = chatsDict[peerId.chat_id]
+					else if (peerId.chatId != 0L) {
+						val chat = chatsDict[peerId.chatId]
 
-						if (chat?.migrated_to != null) {
+						if ((chat as? TLChat)?.migratedTo != null) {
 							continue
 						}
 					}
@@ -1290,11 +1323,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				newMessages.add(messageObject)
 
-				// MARK: remove check for service messages
-				if (message !is TL_messageService) {
-					// MARK: but keep this line
-					newDialogMessage.put(messageObject.dialogId, messageObject)
-				}
+				newDialogMessage.put(messageObject.dialogId, messageObject)
 			}
 
 			fileLoader.checkMediaExistence(newMessages)
@@ -1316,11 +1345,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					promoDialog = d
 				}
 
-				if (d.last_message_date == 0) {
+				if (d.lastMessageDate == 0) {
 					val mess = newDialogMessage[d.id]
 
 					if (mess != null) {
-						d.last_message_date = mess.messageOwner!!.date
+						d.lastMessageDate = mess.messageOwner!!.date
 					}
 				}
 
@@ -1333,12 +1362,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 
-					channelsPts.put(-d.id, d.pts)
+					channelsPts.put(-d.id, (d as? TLDialog)?.pts ?: 0)
 				}
 				else if (d.id < 0) {
 					val chat = chatsDict[-d.id]
 
-					if (chat?.migrated_to != null) {
+					if (chat?.migratedTo != null) {
 						continue
 					}
 				}
@@ -1351,7 +1380,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					value = 0
 				}
 
-				dialogs_read_inbox_max[d.id] = max(value, d.read_inbox_max_id)
+				dialogs_read_inbox_max[d.id] = max(value, (d as? TLDialog)?.readInboxMaxId ?: 0)
 
 				value = dialogs_read_outbox_max[d.id]
 
@@ -1359,7 +1388,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					value = 0
 				}
 
-				dialogs_read_outbox_max[d.id] = max(value, d.read_outbox_max_id)
+				dialogs_read_outbox_max[d.id] = max(value, (d as? TLDialog)?.readOutboxMaxId ?: 0)
 			}
 
 			if (pinnedRemoteDialogs != null && pinnedRemoteDialogs.dialogs.isNotEmpty()) {
@@ -1367,27 +1396,28 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				for (a in pinnedRemoteDialogs.messages.indices) {
 					val message = pinnedRemoteDialogs.messages[a]
+					val action = message.action
 
-					if (message.action is TL_messageActionChatDeleteUser) {
-						val user = usersDict[message.action?.user_id ?: Long.MIN_VALUE]
+					if (action is TLRPC.TLMessageActionChatDeleteUser) {
+						val user = usersDict[action.userId] as? TLUser
 
 						if (user?.bot == true) {
-							message.reply_markup = TL_replyKeyboardHide()
+							message.replyMarkup = TLRPC.TLReplyKeyboardHide()
 							message.flags = message.flags or 64
 						}
 					}
 
-					if (message.action is TL_messageActionChatMigrateTo || message.action is TL_messageActionChannelCreate) {
+					if (action is TLRPC.TLMessageActionChatMigrateTo || action is TLRPC.TLMessageActionChannelCreate) {
 						message.unread = false
-						message.media_unread = false
+						message.mediaUnread = false
 					}
 					else {
 						val readMax = if (message.out) dialogs_read_outbox_max else dialogs_read_inbox_max
-						var value = readMax[message.dialog_id]
+						var value = readMax[message.dialogId]
 
 						if (value == null) {
-							value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-							readMax[message.dialog_id] = value
+							value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+							readMax[message.dialogId] = value
 						}
 
 						message.unread = value < message.id
@@ -1423,17 +1453,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						applyDialogsNotificationsSettings(pinnedRemoteDialogs.dialogs)
 					}
 
-					if (encryptedChats != null) {
-						for (a in encryptedChats.indices) {
-							val encryptedChat = encryptedChats[a]
-
-							if (encryptedChat is TL_encryptedChat && AndroidUtilities.getMyLayerVersion(encryptedChat.layer) < SecretChatHelper.CURRENT_SECRET_CHAT_LAYER) {
-								secretChatHelper.sendNotifyLayerMessage(encryptedChat, null)
-							}
-
-							putEncryptedChat(encryptedChat, true)
-						}
-					}
+//					if (encryptedChats != null) {
+//						for (a in encryptedChats.indices) {
+//							val encryptedChat = encryptedChats[a]
+//
+//							if (encryptedChat is TLRPC.TLEncryptedChat && AndroidUtilities.getMyLayerVersion(encryptedChat.layer) < SecretChatHelper.CURRENT_SECRET_CHAT_LAYER) {
+//								secretChatHelper.sendNotifyLayerMessage(encryptedChat, null)
+//							}
+//
+//							putEncryptedChat(encryptedChat, true)
+//						}
+//					}
 
 					for (a in 0 until newDialogsDict.size()) {
 						val key = newDialogsDict.keyAt(a)
@@ -1441,24 +1471,29 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val currentDialog = dialogs_dict[key]
 
 						if (pinnedRemoteDialogs != null && pinnedRemoteDialogs.dialogs.contains(value)) {
-							if (value.draft is TL_draftMessage) {
-								mediaDataController.saveDraft(value.id, 0, value.draft, null, false)
-							}
+							if (value is TLDialog) {
+								if (value.draft is TLRPC.TLDraftMessage) {
+									mediaDataController.saveDraft(value.id, 0, value.draft, null, false)
+								}
 
-							currentDialog?.notify_settings = value.notify_settings
+								(currentDialog as? TLDialog)?.notifySettings = value.notifySettings
+							}
 						}
 
 						val newMsg = newDialogMessage[value.id]
 
 						if (currentDialog == null) {
 							dialogs_dict.put(key, value)
-							dialogMessage.put(key, newMsg)
 
-							if (newMsg != null && newMsg.messageOwner?.peer_id?.channel_id == 0L) {
+							newMsg?.let {
+								dialogMessage.put(key, it)
+							}
+
+							if (newMsg != null && newMsg.messageOwner?.peerId?.channelId == 0L) {
 								dialogMessagesByIds.put(newMsg.id, newMsg)
 
-								if (newMsg.messageOwner?.random_id != 0L) {
-									dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+								if (newMsg.messageOwner?.randomId != 0L) {
+									dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 								}
 							}
 						}
@@ -1468,30 +1503,33 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							val oldMsg = dialogMessage[key]
 
-							if (oldMsg != null && oldMsg.deleted || oldMsg == null || currentDialog.top_message > 0) {
-								if (value.top_message >= currentDialog.top_message) {
+							if (oldMsg != null && oldMsg.deleted || oldMsg == null || currentDialog.topMessage > 0) {
+								if (value.topMessage >= currentDialog.topMessage) {
 									dialogs_dict.put(key, value)
-									dialogMessage.put(key, newMsg)
+
+									newMsg?.let {
+										dialogMessage.put(key, it)
+									}
 
 									if (oldMsg != null) {
-										if (oldMsg.messageOwner?.peer_id?.channel_id == 0L) {
+										if (oldMsg.messageOwner?.peerId?.channelId == 0L) {
 											dialogMessagesByIds.remove(oldMsg.id)
 										}
 
-										if (oldMsg.messageOwner?.random_id != 0L) {
-											dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.random_id)
+										if (oldMsg.messageOwner?.randomId != 0L) {
+											dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.randomId)
 										}
 									}
 
-									if (newMsg != null && newMsg.messageOwner?.peer_id?.channel_id == 0L) {
+									if (newMsg != null && newMsg.messageOwner?.peerId?.channelId == 0L) {
 										if (oldMsg != null && oldMsg.id == newMsg.id) {
 											newMsg.deleted = oldMsg.deleted
 										}
 
 										dialogMessagesByIds.put(newMsg.id, newMsg)
 
-										if (newMsg.messageOwner?.random_id != 0L) {
-											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+										if (newMsg.messageOwner?.randomId != 0L) {
+											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 										}
 									}
 								}
@@ -1499,9 +1537,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							else {
 								if (newMsg == null || newMsg.messageOwner!!.date > oldMsg.messageOwner!!.date) {
 									dialogs_dict.put(key, value)
-									dialogMessage.put(key, newMsg)
 
-									if (oldMsg.messageOwner?.peer_id?.channel_id == 0L) {
+									newMsg?.let {
+										dialogMessage.put(key, it)
+									}
+
+									if (oldMsg.messageOwner?.peerId?.channelId == 0L) {
 										dialogMessagesByIds.remove(oldMsg.id)
 									}
 
@@ -1510,17 +1551,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 											newMsg.deleted = oldMsg.deleted
 										}
 
-										if (newMsg.messageOwner?.peer_id?.channel_id == 0L) {
+										if (newMsg.messageOwner?.peerId?.channelId == 0L) {
 											dialogMessagesByIds.put(newMsg.id, newMsg)
 
-											if (newMsg.messageOwner?.random_id != 0L) {
-												dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+											if (newMsg.messageOwner?.randomId != 0L) {
+												dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 											}
 										}
 									}
 
-									if (oldMsg.messageOwner?.random_id != 0L) {
-										dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.random_id)
+									if (oldMsg.messageOwner?.randomId != 0L) {
+										dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.randomId)
 									}
 								}
 							}
@@ -1535,7 +1576,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					while (a < size) {
 						val dialog = dialogs_dict.valueAt(a)
 
-						if (deletingDialogs.indexOfKey(dialog!!.id) >= 0) {
+						if (deletingDialogs.indexOfKey(dialog.id) >= 0) {
 							a++
 							continue
 						}
@@ -1569,7 +1610,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		loadingSuggestedFilters = true
 
-		val req = TL_messages_getSuggestedDialogFilters()
+		val req = TLRPC.TLMessagesGetSuggestedDialogFilters()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
@@ -1578,7 +1619,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				if (response is Vector) {
 					response.objects.forEach {
-						if (it is TL_dialogFilterSuggested) {
+						if (it is TLRPC.TLDialogFilterSuggested) {
 							suggestedFilters.add(it)
 						}
 					}
@@ -1599,7 +1640,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			userConfig.saveConfig(false)
 		}
 
-		val req = TL_messages_getDialogFilters()
+		val req = TLRPC.TLMessagesGetDialogFilters()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			if (response is Vector) {
@@ -1685,11 +1726,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		loadingAppConfig = true
 
-		val req = TL_help_getAppConfig()
+		val req = TLRPC.TLHelpGetAppConfig()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TL_jsonObject) {
+				if (response is TLRPC.TLJsonObject) {
 					val editor = mainPreferences.edit()
 					var changed = false
 					var keelAliveChanged = false
@@ -1704,10 +1745,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 						when (value.key) {
 							"login_google_oauth_client_id" -> {
-								if (value.value is TL_jsonString) {
-									val str = (value.value as TL_jsonString).value
+								if (value.value is TLRPC.TLJsonString) {
+									val str = (value.value as? TLRPC.TLJsonString)?.value
 
-									if (BuildVars.GOOGLE_AUTH_CLIENT_ID != str) {
+									if (!str.isNullOrEmpty() && BuildVars.GOOGLE_AUTH_CLIENT_ID != str) {
 										BuildVars.GOOGLE_AUTH_CLIENT_ID = str
 										editor.putString("googleAuthClientId", BuildVars.GOOGLE_AUTH_CLIENT_ID)
 										changed = true
@@ -1716,14 +1757,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"premium_playmarket_direct_currency_list" -> {
-								if (value.value is TL_jsonArray) {
-									val arr = value.value as TL_jsonArray
+								if (value.value is TLRPC.TLJsonArray) {
+									val arr = value.value as TLRPC.TLJsonArray
 									val currencySet = HashSet<String>()
 
 									for (el in arr.value) {
-										if (el is TL_jsonString) {
+										if (el is TLRPC.TLJsonString) {
 											val currency = el.value
-											currencySet.add(currency)
+
+											if (!currency.isNullOrEmpty()) {
+												currencySet.add(currency)
+											}
 										}
 									}
 
@@ -1741,9 +1785,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"premium_purchase_blocked" -> {
-								if (value.value is TL_jsonBool) {
-									if (premiumLocked != (value.value as TL_jsonBool).value) {
-										premiumLocked = (value.value as TL_jsonBool).value
+								if (value.value is TLRPC.TLJsonBool) {
+									if (premiumLocked != (value.value as TLRPC.TLJsonBool).value) {
+										premiumLocked = (value.value as TLRPC.TLJsonBool).value
 										editor.putBoolean("premiumLocked", premiumLocked)
 										changed = true
 									}
@@ -1751,8 +1795,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"premium_bot_username" -> {
-								if (value.value is TL_jsonString) {
-									val string = (value.value as TL_jsonString).value
+								if (value.value is TLRPC.TLJsonString) {
+									val string = (value.value as TLRPC.TLJsonString).value
 
 									if (string != premiumBotUsername) {
 										premiumBotUsername = string
@@ -1763,8 +1807,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"premium_invoice_slug" -> {
-								if (value.value is TL_jsonString) {
-									val string = (value.value as TL_jsonString).value
+								if (value.value is TLRPC.TLJsonString) {
+									val string = (value.value as TLRPC.TLJsonString).value
 
 									if (string != premiumInvoiceSlug) {
 										premiumInvoiceSlug = string
@@ -1775,15 +1819,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"premium_promo_order" -> {
-								if (value.value is TL_jsonArray) {
-									val order = value.value as TL_jsonArray
+								if (value.value is TLRPC.TLJsonArray) {
+									val order = value.value as TLRPC.TLJsonArray
 									changed = savePremiumFeaturesPreviewOrder(editor, order.value)
 								}
 							}
 
 							"emojies_animated_zoom" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (animatedEmojisZoom.toDouble() != number.value) {
 										animatedEmojisZoom = number.value.toFloat()
@@ -1794,8 +1838,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"getfile_experimental_params" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != getfileExperimentalParams) {
 										getfileExperimentalParams = bool.value
@@ -1806,8 +1850,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_enabled" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != filtersEnabled) {
 										filtersEnabled = bool.value
@@ -1818,8 +1862,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_tooltip" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != showFiltersTooltip) {
 										showFiltersTooltip = bool.value
@@ -1831,8 +1875,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"youtube_pip" -> {
-								if (value.value is TL_jsonString) {
-									val string = value.value as TL_jsonString
+								if (value.value is TLRPC.TLJsonString) {
+									val string = value.value as TLRPC.TLJsonString
 
 									if (string.value != youtubePipType) {
 										youtubePipType = string.value
@@ -1843,8 +1887,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"background_connection" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != backgroundConnection) {
 										backgroundConnection = bool.value
@@ -1856,8 +1900,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"keep_alive_service" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != keepAliveService) {
 										keepAliveService = bool.value
@@ -1869,8 +1913,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"qr_login_camera" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != qrLoginCamera) {
 										qrLoginCamera = bool.value
@@ -1881,8 +1925,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"save_gifs_with_stickers" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != saveGifsWithStickers) {
 										saveGifsWithStickers = bool.value
@@ -1895,10 +1939,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							"url_auth_domains" -> {
 								val newDomains = mutableSetOf<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (domain in (value.value as TL_jsonArray).value) {
-										if (domain is TL_jsonString) {
-											newDomains.add(domain.value)
+								if (value.value is TLRPC.TLJsonArray) {
+									for (domain in (value.value as TLRPC.TLJsonArray).value) {
+										if (domain is TLRPC.TLJsonString) {
+											domain.value?.let {
+												newDomains.add(it)
+											}
 										}
 									}
 								}
@@ -1913,10 +1959,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							"autologin_domains" -> {
 								val newDomains = mutableSetOf<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (domain in (value.value as TL_jsonArray).value) {
-										if (domain is TL_jsonString) {
-											newDomains.add(domain.value)
+								if (value.value is TLRPC.TLJsonArray) {
+									for (domain in (value.value as TLRPC.TLJsonArray).value) {
+										if (domain is TLRPC.TLJsonString) {
+											domain.value?.let {
+												newDomains.add(it)
+											}
 										}
 									}
 								}
@@ -1929,8 +1977,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"autologin_token" -> {
-								if (value.value is TL_jsonString) {
-									val string = value.value as TL_jsonString
+								if (value.value is TLRPC.TLJsonString) {
+									val string = value.value as TLRPC.TLJsonString
 
 									if (string.value != autologinToken) {
 										autologinToken = string.value
@@ -1943,10 +1991,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							"emojies_send_dice" -> {
 								val newEmojies = mutableSetOf<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (emoji in (value.value as TL_jsonArray).value) {
-										if (emoji is TL_jsonString) {
-											newEmojies.add(emoji.value.replace("\uFE0F", ""))
+								if (value.value is TLRPC.TLJsonArray) {
+									for (emoji in (value.value as TLRPC.TLJsonArray).value) {
+										if (emoji is TLRPC.TLJsonString) {
+											emoji.value?.let {
+												newEmojies.add(it.replace("\uFE0F", ""))
+											}
 										}
 									}
 								}
@@ -1959,12 +2009,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"gif_search_emojies" -> {
-								val newEmojies = ArrayList<String>()
+								val newEmojies = mutableListOf<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (emoji in (value.value as TL_jsonArray).value) {
-										if (emoji is TL_jsonString) {
-											newEmojies.add(emoji.value.replace("\uFE0F", ""))
+								if (value.value is TLRPC.TLJsonArray) {
+									for (emoji in (value.value as TLRPC.TLJsonArray).value) {
+										if (emoji is TLRPC.TLJsonString) {
+											emoji.value?.let {
+												newEmojies.add(it.replace("\uFE0F", ""))
+											}
 										}
 									}
 								}
@@ -1991,16 +2043,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								try {
 									val newEmojies = HashMap<String, DiceFrameSuccess>()
 
-									if (value.value is TL_jsonObject) {
-										val jsonObject = value.value as TL_jsonObject
+									if (value.value is TLRPC.TLJsonObject) {
+										val jsonObject = value.value as TLRPC.TLJsonObject
 										var b = 0
 										val n2 = jsonObject.value.size
 
 										while (b < n2) {
 											val `val` = jsonObject.value[b]
 
-											if (`val`.value is TL_jsonObject) {
-												val jsonObject2 = `val`.value as TL_jsonObject
+											if (`val`.value is TLRPC.TLJsonObject) {
+												val jsonObject2 = `val`.value as TLRPC.TLJsonObject
 												var n = Int.MAX_VALUE
 												var f = Int.MAX_VALUE
 												var c = 0
@@ -2009,12 +2061,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 												while (c < n3) {
 													val val2 = jsonObject2.value[c]
 
-													if (val2.value is TL_jsonNumber) {
+													if (val2.value is TLRPC.TLJsonNumber) {
 														if ("value" == val2.key) {
-															n = (val2.value as TL_jsonNumber).value.toInt()
+															n = (val2.value as TLRPC.TLJsonNumber).value.toInt()
 														}
 														else if ("frame_start" == val2.key) {
-															f = (val2.value as TL_jsonNumber).value.toInt()
+															f = (val2.value as TLRPC.TLJsonNumber).value.toInt()
 														}
 													}
 
@@ -2022,7 +2074,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 												}
 
 												if (f != Int.MAX_VALUE && n != Int.MAX_VALUE) {
-													newEmojies[`val`.key.replace("\uFE0F", "")] = DiceFrameSuccess(f, n)
+													`val`.key?.replace("\uFE0F", "")?.let {
+														newEmojies[it] = DiceFrameSuccess(f, n)
+													}
 												}
 											}
 
@@ -2055,8 +2109,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"autoarchive_setting_available" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != autoarchiveAvailable) {
 										autoarchiveAvailable = bool.value
@@ -2067,8 +2121,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"groupcall_video_participants_max" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != groupCallVideoMaxParticipants.toDouble()) {
 										groupCallVideoMaxParticipants = number.value.toInt()
@@ -2079,8 +2133,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"chat_read_mark_size_threshold" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != chatReadMarkSizeThreshold.toDouble()) {
 										chatReadMarkSizeThreshold = number.value.toInt()
@@ -2091,8 +2145,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"chat_read_mark_expire_period" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != chatReadMarkExpirePeriod.toDouble()) {
 										chatReadMarkExpirePeriod = number.value.toInt()
@@ -2103,8 +2157,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"inapp_update_check_delay" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != updateCheckDelay.toDouble()) {
 										updateCheckDelay = number.value.toInt()
@@ -2112,8 +2166,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										changed = true
 									}
 								}
-								else if (value.value is TL_jsonString) {
-									val number = value.value as TL_jsonString
+								else if (value.value is TLRPC.TLJsonString) {
+									val number = value.value as TLRPC.TLJsonString
 									val delay = Utilities.parseInt(number.value)
 
 									if (delay != updateCheckDelay) {
@@ -2125,8 +2179,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"round_video_encoding" -> {
-								if (value.value is TL_jsonObject) {
-									val jsonObject = value.value as TL_jsonObject
+								if (value.value is TLRPC.TLJsonObject) {
+									val jsonObject = value.value as TLRPC.TLJsonObject
 									var b = 0
 									val n2 = jsonObject.value.size
 
@@ -2135,8 +2189,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 										when (value2.key) {
 											"diameter" -> {
-												if (value2.value is TL_jsonNumber) {
-													val number = value2.value as TL_jsonNumber
+												if (value2.value is TLRPC.TLJsonNumber) {
+													val number = value2.value as TLRPC.TLJsonNumber
 
 													if (number.value != roundVideoSize.toDouble()) {
 														roundVideoSize = number.value.toInt()
@@ -2147,8 +2201,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 											}
 
 											"video_bitrate" -> {
-												if (value2.value is TL_jsonNumber) {
-													val number = value2.value as TL_jsonNumber
+												if (value2.value is TLRPC.TLJsonNumber) {
+													val number = value2.value as TLRPC.TLJsonNumber
 
 													if (number.value != roundVideoBitrate.toDouble()) {
 														roundVideoBitrate = number.value.toInt()
@@ -2159,8 +2213,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 											}
 
 											"audio_bitrate" -> {
-												if (value2.value is TL_jsonNumber) {
-													val number = value2.value as TL_jsonNumber
+												if (value2.value is TLRPC.TLJsonNumber) {
+													val number = value2.value as TLRPC.TLJsonNumber
 
 													if (number.value != roundAudioBitrate.toDouble()) {
 														roundAudioBitrate = number.value.toInt()
@@ -2177,8 +2231,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"stickers_emoji_suggest_only_api" -> {
-								if (value.value is TL_jsonBool) {
-									val bool = value.value as TL_jsonBool
+								if (value.value is TLRPC.TLJsonBool) {
+									val bool = value.value as TLRPC.TLJsonBool
 
 									if (bool.value != suggestStickersApiOnly) {
 										suggestStickersApiOnly = bool.value
@@ -2191,10 +2245,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							"export_regex" -> {
 								val newExport = HashSet<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (regex in (value.value as TL_jsonArray).value) {
-										if (regex is TL_jsonString) {
-											newExport.add(regex.value)
+								if (value.value is TLRPC.TLJsonArray) {
+									for (regex in (value.value as TLRPC.TLJsonArray).value) {
+										if (regex is TLRPC.TLJsonString) {
+											regex.value?.let {
+												newExport.add(it)
+											}
 										}
 									}
 								}
@@ -2209,10 +2265,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							"export_group_urls" -> {
 								val newExport = mutableSetOf<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (url in (value.value as TL_jsonArray).value) {
-										if (url is TL_jsonString) {
-											newExport.add(url.value)
+								if (value.value is TLRPC.TLJsonArray) {
+									for (url in (value.value as TLRPC.TLJsonArray).value) {
+										if (url is TLRPC.TLJsonString) {
+											url.value?.let {
+												newExport.add(it)
+											}
 										}
 									}
 								}
@@ -2227,10 +2285,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							"export_private_urls" -> {
 								val newExport = mutableSetOf<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (url in (value.value as TL_jsonArray).value) {
-										if (url is TL_jsonString) {
-											newExport.add(url.value)
+								if (value.value is TLRPC.TLJsonArray) {
+									for (url in (value.value as TLRPC.TLJsonArray).value) {
+										if (url is TLRPC.TLJsonString) {
+											url.value?.let {
+												newExport.add(it)
+											}
 										}
 									}
 								}
@@ -2245,10 +2305,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							"pending_suggestions" -> {
 								val newSuggestions = mutableSetOf<String>()
 
-								if (value.value is TL_jsonArray) {
-									for (suggestion in (value.value as TL_jsonArray).value) {
-										if (suggestion is TL_jsonString) {
-											newSuggestions.add(suggestion.value)
+								if (value.value is TLRPC.TLJsonArray) {
+									for (suggestion in (value.value as TLRPC.TLJsonArray).value) {
+										if (suggestion is TLRPC.TLJsonString) {
+											suggestion.value?.let {
+												newSuggestions.add(it)
+											}
 										}
 									}
 								}
@@ -2265,16 +2327,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								try {
 									val newEmojies = HashMap<String, EmojiSound>()
 
-									if (value.value is TL_jsonObject) {
-										val jsonObject = value.value as TL_jsonObject
+									if (value.value is TLRPC.TLJsonObject) {
+										val jsonObject = value.value as TLRPC.TLJsonObject
 										var b = 0
 										val n2 = jsonObject.value.size
 
 										while (b < n2) {
 											val `val` = jsonObject.value[b]
 
-											if (`val`.value is TL_jsonObject) {
-												val jsonObject2 = `val`.value as TL_jsonObject
+											if (`val`.value is TLRPC.TLJsonObject) {
+												val jsonObject2 = `val`.value as TLRPC.TLJsonObject
 												var i: Long = 0
 												var ah: Long = 0
 												var fr: String? = null
@@ -2284,18 +2346,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 												while (c < n3) {
 													val val2 = jsonObject2.value[c]
 
-													if (val2.value is TL_jsonString) {
+													if (val2.value is TLRPC.TLJsonString) {
 														when (val2.key) {
 															"id" -> {
-																i = Utilities.parseLong((val2.value as TL_jsonString).value)
+																i = Utilities.parseLong((val2.value as TLRPC.TLJsonString).value)
 															}
 
 															"access_hash" -> {
-																ah = Utilities.parseLong((val2.value as TL_jsonString).value)
+																ah = Utilities.parseLong((val2.value as TLRPC.TLJsonString).value)
 															}
 
 															"file_reference_base64" -> {
-																fr = (val2.value as TL_jsonString).value
+																fr = (val2.value as TLRPC.TLJsonString).value
 															}
 														}
 													}
@@ -2304,7 +2366,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 												}
 
 												if (i != 0L && ah != 0L && fr != null) {
-													newEmojies[`val`.key.replace("\uFE0F", "")] = EmojiSound(i, ah, fr)
+													`val`.key?.replace("\uFE0F", "")?.let {
+														newEmojies[it] = EmojiSound(i, ah, fr)
+													}
 												}
 											}
 
@@ -2338,8 +2402,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"ringtone_size_max" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != ringtoneSizeMax.toDouble()) {
 										ringtoneSizeMax = number.value.toInt()
@@ -2350,8 +2414,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"ringtone_duration_max" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != ringtoneDurationMax.toDouble()) {
 										ringtoneDurationMax = number.value.toInt()
@@ -2362,8 +2426,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"channels_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != channelsLimitDefault.toDouble()) {
 										channelsLimitDefault = number.value.toInt()
@@ -2374,8 +2438,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"channels_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != channelsLimitPremium.toDouble()) {
 										channelsLimitPremium = number.value.toInt()
@@ -2386,8 +2450,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"saved_gifs_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != savedGifsLimitDefault.toDouble()) {
 										savedGifsLimitDefault = number.value.toInt()
@@ -2398,8 +2462,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"saved_gifs_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != savedGifsLimitPremium.toDouble()) {
 										savedGifsLimitPremium = number.value.toInt()
@@ -2410,8 +2474,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"stickers_faved_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != stickersFavedLimitDefault.toDouble()) {
 										stickersFavedLimitDefault = number.value.toInt()
@@ -2422,8 +2486,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"stickers_faved_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != stickersFavedLimitPremium.toDouble()) {
 										stickersFavedLimitPremium = number.value.toInt()
@@ -2434,8 +2498,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != dialogFiltersLimitDefault.toDouble()) {
 										dialogFiltersLimitDefault = number.value.toInt()
@@ -2446,8 +2510,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != dialogFiltersLimitPremium.toDouble()) {
 										dialogFiltersLimitPremium = number.value.toInt()
@@ -2458,8 +2522,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_chats_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != dialogFiltersChatsLimitDefault.toDouble()) {
 										dialogFiltersChatsLimitDefault = number.value.toInt()
@@ -2470,8 +2534,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_chats_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != dialogFiltersChatsLimitPremium.toDouble()) {
 										dialogFiltersChatsLimitPremium = number.value.toInt()
@@ -2482,8 +2546,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_pinned_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != dialogFiltersPinnedLimitDefault.toDouble()) {
 										dialogFiltersPinnedLimitDefault = number.value.toInt()
@@ -2494,8 +2558,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"dialog_filters_pinned_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != dialogFiltersPinnedLimitPremium.toDouble()) {
 										dialogFiltersPinnedLimitPremium = number.value.toInt()
@@ -2506,8 +2570,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"upload_max_fileparts_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != uploadMaxFileParts.toDouble()) {
 										uploadMaxFileParts = number.value.toInt()
@@ -2518,8 +2582,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"upload_max_fileparts_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != uploadMaxFilePartsPremium.toDouble()) {
 										uploadMaxFilePartsPremium = number.value.toInt()
@@ -2530,8 +2594,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"channels_public_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != publicLinksLimitDefault.toDouble()) {
 										publicLinksLimitDefault = number.value.toInt()
@@ -2542,8 +2606,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"channels_public_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != publicLinksLimitPremium.toDouble()) {
 										publicLinksLimitPremium = number.value.toInt()
@@ -2554,8 +2618,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"caption_length_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != captionLengthLimitDefault.toDouble()) {
 										captionLengthLimitDefault = number.value.toInt()
@@ -2566,8 +2630,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"caption_length_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != captionLengthLimitPremium.toDouble()) {
 										captionLengthLimitPremium = number.value.toInt()
@@ -2578,8 +2642,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"about_length_limit_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != aboutLengthLimitDefault.toDouble()) {
 										aboutLengthLimitDefault = number.value.toInt()
@@ -2590,8 +2654,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"about_length_limit_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != aboutLengthLimitPremium.toDouble()) {
 										aboutLengthLimitPremium = number.value.toInt()
@@ -2602,8 +2666,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"reactions_user_max_default" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != reactionsUserMaxDefault.toDouble()) {
 										reactionsUserMaxDefault = number.value.toInt()
@@ -2614,8 +2678,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"reactions_user_max_premium" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != reactionsUserMaxPremium.toDouble()) {
 										reactionsUserMaxPremium = number.value.toInt()
@@ -2626,8 +2690,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							"reactions_in_chat_max" -> {
-								if (value.value is TL_jsonNumber) {
-									val number = value.value as TL_jsonNumber
+								if (value.value is TLRPC.TLJsonNumber) {
+									val number = value.value as TLRPC.TLJsonNumber
 
 									if (number.value != reactionsInChatMax.toDouble()) {
 										reactionsInChatMax = number.value.toInt()
@@ -2642,7 +2706,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 
 					if (changed) {
-						editor.commit()
+						editor.apply()
 					}
 
 					if (keelAliveChanged) {
@@ -2659,10 +2723,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 	private fun resetAppConfig() {
 		getfileExperimentalParams = false
-		mainPreferences.edit().remove("getfileExperimentalParams").commit()
+		mainPreferences.edit { remove("getfileExperimentalParams") }
 	}
 
-	private fun savePremiumFeaturesPreviewOrder(editor: SharedPreferences.Editor, value: ArrayList<JSONValue>): Boolean {
+	private fun savePremiumFeaturesPreviewOrder(editor: SharedPreferences.Editor, value: List<TLRPC.JSONValue>): Boolean {
 		val stringBuilder = StringBuilder()
 
 		premiumFeaturesTypesToPosition.clear()
@@ -2670,8 +2734,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		for (i in value.indices) {
 			var s: String? = null
 
-			if (value[i] is TL_jsonString) {
-				s = (value[i] as TL_jsonString).value
+			if (value[i] is TLRPC.TLJsonString) {
+				s = (value[i] as TLRPC.TLJsonString).value
 			}
 
 			if (s != null) {
@@ -2724,9 +2788,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		if (did == 0L) {
 			if (pendingSuggestions?.remove(suggestion) == true) {
-				val editor = mainPreferences.edit()
-				editor.putStringSet("pendingSuggestions", pendingSuggestions)
-				editor.commit()
+				mainPreferences.edit {
+					putStringSet("pendingSuggestions", pendingSuggestions)
+				}
 
 				notificationCenter.postNotificationName(NotificationCenter.newSuggestionsAvailable)
 			}
@@ -2735,11 +2799,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		val req = TL_help_dismissSuggestion()
+		val req = TLRPC.TLHelpDismissSuggestion()
 		req.suggestion = suggestion
 
 		if (did == 0L) {
-			req.peer = TL_inputPeerEmpty()
+			req.peer = TLRPC.TLInputPeerEmpty()
 		}
 		else {
 			req.peer = getInputPeer(did)
@@ -2748,26 +2812,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		connectionsManager.sendRequest(req)
 	}
 
-	fun updateConfig(config: TL_config) {
+	fun updateConfig(config: TLRPC.TLConfig) {
 		AndroidUtilities.runOnUIThread {
 			downloadController.loadAutoDownloadConfig(false)
 
 			loadAppConfig()
 
 			remoteConfigLoaded = true
-			maxMegagroupCount = config.megagroup_size_max
-			maxGroupCount = config.chat_size_max
-			maxEditTime = config.edit_time_limit
-			ratingDecay = config.rating_e_decay
-			maxRecentGifsCount = config.saved_gifs_limit
-			maxRecentStickersCount = config.stickers_recent_limit
-			maxFaveStickersCount = config.stickers_faved_limit
-			revokeTimeLimit = config.revoke_time_limit
-			revokeTimePmLimit = config.revoke_pm_time_limit
-			canRevokePmInbox = config.revoke_pm_inbox
-			linkPrefix = config.me_url_prefix ?: ""
+			maxMegagroupCount = config.megagroupSizeMax
+			maxGroupCount = config.chatSizeMax
+			maxEditTime = config.editTimeLimit
+			ratingDecay = config.ratingEDecay
+			maxRecentGifsCount = config.savedGifsLimit
+			maxRecentStickersCount = config.stickersRecentLimit
+			maxFaveStickersCount = config.stickersFavedLimit
+			revokeTimeLimit = config.revokeTimeLimit
+			revokeTimePmLimit = config.revokePmTimeLimit
+			canRevokePmInbox = config.revokePmInbox
+			linkPrefix = config.meUrlPrefix ?: ""
 
-			val forceTryIpV6 = config.force_try_ipv6
+			val forceTryIpV6 = config.forceTryIpv6
 
 			if (linkPrefix.endsWith("/")) {
 				linkPrefix = linkPrefix.substring(0, linkPrefix.length - 1)
@@ -2780,36 +2844,36 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				linkPrefix = linkPrefix.substring(7)
 			}
 
-			callReceiveTimeout = config.call_receive_timeout_ms
-			callRingTimeout = config.call_ring_timeout_ms
-			callConnectTimeout = config.call_connect_timeout_ms
-			callPacketTimeout = config.call_packet_timeout_ms
-			maxPinnedDialogsCount = config.pinned_dialogs_count_max
-			maxFolderPinnedDialogsCount = config.pinned_infolder_count_max
-			maxMessageLength = config.message_length_max
-			maxCaptionLength = config.caption_length_max
-			preloadFeaturedStickers = config.preload_featured_stickers
+			callReceiveTimeout = config.callReceiveTimeoutMs
+			callRingTimeout = config.callRingTimeoutMs
+			callConnectTimeout = config.callConnectTimeoutMs
+			callPacketTimeout = config.callPacketTimeoutMs
+			maxPinnedDialogsCount = config.pinnedDialogsCountMax
+			maxFolderPinnedDialogsCount = config.pinnedInfolderCountMax
+			maxMessageLength = config.messageLengthMax
+			maxCaptionLength = config.captionLengthMax
+			preloadFeaturedStickers = config.preloadFeaturedStickers
 
-			if (config.venue_search_username != null) {
-				venueSearchBot = config.venue_search_username
+			if (config.venueSearchUsername != null) {
+				venueSearchBot = config.venueSearchUsername
 			}
 
-			if (config.gif_search_username != null) {
-				gifSearchBot = config.gif_search_username
+			if (config.gifSearchUsername != null) {
+				gifSearchBot = config.gifSearchUsername
 			}
 
 			if (imageSearchBot != null) {
-				imageSearchBot = config.img_search_username
+				imageSearchBot = config.imgSearchUsername
 			}
 
-			blockedCountry = config.blocked_mode
-			dcDomainName = config.dc_txt_domain_name
-			webFileDatacenterId = config.webfile_dc_id
+			blockedCountry = config.blockedMode
+			dcDomainName = config.dcTxtDomainName
+			webFileDatacenterId = config.webfileDcId
 
-			if (config.suggested_lang_code != null) {
-				val loadRemote = suggestedLangCode == null || suggestedLangCode != config.suggested_lang_code
+			if (config.suggestedLangCode != null) {
+				val loadRemote = suggestedLangCode == null || suggestedLangCode != config.suggestedLangCode
 
-				suggestedLangCode = config.suggested_lang_code
+				suggestedLangCode = config.suggestedLangCode
 
 				if (loadRemote) {
 					LocaleController.getInstance().loadRemoteLanguages(currentAccount)
@@ -2820,17 +2884,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			// Theme.loadRemoteThemes(currentAccount, false)
 			// Theme.checkCurrentRemoteTheme(false)
 
-			if (config.static_maps_provider == null) {
-				config.static_maps_provider = "ello"
+			if (config.staticMapsProvider == null) {
+				config.staticMapsProvider = "ello"
 			}
 
 			mapKey = null
 			mapProvider = MAP_PROVIDER_ELLO
 			availableMapProviders = 0
 
-			FileLog.d("map providers = " + config.static_maps_provider)
+			FileLog.d("map providers = " + config.staticMapsProvider)
 
-			val providers = config.static_maps_provider?.split(",".toRegex())?.dropLastWhile { it.isEmpty() }?.toTypedArray()
+			val providers = config.staticMapsProvider?.split(",".toRegex())?.dropLastWhile { it.isEmpty() }?.toTypedArray()
 
 			providers?.forEachIndexed { index, provider ->
 				val mapArgs = provider.split("\\+".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
@@ -2879,93 +2943,91 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			val editor = mainPreferences.edit()
-			editor.putBoolean("remoteConfigLoaded", remoteConfigLoaded)
-			editor.putInt("maxGroupCount", maxGroupCount)
-			editor.putInt("maxMegagroupCount", maxMegagroupCount)
-			editor.putInt("maxEditTime", maxEditTime)
-			editor.putInt("ratingDecay", ratingDecay)
-			editor.putInt("maxRecentGifsCount", maxRecentGifsCount)
-			editor.putInt("maxRecentStickersCount", maxRecentStickersCount)
-			editor.putInt("maxFaveStickersCount", maxFaveStickersCount)
-			editor.putInt("callReceiveTimeout", callReceiveTimeout)
-			editor.putInt("callRingTimeout", callRingTimeout)
-			editor.putInt("callConnectTimeout", callConnectTimeout)
-			editor.putInt("callPacketTimeout", callPacketTimeout)
-			editor.putString("linkPrefix", linkPrefix)
-			editor.putInt("maxPinnedDialogsCount", maxPinnedDialogsCount)
-			editor.putInt("maxFolderPinnedDialogsCount", maxFolderPinnedDialogsCount)
-			editor.putInt("maxMessageLength", maxMessageLength)
-			editor.putInt("maxCaptionLength", maxCaptionLength)
-			editor.putBoolean("preloadFeaturedStickers", preloadFeaturedStickers)
-			editor.putInt("revokeTimeLimit", revokeTimeLimit)
-			editor.putInt("revokeTimePmLimit", revokeTimePmLimit)
-			editor.putInt("mapProvider", mapProvider)
+			mainPreferences.edit {
+				putBoolean("remoteConfigLoaded", remoteConfigLoaded)
+				putInt("maxGroupCount", maxGroupCount)
+				putInt("maxMegagroupCount", maxMegagroupCount)
+				putInt("maxEditTime", maxEditTime)
+				putInt("ratingDecay", ratingDecay)
+				putInt("maxRecentGifsCount", maxRecentGifsCount)
+				putInt("maxRecentStickersCount", maxRecentStickersCount)
+				putInt("maxFaveStickersCount", maxFaveStickersCount)
+				putInt("callReceiveTimeout", callReceiveTimeout)
+				putInt("callRingTimeout", callRingTimeout)
+				putInt("callConnectTimeout", callConnectTimeout)
+				putInt("callPacketTimeout", callPacketTimeout)
+				putString("linkPrefix", linkPrefix)
+				putInt("maxPinnedDialogsCount", maxPinnedDialogsCount)
+				putInt("maxFolderPinnedDialogsCount", maxFolderPinnedDialogsCount)
+				putInt("maxMessageLength", maxMessageLength)
+				putInt("maxCaptionLength", maxCaptionLength)
+				putBoolean("preloadFeaturedStickers", preloadFeaturedStickers)
+				putInt("revokeTimeLimit", revokeTimeLimit)
+				putInt("revokeTimePmLimit", revokeTimePmLimit)
+				putInt("mapProvider", mapProvider)
 
-			if (mapKey != null) {
-				editor.putString("pk", mapKey)
+				if (mapKey != null) {
+					putString("pk", mapKey)
+				}
+				else {
+					remove("pk")
+				}
+
+				putBoolean("canRevokePmInbox", canRevokePmInbox)
+				putBoolean("blockedCountry", blockedCountry)
+				putString("venueSearchBot", venueSearchBot)
+				putString("gifSearchBot", gifSearchBot)
+				putString("imageSearchBot", imageSearchBot)
+				putString("dcDomainName2", dcDomainName)
+				putInt("webFileDatacenterId", webFileDatacenterId)
+				putString("suggestedLangCode", suggestedLangCode)
+				putBoolean("forceTryIpV6", forceTryIpV6)
+
 			}
-			else {
-				editor.remove("pk")
-			}
-
-			editor.putBoolean("canRevokePmInbox", canRevokePmInbox)
-			editor.putBoolean("blockedCountry", blockedCountry)
-			editor.putString("venueSearchBot", venueSearchBot)
-			editor.putString("gifSearchBot", gifSearchBot)
-			editor.putString("imageSearchBot", imageSearchBot)
-			editor.putString("dcDomainName2", dcDomainName)
-			editor.putInt("webFileDatacenterId", webFileDatacenterId)
-			editor.putString("suggestedLangCode", suggestedLangCode)
-			editor.putBoolean("forceTryIpV6", forceTryIpV6)
-
-			editor.commit()
 
 			connectionsManager.setForceTryIpV6(forceTryIpV6)
 
-			LocaleController.getInstance().checkUpdateForCurrentRemoteLocale(currentAccount, config.lang_pack_version, config.base_lang_pack_version)
+			LocaleController.getInstance().checkUpdateForCurrentRemoteLocale(currentAccount, config.langPackVersion, config.baseLangPackVersion)
 
 			notificationCenter.postNotificationName(NotificationCenter.configLoaded)
 		}
 	}
 
 	fun addSupportUser() {
-		var user = TL_userForeign_old2()
-		// user.phone = "333";
+		var user = TLUser()
 		user.id = 333000
-		user.first_name = "Ello"
-		user.last_name = ""
+		user.firstName = "Ello"
+		user.lastName = ""
 		user.status = null
-		user.photo = TL_userProfilePhotoEmpty()
+		user.photo = TLRPC.TLUserProfilePhotoEmpty()
 
 		putUser(user, true)
 
-		user = TL_userForeign_old2()
-		// user.phone = "42777";
+		user = TLUser()
 		user.id = 777000
 		user.verified = true
-		user.first_name = "Ello"
-		user.last_name = "Notifications"
+		user.firstName = "Ello"
+		user.lastName = "Notifications"
 		user.status = null
-		user.photo = TL_userProfilePhotoEmpty()
+		user.photo = TLRPC.TLUserProfilePhotoEmpty()
 
 		putUser(user, true)
 	}
 
 	fun getInputUser(user: User?): InputUser {
-		if (user == null) {
-			return TL_inputUserEmpty()
+		if (user !is TLUser) {
+			return TLRPC.TLInputUserEmpty()
 		}
 
 		val inputUser: InputUser
 
 		if (user.id == userConfig.getClientUserId()) {
-			inputUser = TL_inputUserSelf()
+			inputUser = TLRPC.TLInputUserSelf()
 		}
 		else {
-			inputUser = TL_inputUser()
-			inputUser.user_id = user.id
-			inputUser.access_hash = user.access_hash
+			inputUser = TLRPC.TLInputUser()
+			inputUser.userId = user.id
+			inputUser.accessHash = user.accessHash
 		}
 
 		return inputUser
@@ -2973,16 +3035,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 	fun getInputUser(peer: InputPeer?): InputUser {
 		if (peer == null) {
-			return TL_inputUserEmpty()
+			return TLRPC.TLInputUserEmpty()
 		}
 
-		if (peer is TL_inputPeerSelf) {
-			return TL_inputUserSelf()
+		if (peer is TLRPC.TLInputPeerSelf) {
+			return TLRPC.TLInputUserSelf()
 		}
 
-		val inputUser = TL_inputUser()
-		inputUser.user_id = peer.user_id
-		inputUser.access_hash = peer.access_hash
+		val inputUser = TLRPC.TLInputUser()
+		inputUser.userId = peer.userId
+		inputUser.accessHash = peer.accessHash
 
 		return inputUser
 	}
@@ -2991,35 +3053,42 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		return getInputUser(getUser(userId))
 	}
 
-	fun getInputChannel(chatId: Long?): InputChannel {
+	fun getInputChannel(chatId: Long?): TLRPC.InputChannel {
 		return getInputChannel(getChat(chatId))
 	}
 
-	fun getInputPeer(peer: Peer?): InputPeer {
+	fun getInputPeer(peer: TLRPC.Peer?): InputPeer {
 		val inputPeer: InputPeer
 
-		if (peer is TL_peerChat) {
-			inputPeer = TL_inputPeerChat()
-			inputPeer.chat_id = peer.chat_id
-		}
-		else if (peer is TL_peerChannel) {
-			inputPeer = TL_inputPeerChannel()
-			inputPeer.channel_id = peer.channel_id
-
-			val chat = getChat(peer.channel_id)
-
-			if (chat != null) {
-				inputPeer.access_hash = chat.access_hash
+		when (peer) {
+			is TLRPC.TLPeerChat -> {
+				inputPeer = TLRPC.TLInputPeerChat().also {
+					it.chatId = peer.chatId
+				}
 			}
-		}
-		else {
-			inputPeer = TL_inputPeerUser()
-			inputPeer.user_id = peer?.user_id ?: 0
 
-			val user = getUser(peer?.user_id)
+			is TLRPC.TLPeerChannel -> {
+				inputPeer = TLRPC.TLInputPeerChannel().also {
+					it.channelId = peer.channelId
 
-			if (user != null) {
-				inputPeer.access_hash = user.access_hash
+					val chat = getChat(peer.channelId)
+
+					if (chat != null) {
+						it.accessHash = chat.accessHash
+					}
+				}
+			}
+
+			else -> {
+				inputPeer = TLRPC.TLInputPeerUser().also {
+					it.userId = peer?.userId ?: 0
+
+					val user = getUser(peer?.userId) as? TLUser
+
+					if (user != null) {
+						it.accessHash = user.accessHash
+					}
+				}
 			}
 		}
 
@@ -3033,47 +3102,49 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val chat = getChat(-id)
 
 			if (ChatObject.isChannel(chat)) {
-				inputPeer = TL_inputPeerChannel()
-				inputPeer.channel_id = -id
-				inputPeer.access_hash = chat.access_hash
+				inputPeer = TLRPC.TLInputPeerChannel()
+				inputPeer.channelId = -id
+				inputPeer.accessHash = chat.accessHash
 			}
 			else {
-				inputPeer = TL_inputPeerChat()
-				inputPeer.chat_id = -id
+				inputPeer = TLRPC.TLInputPeerChat()
+				inputPeer.chatId = -id
 			}
 		}
 		else {
-			val user = getUser(id)
-
-			inputPeer = TL_inputPeerUser()
-			inputPeer.user_id = id
+			val user = getUser(id) as? TLUser
 
 			if (user != null) {
-				inputPeer.access_hash = user.access_hash
+				inputPeer = TLRPC.TLInputPeerUser()
+				inputPeer.userId = id
+				inputPeer.accessHash = user.accessHash
+			}
+			else {
+				inputPeer = TLRPC.TLInputPeerEmpty()
 			}
 		}
 
 		return inputPeer
 	}
 
-	fun getPeer(id: Long): Peer {
-		val inputPeer: Peer
+	fun getPeer(id: Long): TLRPC.Peer {
+		val inputPeer: TLRPC.Peer
 
 		if (id < 0) {
 			val chat = getChat(-id)
 
-			if (chat is TL_channel || chat is TL_channelForbidden) {
-				inputPeer = TL_peerChannel()
-				inputPeer.channel_id = -id
+			if (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden) {
+				inputPeer = TLRPC.TLPeerChannel()
+				inputPeer.channelId = -id
 			}
 			else {
-				inputPeer = TL_peerChat()
-				inputPeer.chat_id = -id
+				inputPeer = TLRPC.TLPeerChat()
+				inputPeer.chatId = -id
 			}
 		}
 		else {
-			inputPeer = TL_peerUser()
-			inputPeer.user_id = id
+			inputPeer = TLRPC.TLPeerUser()
+			inputPeer.userId = id
 		}
 
 		return inputPeer
@@ -3086,13 +3157,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				val file = args[1] as InputFile
 
 				if (uploadingAvatar != null && uploadingAvatar == location) {
-					val req = TL_photos_uploadProfilePhoto()
+					val req = TLRPC.TLPhotosUploadProfilePhoto()
 					req.file = file
 					req.flags = req.flags or 1
 
 					connectionsManager.sendRequest(req) { response, error ->
 						if (error == null) {
-							var user = getUser(userConfig.getClientUserId())
+							var user = getUser(userConfig.getClientUserId()) as? TLUser
 
 							if (user == null) {
 								user = userConfig.getCurrentUser()
@@ -3106,28 +3177,27 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								return@sendRequest
 							}
 
-							val photo = response as? TL_photos_photo
-							val sizes = photo?.photo?.sizes
+							val photo = response as? TLRPC.TLPhotosPhoto
+							val sizes = (photo?.photo as? TLPhoto)?.sizes
 							val smallSize = FileLoader.getClosestPhotoSizeWithSize(sizes, 100)
 							val bigSize = FileLoader.getClosestPhotoSizeWithSize(sizes, 1000)
 
-							user.photo = TL_userProfilePhoto()
-							user.photo?.photo_id = photo?.photo?.id ?: 0L
+							user.photo = TLRPC.TLUserProfilePhoto().also {
+								it.photoId = photo?.photo?.id ?: 0L
+								it.dcId = (photo?.photo as? TLPhoto)?.dcId ?: 0
 
-							if (smallSize != null) {
-								user.photo?.photo_small = smallSize.location
-							}
+								smallSize?.location?.let { location ->
+									it.photoSmall = location
+								}
 
-							if (bigSize != null) {
-								user.photo?.photo_big = bigSize.location
+								bigSize?.location?.let { location ->
+									it.photoBig = location
+								}
 							}
 
 							messagesStorage.clearUserPhotos(user.id)
 
-							val users = ArrayList<User>()
-							users.add(user)
-
-							messagesStorage.putUsersAndChats(users, null, false, true)
+							messagesStorage.putUsersAndChats(listOf(user), null, false, true)
 
 							AndroidUtilities.runOnUIThread {
 								notificationCenter.postNotificationName(NotificationCenter.mainUserInfoChanged)
@@ -3138,23 +3208,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 				else if (uploadingWallpaper != null && uploadingWallpaper == location) {
-					val req = TL_account_uploadWallPaper()
+					val req = TLRPC.TLAccountUploadWallPaper()
 					req.file = file
-					req.mime_type = "image/jpeg"
+					req.mimeType = "image/jpeg"
 
 					val overrideWallpaperInfo = uploadingWallpaperInfo
 
-					val settings = TL_wallPaperSettings()
+					val settings = TLRPC.TLWallPaperSettings()
 					settings.blur = overrideWallpaperInfo!!.isBlurred
 					settings.motion = overrideWallpaperInfo.isMotion
 
 					req.settings = settings
 
 					connectionsManager.sendRequest(req) { response, _ ->
-						val wallPaper = response as WallPaper?
+						val wallPaper = response as? TLRPC.WallPaper
 						val path = File(ApplicationLoader.filesDirFixed, overrideWallpaperInfo.originalFileName)
 
-						if (wallPaper != null) {
+						if (wallPaper is TLRPC.TLWallPaper) {
 							runCatching {
 								AndroidUtilities.copyFile(path, fileLoader.getPathToAttach(wallPaper.document, true))
 							}
@@ -3165,26 +3235,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								wallPaper.settings = settings
 								wallPaper.flags = wallPaper.flags or 4
 
-								overrideWallpaperInfo.slug = wallPaper.slug
+								overrideWallpaperInfo.slug = (wallPaper as? TLRPC.TLWallPaper)?.slug
 								overrideWallpaperInfo.saveOverrideWallpaper()
 
-								val wallpapers = ArrayList<WallPaper>()
-								wallpapers.add(wallPaper)
+								messagesStorage.putWallpapers(listOf(wallPaper), 2)
 
-								messagesStorage.putWallpapers(wallpapers, 2)
-
-								val image = FileLoader.getClosestPhotoSizeWithSize(wallPaper.document.thumbs, 320)
+								val image = FileLoader.getClosestPhotoSizeWithSize(((wallPaper as? TLRPC.TLWallPaper)?.document as? TLRPC.TLDocument)?.thumbs, 320)
 
 								if (image != null) {
-									val newKey = image.location.volume_id.toString() + "_" + image.location.local_id + "@100_100"
+									val newKey = image.location?.volumeId?.toString() + "_" + image.location?.localId + "@100_100"
 									val oldKey = Utilities.MD5(path.absolutePath) + "@100_100"
 
-									ImageLocation.getForDocument(image, wallPaper.document)?.let {
+									ImageLocation.getForDocument(image, (wallPaper as? TLRPC.TLWallPaper)?.document)?.let {
 										ImageLoader.instance.replaceImageInCache(oldKey, newKey, it, false)
 									}
 								}
 
-								NotificationCenter.globalInstance.postNotificationName(NotificationCenter.wallpapersNeedReload, wallPaper.slug)
+								NotificationCenter.globalInstance.postNotificationName(NotificationCenter.wallpapersNeedReload, (wallPaper as? TLRPC.TLWallPaper)?.slug ?: "")
 							}
 						}
 					}
@@ -3242,17 +3309,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					uploadingThemes.remove(location)
 
 					if (uploadedFile != null && uploadedThumb != null) {
-						val req = TL_account_uploadTheme()
-						req.mime_type = "application/x-tgtheme-android"
-						req.file_name = "theme.attheme"
+						val req = TLRPC.TLAccountUploadTheme()
+						req.mimeType = "application/x-tgtheme-android"
+						req.fileName = "theme.attheme"
 						req.file = uploadedFile
-						req.file.name = "theme.attheme"
+						req.file?.name = "theme.attheme"
 						req.thumb = uploadedThumb
-						req.thumb.name = "theme-preview.jpg"
+						req.thumb?.name = "theme-preview.jpg"
 						req.flags = req.flags or 1
 
-						val info: TL_theme?
-						val settings: TL_inputThemeSettings?
+						val info: TLRPC.TLTheme?
+						val settings: TLRPC.TLInputThemeSettings?
 
 						if (accent != null) {
 							accent.uploadedFile = null
@@ -3260,72 +3327,72 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							info = accent.info
 
-							settings = TL_inputThemeSettings()
-							settings.base_theme = Theme.getBaseThemeByKey(themeInfo!!.name)
-							settings.accent_color = accent.accentColor
+							settings = TLRPC.TLInputThemeSettings()
+							settings.baseTheme = Theme.getBaseThemeByKey(themeInfo!!.name)
+							settings.accentColor = accent.accentColor
 
 							if (accent.accentColor2 != 0) {
 								settings.flags = settings.flags or 8
-								settings.outbox_accent_color = accent.accentColor2
+								settings.outboxAccentColor = accent.accentColor2
 							}
 
 							if (accent.myMessagesAccentColor != 0) {
-								settings.message_colors.add(accent.myMessagesAccentColor)
+								settings.messageColors.add(accent.myMessagesAccentColor)
 								settings.flags = settings.flags or 1
 
 								if (accent.myMessagesGradientAccentColor1 != 0) {
-									settings.message_colors.add(accent.myMessagesGradientAccentColor1)
+									settings.messageColors.add(accent.myMessagesGradientAccentColor1)
 
 									if (accent.myMessagesGradientAccentColor2 != 0) {
-										settings.message_colors.add(accent.myMessagesGradientAccentColor2)
+										settings.messageColors.add(accent.myMessagesGradientAccentColor2)
 
 										if (accent.myMessagesGradientAccentColor3 != 0) {
-											settings.message_colors.add(accent.myMessagesGradientAccentColor3)
+											settings.messageColors.add(accent.myMessagesGradientAccentColor3)
 										}
 									}
 								}
 
-								settings.message_colors_animated = accent.myMessagesAnimated
+								settings.messageColorsAnimated = accent.myMessagesAnimated
 							}
 
 							settings.flags = settings.flags or 2
-							settings.wallpaper_settings = TL_wallPaperSettings()
+							settings.wallpaperSettings = TLRPC.TLWallPaperSettings()
 
 							if (!TextUtils.isEmpty(accent.patternSlug)) {
-								val inputWallPaperSlug = TL_inputWallPaperSlug()
+								val inputWallPaperSlug = TLRPC.TLInputWallPaperSlug()
 								inputWallPaperSlug.slug = accent.patternSlug
 
 								settings.wallpaper = inputWallPaperSlug
-								settings.wallpaper_settings.intensity = (accent.patternIntensity * 100).toInt()
-								settings.wallpaper_settings.flags = settings.wallpaper_settings.flags or 8
+								settings.wallpaperSettings?.intensity = (accent.patternIntensity * 100).toInt()
+								settings.wallpaperSettings?.flags = settings.wallpaperSettings!!.flags or 8
 							}
 							else {
-								val inputWallPaperNoFile = TL_inputWallPaperNoFile()
+								val inputWallPaperNoFile = TLRPC.TLInputWallPaperNoFile()
 								inputWallPaperNoFile.id = 0
 								settings.wallpaper = inputWallPaperNoFile
 							}
 
-							settings.wallpaper_settings.motion = accent.patternMotion
+							settings.wallpaperSettings?.motion = accent.patternMotion
 
 							if (accent.backgroundOverrideColor != 0L) {
-								settings.wallpaper_settings.background_color = accent.backgroundOverrideColor.toInt()
-								settings.wallpaper_settings.flags = settings.wallpaper_settings.flags or 1
+								settings.wallpaperSettings?.backgroundColor = accent.backgroundOverrideColor.toInt()
+								settings.wallpaperSettings?.flags = settings.wallpaperSettings!!.flags or 1
 							}
 
 							if (accent.backgroundGradientOverrideColor1 != 0L) {
-								settings.wallpaper_settings.second_background_color = accent.backgroundGradientOverrideColor1.toInt()
-								settings.wallpaper_settings.flags = settings.wallpaper_settings.flags or 16
-								settings.wallpaper_settings.rotation = AndroidUtilities.getWallpaperRotation(accent.backgroundRotation, true)
+								settings.wallpaperSettings?.secondBackgroundColor = accent.backgroundGradientOverrideColor1.toInt()
+								settings.wallpaperSettings?.flags = settings.wallpaperSettings!!.flags or 16
+								settings.wallpaperSettings?.rotation = AndroidUtilities.getWallpaperRotation(accent.backgroundRotation, true)
 							}
 
 							if (accent.backgroundGradientOverrideColor2 != 0L) {
-								settings.wallpaper_settings.third_background_color = accent.backgroundGradientOverrideColor2.toInt()
-								settings.wallpaper_settings.flags = settings.wallpaper_settings.flags or 32
+								settings.wallpaperSettings?.thirdBackgroundColor = accent.backgroundGradientOverrideColor2.toInt()
+								settings.wallpaperSettings?.flags = settings.wallpaperSettings!!.flags or 32
 							}
 
 							if (accent.backgroundGradientOverrideColor3 != 0L) {
-								settings.wallpaper_settings.fourth_background_color = accent.backgroundGradientOverrideColor3.toInt()
-								settings.wallpaper_settings.flags = settings.wallpaper_settings.flags or 64
+								settings.wallpaperSettings?.fourthBackgroundColor = accent.backgroundGradientOverrideColor3.toInt()
+								settings.wallpaperSettings?.flags = settings.wallpaperSettings!!.flags or 64
 							}
 						}
 						else {
@@ -3340,30 +3407,28 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							val index = title.lastIndexOf(".attheme")
 							val n = if (index > 0) title.substring(0, index) else title
 
-							if (response != null) {
-								val document = response as Document
-
-								val inputDocument = TL_inputDocument()
-								inputDocument.access_hash = document.access_hash
-								inputDocument.id = document.id
-								inputDocument.file_reference = document.file_reference
+							if (response is TLRPC.TLDocument) {
+								val inputDocument = TLRPC.TLInputDocument()
+								inputDocument.accessHash = response.accessHash
+								inputDocument.id = response.id
+								inputDocument.fileReference = (response as? TLRPC.TLDocument)?.fileReference
 
 								if (info == null || !info.creator) {
-									val req2 = TL_account_createTheme()
+									val req2 = TLRPC.TLAccountCreateTheme()
 									req2.document = inputDocument
 									req2.flags = req2.flags or 4
 									req2.slug = info?.slug ?: ""
 									req2.title = n
 
 									if (settings != null) {
-										req2.settings = settings
+										req2.settings.add(settings)
 										req2.flags = req2.flags or 8
 									}
 
 									connectionsManager.sendRequest(req2) { response1, _ ->
 										AndroidUtilities.runOnUIThread {
-											if (response1 is TL_theme) {
-												Theme.setThemeUploadInfo(themeInfo, accent, response1 as TL_theme?, currentAccount, false)
+											if (response1 is TLRPC.TLTheme) {
+												Theme.setThemeUploadInfo(themeInfo, accent, response1 as TLRPC.TLTheme?, currentAccount, false)
 												installTheme(themeInfo, accent, themeInfo === Theme.getCurrentNightTheme())
 												notificationCenter.postNotificationName(NotificationCenter.themeUploadedToServer, themeInfo, accent)
 											}
@@ -3374,11 +3439,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									}
 								}
 								else {
-									val req2 = TL_account_updateTheme()
+									val req2 = TLRPC.TLAccountUpdateTheme()
 
-									val inputTheme = TL_inputTheme()
+									val inputTheme = TLRPC.TLInputTheme()
 									inputTheme.id = info.id
-									inputTheme.access_hash = info.access_hash
+									inputTheme.accessHash = info.accessHash
 
 									req2.theme = inputTheme
 									req2.slug = info.slug
@@ -3389,7 +3454,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									req2.flags = req2.flags or 4
 
 									if (settings != null) {
-										req2.settings = settings
+										req2.settings.add(settings)
 										req2.flags = req2.flags or 8
 									}
 
@@ -3397,8 +3462,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 									connectionsManager.sendRequest(req2) { response1, _ ->
 										AndroidUtilities.runOnUIThread {
-											if (response1 is TL_theme) {
-												Theme.setThemeUploadInfo(themeInfo, accent, response1 as TL_theme?, currentAccount, false)
+											if (response1 is TLRPC.TLTheme) {
+												Theme.setThemeUploadInfo(themeInfo, accent, response1 as TLRPC.TLTheme?, currentAccount, false)
 												notificationCenter.postNotificationName(NotificationCenter.themeUploadedToServer, themeInfo, accent)
 											}
 											else {
@@ -3455,15 +3520,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				val did = args[3] as Long
 				var obj = dialogMessage[did]
 
-				if (obj != null && (obj.id == msgId || obj.messageOwner?.local_id == msgId)) {
+				if (obj != null && (obj.id == msgId || obj.messageOwner?.localId == msgId)) {
 					obj.messageOwner?.id = newMsgId
-					obj.messageOwner?.send_state = MessageObject.MESSAGE_SEND_STATE_SENT
+					obj.messageOwner?.sendState = MessageObject.MESSAGE_SEND_STATE_SENT
 				}
 
 				val dialog = dialogs_dict[did]
 
-				if (dialog != null && dialog.top_message == msgId) {
-					dialog.top_message = newMsgId
+				if (dialog != null && dialog.topMessage == msgId) {
+					dialog.topMessage = newMsgId
 					notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 				}
 
@@ -3478,8 +3543,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val chatFull = fullChats[-did]
 					val chat = getChat(-did)
 
-					if (chat != null && !ChatObject.hasAdminRights(chat) && chatFull != null && chatFull.slowmode_seconds != 0) {
-						chatFull.slowmode_next_send_date = connectionsManager.currentTime + chatFull.slowmode_seconds
+					if (chat != null && !ChatObject.hasAdminRights(chat) && chatFull != null && chatFull.slowmodeSeconds != 0) {
+						chatFull.slowmodeNextSendDate = connectionsManager.currentTime + chatFull.slowmodeSeconds
 						chatFull.flags = chatFull.flags or 262144
 
 						messagesStorage.updateChatInfo(chatFull, false)
@@ -3490,7 +3555,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			NotificationCenter.updateMessageMedia -> {
 				val message = args[0] as Message
 
-				if (message.peer_id?.channel_id == 0L) {
+				if (message.peerId?.channelId == 0L) {
 					val existMessageObject = dialogMessagesByIds[message.id]
 
 					if (existMessageObject != null) {
@@ -3499,7 +3564,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						existMessageObject.messageOwner?.media = media
 
 						if (media != null) {
-							if (media.ttl_seconds != 0 && (media.photo is TL_photoEmpty || media.document is TL_documentEmpty)) {
+							if (media.ttlSeconds != 0 && (media.photo is TLRPC.TLPhotoEmpty || media.document is TLRPC.TLDocumentEmpty)) {
 								existMessageObject.setType()
 								notificationCenter.postNotificationName(NotificationCenter.notificationsSettingsUpdated)
 							}
@@ -3523,7 +3588,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		notificationsController.cleanup()
 		sendMessagesHelper.cleanup()
-		secretChatHelper.cleanup()
+		// secretChatHelper.cleanup()
 		locationController.cleanup()
 		mediaDataController.cleanup()
 
@@ -3532,14 +3597,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		DialogsActivity.dialogsLoaded[currentAccount] = false
 
 		var editor = notificationsPreferences.edit()
-		editor.clear().commit()
+		editor.clear().apply()
 
 		editor = emojiPreferences.edit()
-		editor.putLong("lastGifLoadTime", 0).putLong("lastStickersLoadTime", 0).putLong("lastStickersLoadTimeMask", 0).putLong("lastStickersLoadTimeFavs", 0).commit()
+		editor.putLong("lastGifLoadTime", 0).putLong("lastStickersLoadTime", 0).putLong("lastStickersLoadTimeMask", 0).putLong("lastStickersLoadTimeFavs", 0).apply()
 
 		editor = mainPreferences.edit()
-		editor.remove("archivehint").remove("proximityhint").remove("archivehint_l").remove("gifhint").remove("reminderhint").remove("soundHint").remove("dcDomainName2").remove("webFileDatacenterId").remove("themehint").remove("showFiltersTooltip").commit()
-		editor.remove(FeedFragment.LAST_READ_ID).remove(FeedFragment.FEED_POSITION).remove(FeedFragment.FEED_OFFSET).remove(FeedFragment.CURRENT_PAGE).commit()
+		editor.remove("archivehint").remove("proximityhint").remove("archivehint_l").remove("gifhint").remove("reminderhint").remove("soundHint").remove("dcDomainName2").remove("webFileDatacenterId").remove("themehint").remove("showFiltersTooltip").apply()
+		editor.remove(FeedFragment.LAST_READ_TIMESTAMP).remove(FeedFragment.FEED_POSITION).remove(FeedFragment.FEED_OFFSET).remove(FeedFragment.CURRENT_PAGE).apply()
 
 		val preferences = ApplicationLoader.applicationContext.getSharedPreferences("shortcut_widget", Activity.MODE_PRIVATE)
 		var widgetEditor: SharedPreferences.Editor? = null
@@ -3580,7 +3645,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		widgetEditor?.commit()
+		widgetEditor?.apply()
 
 		if (chatsWidgets != null) {
 			for (widget in chatsWidgets) {
@@ -3775,7 +3840,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return false
 		}
 
-		val migratedTo = getChat(chat.migrated_to?.channel_id)
+		val migratedTo = getChat(chat.migratedTo?.channelId)
 
 		if (migratedTo != null) {
 			return migratedTo.noforwards
@@ -3833,7 +3898,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	fun getEncryptedChatDB(chatId: Int, created: Boolean): EncryptedChat? {
 		var chat = encryptedChats[chatId]
 
-		if (chat == null || created && (chat is TL_encryptedChatWaiting || chat is TL_encryptedChatRequested)) {
+		if (chat == null || created && (chat is TLRPC.TLEncryptedChatWaiting || chat is TLRPC.TLEncryptedChatRequested)) {
 			val countDownLatch = CountDownLatch(1)
 
 			val result = ArrayList<TLObject>()
@@ -3915,20 +3980,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun getExportedInvite(chatId: Long): TL_chatInviteExported? {
+	fun getExportedInvite(chatId: Long): TLRPC.ExportedChatInvite? {
 		return exportedChats[chatId]
 	}
 
 	fun putUser(user: User?, fromCache: Boolean): Boolean {
-		@Suppress("NAME_SHADOWING") var fromCache = fromCache
-
-		if (user == null) {
+		if (user !is TLUser) {
 			return false
 		}
 
-		fromCache = fromCache && user.id / 1000 != 333L && user.id != BuildConfig.NOTIFICATIONS_BOT_ID
+		@Suppress("NAME_SHADOWING") val fromCache = fromCache && user.id / 1000 != 333L && user.id != BuildConfig.NOTIFICATIONS_BOT_ID
 
-		val oldUser = users[user.id]
+		val oldUser = users[user.id] as? TLUser
 
 		if (oldUser === user) {
 			return false
@@ -3942,7 +4005,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			objectsByUsernames[it.lowercase()] = user
 		}
 
-		updateEmojiStatusUntilUpdate(user.id, user.emoji_status)
+		updateEmojiStatusUntilUpdate(user.id, user.emojiStatus)
 
 		if (user.min) {
 			if (oldUser != null) {
@@ -3958,7 +4021,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 
-					if (user.apply_min_photo) {
+					if (user.applyMinPhoto) {
 						if (user.photo != null) {
 							oldUser.photo = user.photo
 							oldUser.flags = oldUser.flags or 32
@@ -3976,7 +4039,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 		else {
 			if (!fromCache) {
-				val existingUser = users[user.id]
+				val existingUser = users[user.id] as? TLUser
 
 				if (existingUser == null || !existingUser.contact || user.contact) {
 					users[user.id] = user
@@ -3987,7 +4050,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					userConfig.saveConfig(true)
 				}
 
-				return oldUser != null && user.status != null && oldUser.status != null && user.status!!.expires != oldUser.status!!.expires
+				val oldStatus = oldUser?.status
+				val status = user.status
+
+				return oldStatus != null && status != null && (oldStatus::class != status::class || (oldStatus as? TLRPC.TLUserStatusOnline)?.expires != (status as? TLRPC.TLUserStatusOnline)?.expires)
+
+				// return oldUser != null && user.status != null && oldUser.status != null && user.status!!.expires != oldUser.status!!.expires
 			}
 			else if (oldUser == null) {
 				users[user.id] = user
@@ -4003,7 +4071,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						user.username = null
 					}
 				}
-				if (oldUser.apply_min_photo) {
+				if (oldUser.applyMinPhoto) {
 					if (oldUser.photo != null) {
 						user.photo = oldUser.photo
 						user.flags = user.flags or 32
@@ -4068,21 +4136,21 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					oldChat.broadcast = chat.broadcast
 					oldChat.verified = chat.verified
 					oldChat.megagroup = chat.megagroup
-					oldChat.call_not_empty = chat.call_not_empty
-					oldChat.call_active = chat.call_active
+					oldChat.callNotEmpty = chat.callNotEmpty
+					oldChat.callActive = chat.callActive
 
-					if (chat.default_banned_rights != null) {
-						oldChat.default_banned_rights = chat.default_banned_rights
+					if (chat.defaultBannedRights != null) {
+						oldChat.defaultBannedRights = chat.defaultBannedRights
 						oldChat.flags = oldChat.flags or 262144
 					}
 
-					if (chat.admin_rights != null) {
-						oldChat.admin_rights = chat.admin_rights
+					if (chat.adminRights != null) {
+						oldChat.adminRights = chat.adminRights
 						oldChat.flags = oldChat.flags or 16384
 					}
 
-					if (chat.banned_rights != null) {
-						oldChat.banned_rights = chat.banned_rights
+					if (chat.bannedRights != null) {
+						oldChat.bannedRights = chat.bannedRights
 						oldChat.flags = oldChat.flags or 32768
 					}
 
@@ -4095,8 +4163,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						oldChat.username = null
 					}
 
-					if (chat.participants_count != 0) {
-						oldChat.participants_count = chat.participants_count
+					if (chat.participantsCount != 0) {
+						oldChat.participantsCount = chat.participantsCount
 					}
 
 					addOrRemoveActiveVoiceChat(oldChat)
@@ -4114,36 +4182,36 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						loadedFullChats.remove(chat.id)
 					}
 
-					if (oldChat.participants_count != 0 && chat.participants_count == 0) {
-						chat.participants_count = oldChat.participants_count
+					if (oldChat.participantsCount != 0 && chat.participantsCount == 0) {
+						chat.participantsCount = oldChat.participantsCount
 						chat.flags = chat.flags or 131072
 					}
 
-					val oldFlags = if (oldChat.banned_rights != null) oldChat.banned_rights.flags else 0
-					val newFlags = if (chat.banned_rights != null) chat.banned_rights.flags else 0
-					val oldFlags2 = if (oldChat.default_banned_rights != null) oldChat.default_banned_rights.flags else 0
-					val newFlags2 = if (chat.default_banned_rights != null) chat.default_banned_rights.flags else 0
+					val oldFlags = oldChat.bannedRights?.flags ?: 0
+					val newFlags = chat.bannedRights?.flags ?: 0
+					val oldFlags2 = oldChat.defaultBannedRights?.flags ?: 0
+					val newFlags2 = chat.defaultBannedRights?.flags ?: 0
 
-					oldChat.default_banned_rights = chat.default_banned_rights
+					oldChat.defaultBannedRights = chat.defaultBannedRights
 
-					if (oldChat.default_banned_rights == null) {
+					if (oldChat.defaultBannedRights == null) {
 						oldChat.flags = oldChat.flags and 262144.inv()
 					}
 					else {
 						oldChat.flags = oldChat.flags or 262144
 					}
 
-					oldChat.banned_rights = chat.banned_rights
-					if (oldChat.banned_rights == null) {
+					oldChat.bannedRights = chat.bannedRights
+					if (oldChat.bannedRights == null) {
 						oldChat.flags = oldChat.flags and 32768.inv()
 					}
 					else {
 						oldChat.flags = oldChat.flags or 32768
 					}
 
-					oldChat.admin_rights = chat.admin_rights
+					oldChat.adminRights = chat.adminRights
 
-					if (oldChat.admin_rights == null) {
+					if (oldChat.adminRights == null) {
 						oldChat.flags = oldChat.flags and 16384.inv()
 					}
 					else {
@@ -4169,18 +4237,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				chat.verified = oldChat.verified
 				chat.megagroup = oldChat.megagroup
 
-				if (oldChat.default_banned_rights != null) {
-					chat.default_banned_rights = oldChat.default_banned_rights
+				if (oldChat.defaultBannedRights != null) {
+					chat.defaultBannedRights = oldChat.defaultBannedRights
 					chat.flags = chat.flags or 262144
 				}
 
-				if (oldChat.admin_rights != null) {
-					chat.admin_rights = oldChat.admin_rights
+				if (oldChat.adminRights != null) {
+					chat.adminRights = oldChat.adminRights
 					chat.flags = chat.flags or 16384
 				}
 
-				if (oldChat.banned_rights != null) {
-					chat.banned_rights = oldChat.banned_rights
+				if (oldChat.bannedRights != null) {
+					chat.bannedRights = oldChat.bannedRights
 					chat.flags = chat.flags or 32768
 				}
 
@@ -4193,8 +4261,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					chat.username = null
 				}
 
-				if (oldChat.participants_count != 0 && chat.participants_count == 0) {
-					chat.participants_count = oldChat.participants_count
+				if (oldChat.participantsCount != 0 && chat.participantsCount == 0) {
+					chat.participantsCount = oldChat.participantsCount
 					chat.flags = chat.flags or 131072
 				}
 
@@ -4216,6 +4284,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	private fun addOrRemoveActiveVoiceChat(chat: Chat) {
+		if (chat !is TLChat) {
+			return
+		}
+
 		if (Thread.currentThread() !== Looper.getMainLooper().thread) {
 			AndroidUtilities.runOnUIThread { addOrRemoveActiveVoiceChatInternal(chat) }
 		}
@@ -4227,7 +4299,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	private fun addOrRemoveActiveVoiceChatInternal(chat: Chat) {
 		val currentChat = activeVoiceChatsMap[chat.id]
 
-		if (chat.call_active && chat.call_not_empty && chat.migrated_to == null && !ChatObject.isNotInChat(chat)) {
+		if (chat.callActive && chat.callNotEmpty && chat.migratedTo == null && !ChatObject.isNotInChat(chat)) {
 			if (currentChat != null) {
 				return
 			}
@@ -4257,7 +4329,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		installReferer = referer
 
-		mainPreferences.edit().putString("installReferer", referer).commit()
+		mainPreferences.edit { putString("installReferer", referer) }
 	}
 
 	fun putEncryptedChat(encryptedChat: EncryptedChat?, fromCache: Boolean) {
@@ -4283,7 +4355,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun getUserFull(uid: Long?): UserFull? {
+	fun getUserFull(uid: Long?): TLUserFull? {
 		if (uid == null) {
 			return null
 		}
@@ -4321,47 +4393,39 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		val chatFull = getChatFull(chatId)
-
-		if (chatFull?.call == null) {
-			return null
-		}
-
-		val result = groupCalls[chatFull.call.id]
+		val call = chatFull?.call ?: return null
+		val result = groupCalls[call.id]
 
 		if (result == null && load && !loadingGroupCalls.contains(chatId)) {
 			loadingGroupCalls.add(chatId)
 
-			if (chatFull.call != null) {
-				val req = TL_phone_getGroupCall()
-				req.call = chatFull.call
-				req.limit = 20
+			val req = TLRPC.TLPhoneGetGroupCall()
+			req.call = call
+			req.limit = 20
 
-				connectionsManager.sendRequest(req) { response, _ ->
-					AndroidUtilities.runOnUIThread {
-						if (response != null) {
-							val groupCall = response as TL_phone_groupCall
+			connectionsManager.sendRequest(req) { response, _ ->
+				AndroidUtilities.runOnUIThread {
+					if (response is TLRPC.TLPhoneGroupCall) {
+						putUsers(response.users, false)
+						putChats(response.chats, false)
 
-							putUsers(groupCall.users, false)
-							putChats(groupCall.chats, false)
+						val call = ChatObject.Call()
+						call.setCall(accountInstance, chatId, response)
 
-							val call = ChatObject.Call()
-							call.setCall(accountInstance, chatId, groupCall)
+						groupCalls.put(response.call!!.id, call)
+						groupCallsByChatId.put(chatId, call)
 
-							groupCalls.put(groupCall.call.id, call)
-							groupCallsByChatId.put(chatId, call)
+						notificationCenter.postNotificationName(NotificationCenter.groupCallUpdated, chatId, response.call!!.id, false)
 
-							notificationCenter.postNotificationName(NotificationCenter.groupCallUpdated, chatId, groupCall.call.id, false)
-
-							onLoad?.run()
-						}
-
-						loadingGroupCalls.remove(chatId)
+						onLoad?.run()
 					}
+
+					loadingGroupCalls.remove(chatId)
 				}
 			}
 		}
 
-		if (result != null && result.call is TL_groupCallDiscarded) {
+		if (result != null && result.call is TLRPC.TLGroupCallDiscarded) {
 			return null
 		}
 
@@ -4386,17 +4450,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val req = TL_messages_getPeerDialogs()
+		val req = TLRPC.TLMessagesGetPeerDialogs()
 
 		if (dialogs != null) {
 			for (a in dialogs.indices) {
 				val inputPeer = getInputPeer(dialogs[a].id)
 
-				if (inputPeer is TL_inputPeerChannel && inputPeer.access_hash == 0L) {
+				if (inputPeer is TLRPC.TLInputPeerChannel && inputPeer.accessHash == 0L) {
 					continue
 				}
 
-				val inputDialogPeer = TL_inputDialogPeer()
+				val inputDialogPeer = TLRPC.TLInputDialogPeer()
 				inputDialogPeer.peer = inputPeer
 
 				req.peers.add(inputDialogPeer)
@@ -4405,11 +4469,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		else {
 			val inputPeer = getInputPeer(did)
 
-			if (inputPeer is TL_inputPeerChannel && inputPeer.access_hash == 0L) {
+			if (inputPeer is TLRPC.TLInputPeerChannel && inputPeer.accessHash == 0L) {
 				return
 			}
 
-			val inputDialogPeer = TL_inputDialogPeer()
+			val inputDialogPeer = TLRPC.TLInputDialogPeer()
 			inputDialogPeer.peer = inputPeer
 
 			req.peers.add(inputDialogPeer)
@@ -4420,7 +4484,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_peerDialogs) {
+			if (response is TLRPC.TLMessagesPeerDialogs) {
 				val updateArray = mutableListOf<Update>()
 
 				for (dialog in response.dialogs) {
@@ -4432,20 +4496,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = 0
 					}
 
-					dialogs_read_inbox_max[dialog.id] = max(dialog.read_inbox_max_id, value)
+					dialogs_read_inbox_max[dialog.id] = max(dialog.readInboxMaxId, value)
 
 					if (value == 0) {
-						if (dialog.peer.channel_id != 0L) {
-							val update = TL_updateReadChannelInbox()
-							update.channel_id = dialog.peer.channel_id
-							update.max_id = dialog.read_inbox_max_id
-							update.still_unread_count = dialog.unread_count
+						if (dialog.peer.channelId != 0L) {
+							val update = TLRPC.TLUpdateReadChannelInbox()
+							update.channelId = dialog.peer.channelId
+							update.maxId = dialog.readInboxMaxId
+							update.stillUnreadCount = dialog.unreadCount
 							updateArray.add(update)
 						}
 						else {
-							val update = TL_updateReadHistoryInbox()
+							val update = TLRPC.TLUpdateReadHistoryInbox()
 							update.peer = dialog.peer
-							update.max_id = dialog.read_inbox_max_id
+							update.maxId = dialog.readInboxMaxId
 							updateArray.add(update)
 						}
 					}
@@ -4456,20 +4520,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = 0
 					}
 
-					dialogs_read_outbox_max[dialog.id] = max(dialog.read_outbox_max_id, value)
+					dialogs_read_outbox_max[dialog.id] = max(dialog.readOutboxMaxId, value)
 
-					if (dialog.read_outbox_max_id > value) {
-						if (dialog.peer.channel_id != 0L) {
-							val update = TL_updateReadChannelOutbox()
-							update.channel_id = dialog.peer.channel_id
-							update.max_id = dialog.read_outbox_max_id
+					if (dialog.readOutboxMaxId > value) {
+						if (dialog.peer.channelId != 0L) {
+							val update = TLRPC.TLUpdateReadChannelOutbox()
+							update.channelId = dialog.peer.channelId
+							update.maxId = dialog.readOutboxMaxId
 
 							updateArray.add(update)
 						}
 						else {
-							val update = TL_updateReadHistoryOutbox()
+							val update = TLRPC.TLUpdateReadHistoryOutbox()
 							update.peer = dialog.peer
-							update.max_id = dialog.read_outbox_max_id
+							update.maxId = dialog.readOutboxMaxId
 
 							updateArray.add(update)
 						}
@@ -4515,13 +4579,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			messagesStorage.loadChannelAdmins(chatId)
 		}
 		else {
-			val req = TL_channels_getParticipants()
+			val req = TLRPC.TLChannelsGetParticipants()
 			req.channel = getInputChannel(chatId)
 			req.limit = 100
-			req.filter = TL_channelParticipantsAdmins()
+			req.filter = TLRPC.TLChannelParticipantsAdmins()
 
 			connectionsManager.sendRequest(req) { response, error ->
-				if (response is TL_channels_channelParticipants) {
+				if (response is TLRPC.TLChannelsChannelParticipants) {
 					processLoadedAdminsResponse(chatId, response)
 				}
 				else if (error != null) {
@@ -4535,11 +4599,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun processLoadedAdminsResponse(chatId: Long, participants: TL_channels_channelParticipants) {
+	fun processLoadedAdminsResponse(chatId: Long, participants: TLRPC.TLChannelsChannelParticipants) {
 		val array1 = LongSparseArray<ChannelParticipant>(participants.participants.size)
 
 		for (participant in participants.participants) {
-			array1.put(MessageObject.getPeerId(participant.peer), participant)
+			array1.put(participant.userId, participant)
 		}
 
 		processLoadedChannelAdmins(array1, chatId, false)
@@ -4561,10 +4625,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun loadFullChat(chatId: Long, classGuid: Int, force: Boolean) {
+	@JvmOverloads
+	fun loadFullChat(chatId: Long, classGuid: Int, force: Boolean, callback: Runnable? = null) {
 		val loaded = loadedFullChats.contains(chatId)
 
 		if (loadingFullChats.contains(chatId) || (!force && loaded)) {
+			callback?.run()
 			return
 		}
 
@@ -4575,7 +4641,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val chat = getChat(chatId)
 
 		if (ChatObject.isChannel(chat)) {
-			val req = TL_channels_getFullChannel()
+			val req = TLRPC.TLChannelsGetFullChannel()
 			req.channel = getInputChannel(chat)
 
 			request = req
@@ -4583,8 +4649,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			loadChannelAdmins(chatId, !loaded)
 		}
 		else {
-			val req = TL_messages_getFullChat()
-			req.chat_id = chatId
+			val req = TLRPC.TLMessagesGetFullChat()
+			req.chatId = chatId
 
 			request = req
 
@@ -4597,7 +4663,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			var ok = false
 
 			if (error == null) {
-				if (response is TL_messages_chatFull) {
+				if (response is TLRPC.TLMessagesChatFull) {
 					ok = true
 
 					messagesStorage.putUsersAndChats(response.users, response.chats, true, true)
@@ -4613,13 +4679,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val fullChat = response.fullChat
 
 						if (fullChat != null) {
-							dialogs_read_inbox_max[dialogId] = max(fullChat.read_inbox_max_id, value)
+							dialogs_read_inbox_max[dialogId] = max(fullChat.readInboxMaxId, value)
 
-							if (fullChat.read_inbox_max_id > value) {
-								val update = TL_updateReadChannelInbox()
-								update.channel_id = chatId
-								update.max_id = fullChat.read_inbox_max_id
-								update.still_unread_count = fullChat.unread_count
+							if (fullChat.readInboxMaxId > value) {
+								val update = TLRPC.TLUpdateReadChannelInbox()
+								update.channelId = chatId
+								update.maxId = fullChat.readInboxMaxId
+								update.stillUnreadCount = fullChat.unreadCount
 
 								processUpdateArray(listOf(update), null, null, false, 0)
 							}
@@ -4630,12 +4696,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								value = messagesStorage.getDialogReadMax(true, dialogId)
 							}
 
-							dialogs_read_outbox_max[dialogId] = max(fullChat.read_outbox_max_id, value)
+							dialogs_read_outbox_max[dialogId] = max(fullChat.readOutboxMaxId, value)
 
-							if (fullChat.read_outbox_max_id > value) {
-								val update = TL_updateReadChannelOutbox()
-								update.channel_id = chatId
-								update.max_id = fullChat.read_outbox_max_id
+							if (fullChat.readOutboxMaxId > value) {
+								val update = TLRPC.TLUpdateReadChannelOutbox()
+								update.channelId = chatId
+								update.maxId = fullChat.readOutboxMaxId
 
 								processUpdateArray(listOf(update), null, null, false, 0)
 							}
@@ -4649,11 +4715,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							response.fullChat?.inviterId = old.inviterId
 						}
 
-						fullChats.put(chatId, response.fullChat)
+						fullChats.put(chatId, response.fullChat!!)
 
-						applyDialogNotificationsSettings(-chatId, response.fullChat?.notify_settings)
+						applyDialogNotificationsSettings(-chatId, response.fullChat?.notifySettings)
 
-						response.fullChat?.bot_info?.forEach {
+						response.fullChat?.botInfo?.forEach {
 							mediaDataController.putBotInfo(-chatId, it)
 						}
 
@@ -4672,7 +4738,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 
-						exportedChats.put(chatId, response.fullChat?.exported_invite)
+						response.fullChat?.exportedInvite?.let {
+							exportedChats.put(chatId, it)
+						}
 
 						loadingFullChats.remove(chatId)
 						loadedFullChats.add(chatId)
@@ -4689,8 +4757,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						if ((response.fullChat?.flags ?: 0) and 2048 != 0) {
 							val dialog = dialogs_dict[-chatId]
 
-							if (dialog != null && dialog.folder_id != response.fullChat?.folder_id) {
-								dialog.folder_id = response.fullChat?.folder_id ?: 0
+							if (dialog != null && dialog.folderId != response.fullChat?.folderId) {
+								dialog.folderId = response.fullChat?.folderId ?: 0
 								sortDialogs(null)
 								notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 							}
@@ -4705,6 +4773,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					loadingFullChats.remove(chatId)
 				}
 			}
+
+			callback?.run()
 		}
 
 		if (classGuid != 0) {
@@ -4713,66 +4783,58 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun loadFullUser(user: User?, classGuid: Int, force: Boolean) {
-		if (user == null || loadingFullUsers.contains(user.id)) {
-			return
-		}
-
-		if (!force && loadedFullUsers.contains(user.id)) {
-			val userFull = getUserFull(user.id)
-
-			if (userFull != null) {
-				ioScope.launch {
-					delay(500)
-
-					mainScope.launch {
-						notificationCenter.postNotificationName(NotificationCenter.userInfoDidLoad, user.id, userFull)
-					}
-				}
-
-				return
+		ioScope.launch {
+			if (user !is TLUser || loadingFullUsers.contains(user.id)) {
+				return@launch
 			}
-		}
 
-		loadingFullUsers.add(user.id)
+			if (!force && loadedFullUsers.contains(user.id)) {
+				val userFull = getUserFull(user.id)
 
-		val req = TL_users_getFullUser()
-		req.id = getInputUser(user)
+				if (userFull != null) {
+					ioScope.launch {
+						delay(500)
 
-		val dialogId = user.id
-
-		if (dialogs_read_inbox_max[dialogId] == null || dialogs_read_outbox_max[dialogId] == null) {
-			reloadDialogsReadValue(null, dialogId)
-		}
-
-		connectionsManager.sendRequest(req) { response, error ->
-			if (error == null) {
-				val res = response as? TL_users_userFull
-
-				if (res == null) {
-					AndroidUtilities.runOnUIThread {
-						loadingFullUsers.remove(user.id)
+						mainScope.launch {
+							notificationCenter.postNotificationName(NotificationCenter.userInfoDidLoad, user.id, userFull)
+						}
 					}
 
-					return@sendRequest
+					return@launch
 				}
+			}
 
-				val userFull = res.fullUser
+			loadingFullUsers.add(user.id)
 
-				putUsers(res.users, false)
-				putChats(res.chats, false)
+			val req = TLRPC.TLUsersGetFullUser()
+			req.id = getInputUser(user)
 
-				userFull?.user = getUser(userFull?.id)
+			val dialogId = user.id
+
+			if (dialogs_read_inbox_max[dialogId] == null || dialogs_read_outbox_max[dialogId] == null) {
+				reloadDialogsReadValue(null, dialogId)
+			}
+
+			val response = connectionsManager.performRequest(req)
+
+			if (response is TLRPC.TLUsersUserFull) {
+				val userFull = response.fullUser
+
+				putUsers(response.users, false)
+				putChats(response.chats, false)
+
+				val userFullUser = getUser(userFull?.id) as? TLUser
 
 				messagesStorage.updateUserInfo(userFull, false)
 
-				AndroidUtilities.runOnUIThread {
+				mainScope.launch {
 					if (userFull != null) {
-						savePeerSettings(userFull.user?.id ?: 0L, userFull.settings)
-						applyDialogNotificationsSettings(user.id, userFull.notify_settings)
+						savePeerSettings(userFull.id, userFull.settings)
+						applyDialogNotificationsSettings(user.id, userFull.notifySettings)
 
-						if (userFull.bot_info is TL_botInfo) {
-							userFull.bot_info?.user_id = user.id
-							mediaDataController.putBotInfo(user.id, userFull.bot_info)
+						if (userFull.botInfo is TLRPC.TLBotInfo) {
+							userFull.botInfo?.userId = user.id
+							mediaDataController.putBotInfo(user.id, userFull.botInfo)
 						}
 
 						val index = blockedPeers.indexOfKey(user.id)
@@ -4796,25 +4858,25 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					loadingFullUsers.remove(user.id)
 					loadedFullUsers.add(user.id)
 
-					val names = user.first_name + user.last_name + user.username
+					val names = user.firstName + user.lastName + user.username
 
-					userFull?.user?.let {
+					userFullUser?.let {
 						val users = listOf(it)
 						putUsers(users, false)
 						messagesStorage.putUsersAndChats(users, null, false, true)
 					}
 
-					if (names != userFull?.user?.first_name + userFull?.user?.last_name + userFull?.user?.username) {
+					if (names != userFullUser?.firstName + userFullUser?.lastName + userFullUser?.username) {
 						notificationCenter.postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_NAME)
 					}
 
-					if (userFull?.user?.photo?.has_video == true) {
+					if (userFullUser?.photo?.hasVideo == true) {
 						notificationCenter.postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_AVATAR)
 					}
 
-					if (userFull?.bot_info is TL_botInfo) {
-						userFull.bot_info?.user_id = userFull.id
-						notificationCenter.postNotificationName(NotificationCenter.botInfoDidLoad, userFull.bot_info, classGuid)
+					if (userFull?.botInfo is TLRPC.TLBotInfo) {
+						userFull.botInfo?.userId = userFull.id
+						notificationCenter.postNotificationName(NotificationCenter.botInfoDidLoad, userFull.botInfo, classGuid)
 					}
 
 					notificationCenter.postNotificationName(NotificationCenter.userInfoDidLoad, user.id, userFull)
@@ -4822,8 +4884,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					if ((userFull?.flags ?: 0) and 2048 != 0) {
 						val dialog = dialogs_dict[user.id]
 
-						if (dialog != null && dialog.folder_id != userFull?.folder_id) {
-							dialog.folder_id = userFull?.folder_id ?: 0
+						if (dialog != null && dialog.folderId != userFull?.folderId) {
+							dialog.folderId = userFull?.folderId ?: 0
 							sortDialogs(null)
 							notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 						}
@@ -4831,7 +4893,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 			else {
-				AndroidUtilities.runOnUIThread {
+				mainScope.launch {
 					loadingFullUsers.remove(user.id)
 				}
 			}
@@ -4843,30 +4905,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val request: TLObject
-		val result = ArrayList<Int>()
-
-		val chat = if (DialogObject.isChatDialog(dialogId)) {
-			getChat(-dialogId)
-		}
-		else {
-			null
-		}
-
-		if (ChatObject.isChannel(chat)) {
-			val req = TL_channels_getMessages()
-			req.channel = getInputChannel(chat)
-			req.id = result
-
-			request = req
-		}
-		else {
-			val req = TL_messages_getMessages()
-			req.id = result
-
-			request = req
-		}
-
+		val result = mutableListOf<Int>()
 		var arrayList = reloadingMessages[dialogId]
 
 		for (a in mids.indices) {
@@ -4890,8 +4929,27 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		arrayList.addAll(result)
 
+		val chat = if (DialogObject.isChatDialog(dialogId)) {
+			getChat(-dialogId)
+		}
+		else {
+			null
+		}
+
+		val request = if (ChatObject.isChannel(chat)) {
+			val req = TLRPC.TLChannelsGetMessages()
+			req.channel = getInputChannel(chat)
+			req.id.addAll(result.map { msgId -> TLRPC.TLInputMessageID().also { it.id = msgId } })
+			req
+		}
+		else {
+			val req = TLRPC.TLMessagesGetMessages()
+			req.id.addAll(result.map { msgId -> TLRPC.TLInputMessageID().also { it.id = msgId } })
+			req
+		}
+
 		connectionsManager.sendRequest(request) { response, _ ->
-			if (response is messages_Messages) {
+			if (response is MessagesMessages) {
 				val usersLocal = LongSparseArray<User>()
 
 				for (u in response.users) {
@@ -4922,7 +4980,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				for (a in response.messages.indices) {
 					val message = response.messages[a]
-					message.dialog_id = dialogId
+					message.dialogId = dialogId
 
 					if (!scheduled) {
 						message.unread = (if (message.out) outboxValue else inboxValue) < message.id
@@ -4955,7 +5013,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							if (dialogObj.id == obj.id) {
 								dialogMessage.put(dialogId, obj)
 
-								if (obj.messageOwner?.peer_id?.channel_id == 0L) {
+								if (obj.messageOwner?.peerId?.channelId == 0L) {
 									val obj2 = dialogMessagesByIds[obj.id]
 
 									dialogMessagesByIds.remove(obj.id)
@@ -4983,13 +5041,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val editor = notificationsPreferences.edit()
-		editor.putInt("dialog_bar_vis3$dialogId", 3)
-		editor.remove("dialog_bar_invite$dialogId")
-		editor.commit()
+		notificationsPreferences.edit {
+			putInt("dialog_bar_vis3$dialogId", 3)
+			remove("dialog_bar_invite$dialogId")
+		}
 
 		if (!DialogObject.isEncryptedDialog(dialogId)) {
-			val req = TL_messages_hidePeerSettingsBar()
+			val req = TLRPC.TLMessagesHidePeerSettingsBar()
 
 			if (currentUser != null) {
 				req.peer = getInputPeer(currentUser.id)
@@ -5007,25 +5065,27 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val editor = notificationsPreferences.edit()
-		editor.putInt("dialog_bar_vis3$dialogId", 3)
-		editor.commit()
+		notificationsPreferences.edit {
+			putInt("dialog_bar_vis3$dialogId", 3)
+		}
 
 		if (DialogObject.isEncryptedDialog(dialogId)) {
-			if (currentEncryptedChat == null || currentEncryptedChat.access_hash == 0L) {
+			if (currentEncryptedChat == null || currentEncryptedChat.accessHash == 0L) {
 				return
 			}
 
-			val req = TL_messages_reportEncryptedSpam()
-			req.peer = TL_inputEncryptedChat()
-			req.peer.chat_id = currentEncryptedChat.id
-			req.peer.access_hash = currentEncryptedChat.access_hash
+			val req = TLRPC.TLMessagesReportEncryptedSpam()
+
+			req.peer = TLRPC.TLInputEncryptedChat().also {
+				it.chatId = currentEncryptedChat.id
+				it.accessHash = currentEncryptedChat.accessHash
+			}
 
 			connectionsManager.sendRequest(req, null, ConnectionsManager.RequestFlagFailOnServerErrors)
 		}
 		else {
 			if (geo) {
-				val req = TL_account_reportPeer()
+				val req = TLRPC.TLAccountReportPeer()
 
 				if (currentChat != null) {
 					req.peer = getInputPeer(-currentChat.id)
@@ -5035,12 +5095,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 
 				req.message = ""
-				req.reason = TL_inputReportReasonGeoIrrelevant()
+				req.reason = TLRPC.TLInputReportReasonGeoIrrelevant()
 
 				connectionsManager.sendRequest(req, null, ConnectionsManager.RequestFlagFailOnServerErrors)
 			}
 			else {
-				val req = TL_messages_reportSpam()
+				val req = TLRPC.TLMessagesReportSpam()
 
 				if (currentChat != null) {
 					req.peer = getInputPeer(-currentChat.id)
@@ -5054,41 +5114,39 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	private fun savePeerSettings(dialogId: Long, settings: TL_peerSettings?) {
+	private fun savePeerSettings(dialogId: Long, settings: TLRPC.TLPeerSettings?) {
 		if (settings == null || notificationsPreferences.getInt("dialog_bar_vis3$dialogId", 0) == 3) {
 			return
 		}
 
-		val editor = notificationsPreferences.edit()
-		val barHidden = !settings.report_spam && !settings.add_contact && !settings.block_contact && !settings.share_contact && !settings.report_geo && !settings.invite_members
+		notificationsPreferences.edit {
+			val barHidden = !settings.reportSpam && !settings.addContact && !settings.blockContact && !settings.shareContact && !settings.reportGeo && !settings.inviteMembers
 
-		if (BuildConfig.DEBUG) {
-			FileLog.d("peer settings loaded for " + dialogId + " add = " + settings.add_contact + " block = " + settings.block_contact + " spam = " + settings.report_spam + " share = " + settings.share_contact + " geo = " + settings.report_geo + " hide = " + barHidden + " distance = " + settings.geo_distance + " invite = " + settings.invite_members)
-		}
+			FileLog.d("peer settings loaded for " + dialogId + " add = " + settings.addContact + " block = " + settings.blockContact + " spam = " + settings.reportSpam + " share = " + settings.shareContact + " geo = " + settings.reportGeo + " hide = " + barHidden + " distance = " + settings.geoDistance + " invite = " + settings.inviteMembers)
 
-		editor.putInt("dialog_bar_vis3$dialogId", if (barHidden) 1 else 2)
-		editor.putBoolean("dialog_bar_share$dialogId", settings.share_contact)
-		editor.putBoolean("dialog_bar_report$dialogId", settings.report_spam)
-		editor.putBoolean("dialog_bar_add$dialogId", settings.add_contact)
-		editor.putBoolean("dialog_bar_block$dialogId", settings.block_contact)
-		editor.putBoolean("dialog_bar_exception$dialogId", settings.need_contacts_exception)
-		editor.putBoolean("dialog_bar_location$dialogId", settings.report_geo)
-		editor.putBoolean("dialog_bar_archived$dialogId", settings.autoarchived)
-		editor.putBoolean("dialog_bar_invite$dialogId", settings.invite_members)
-		editor.putString("dialog_bar_chat_with_admin_title$dialogId", settings.request_chat_title)
-		editor.putBoolean("dialog_bar_chat_with_channel$dialogId", settings.request_chat_broadcast)
-		editor.putInt("dialog_bar_chat_with_date$dialogId", settings.request_chat_date)
+			putInt("dialog_bar_vis3$dialogId", if (barHidden) 1 else 2)
+			putBoolean("dialog_bar_share$dialogId", settings.shareContact)
+			putBoolean("dialog_bar_report$dialogId", settings.reportSpam)
+			putBoolean("dialog_bar_add$dialogId", settings.addContact)
+			putBoolean("dialog_bar_block$dialogId", settings.blockContact)
+			putBoolean("dialog_bar_exception$dialogId", settings.needContactsException)
+			putBoolean("dialog_bar_location$dialogId", settings.reportGeo)
+			putBoolean("dialog_bar_archived$dialogId", settings.autoarchived)
+			putBoolean("dialog_bar_invite$dialogId", settings.inviteMembers)
+			putString("dialog_bar_chat_with_admin_title$dialogId", settings.requestChatTitle)
+			putBoolean("dialog_bar_chat_with_channel$dialogId", settings.requestChatBroadcast)
+			putInt("dialog_bar_chat_with_date$dialogId", settings.requestChatDate)
 
-		if (notificationsPreferences.getInt("dialog_bar_distance$dialogId", -1) != -2) {
-			if (settings.flags and 64 != 0) {
-				editor.putInt("dialog_bar_distance$dialogId", settings.geo_distance)
+			if (notificationsPreferences.getInt("dialog_bar_distance$dialogId", -1) != -2) {
+				if (settings.flags and 64 != 0) {
+					putInt("dialog_bar_distance$dialogId", settings.geoDistance)
+				}
+				else {
+					remove("dialog_bar_distance$dialogId")
+				}
 			}
-			else {
-				editor.remove("dialog_bar_distance$dialogId")
-			}
-		}
 
-		editor.commit()
+		}
 
 		notificationCenter.postNotificationName(NotificationCenter.peerSettingsDidLoad, dialogId)
 	}
@@ -5106,21 +5164,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		loadingPeerSettings.put(dialogId, true)
 
-		if (BuildConfig.DEBUG) {
-			FileLog.d("request spam button for $dialogId")
-		}
+		FileLog.d("request spam button for $dialogId")
 
 		val vis = notificationsPreferences.getInt("dialog_bar_vis3$dialogId", 0)
 
 		if (vis == 1 || vis == 3) {
-			if (BuildConfig.DEBUG) {
-				FileLog.d("dialog bar already hidden for $dialogId")
-			}
+			FileLog.d("dialog bar already hidden for $dialogId")
 
 			return
 		}
 
-		val req = TL_messages_getPeerSettings()
+		val req = TLRPC.TLMessagesGetPeerSettings()
 
 		if (currentUser != null) {
 			req.peer = getInputPeer(currentUser.id)
@@ -5133,7 +5187,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			AndroidUtilities.runOnUIThread {
 				loadingPeerSettings.remove(dialogId)
 
-				if (response is TL_messages_peerSettings) {
+				if (response is TLRPC.TLMessagesPeerSettings) {
 					putUsers(response.users, false)
 					putChats(response.chats, false)
 
@@ -5144,9 +5198,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun processNewChannelDifferenceParams(pts: Int, ptsCount: Int, channelId: Long) {
-		if (BuildConfig.DEBUG) {
-			FileLog.d("processNewChannelDifferenceParams pts = $pts pts_count = $ptsCount channeldId = $channelId")
-		}
+		FileLog.d("processNewChannelDifferenceParams pts = $pts pts_count = $ptsCount channeldId = $channelId")
 
 		var channelPts = channelsPts[channelId]
 
@@ -5161,21 +5213,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		if (channelPts + ptsCount == pts) {
-			if (BuildConfig.DEBUG) {
-				FileLog.d("APPLY CHANNEL PTS")
-			}
+			FileLog.d("APPLY CHANNEL PTS")
 
 			channelsPts.put(channelId, pts)
 			messagesStorage.saveChannelPts(channelId, pts)
 		}
 		else if (channelPts != pts) {
 			val updatesStartWaitTime = updatesStartWaitTimeChannels[channelId]
-			val gettingDifferenceChannel = gettingDifferenceChannels[channelId, false]
+			val gettingDifferenceChannel = gettingDifferenceChannels.get(channelId, false)
 
 			if (gettingDifferenceChannel || updatesStartWaitTime == 0L || abs(System.currentTimeMillis() - updatesStartWaitTime) <= 1500) {
-				if (BuildConfig.DEBUG) {
-					FileLog.d("ADD CHANNEL UPDATE TO QUEUE pts = $pts pts_count = $ptsCount")
-				}
+				FileLog.d("ADD CHANNEL UPDATE TO QUEUE pts = $pts pts_count = $ptsCount")
 
 				if (updatesStartWaitTime == 0L) {
 					updatesStartWaitTimeChannels.put(channelId, System.currentTimeMillis())
@@ -5183,8 +5231,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				val updates = UserActionUpdatesPts()
 				updates.pts = pts
-				updates.pts_count = ptsCount
-				updates.chat_id = channelId
+				updates.ptsCount = ptsCount
+				updates.chatId = channelId
 
 				var arrayList = updatesQueueChannels[channelId]
 
@@ -5215,7 +5263,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					val updates = UserActionUpdatesPts()
 					updates.pts = pts
-					updates.pts_count = ptsCount
+					updates.ptsCount = ptsCount
 
 					updatesQueuePts.add(updates)
 				}
@@ -5354,14 +5402,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			if (did > 0) {
 				val user = getUser(did) ?: return
 
-				val req = TL_photos_getUserPhotos()
+				val req = TLRPC.TLPhotosGetUserPhotos()
 				req.limit = count
 				req.offset = 0
-				req.max_id = maxId.toLong()
-				req.user_id = getInputUser(user)
+				req.maxId = maxId.toLong()
+				req.userId = getInputUser(user)
 
 				val reqId = connectionsManager.sendRequest(req) { response, _ ->
-					if (response is photos_Photos) {
+					if (response is TLRPC.PhotosPhotos) {
 						processLoadedUserPhotos(response, null, did, count, maxId, false, classGuid)
 					}
 				}
@@ -5369,20 +5417,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				connectionsManager.bindRequestToGuid(reqId, classGuid)
 			}
 			else if (did < 0) {
-				val req = TL_messages_search()
-				req.filter = TL_inputMessagesFilterChatPhotos()
+				val req = TLRPC.TLMessagesSearch()
+				req.filter = TLRPC.TLInputMessagesFilterChatPhotos()
 				req.limit = count
-				req.offset_id = maxId
+				req.offsetId = maxId
 				req.q = ""
 				req.peer = getInputPeer(did)
 
 				val reqId = connectionsManager.sendRequest(req) { response, _ ->
-					if (response is messages_Messages) {
-						val res = TL_photos_photos()
-						res.count = response.count
+					if (response is MessagesMessages) {
+						val res = TLRPC.TLPhotosPhotos()
+						// res.count = response.count
 						res.users.addAll(response.users)
 
-						val arrayList = ArrayList<Message>()
+						val arrayList = mutableListOf<Message>()
 
 						for (a in response.messages.indices) {
 							val message = response.messages[a]
@@ -5428,7 +5476,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		blockedPeers.put(id, 1)
 
 		if (user != null) {
-			if (user.bot) {
+			if ((user as? TLUser)?.bot == true) {
 				mediaDataController.removeInline(id)
 			}
 			else {
@@ -5442,7 +5490,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		notificationCenter.postNotificationName(NotificationCenter.blockedUsersDidLoad)
 
-		val req = TL_contacts_block()
+		val req = TLRPC.TLContactsBlock()
 
 		if (user != null) {
 			req.id = getInputPeer(user)
@@ -5454,12 +5502,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		connectionsManager.sendRequest(req)
 	}
 
-	fun setParticipantBannedRole(chatId: Long, user: User?, chat: Chat?, rights: TL_chatBannedRights?, isChannel: Boolean, parentFragment: BaseFragment?) {
+	fun setParticipantBannedRole(chatId: Long, user: User?, chat: Chat?, rights: TLRPC.TLChatBannedRights?, isChannel: Boolean, parentFragment: BaseFragment?) {
 		if (user == null && chat == null || rights == null) {
 			return
 		}
 
-		val req = TL_channels_editBanned()
+		val req = TLRPC.TLChannelsEditBanned()
 		req.channel = getInputChannel(chatId)
 
 		if (user != null) {
@@ -5469,7 +5517,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			req.participant = getInputPeer(chat)
 		}
 
-		req.banned_rights = rights
+		req.bannedRights = rights
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (response is Updates) {
@@ -5488,7 +5536,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun setChannelSlowMode(chatId: Long, seconds: Int) {
-		val req = TL_channels_toggleSlowMode()
+		val req = TLRPC.TLChannelsToggleSlowMode()
 		req.seconds = seconds
 		req.channel = getInputChannel(chatId)
 
@@ -5503,14 +5551,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun setDefaultBannedRole(chatId: Long, rights: TL_chatBannedRights?, isChannel: Boolean, parentFragment: BaseFragment?) {
+	fun setDefaultBannedRole(chatId: Long, rights: TLRPC.TLChatBannedRights?, isChannel: Boolean, parentFragment: BaseFragment?) {
 		if (rights == null) {
 			return
 		}
 
-		val req = TL_messages_editChatDefaultBannedRights()
+		val req = TLRPC.TLMessagesEditChatDefaultBannedRights()
 		req.peer = getInputPeer(-chatId)
-		req.banned_rights = rights
+		req.bannedRights = rights
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (response is Updates) {
@@ -5529,7 +5577,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	@JvmOverloads
-	fun setUserAdminRole(chatId: Long, user: User?, rights: TL_chatAdminRights?, rank: String?, isChannel: Boolean, parentFragment: BaseFragment?, addingNew: Boolean, forceAdmin: Boolean, botHash: String?, onSuccess: Runnable?, onError: ErrorDelegate? = null) {
+	fun setUserAdminRole(chatId: Long, user: User?, rights: TLRPC.TLChatAdminRights?, rank: String?, isChannel: Boolean, parentFragment: BaseFragment?, addingNew: Boolean, forceAdmin: Boolean, botHash: String?, onSuccess: Runnable?, onError: ErrorDelegate? = null) {
 		if (user == null || rights == null) {
 			return
 		}
@@ -5537,15 +5585,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val chat = getChat(chatId)
 
 		if (ChatObject.isChannel(chat)) {
-			val req = TL_channels_editAdmin()
+			val req = TLRPC.TLChannelsEditAdmin()
 
-			val channelInput: InputChannel = TL_inputChannel()
-			channelInput.channel_id = chatId
-			channelInput.access_hash = chat.access_hash
+			val channelInput = TLRPC.TLInputChannel()
+			channelInput.channelId = chatId
+			channelInput.accessHash = chat.accessHash
 
 			req.channel = channelInput
-			req.user_id = getInputUser(user)
-			req.admin_rights = rights
+			req.userId = getInputUser(user)
+			req.adminRights = rights
 			req.rank = rank
 
 			val requestDelegate = RequestDelegate { response, error ->
@@ -5578,10 +5626,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			val req = TL_messages_editChatAdmin()
-			req.chat_id = chatId
-			req.user_id = getInputUser(user)
-			req.is_admin = forceAdmin || rights.change_info || rights.delete_messages || rights.ban_users || rights.invite_users || rights.pin_messages || rights.add_admins || rights.manage_call
+			val req = TLRPC.TLMessagesEditChatAdmin()
+			req.chatId = chatId
+			req.userId = getInputUser(user)
+			req.isAdmin = forceAdmin || rights.changeInfo || rights.deleteMessages || rights.banUsers || rights.inviteUsers || rights.pinMessages || rights.addAdmins || rights.manageCall
 
 			val requestDelegate = RequestDelegate { _, error ->
 				if (error == null) {
@@ -5602,7 +5650,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 			}
-			if (req.is_admin || addingNew || !TextUtils.isEmpty(botHash)) {
+			if (req.isAdmin || addingNew || !TextUtils.isEmpty(botHash)) {
 				addUserToChat(chatId, user, 0, botHash, parentFragment, true, { connectionsManager.sendRequest(req, requestDelegate) }, onError)
 			}
 			else {
@@ -5612,7 +5660,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun unblockPeer(id: Long) {
-		val req = TL_contacts_unblock()
+		val req = TLRPC.TLContactsUnblock()
 		var user: User? = null
 		var chat: Chat? = null
 
@@ -5653,13 +5701,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		loadingBlockedPeers = true
 
-		val req = TL_contacts_getBlocked()
+		val req = TLRPC.TLContactsGetBlocked()
 		req.offset = if (reset) 0 else blockedPeers.size()
 		req.limit = if (reset) 20 else 100
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is contacts_Blocked) {
+				if (response is TLRPC.ContactsBlocked) {
 					putUsers(response.users, false)
 					putChats(response.chats, false)
 
@@ -5669,11 +5717,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						blockedPeers.clear()
 					}
 
-					totalBlockedCount = max(response.count, response.blocked.size)
+					totalBlockedCount = max((response as? TLRPC.TLContactsBlockedSlice)?.count ?: 0, response.blocked.size)
 					blockedEndReached = response.blocked.size < req.limit
 
 					for (peer in response.blocked) {
-						blockedPeers.put(MessageObject.getPeerId(peer.peer_id), 1)
+						blockedPeers.put(MessageObject.getPeerId(peer.peerId), 1)
 					}
 
 					loadingBlockedPeers = false
@@ -5687,9 +5735,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	@JvmOverloads
 	fun deleteUserPhoto(photo: InputPhoto?, isLastPhoto: Boolean = false) {
 		if (photo == null) {
-			userConfig.getCurrentUser()?.photo = TL_userProfilePhotoEmpty()
+			userConfig.getCurrentUser()?.photo = TLRPC.TLUserProfilePhotoEmpty()
 
-			var user = getUser(userConfig.getClientUserId())
+			var user = getUser(userConfig.getClientUserId()) as? TLUser
 
 			if (user == null) {
 				user = userConfig.getCurrentUser()
@@ -5700,7 +5748,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 
 			if (user.photo != null) {
-				messagesStorage.clearUserPhoto(user.id, user.photo?.photo_id ?: 0)
+				messagesStorage.clearUserPhoto(user.id, user.photo?.photoId ?: 0)
 			}
 
 			user.photo = userConfig.getCurrentUser()?.photo
@@ -5708,15 +5756,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			notificationCenter.postNotificationName(NotificationCenter.mainUserInfoChanged)
 			notificationCenter.postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_ALL)
 
-			val req = TL_photos_updateProfilePhoto()
-			req.id = TL_inputPhotoEmpty()
+			val req = TLRPC.TLPhotosUpdateProfilePhoto()
+			req.id = TLRPC.TLInputPhotoEmpty()
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_photos_photo) {
+				if (response is TLRPC.TLPhotosPhoto) {
 					AndroidUtilities.runOnUIThread {
 						messagesStorage.clearUserPhotos(user.id)
 
-						var user1 = getUser(userConfig.getClientUserId())
+						var user1 = getUser(userConfig.getClientUserId()) as? TLUser
 
 						if (user1 == null) {
 							user1 = userConfig.getCurrentUser()
@@ -5730,16 +5778,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							return@runOnUIThread
 						}
 
-						if (response.photo is TL_photo && !isLastPhoto) {
-							user1.photo = TL_userProfilePhoto()
-							user1.photo?.has_video = !response.photo?.video_sizes.isNullOrEmpty()
-							user1.photo?.photo_id = response.photo?.id ?: 0L
-							user1.photo?.photo_small = FileLoader.getClosestPhotoSizeWithSize(response.photo?.sizes, 150)?.location
-							user1.photo?.photo_big = FileLoader.getClosestPhotoSizeWithSize(response.photo?.sizes, 800)?.location
-							user1.photo?.dc_id = response.photo?.dc_id ?: 0
+						val responsePhoto = response.photo as? TLPhoto
+
+						if (responsePhoto != null && !isLastPhoto) {
+							user1.photo = TLRPC.TLUserProfilePhoto().also {
+								it.hasVideo = responsePhoto.videoSizes.isNotEmpty()
+								it.photoId = response.photo?.id ?: 0L
+								it.photoSmall = FileLoader.getClosestPhotoSizeWithSize(responsePhoto.sizes, 150)?.location
+								it.photoBig = FileLoader.getClosestPhotoSizeWithSize(responsePhoto.sizes, 800)?.location
+								it.dcId = (response.photo as? TLPhoto)?.dcId ?: 0
+							}
 						}
 						else {
-							user1.photo = TL_userProfilePhotoEmpty()
+							user1.photo = TLRPC.TLUserProfilePhotoEmpty()
 						}
 
 						messagesStorage.putUsersAndChats(listOf(user1), null, false, false)
@@ -5747,10 +5798,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val userFull = getUserFull(user1.id)
 
 						if (isLastPhoto) {
-							userFull?.profile_photo = null
+							userFull?.profilePhoto = null
 						}
 						else {
-							userFull?.profile_photo = response.photo
+							userFull?.profilePhoto = response.photo
 						}
 
 						messagesStorage.updateUserInfo(userFull, false)
@@ -5766,7 +5817,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			val req = TL_photos_deletePhotos()
+			val req = TLRPC.TLPhotosDeletePhotos()
 			req.id.add(photo)
 
 			connectionsManager.sendRequest(req) { _, error ->
@@ -5779,7 +5830,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun processLoadedUserPhotos(res: photos_Photos?, messages: ArrayList<Message>?, did: Long, count: Int, maxId: Int, fromCache: Boolean, classGuid: Int) {
+	fun processLoadedUserPhotos(res: TLRPC.PhotosPhotos?, messages: List<Message>?, did: Long, count: Int, maxId: Int, fromCache: Boolean, classGuid: Int) {
 		if (!fromCache && res != null) {
 			messagesStorage.putUsersAndChats(res.users, null, true, true)
 			messagesStorage.putDialogPhotos(did, res, messages)
@@ -5800,7 +5851,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		uploadingAvatar = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + location.volume_id + "_" + location.local_id + ".jpg"
+		uploadingAvatar = FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE).toString() + "/" + location.volumeId + "_" + location.localId + ".jpg"
 
 		fileLoader.uploadFile(uploadingAvatar, encrypted = false, small = true, type = ConnectionsManager.FileTypePhoto)
 	}
@@ -5809,11 +5860,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val info = accent?.info ?: themeInfo?.info
 
 		if (info != null) {
-			val req = TL_account_saveTheme()
+			val req = TLRPC.TLAccountSaveTheme()
 
-			val inputTheme = TL_inputTheme()
+			val inputTheme = TLRPC.TLInputTheme()
 			inputTheme.id = info.id
-			inputTheme.access_hash = info.access_hash
+			inputTheme.accessHash = info.accessHash
 
 			req.theme = inputTheme
 			req.unsave = unsave
@@ -5833,15 +5884,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val isBlurred = accent == null && themeInfo?.isBlured == true
 		val isMotion = accent?.patternMotion ?: themeInfo?.isMotion ?: false
 
-		val req = TL_account_installTheme()
+		val req = TLRPC.TLAccountInstallTheme()
 		req.dark = night
 
 		if (info != null) {
 			req.format = "android"
 
-			val inputTheme = TL_inputTheme()
+			val inputTheme = TLRPC.TLInputTheme()
 			inputTheme.id = info.id
-			inputTheme.access_hash = info.access_hash
+			inputTheme.accessHash = info.accessHash
 
 			req.theme = inputTheme
 			req.flags = req.flags or 2
@@ -5850,15 +5901,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		connectionsManager.sendRequest(req)
 
 		if (!slug.isNullOrEmpty()) {
-			val req2 = TL_account_installWallPaper()
+			val req2 = TLRPC.TLAccountInstallWallPaper()
 
-			val inputWallPaperSlug = TL_inputWallPaperSlug()
+			val inputWallPaperSlug = TLRPC.TLInputWallPaperSlug()
 			inputWallPaperSlug.slug = slug
 
 			req2.wallpaper = inputWallPaperSlug
-			req2.settings = TL_wallPaperSettings()
-			req2.settings.blur = isBlurred
-			req2.settings.motion = isMotion
+
+			req2.settings = TLRPC.TLWallPaperSettings().also {
+				it.blur = isBlurred
+				it.motion = isMotion
+			}
 
 			connectionsManager.sendRequest(req2)
 		}
@@ -5939,55 +5992,55 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			fileLoader.uploadFile(uploadingWallpaper, encrypted = false, small = true, type = ConnectionsManager.FileTypePhoto)
 		}
 		else if (!info.isDefault && !info.isColor && info.wallpaperId > 0 && !info.isTheme) {
-			val inputWallPaper: InputWallPaper
+			val inputWallPaper: TLRPC.InputWallPaper
 
 			if (info.wallpaperId > 0) {
-				val inputWallPaperId = TL_inputWallPaper()
+				val inputWallPaperId = TLRPC.TLInputWallPaper()
 				inputWallPaperId.id = info.wallpaperId
-				inputWallPaperId.access_hash = info.accessHash
+				inputWallPaperId.accessHash = info.accessHash
 				inputWallPaper = inputWallPaperId
 			}
 			else {
-				val inputWallPaperSlug = TL_inputWallPaperSlug()
+				val inputWallPaperSlug = TLRPC.TLInputWallPaperSlug()
 				inputWallPaperSlug.slug = info.slug
 				inputWallPaper = inputWallPaperSlug
 			}
 
-			val settings = TL_wallPaperSettings()
+			val settings = TLRPC.TLWallPaperSettings()
 			settings.blur = info.isBlurred
 			settings.motion = info.isMotion
 
 			if (info.color != 0) {
-				settings.background_color = info.color and 0x00ffffff
+				settings.backgroundColor = info.color and 0x00ffffff
 				settings.flags = settings.flags or 1
 				settings.intensity = (info.intensity * 100).toInt()
 				settings.flags = settings.flags or 8
 			}
 
 			if (info.gradientColor1 != 0) {
-				settings.second_background_color = info.gradientColor1 and 0x00ffffff
+				settings.secondBackgroundColor = info.gradientColor1 and 0x00ffffff
 				settings.rotation = AndroidUtilities.getWallpaperRotation(info.rotation, true)
 				settings.flags = settings.flags or 16
 			}
 
 			if (info.gradientColor2 != 0) {
-				settings.third_background_color = info.gradientColor2 and 0x00ffffff
+				settings.thirdBackgroundColor = info.gradientColor2 and 0x00ffffff
 				settings.flags = settings.flags or 32
 			}
 
 			if (info.gradientColor3 != 0) {
-				settings.fourth_background_color = info.gradientColor3 and 0x00ffffff
+				settings.fourthBackgroundColor = info.gradientColor3 and 0x00ffffff
 				settings.flags = settings.flags or 64
 			}
 
 			val req = if (install) {
-				val request = TL_account_installWallPaper()
+				val request = TLRPC.TLAccountInstallWallPaper()
 				request.wallpaper = inputWallPaper
 				request.settings = settings
 				request
 			}
 			else {
-				val request = TL_account_saveWallPaper()
+				val request = TLRPC.TLAccountSaveWallPaper()
 				request.wallpaper = inputWallPaper
 				request.settings = settings
 				request
@@ -6026,15 +6079,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		if ((info.isColor || info.gradientColor2 != 0) && info.wallpaperId <= 0) {
-			val wallPaper: WallPaper
+			val wallPaper: TLRPC.WallPaper
 
 			if (info.isColor) {
-				wallPaper = TL_wallPaperNoFile()
+				wallPaper = TLRPC.TLWallPaperNoFile()
 			}
 			else {
-				wallPaper = TL_wallPaper()
+				wallPaper = TLRPC.TLWallPaper()
 				wallPaper.slug = info.slug
-				wallPaper.document = TL_documentEmpty()
+				wallPaper.document = TLRPC.TLDocumentEmpty()
 			}
 
 			if (info.wallpaperId == 0L) {
@@ -6050,37 +6103,36 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			wallPaper.dark = MotionBackgroundDrawable.isDark(info.color, info.gradientColor1, info.gradientColor2, info.gradientColor3)
 			wallPaper.flags = wallPaper.flags or 4
-			wallPaper.settings = TL_wallPaperSettings()
-			wallPaper.settings.blur = info.isBlurred
-			wallPaper.settings.motion = info.isMotion
 
-			if (info.color != 0) {
-				wallPaper.settings.background_color = info.color
-				wallPaper.settings.flags = wallPaper.settings.flags or 1
-				wallPaper.settings.intensity = (info.intensity * 100).toInt()
-				wallPaper.settings.flags = wallPaper.settings.flags or 8
+			wallPaper.settings = TLRPC.TLWallPaperSettings().also {
+				it.blur = info.isBlurred
+				it.motion = info.isMotion
+
+				if (info.color != 0) {
+					it.backgroundColor = info.color
+					it.flags = it.flags or 1
+					it.intensity = (info.intensity * 100).toInt()
+					it.flags = it.flags or 8
+				}
+
+				if (info.gradientColor1 != 0) {
+					it.secondBackgroundColor = info.gradientColor1
+					it.rotation = AndroidUtilities.getWallpaperRotation(info.rotation, true)
+					it.flags = it.flags or 16
+				}
+
+				if (info.gradientColor2 != 0) {
+					it.thirdBackgroundColor = info.gradientColor2
+					it.flags = it.flags or 32
+				}
+
+				if (info.gradientColor3 != 0) {
+					it.fourthBackgroundColor = info.gradientColor3
+					it.flags = it.flags or 64
+				}
 			}
 
-			if (info.gradientColor1 != 0) {
-				wallPaper.settings.second_background_color = info.gradientColor1
-				wallPaper.settings.rotation = AndroidUtilities.getWallpaperRotation(info.rotation, true)
-				wallPaper.settings.flags = wallPaper.settings.flags or 16
-			}
-
-			if (info.gradientColor2 != 0) {
-				wallPaper.settings.third_background_color = info.gradientColor2
-				wallPaper.settings.flags = wallPaper.settings.flags or 32
-			}
-
-			if (info.gradientColor3 != 0) {
-				wallPaper.settings.fourth_background_color = info.gradientColor3
-				wallPaper.settings.flags = wallPaper.settings.flags or 64
-			}
-
-			val arrayList = ArrayList<WallPaper>()
-			arrayList.add(wallPaper)
-
-			messagesStorage.putWallpapers(arrayList, -3)
+			messagesStorage.putWallpapers(listOf(wallPaper), -3)
 			messagesStorage.getWallpapers()
 		}
 	}
@@ -6103,7 +6155,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	@JvmOverloads
-	fun deleteMessages(messages: List<Int>?, randoms: ArrayList<Long>?, encryptedChat: EncryptedChat?, dialogId: Long, forAll: Boolean, scheduled: Boolean, cacheOnly: Boolean = false, taskId: Long = 0, taskRequest: TLObject? = null) {
+	fun deleteMessages(messages: List<Int>?, randoms: List<Long>?, encryptedChat: EncryptedChat?, dialogId: Long, forAll: Boolean, scheduled: Boolean, cacheOnly: Boolean = false, taskId: Long = 0, taskRequest: TLObject? = null) {
 		if (messages.isNullOrEmpty() && taskId == 0L) {
 			return
 		}
@@ -6150,8 +6202,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			notificationCenter.postNotificationName(NotificationCenter.messagesDeleted, messages, channelId, scheduled)
 		}
 		else {
-			channelId = if (taskRequest is TL_channels_deleteMessages) {
-				taskRequest.channel.channel_id
+			channelId = if (taskRequest is TLRPC.TLChannelsDeleteMessages) {
+				taskRequest.channel?.channelId ?: 0
 			}
 			else {
 				0
@@ -6165,15 +6217,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val newTaskId: Long
 
 		if (scheduled) {
-			val req: TL_messages_deleteScheduledMessages
+			val req: TLRPC.TLMessagesDeleteScheduledMessages
 
-			if (taskRequest is TL_messages_deleteScheduledMessages) {
+			if (taskRequest is TLRPC.TLMessagesDeleteScheduledMessages) {
 				req = taskRequest
 				newTaskId = taskId
 			}
 			else {
-				req = TL_messages_deleteScheduledMessages()
-				req.id = toSend
+				req = TLRPC.TLMessagesDeleteScheduledMessages()
+				req.id.addAll(toSend ?: emptyList())
 				req.peer = getInputPeer(dialogId)
 
 				val data = try {
@@ -6202,15 +6254,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else if (channelId != 0L) {
-			val req: TL_channels_deleteMessages
+			val req: TLRPC.TLChannelsDeleteMessages
 
 			if (taskRequest != null) {
-				req = taskRequest as TL_channels_deleteMessages
+				req = taskRequest as TLRPC.TLChannelsDeleteMessages
 				newTaskId = taskId
 			}
 			else {
-				req = TL_channels_deleteMessages()
-				req.id = toSend
+				req = TLRPC.TLChannelsDeleteMessages()
+				req.id.addAll(toSend ?: emptyList())
 				req.channel = getInputChannel(channelId)
 
 				val data = try {
@@ -6229,8 +6281,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_messages_affectedMessages) {
-					processNewChannelDifferenceParams(response.pts, response.pts_count, channelId)
+				if (response is TLRPC.TLMessagesAffectedMessages) {
+					processNewChannelDifferenceParams(response.pts, response.ptsCount, channelId)
 				}
 
 				if (newTaskId != 0L) {
@@ -6239,19 +6291,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			if (randoms != null && encryptedChat != null && randoms.isNotEmpty()) {
-				secretChatHelper.sendMessagesDeleteMessage(encryptedChat, randoms, null)
-			}
+			// MARK: uncomment to enable secret chats
+//			if (randoms != null && encryptedChat != null && randoms.isNotEmpty()) {
+//				secretChatHelper.sendMessagesDeleteMessage(encryptedChat, randoms, null)
+//			}
 
-			val req: TL_messages_deleteMessages
+			val req: TLRPC.TLMessagesDeleteMessages
 
-			if (taskRequest is TL_messages_deleteMessages) {
+			if (taskRequest is TLRPC.TLMessagesDeleteMessages) {
 				req = taskRequest
 				newTaskId = taskId
 			}
 			else {
-				req = TL_messages_deleteMessages()
-				req.id = toSend
+				req = TLRPC.TLMessagesDeleteMessages()
+				req.id.addAll(toSend ?: emptyList())
 				req.revoke = forAll
 
 				val data = try {
@@ -6270,8 +6323,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_messages_affectedMessages) {
-					processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+				if (response is TLRPC.TLMessagesAffectedMessages) {
+					processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 				}
 
 				if (newTaskId != 0L) {
@@ -6288,16 +6341,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		val peerId = (if (chat != null) -chat.id else user?.id) ?: return
 
-		val req = TL_messages_unpinAllMessages()
+		val req = TLRPC.TLMessagesUnpinAllMessages()
 		req.peer = getInputPeer(peerId)
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_affectedHistory) {
+			if (response is TLRPC.TLMessagesAffectedHistory) {
 				if (ChatObject.isChannel(chat)) {
-					processNewChannelDifferenceParams(response.pts, response.pts_count, chat.id)
+					processNewChannelDifferenceParams(response.pts, response.ptsCount, chat.id)
 				}
 				else {
-					processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+					processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 				}
 
 				messagesStorage.updatePinnedMessages(peerId, null, false, 0, 0, false, null)
@@ -6312,12 +6365,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		val peerId = (if (chat != null) -chat.id else user?.id) ?: return
 
-		val req = TL_messages_updatePinnedMessage()
+		val req = TLRPC.TLMessagesUpdatePinnedMessage()
 		req.peer = getInputPeer(peerId)
 		req.id = id
 		req.unpin = unpin
 		req.silent = !notify
-		req.pm_oneside = oneSide
+		req.pmOneside = oneSide
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			if (response is Updates) {
@@ -6341,17 +6394,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			messagesStorage.deleteUserChatHistory(-currentChat.id, fromId)
 		}
 
-		val req = TL_channels_deleteParticipantHistory()
+		val req = TLRPC.TLChannelsDeleteParticipantHistory()
 		req.channel = getInputChannel(currentChat)
 		req.participant = if (fromUser != null) getInputPeer(fromUser) else getInputPeer(fromChat)
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_affectedHistory) {
+			if (response is TLRPC.TLMessagesAffectedHistory) {
 				if (response.offset > 0) {
 					deleteUserChannelHistory(currentChat, fromUser, fromChat, response.offset)
 				}
 
-				processNewChannelDifferenceParams(response.pts, response.pts_count, currentChat.id)
+				processNewChannelDifferenceParams(response.pts, response.ptsCount, currentChat.id)
 			}
 		}
 	}
@@ -6385,7 +6438,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		get() {
 			var count = 0
 
-			for (i in 0 until dialogsByFolder.size()) {
+			for (i in 0 until dialogsByFolder.size) {
 				val dialogs: List<Dialog?>? = dialogsByFolder[dialogsByFolder.keyAt(i)]
 
 				if (dialogs != null) {
@@ -6428,7 +6481,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun putDraftDialogIfNeed(dialogId: Long, draftMessage: DraftMessage) {
+	fun putDraftDialogIfNeed(dialogId: Long, draftMessage: TLRPC.DraftMessage) {
 		if (dialogs_dict.indexOfKey(dialogId) < 0) {
 			val mediaDataController = mediaDataController
 			val dialogsCount = allDialogs.size
@@ -6442,10 +6495,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			val dialog = TL_dialog()
+			val dialog = TLDialog()
 			dialog.id = dialogId
 			dialog.draft = draftMessage
-			dialog.folder_id = mediaDataController.getDraftFolderId(dialogId)
+			dialog.folderId = mediaDataController.getDraftFolderId(dialogId)
 			dialog.flags = if (dialogId < 0 && ChatObject.isChannel(getChat(-dialogId))) 1 else 0
 
 			dialogs_dict.put(dialogId, dialog)
@@ -6458,7 +6511,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	fun removeDraftDialogIfNeed(dialogId: Long) {
 		val dialog = dialogs_dict[dialogId]
 
-		if (dialog != null && dialog.top_message == 0) {
+		if (dialog != null && dialog.topMessage == 0) {
 			dialogs_dict.remove(dialog.id)
 			allDialogs.remove(dialog)
 		}
@@ -6497,7 +6550,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		dialogs_dict.remove(did)
 
-		val dialogs = dialogsByFolder[dialog.folder_id]
+		val dialogs = dialogsByFolder[dialog.folderId]
 
 		dialogs?.remove(dialog)
 	}
@@ -6505,7 +6558,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	fun hidePromoDialog() {
 		val promoDialog = promoDialog ?: return
 
-		val req = TL_help_hidePromoData()
+		val req = TLRPC.TLHelpHidePromoData()
 		req.peer = getInputPeer(promoDialog.id)
 
 		connectionsManager.sendRequest(req)
@@ -6514,7 +6567,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			promoDialogId = 0
 			proxyDialogAddress = null
 			nextPromoInfoCheckTime = connectionsManager.currentTime + 60 * 60
-			mainPreferences.edit().putLong("proxy_dialog", promoDialogId).remove("proxyDialogAddress").putInt("nextPromoInfoCheckTime", nextPromoInfoCheckTime).commit()
+
+			mainPreferences.edit { putLong("proxy_dialog", promoDialogId).remove("proxyDialogAddress").putInt("nextPromoInfoCheckTime", nextPromoInfoCheckTime) }
 		}
 
 		removePromoDialog()
@@ -6526,7 +6580,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun setDialogHistoryTTL(did: Long, ttl: Int) {
-		val req = TL_messages_setHistoryTTL()
+		val req = TLRPC.TLMessagesSetHistoryTTL()
 		req.peer = getInputPeer(did)
 		req.period = ttl
 
@@ -6537,7 +6591,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		var chatFull: ChatFull? = null
-		var userFull: UserFull? = null
+		var userFull: TLUserFull? = null
 
 		if (did > 0) {
 			userFull = getUserFull(did)
@@ -6546,7 +6600,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return
 			}
 
-			userFull.ttl_period = ttl
+			userFull.ttlPeriod = ttl
 			userFull.flags = userFull.flags or 16384
 		}
 		else {
@@ -6556,9 +6610,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return
 			}
 
-			chatFull.ttl_period = ttl
+			chatFull.ttlPeriod = ttl
 
-			if (chatFull is TL_channelFull) {
+			if (chatFull is TLRPC.TLChannelFull) {
 				chatFull.flags = chatFull.flags or 16777216
 			}
 			else {
@@ -6603,7 +6657,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 
 				for (j in peers.peers.indices) {
-					if (peers.peers[j].peer.channel_id == -did || peers.peers[j].peer.chat_id == -did) {
+					if (peers.peers[j].peer.channelId == -did || peers.peers[j].peer.chatId == -did) {
 						peers.peers.removeAt(j)
 						break
 					}
@@ -6652,9 +6706,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			if (dialog != null) {
 				if (first == 2) {
-					maxIdDelete = max(0, dialog.top_message)
-					maxIdDelete = max(maxIdDelete, dialog.read_inbox_max_id)
-					maxIdDelete = max(maxIdDelete, dialog.read_outbox_max_id)
+					maxIdDelete = max(0, dialog.topMessage)
+					maxIdDelete = max(maxIdDelete, dialog.readInboxMaxId)
+					maxIdDelete = max(maxIdDelete, dialog.readOutboxMaxId)
 				}
 
 				if (onlyHistory == 0 || onlyHistory == 3) {
@@ -6674,15 +6728,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					else {
 						removeDialog(dialog)
 
-						val offset = nextDialogsCacheOffset[dialog.folder_id, 0]
+						val offset = nextDialogsCacheOffset[dialog.folderId, 0]
 
 						if (offset > 0) {
-							nextDialogsCacheOffset.put(dialog.folder_id, offset - 1)
+							nextDialogsCacheOffset.put(dialog.folderId, offset - 1)
 						}
 					}
 				}
 				else {
-					dialog.unread_count = 0
+					dialog.unreadCount = 0
 				}
 
 				if (!isPromoDialog) {
@@ -6694,36 +6748,39 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					if (`object` != null) {
 						lastMessageId = `object`.id
 
-						if (`object`.messageOwner?.peer_id?.channel_id == 0L) {
+						if (`object`.messageOwner?.peerId?.channelId == 0L) {
 							dialogMessagesByIds.remove(`object`.id)
 						}
 					}
 					else {
-						lastMessageId = dialog.top_message
-						`object` = dialogMessagesByIds[dialog.top_message]
+						lastMessageId = dialog.topMessage
+						`object` = dialogMessagesByIds[dialog.topMessage]
 
-						if (`object` != null && `object`.messageOwner?.peer_id?.channel_id == 0L) {
-							dialogMessagesByIds.remove(dialog.top_message)
+						if (`object` != null && `object`.messageOwner?.peerId?.channelId == 0L) {
+							dialogMessagesByIds.remove(dialog.topMessage)
 						}
 					}
 
-					if (`object` != null && `object`.messageOwner?.random_id != 0L) {
-						dialogMessagesByRandomIds.remove(`object`.messageOwner!!.random_id)
+					if (`object` != null && `object`.messageOwner?.randomId != 0L) {
+						dialogMessagesByRandomIds.remove(`object`.messageOwner!!.randomId)
 					}
 
 					if (onlyHistory == 1 && !DialogObject.isEncryptedDialog(did) && lastMessageId > 0) {
-						val message = TL_messageService()
-						message.id = dialog.top_message
+						val message = TLRPC.TLMessageService()
+						message.id = dialog.topMessage
 						message.out = userConfig.getClientUserId() == did
-						message.from_id = TL_peerUser()
-						message.from_id?.user_id = userConfig.getClientUserId()
-						message.flags = message.flags or 256
-						message.action = TL_messageActionHistoryClear()
-						message.date = dialog.last_message_date
-						message.dialog_id = did
-						message.peer_id = getPeer(did)
 
-						val isDialogCreated = createdDialogIds.contains(message.dialog_id)
+						message.fromId = TLRPC.TLPeerUser().also {
+							it.userId = userConfig.getClientUserId()
+						}
+
+						message.flags = message.flags or 256
+						message.action = TLRPC.TLMessageActionHistoryClear()
+						message.date = dialog.lastMessageDate
+						message.dialogId = did
+						message.peerId = getPeer(did)
+
+						val isDialogCreated = createdDialogIds.contains(message.dialogId)
 						val obj = MessageObject(currentAccount, message, isDialogCreated, isDialogCreated)
 
 						updateInterfaceWithMessages(did, listOf(obj), false)
@@ -6731,7 +6788,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						messagesStorage.putMessages(listOf(message), false, true, false, 0, false)
 					}
 					else {
-						dialog.top_message = 0
+						dialog.topMessage = 0
 					}
 				}
 			}
@@ -6777,7 +6834,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			val newTaskId: Long
 
-			if (peer !is TL_inputPeerChannel || onlyHistory != 0) {
+			if (peer !is TLRPC.TLInputPeerChannel || onlyHistory != 0) {
 				if (maxIdDelete > 0 && maxIdDelete != Int.MAX_VALUE) {
 					val current = deletedHistory[did, 0]
 					deletedHistory.put(did, max(current, maxIdDelete))
@@ -6811,7 +6868,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				newTaskId = taskId
 			}
 
-			if (peer is TL_inputPeerChannel) {
+			if (peer is TLRPC.TLInputPeerChannel) {
 				if (onlyHistory == 0) {
 					if (newTaskId != 0L) {
 						messagesStorage.removePendingTask(newTaskId)
@@ -6820,12 +6877,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					return
 				}
 
-				val req = TL_channels_deleteHistory()
-				req.channel = TL_inputChannel()
-				req.for_everyone = revoke
-				req.channel.channel_id = peer.channel_id
-				req.channel.access_hash = peer.access_hash
-				req.max_id = if (maxIdDelete > 0) maxIdDelete else Int.MAX_VALUE
+				val req = TLRPC.TLChannelsDeleteHistory()
+				req.forEveryone = revoke
+
+				req.channel = TLRPC.TLInputChannel().also {
+					it.channelId = peer.channelId
+					it.accessHash = peer.accessHash
+				}
+
+				req.maxId = if (maxIdDelete > 0) maxIdDelete else Int.MAX_VALUE
 
 				connectionsManager.sendRequest(req, { response, _ ->
 					if (newTaskId != 0L) {
@@ -6838,10 +6898,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}, ConnectionsManager.RequestFlagInvokeAfter)
 			}
 			else {
-				val req = TL_messages_deleteHistory()
+				val req = TLRPC.TLMessagesDeleteHistory()
 				req.peer = peer
-				req.max_id = if (maxIdDelete > 0) maxIdDelete else Int.MAX_VALUE
-				req.just_clear = onlyHistory != 0
+				req.maxId = if (maxIdDelete > 0) maxIdDelete else Int.MAX_VALUE
+				req.justClear = onlyHistory != 0
 				req.revoke = revoke
 
 				connectionsManager.sendRequest(req, { response, _ ->
@@ -6849,12 +6909,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						messagesStorage.removePendingTask(newTaskId)
 					}
 
-					if (response is TL_messages_affectedHistory) {
+					if (response is TLRPC.TLMessagesAffectedHistory) {
 						if (response.offset > 0) {
 							deleteDialog(did, 0, onlyHistory, maxIdDelete, revoke, peer, 0)
 						}
 
-						processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+						processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 
 						messagesStorage.onDeleteQueryComplete(did)
 					}
@@ -6862,30 +6922,29 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			val encryptedId = DialogObject.getEncryptedChatId(did)
-
-			if (onlyHistory == 1) {
-				secretChatHelper.sendClearHistoryMessage(getEncryptedChat(encryptedId), null)
-			}
-			else {
-				secretChatHelper.declineSecretChat(encryptedId, revoke)
-			}
+			// MARK: uncomment to enable secret chats
+//			val encryptedId = DialogObject.getEncryptedChatId(did)
+//
+//			if (onlyHistory == 1) {
+//				secretChatHelper.sendClearHistoryMessage(getEncryptedChat(encryptedId), null)
+//			}
+//			else {
+//				secretChatHelper.declineSecretChat(encryptedId, revoke)
+//			}
 		}
 	}
 
 	fun saveGif(parentObject: Any?, document: Document?) {
-		if (parentObject == null || !MessageObject.isGifDocument(document)) {
+		if (parentObject == null || !MessageObject.isGifDocument(document) || document !is TLRPC.TLDocument) {
 			return
 		}
 
-		val req = TL_messages_saveGif()
-		req.id = TL_inputDocument()
-		req.id?.id = document.id
-		req.id?.access_hash = document.access_hash
-		req.id?.file_reference = document.file_reference
+		val req = TLRPC.TLMessagesSaveGif()
 
-		if (req.id?.file_reference == null) {
-			req.id?.file_reference = ByteArray(0)
+		req.id = TLRPC.TLInputDocument().also {
+			it.id = document.id
+			it.accessHash = document.accessHash
+			it.fileReference = document.fileReference ?: ByteArray(0)
 		}
 
 		req.unsave = false
@@ -6898,18 +6957,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun saveRecentSticker(parentObject: Any?, document: Document?, asMask: Boolean) {
-		if (parentObject == null || document == null) {
+		if (parentObject == null || document !is TLRPC.TLDocument) {
 			return
 		}
 
-		val req = TL_messages_saveRecentSticker()
-		req.id = TL_inputDocument()
-		req.id.id = document.id
-		req.id.access_hash = document.access_hash
-		req.id.file_reference = document.file_reference
+		val req = TLRPC.TLMessagesSaveRecentSticker()
 
-		if (req.id.file_reference == null) {
-			req.id.file_reference = ByteArray(0)
+		req.id = TLRPC.TLInputDocument().also {
+			it.id = document.id
+			it.accessHash = document.accessHash
+			it.fileReference = document.fileReference ?: ByteArray(0)
 		}
 
 		req.unsave = false
@@ -6929,15 +6986,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		loadingFullParticipants.add(chatId)
 
-		val req = TL_channels_getParticipants()
+		val req = TLRPC.TLChannelsGetParticipants()
 		req.channel = getInputChannel(chatId)
-		req.filter = TL_channelParticipantsRecent()
+		req.filter = TLRPC.TLChannelParticipantsRecent()
 		req.offset = 0
 		req.limit = 32
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
-				if (response is TL_channels_channelParticipants) {
+				if (response is TLRPC.TLChannelsChannelParticipants) {
 					putUsers(response.users, false)
 					putChats(response.chats, false)
 
@@ -6986,7 +7043,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		messagesStorage.loadUserInfo(user, force, classGuid)
 	}
 
-	fun processUserInfo(user: User, info: UserFull?, fromCache: Boolean, force: Boolean, classGuid: Int, pinnedMessages: ArrayList<Int>?, pinnedMessagesMap: HashMap<Int, MessageObject>?, totalPinnedCount: Int, pinnedEndReached: Boolean) {
+	fun processUserInfo(user: User, info: TLUserFull?, fromCache: Boolean, force: Boolean, classGuid: Int, pinnedMessages: ArrayList<Int>?, pinnedMessagesMap: HashMap<Int, MessageObject>?, totalPinnedCount: Int, pinnedEndReached: Boolean) {
 		AndroidUtilities.runOnUIThread {
 			if (fromCache) {
 				loadFullUser(user, classGuid, force)
@@ -7037,7 +7094,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							connectionsManager.cancelRequest(statusRequest, true)
 						}
 
-						val req = TL_account_updateStatus()
+						val req = TLRPC.TLAccountUpdateStatus()
 						req.offline = false
 
 						statusRequest = connectionsManager.sendRequest(req) { _, error ->
@@ -7064,7 +7121,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					connectionsManager.cancelRequest(statusRequest, true)
 				}
 
-				val req = TL_account_updateStatus()
+				val req = TLRPC.TLAccountUpdateStatus()
 				req.offline = true
 
 				statusRequest = connectionsManager.sendRequest(req) { _, error ->
@@ -7108,16 +7165,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				for (a in 0 until channelViewsToSend.size()) {
 					val key = channelViewsToSend.keyAt(a)
 
-					val req = TL_messages_getMessagesViews()
+					val req = TLRPC.TLMessagesGetMessagesViews()
 					req.peer = getInputPeer(key)
-					req.id = ArrayList(channelViewsToSend.valueAt(a))
+					req.id.addAll(channelViewsToSend.valueAt(a))
 					req.increment = a == 0
 
 					connectionsManager.sendRequest(req) { response, _ ->
-						if (response is TL_messages_messageViews) {
+						if (response is TLRPC.TLMessagesMessageViews) {
 							val channelViews = LongSparseArray<SparseIntArray>()
 							val channelForwards = LongSparseArray<SparseIntArray>()
-							val channelReplies = LongSparseArray<SparseArray<MessageReplies>>()
+							val channelReplies = LongSparseArray<SparseArray<TLMessageReplies>>()
 							var views = channelViews[key]
 							var forwards = channelForwards[key]
 							var replies = channelReplies[key]
@@ -7182,27 +7239,21 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					while (a < n) {
 						val array = pollsToCheck.valueAt(a)
-
-						if (array == null) {
-							a++
-							continue
-						}
-
 						var b = 0
-						var n2 = array.size()
+						var n2 = array.size
 
 						while (b < n2) {
 							val messageObject = array.valueAt(b)
-							val mediaPoll = messageObject.messageOwner?.media as TL_messageMediaPoll
+							val mediaPoll = messageObject.messageOwner?.media as TLRPC.TLMessageMediaPoll
 							var timeout = 30000
 							var expired: Boolean
 
-							if ((mediaPoll.poll.close_date != 0 && !mediaPoll.poll.closed).also { expired = it }) {
-								if (mediaPoll.poll.close_date <= currentServerTime) {
+							if ((mediaPoll.poll?.closeDate != 0 && mediaPoll.poll?.closed != true).also { expired = it }) {
+								if ((mediaPoll.poll?.closeDate ?: 0) <= currentServerTime) {
 									timeout = 1000
 								}
 								else {
-									minExpireTime = min(minExpireTime, mediaPoll.poll.close_date - currentServerTime)
+									minExpireTime = min(minExpireTime, (mediaPoll.poll?.closeDate ?: 0) - currentServerTime)
 								}
 							}
 
@@ -7216,9 +7267,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							else {
 								messageObject.pollLastCheckTime = time
 
-								val req = TL_messages_getPollResults()
+								val req = TLRPC.TLMessagesGetPollResults()
 								req.peer = getInputPeer(messageObject.dialogId)
-								req.msg_id = messageObject.id
+								req.msgId = messageObject.id
 
 								connectionsManager.sendRequest(req) { response, _ ->
 									if (response is Updates) {
@@ -7226,8 +7277,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 											for (i in response.updates.indices) {
 												val update = response.updates[i]
 
-												if (update is TL_updateMessagePoll) {
-													if (update.poll != null && !update.poll.closed) {
+												if (update is TLRPC.TLUpdateMessagePoll) {
+													if (update.poll != null && !update.poll!!.closed) {
 														lastViewsCheckTime = System.currentTimeMillis() - 4000
 													}
 												}
@@ -7246,7 +7297,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							lastViewsCheckTime = min(lastViewsCheckTime, System.currentTimeMillis() - (5L - minExpireTime) * 1000L)
 						}
 
-						if (array.size() == 0) {
+						if (array.isEmpty()) {
 							pollsToCheck.remove(pollsToCheck.keyAt(a))
 							n--
 							a--
@@ -7321,11 +7372,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						a--
 					}
 
-					val req = TL_messages_getOnlines()
+					val req = TLRPC.TLMessagesGetOnlines()
 					req.peer = getInputPeer(-key)
 
 					connectionsManager.sendRequest(req) { response, _ ->
-						if (response is TL_chatOnlines) {
+						if (response is TLRPC.TLChatOnlines) {
 							messagesStorage.updateChatOnlineCount(key, response.onlines)
 
 							AndroidUtilities.runOnUIThread {
@@ -7362,7 +7413,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							while (a < arr.size) {
 								val user = arr[a]
 
-								val timeToRemove = if (user.action is TL_sendMessageGamePlayAction) {
+								val timeToRemove = if (user.action is TLRPC.TLSendMessageGamePlayAction) {
 									30000
 								}
 								else {
@@ -7423,7 +7474,6 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		locationController.update()
 
-		checkPromoInfoInternal(false)
 		checkTosUpdate()
 	}
 
@@ -7434,21 +7484,21 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		checkingTosUpdate = true
 
-		val req = TL_help_getTermsOfServiceUpdate()
+		val req = TLRPC.TLHelpGetTermsOfServiceUpdate()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			checkingTosUpdate = false
 
 			when (response) {
-				is TL_help_termsOfServiceUpdateEmpty -> {
+				is TLRPC.TLHelpTermsOfServiceUpdateEmpty -> {
 					nextTosCheckTime = response.expires
 				}
 
-				is TL_help_termsOfServiceUpdate -> {
+				is TLRPC.TLHelpTermsOfServiceUpdate -> {
 					nextTosCheckTime = response.expires
 
 					AndroidUtilities.runOnUIThread {
-						notificationCenter.postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.TERMS_UPDATED, response.terms_of_service)
+						notificationCenter.postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.TERMS_UPDATED, response.termsOfService)
 					}
 				}
 
@@ -7457,344 +7507,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			notificationsPreferences.edit().putInt("nextTosCheckTime", nextTosCheckTime).commit()
-		}
-	}
-
-	fun checkPromoInfo(reset: Boolean) {
-		Utilities.stageQueue.postRunnable {
-			checkPromoInfoInternal(reset)
-		}
-	}
-
-	private fun checkPromoInfoInternal(reset: Boolean) {
-		if (reset && checkingPromoInfo) {
-			checkingPromoInfo = false
-		}
-
-		if (!reset && nextPromoInfoCheckTime > connectionsManager.currentTime || checkingPromoInfo) {
-			return
-		}
-
-		if (checkingPromoInfoRequestId != 0) {
-			connectionsManager.cancelRequest(checkingPromoInfoRequestId, true)
-			checkingPromoInfoRequestId = 0
-		}
-
-		val preferences: SharedPreferences = getGlobalMainSettings()
-		// boolean enabled = preferences.getBoolean("proxy_enabled", false);
-		val proxyAddress = preferences.getString("proxy_ip", "")
-		val proxySecret = preferences.getString("proxy_secret", "")
-		var removeCurrent = 0
-
-		if (promoDialogId != 0L && promoDialogType == PROMO_TYPE_PROXY && proxyDialogAddress != null && proxyDialogAddress != proxyAddress + proxySecret) {
-			removeCurrent = 1
-		}
-
-		lastCheckPromoId++
-		checkingPromoInfo = true
-
-		val checkPromoId = lastCheckPromoId
-
-		val req = TL_help_getPromoData()
-
-		checkingPromoInfoRequestId = connectionsManager.sendRequest(req) { response, _ ->
-			if (checkPromoId != lastCheckPromoId) {
-				return@sendRequest
-			}
-
-			var noDialog = false
-
-			if (response is TL_help_promoDataEmpty) {
-				nextPromoInfoCheckTime = response.expires
-				noDialog = true
-			}
-			else if (response is TL_help_promoData) {
-				val did: Long
-
-				if (response.peer.user_id != 0L) {
-					did = response.peer.user_id
-				}
-				else if (response.peer.chat_id != 0L) {
-					did = -response.peer.chat_id
-
-					for (a in response.chats.indices) {
-						val chat = response.chats[a]
-
-						if (chat.id == response.peer.chat_id) {
-							if (chat.kicked || chat.restricted) {
-								noDialog = true
-							}
-
-							break
-						}
-					}
-				}
-				else {
-					did = -response.peer.channel_id
-
-					for (a in response.chats.indices) {
-						val chat = response.chats[a]
-
-						if (chat.id == response.peer.channel_id) {
-							if (chat.kicked || chat.restricted) {
-								noDialog = true
-							}
-
-							break
-						}
-					}
-				}
-
-				promoDialogId = did
-
-				if (response.proxy) {
-					promoDialogType = PROMO_TYPE_PROXY
-				}
-				else if (!TextUtils.isEmpty(response.psa_type)) {
-					promoDialogType = PROMO_TYPE_PSA
-					promoPsaType = response.psa_type
-				}
-				else {
-					promoDialogType = PROMO_TYPE_OTHER
-				}
-
-				proxyDialogAddress = proxyAddress + proxySecret
-				promoPsaMessage = response.psa_message
-				nextPromoInfoCheckTime = response.expires
-
-				val editor: SharedPreferences.Editor = getGlobalMainSettings().edit()
-				editor.putLong("proxy_dialog", promoDialogId)
-				editor.putString("proxyDialogAddress", proxyDialogAddress)
-				editor.putInt("promo_dialog_type", promoDialogType)
-
-				if (promoPsaMessage != null) {
-					editor.putString("promo_psa_message", promoPsaMessage)
-				}
-				else {
-					editor.remove("promo_psa_message")
-				}
-
-				if (promoPsaType != null) {
-					editor.putString("promo_psa_type", promoPsaType)
-				}
-				else {
-					editor.remove("promo_psa_type")
-				}
-
-				editor.putInt("nextPromoInfoCheckTime", nextPromoInfoCheckTime)
-				editor.commit()
-
-				if (!noDialog) {
-					AndroidUtilities.runOnUIThread {
-						if (promoDialog != null && did != promoDialog!!.id) {
-							removePromoDialog()
-						}
-
-						promoDialog = dialogs_dict[did]
-
-						if (promoDialog != null) {
-							checkingPromoInfo = false
-							sortDialogs(null)
-							notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload, true)
-						}
-						else {
-							val usersDict = LongSparseArray<User>()
-							val chatsDict = LongSparseArray<Chat>()
-
-							for (a in response.users.indices) {
-								val u = response.users[a]
-								usersDict.put(u.id, u)
-							}
-
-							for (a in response.chats.indices) {
-								val c = response.chats[a]
-								chatsDict.put(c.id, c)
-							}
-
-							val req1 = TL_messages_getPeerDialogs()
-							val peer = TL_inputDialogPeer()
-
-							if (response.peer.user_id != 0L) {
-								peer.peer = TL_inputPeerUser()
-								peer.peer.user_id = response.peer.user_id
-
-								val user = usersDict[response.peer.user_id]
-
-								if (user != null) {
-									peer.peer.access_hash = user.access_hash
-								}
-							}
-							else if (response.peer.chat_id != 0L) {
-								peer.peer = TL_inputPeerChat()
-								peer.peer.chat_id = response.peer.chat_id
-
-								val chat = chatsDict[response.peer.chat_id]
-
-								if (chat != null) {
-									peer.peer.access_hash = chat.access_hash
-								}
-							}
-							else {
-								peer.peer = TL_inputPeerChannel()
-								peer.peer.channel_id = response.peer.channel_id
-
-								val chat = chatsDict[response.peer.channel_id]
-
-								if (chat != null) {
-									peer.peer.access_hash = chat.access_hash
-								}
-							}
-
-							req1.peers.add(peer)
-
-							checkingPromoInfoRequestId = connectionsManager.sendRequest(req1) { response1, _ ->
-								if (checkPromoId != lastCheckPromoId) {
-									return@sendRequest
-								}
-
-								checkingPromoInfoRequestId = 0
-
-								val res2 = response1 as? TL_messages_peerDialogs
-
-								if (res2 != null && res2.dialogs.isNotEmpty()) {
-									messagesStorage.putUsersAndChats(response.users, response.chats, true, true)
-
-									val dialogs = TL_messages_dialogs()
-									dialogs.chats = res2.chats
-									dialogs.users = res2.users
-									dialogs.dialogs = res2.dialogs
-									dialogs.messages = res2.messages
-
-									messagesStorage.putDialogs(dialogs, 2)
-
-									AndroidUtilities.runOnUIThread {
-										putUsers(response.users, false)
-										putChats(response.chats, false)
-										putUsers(res2.users, false)
-										putChats(res2.chats, false)
-
-										promoDialog?.let { promoDialog ->
-											if (promoDialog.id < 0) {
-												val chat = getChat(-promoDialog.id)
-
-												if (ChatObject.isNotInChat(chat) || chat?.restricted == true) {
-													removeDialog(promoDialog)
-												}
-											}
-											else {
-												removeDialog(promoDialog)
-											}
-										}
-
-										promoDialog = res2.dialogs[0]
-										promoDialog?.id = did
-										promoDialog?.folder_id = 0
-
-										if (DialogObject.isChannel(promoDialog)) {
-											channelsPts.put(-promoDialog!!.id, promoDialog!!.pts)
-										}
-
-										var value = dialogs_read_inbox_max[promoDialog?.id]
-
-										if (value == null) {
-											value = 0
-										}
-
-										dialogs_read_inbox_max[promoDialog!!.id] = max(value, promoDialog!!.read_inbox_max_id)
-
-										value = dialogs_read_outbox_max[promoDialog!!.id]
-
-										if (value == null) {
-											value = 0
-										}
-
-										dialogs_read_outbox_max[promoDialog!!.id] = max(value, promoDialog!!.read_outbox_max_id)
-										dialogs_dict.put(did, promoDialog)
-
-										if (res2.messages.isNotEmpty()) {
-											val usersDict1 = LongSparseArray<User>()
-											val chatsDict1 = LongSparseArray<Chat>()
-
-											for (a in res2.users.indices) {
-												val u = res2.users[a]
-												usersDict1.put(u.id, u)
-											}
-
-											for (a in res2.chats.indices) {
-												val c = res2.chats[a]
-												chatsDict1.put(c.id, c)
-											}
-
-											val messageObject = MessageObject(currentAccount, res2.messages[0], usersDict1, chatsDict1, generateLayout = false, checkMediaExists = true)
-
-											dialogMessage.put(did, messageObject)
-
-											if (promoDialog?.last_message_date == 0) {
-												promoDialog?.last_message_date = messageObject.messageOwner!!.date
-											}
-										}
-
-										sortDialogs(null)
-
-										notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload, true)
-									}
-								}
-								else {
-									AndroidUtilities.runOnUIThread {
-										promoDialog?.let {
-											if (it.id < 0) {
-												val chat = getChat(-it.id)
-
-												if (ChatObject.isNotInChat(chat) || chat?.restricted == true) {
-													removeDialog(promoDialog)
-												}
-											}
-											else {
-												removeDialog(promoDialog)
-											}
-
-											promoDialog = null
-
-											sortDialogs(null)
-
-											notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
-										}
-									}
-								}
-
-								checkingPromoInfo = false
-							}
-						}
-					}
-				}
-			}
-			else {
-				nextPromoInfoCheckTime = connectionsManager.currentTime + 60 * 60
-				noDialog = true
-			}
-
-			if (noDialog) {
-				promoDialogId = 0
-				getGlobalMainSettings().edit().putLong("proxy_dialog", promoDialogId).remove("proxyDialogAddress").putInt("nextPromoInfoCheckTime", nextPromoInfoCheckTime).commit()
-				checkingPromoInfoRequestId = 0
-				checkingPromoInfo = false
-
-				AndroidUtilities.runOnUIThread {
-					removePromoDialog()
-				}
-			}
-		}
-
-		if (removeCurrent != 0) {
-			promoDialogId = 0
-			proxyDialogAddress = null
-			nextPromoInfoCheckTime = connectionsManager.currentTime + 60 * 60
-			getGlobalMainSettings().edit().putLong("proxy_dialog", promoDialogId).remove("proxyDialogAddress").putInt("nextPromoInfoCheckTime", nextPromoInfoCheckTime).commit()
-
-			AndroidUtilities.runOnUIThread {
-				removePromoDialog()
-			}
+			notificationsPreferences.edit { putInt("nextTosCheckTime", nextTosCheckTime) }
 		}
 	}
 
@@ -7828,11 +7541,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return ""
 		}
 
-		return if (!user.first_name.isNullOrEmpty()) {
-			user.first_name
+		return if (!user.firstName.isNullOrEmpty()) {
+			user.firstName
 		}
-		else if (!user.last_name.isNullOrEmpty()) {
-			user.last_name
+		else if (!user.lastName.isNullOrEmpty()) {
+			user.lastName
 		}
 		else {
 			""
@@ -7858,7 +7571,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val user = getUser(pu.userId) ?: continue
 
 					when (pu.action) {
-						is TL_sendMessageRecordAudioAction -> {
+						is TLRPC.TLSendMessageRecordAudioAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsRecordingAudio", R.string.IsRecordingAudio, getUserNameForTyping(user)))
 							}
@@ -7869,7 +7582,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 1)
 						}
 
-						is TL_sendMessageRecordRoundAction -> {
+						is TLRPC.TLSendMessageRecordRoundAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsRecordingRound", R.string.IsRecordingRound, getUserNameForTyping(user)))
 							}
@@ -7880,7 +7593,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 4)
 						}
 
-						is TL_sendMessageUploadRoundAction -> {
+						is TLRPC.TLSendMessageUploadRoundAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSendingVideo", R.string.IsSendingVideo, getUserNameForTyping(user)))
 							}
@@ -7891,7 +7604,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 4)
 						}
 
-						is TL_sendMessageUploadAudioAction -> {
+						is TLRPC.TLSendMessageUploadAudioAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSendingAudio", R.string.IsSendingAudio, getUserNameForTyping(user)))
 							}
@@ -7902,7 +7615,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 2)
 						}
 
-						is TL_sendMessageUploadVideoAction -> {
+						is TLRPC.TLSendMessageUploadVideoAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSendingVideo", R.string.IsSendingVideo, getUserNameForTyping(user)))
 							}
@@ -7913,7 +7626,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 2)
 						}
 
-						is TL_sendMessageRecordVideoAction -> {
+						is TLRPC.TLSendMessageRecordVideoAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsRecordingVideo", R.string.IsRecordingVideo, getUserNameForTyping(user)))
 							}
@@ -7924,7 +7637,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 2)
 						}
 
-						is TL_sendMessageUploadDocumentAction -> {
+						is TLRPC.TLSendMessageUploadDocumentAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSendingFile", R.string.IsSendingFile, getUserNameForTyping(user)))
 							}
@@ -7935,7 +7648,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 2)
 						}
 
-						is TL_sendMessageUploadPhotoAction -> {
+						is TLRPC.TLSendMessageUploadPhotoAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSendingPhoto", R.string.IsSendingPhoto, getUserNameForTyping(user)))
 							}
@@ -7946,7 +7659,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 2)
 						}
 
-						is TL_sendMessageGamePlayAction -> {
+						is TLRPC.TLSendMessageGamePlayAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSendingGame", R.string.IsSendingGame, getUserNameForTyping(user)))
 							}
@@ -7957,7 +7670,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 3)
 						}
 
-						is TL_sendMessageGeoLocationAction -> {
+						is TLRPC.TLSendMessageGeoLocationAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSelectingLocation", R.string.IsSelectingLocation, getUserNameForTyping(user)))
 							}
@@ -7968,7 +7681,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 0)
 						}
 
-						is TL_sendMessageChooseContactAction -> {
+						is TLRPC.TLSendMessageChooseContactAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsSelectingContact", R.string.IsSelectingContact, getUserNameForTyping(user)))
 							}
@@ -7979,8 +7692,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 0)
 						}
 
-						is TL_sendMessageEmojiInteractionSeen -> {
-							val emoji = (pu.action as? TL_sendMessageEmojiInteractionSeen)?.emoticon
+						is TLRPC.TLSendMessageEmojiInteractionSeen -> {
+							val emoji = (pu.action as? TLRPC.TLSendMessageEmojiInteractionSeen)?.emoticon
 
 							val printingString = if (key < 0 && !isEncryptedChat) {
 								LocaleController.formatString("IsEnjoyngAnimations", R.string.IsEnjoyngAnimations, getUserNameForTyping(user), emoji)
@@ -7993,7 +7706,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							newPrintingStringsTypes.put(threadId, 5)
 						}
 
-						is TL_sendMessageChooseStickerAction -> {
+						is TLRPC.TLSendMessageChooseStickerAction -> {
 							if (key < 0 && !isEncryptedChat) {
 								newPrintingStrings.put(threadId, LocaleController.formatString("IsChoosingSticker", R.string.IsChoosingSticker, getUserNameForTyping(user)))
 							}
@@ -8083,7 +7796,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		threads.delete(threadMsgId)
 
-		if (threads.size() == 0) {
+		if (threads.isEmpty()) {
 			dialogs.remove(dialogId)
 		}
 	}
@@ -8103,7 +7816,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			val user = getUser(dialogId)
+			val user = getUser(dialogId) as? TLUser
 
 			if (user != null) {
 				if (user.id == userConfig.getClientUserId()) {
@@ -8140,17 +7853,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		if (!DialogObject.isEncryptedDialog(dialogId)) {
-			val req = TL_messages_setTyping()
+			val req = TLRPC.TLMessagesSetTyping()
 
 			if (threadMsgId != 0) {
-				req.top_msg_id = threadMsgId
+				req.topMsgId = threadMsgId
 				req.flags = req.flags or 1
 			}
 
 			req.peer = getInputPeer(dialogId)
 
-			if (req.peer is TL_inputPeerChannel) {
-				val chat = getChat(req.peer.channel_id)
+			if (req.peer is TLRPC.TLInputPeerChannel) {
+				val chat = getChat(req.peer?.channelId)
 
 				if (chat == null || !chat.megagroup) {
 					return false
@@ -8163,51 +7876,51 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			when (action) {
 				0 -> {
-					req.action = TL_sendMessageTypingAction()
+					req.action = TLRPC.TLSendMessageTypingAction()
 				}
 
 				1 -> {
-					req.action = TL_sendMessageRecordAudioAction()
+					req.action = TLRPC.TLSendMessageRecordAudioAction()
 				}
 
 				2 -> {
-					req.action = TL_sendMessageCancelAction()
+					req.action = TLRPC.TLSendMessageCancelAction()
 				}
 
 				3 -> {
-					req.action = TL_sendMessageUploadDocumentAction()
+					req.action = TLRPC.TLSendMessageUploadDocumentAction()
 				}
 
 				4 -> {
-					req.action = TL_sendMessageUploadPhotoAction()
+					req.action = TLRPC.TLSendMessageUploadPhotoAction()
 				}
 
 				5 -> {
-					req.action = TL_sendMessageUploadVideoAction()
+					req.action = TLRPC.TLSendMessageUploadVideoAction()
 				}
 
 				6 -> {
-					req.action = TL_sendMessageGamePlayAction()
+					req.action = TLRPC.TLSendMessageGamePlayAction()
 				}
 
 				7 -> {
-					req.action = TL_sendMessageRecordRoundAction()
+					req.action = TLRPC.TLSendMessageRecordRoundAction()
 				}
 
 				8 -> {
-					req.action = TL_sendMessageUploadRoundAction()
+					req.action = TLRPC.TLSendMessageUploadRoundAction()
 				}
 
 				9 -> {
-					req.action = TL_sendMessageUploadAudioAction()
+					req.action = TLRPC.TLSendMessageUploadAudioAction()
 				}
 
 				10 -> {
-					req.action = TL_sendMessageChooseStickerAction()
+					req.action = TLRPC.TLSendMessageChooseStickerAction()
 				}
 
 				11 -> {
-					val interactionSeen = TL_sendMessageEmojiInteractionSeen()
+					val interactionSeen = TLRPC.TLSendMessageEmojiInteractionSeen()
 					interactionSeen.emoticon = emojicon
 					req.action = interactionSeen
 				}
@@ -8232,12 +7945,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			val chat = getEncryptedChat(DialogObject.getEncryptedChatId(dialogId))
 
-			if (chat?.auth_key != null && chat.auth_key.size > 1 && chat is TL_encryptedChat) {
-				val req = TL_messages_setEncryptedTyping()
-				req.peer = TL_inputEncryptedChat()
-				req.peer.chat_id = chat.id
-				req.peer.access_hash = chat.access_hash
+			if (chat?.authKey != null && chat.authKey!!.size > 1 && chat is TLRPC.TLEncryptedChat) {
+				val req = TLRPC.TLMessagesSetEncryptedTyping()
 				req.typing = true
+
+				req.peer = TLRPC.TLInputEncryptedChat().also {
+					it.chatId = chat.id
+					it.accessHash = chat.accessHash
+				}
 
 				threads?.put(threadMsgId, true)
 
@@ -8256,7 +7971,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		return true
 	}
 
-	fun removeDeletedMessagesFromArray(dialogId: Long, messages: ArrayList<Message>) {
+	fun removeDeletedMessagesFromArray(dialogId: Long, messages: MutableList<Message>) {
 		val maxDeletedId = deletedHistory[dialogId, 0]
 
 		if (maxDeletedId == 0) {
@@ -8297,38 +8012,38 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					return
 				}
 
-				val req = TL_messages_getReplies()
+				val req = TLRPC.TLMessagesGetReplies()
 				req.peer = getInputPeer(dialogId)
-				req.msg_id = threadMessageId
-				req.offset_date = offsetDate
+				req.msgId = threadMessageId
+				req.offsetDate = offsetDate
 				req.limit = count
-				req.offset_id = maxId
+				req.offsetId = maxId
 
 				if (loadType == 4) {
-					req.add_offset = -count + 5
+					req.addOffset = -count + 5
 				}
 				else if (loadType == 3) {
-					req.add_offset = -count / 2
+					req.addOffset = -count / 2
 				}
 				else if (loadType == 1) {
-					req.add_offset = -count - 1
+					req.addOffset = -count - 1
 				}
 				else if (loadType == 2 && maxId != 0) {
-					req.add_offset = -count + 10
+					req.addOffset = -count + 10
 				}
 				else {
 					if (dialogId < 0 && maxId != 0) {
 						val chat = getChat(-dialogId)
 
 						if (ChatObject.isChannel(chat)) {
-							req.add_offset = -1
+							req.addOffset = -1
 							req.limit += 1
 						}
 					}
 				}
 
 				val reqId = connectionsManager.sendRequest(req) { response, error ->
-					if (response is messages_Messages) {
+					if (response is MessagesMessages) {
 						var mid = maxId
 						var fnid = 0
 
@@ -8372,13 +8087,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				// unused
 			}
 			else if (mode == 1) {
-				val req = TL_messages_getScheduledHistory()
+				val req = TLRPC.TLMessagesGetScheduledHistory()
 				req.peer = getInputPeer(dialogId)
 				req.hash = minDate.toLong()
 
 				val reqId = connectionsManager.sendRequest(req) { response, _ ->
-					if (response is messages_Messages) {
-						if (response is TL_messages_messagesNotModified) {
+					if (response is MessagesMessages) {
+						if (response is TLRPC.TLMessagesMessagesNotModified) {
 							return@sendRequest
 						}
 
@@ -8405,30 +8120,30 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 			else {
 				if (loadDialog && (loadType == 3 || loadType == 2) && lastMessageId == 0) {
-					val req = TL_messages_getPeerDialogs()
+					val req = TLRPC.TLMessagesGetPeerDialogs()
 					val inputPeer = getInputPeer(dialogId)
 
-					val inputDialogPeer = TL_inputDialogPeer()
+					val inputDialogPeer = TLRPC.TLInputDialogPeer()
 					inputDialogPeer.peer = inputPeer
 
 					req.peers.add(inputDialogPeer)
 
 					connectionsManager.sendRequest(req) { response, error ->
-						if (response is TL_messages_peerDialogs) {
+						if (response is TLRPC.TLMessagesPeerDialogs) {
 							if (response.dialogs.isNotEmpty()) {
 								val dialog = response.dialogs[0]
 
-								if (dialog.top_message != 0) {
-									val dialogs = TL_messages_dialogs()
-									dialogs.chats = response.chats
-									dialogs.users = response.users
-									dialogs.dialogs = response.dialogs
-									dialogs.messages = response.messages
+								if (dialog.topMessage != 0) {
+									val dialogs = TLRPC.TLMessagesDialogs()
+									dialogs.chats.addAll(response.chats)
+									dialogs.users.addAll(response.users)
+									dialogs.dialogs.addAll(response.dialogs)
+									dialogs.messages.addAll(response.messages)
 
 									messagesStorage.putDialogs(dialogs, 2)
 								}
 
-								loadMessagesInternal(dialogId, mergeDialogId, loadInfo, count, maxId, offsetDate, false, minDate, classGuid, loadType, dialog.top_message, 0, threadMessageId, loadIndex, firstUnread, dialog.unread_count, lastDate, queryFromServer, dialog.unread_mentions_count, false, processMessages)
+								loadMessagesInternal(dialogId, mergeDialogId, loadInfo, count, maxId, offsetDate, false, minDate, classGuid, loadType, dialog.topMessage, 0, threadMessageId, loadIndex, firstUnread, dialog.unreadCount, lastDate, queryFromServer, dialog.unreadMentionsCount, false, processMessages)
 							}
 						}
 						else {
@@ -8441,38 +8156,38 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					return
 				}
 
-				val req = TL_messages_getHistory()
+				val req = TLRPC.TLMessagesGetHistory()
 				req.peer = getInputPeer(dialogId)
 
 				if (loadType == 4) {
-					req.add_offset = -count + 5
+					req.addOffset = -count + 5
 				}
 				else if (loadType == 3) {
-					req.add_offset = -count / 2
+					req.addOffset = -count / 2
 				}
 				else if (loadType == 1) {
-					req.add_offset = -count - 1
+					req.addOffset = -count - 1
 				}
 				else if (loadType == 2 && maxId != 0) {
-					req.add_offset = -count + 6
+					req.addOffset = -count + 6
 				}
 				else {
 					if (dialogId < 0 && maxId != 0) {
 						val chat = getChat(-dialogId)
 
 						if (ChatObject.isChannel(chat)) {
-							req.add_offset = -1
+							req.addOffset = -1
 							req.limit += 1
 						}
 					}
 				}
 
 				req.limit = count
-				req.offset_id = maxId
-				req.offset_date = offsetDate
+				req.offsetId = maxId
+				req.offsetDate = offsetDate
 
 				val reqId = connectionsManager.sendRequest(req) { response, error ->
-					if (response is messages_Messages) {
+					if (response is MessagesMessages) {
 						removeDeletedMessagesFromArray(dialogId, response.messages)
 
 						if (response.messages.size > count) {
@@ -8522,22 +8237,22 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			arrayList.addAll(messages)
 
-			val req = TL_messages_getWebPagePreview()
+			val req = TLRPC.TLMessagesGetWebPagePreview()
 			req.message = url
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
 					val arrayList1 = map.remove(url) ?: return@runOnUIThread
-					val messagesRes = TL_messages_messages()
+					val messagesRes = TLRPC.TLMessagesMessages()
 
-					if (response !is TL_messageMediaWebPage) {
+					if (response !is TLRPC.TLMessageMediaWebPage) {
 						for (a in arrayList1.indices) {
-							arrayList1[a].messageOwner?.media?.webpage = TL_webPageEmpty()
+							arrayList1[a].messageOwner?.media?.webpage = TLRPC.TLWebPageEmpty()
 							messagesRes.messages.add(arrayList1[a].messageOwner!!)
 						}
 					}
 					else {
-						if (response.webpage is TL_webPage || response.webpage is TL_webPageEmpty) {
+						if (response.webpage is TLRPC.TLWebPage || response.webpage is TLRPC.TLWebPageEmpty) {
 							for (a in arrayList1.indices) {
 								arrayList1[a].messageOwner?.media?.webpage = response.webpage
 
@@ -8549,7 +8264,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 						else {
-							array.put(response.webpage.id, arrayList1)
+							response.webpage?.let {
+								array.put(it.id, arrayList1)
+							}
 						}
 					}
 
@@ -8562,10 +8279,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun processLoadedMessages(messagesRes: messages_Messages, resCount: Int, dialogId: Long, mergeDialogId: Long, count: Int, maxId: Int, offsetDate: Int, isCache: Boolean, classGuid: Int, firstUnread: Int, lastMessageId: Int, unreadCount: Int, lastDate: Int, loadType: Int, isEnd: Boolean, mode: Int, threadMessageId: Int, loadIndex: Int, queryFromServer: Boolean, mentionsCount: Int, needProcess: Boolean) {
+	fun processLoadedMessages(messagesRes: MessagesMessages, resCount: Int, dialogId: Long, mergeDialogId: Long, count: Int, maxId: Int, offsetDate: Int, isCache: Boolean, classGuid: Int, firstUnread: Int, lastMessageId: Int, unreadCount: Int, lastDate: Int, loadType: Int, isEnd: Boolean, mode: Int, threadMessageId: Int, loadIndex: Int, queryFromServer: Boolean, mentionsCount: Int, needProcess: Boolean) {
 		var createDialog = false
 
-		if (messagesRes is TL_messages_channelMessages) {
+		if (messagesRes is TLRPC.TLMessagesChannelMessages) {
 			val channelId = -dialogId
 
 			if (mode == 0 && threadMessageId == 0) {
@@ -8598,12 +8315,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		var reload: Boolean
 
 		if (mode == 1) {
-			reload = SystemClock.elapsedRealtime() - lastScheduledServerQueryTime[dialogId, 0L] > 60 * 1000
+			reload = SystemClock.elapsedRealtime() - lastScheduledServerQueryTime.get(dialogId, 0L) > 60 * 1000
 		}
 		else {
-			reload = resCount == 0 && (!isInitialLoading || SystemClock.elapsedRealtime() - lastServerQueryTime[dialogId, 0L] > 60 * 1000)
+			reload = resCount == 0 && (!isInitialLoading || SystemClock.elapsedRealtime() - lastServerQueryTime.get(dialogId, 0L) > 60 * 1000)
 
-			if (mode == 0 && isCache && dialogId < 0 && !dialogs_dict.containsKey(dialogId) && SystemClock.elapsedRealtime() - lastServerQueryTime[dialogId, 0L] > 24 * 60 * 60 * 1000) {
+			if (mode == 0 && isCache && dialogId < 0 && !dialogs_dict.containsKey(dialogId) && SystemClock.elapsedRealtime() - lastServerQueryTime.get(dialogId, 0L) > 24 * 60 * 60 * 1000) {
 				messagesRes.messages.clear()
 				reload = true
 			}
@@ -8631,7 +8348,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 
 					h = MediaDataController.calcHash(h, message.id.toLong())
-					h = MediaDataController.calcHash(h, message.edit_date.toLong())
+					h = MediaDataController.calcHash(h, (message as? TLRPC.TLMessage)?.editDate?.toLong() ?: 0L)
 					h = MediaDataController.calcHash(h, message.date.toLong())
 
 					a++
@@ -8689,18 +8406,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				if (mode == 0) {
 					val action = message.action
 
-					if (action is TL_messageActionChatDeleteUser) {
-						val user = usersDict[action.user_id]
+					if (action is TLRPC.TLMessageActionChatDeleteUser) {
+						val user = usersDict[action.userId] as? TLUser
 
 						if (user != null && user.bot) {
-							message.reply_markup = TL_replyKeyboardHide()
+							message.replyMarkup = TLRPC.TLReplyKeyboardHide()
 							message.flags = message.flags or 64
 						}
 					}
 
-					if (action is TL_messageActionChatMigrateTo || action is TL_messageActionChannelCreate) {
+					if (action is TLRPC.TLMessageActionChatMigrateTo || action is TLRPC.TLMessageActionChannelCreate) {
 						message.unread = false
-						message.media_unread = false
+						message.mediaUnread = false
 					}
 					else if (threadMessageId == 0) {
 						message.unread = (if (message.out) outboxValue else inboxValue) < message.id
@@ -8731,7 +8448,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		for (a in 0 until size) {
 			val message = messagesRes.messages[a]
-			message.dialog_id = dialogId
+			message.dialogId = dialogId
 
 			val checkFileTime = SystemClock.elapsedRealtime()
 
@@ -8747,31 +8464,34 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			if (isCache) {
 				val media = MessageObject.getMedia(message)
 
-				if (message.legacy && message.layer < LAYER) {
+				if (message.legacy && message.layer < TLRPC.LAYER) {
 					messagesToReload.add(message.id)
 				}
-				else if (media is TL_messageMediaUnsupported) {
-					val bytes = media.bytes
-
-					if (bytes != null && (bytes.isEmpty() || (bytes.size == 1 && bytes[0] < LAYER) || (bytes.size == 4 && Utilities.bytesToInt(bytes) < LAYER))) {
-						messagesToReload.add(message.id)
-					}
+				else if (media is TLRPC.TLMessageMediaUnsupported) {
+//					val bytes = media.bytes
+//
+//					if (bytes != null && (bytes.isEmpty() || (bytes.size == 1 && bytes[0] < TLRPC.LAYER) || (bytes.size == 4 && Utilities.bytesToInt(bytes) < TLRPC.LAYER))) {
+					// MARK: check that this does not cause infinite reload cycle
+					messagesToReload.add(message.id)
+//					}
 				}
 
-				if (media is TL_messageMediaWebPage) {
-					if (media.webpage is TL_webPagePending && media.webpage.date <= connectionsManager.currentTime) {
+				if (media is TLRPC.TLMessageMediaWebPage) {
+					val webpage = media.webpage
+
+					if (webpage is TLRPC.TLWebPagePending && webpage.date <= connectionsManager.currentTime) {
 						messagesToReload.add(message.id)
 					}
-					else if (media.webpage is TL_webPageUrlPending) {
-						var arrayList = webpagesToReload[media.webpage.url]
-
-						if (arrayList == null) {
-							arrayList = ArrayList()
-							webpagesToReload[media.webpage.url] = arrayList
-						}
-
-						arrayList.add(messageObject)
-					}
+//					else if (webpage is TLRPC.TLWebPageUrlPending) {
+//						var arrayList = webpagesToReload[webpage.url]
+//
+//						if (arrayList == null) {
+//							arrayList = ArrayList()
+//							webpagesToReload[webpage.url] = arrayList
+//						}
+//
+//						arrayList.add(messageObject)
+//					}
 				}
 			}
 		}
@@ -8798,7 +8518,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					for (a in messagesRes.messages.indices) {
 						val message = messagesRes.messages[a]
 
-						if ((!message.out || message.from_scheduled) && message.id > firstUnread && message.id < firstUnreadFinal) {
+						if ((!message.out || message.fromScheduled) && message.id > firstUnread && message.id < firstUnreadFinal) {
 							firstUnreadFinal = message.id
 						}
 					}
@@ -8842,11 +8562,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val req = TL_help_getRecentMeUrls()
+		val req = TLRPC.TLHelpGetRecentMeUrls()
 		req.referer = installReferer
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_help_recentMeUrls) {
+			if (response is TLRPC.TLHelpRecentMeUrls) {
 				AndroidUtilities.runOnUIThread {
 					putUsers(response.users, false)
 					putChats(response.chats, false)
@@ -8860,7 +8580,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	private fun ensureFolderDialogExists(folderId: Int, folderCreated: BooleanArray?): TL_dialogFolder? {
+	private fun ensureFolderDialogExists(folderId: Int, folderCreated: BooleanArray?): TLRPC.TLDialogFolder? {
 		if (folderId == 0) {
 			return null
 		}
@@ -8868,7 +8588,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val folderDialogId = DialogObject.makeFolderDialogId(folderId)
 		val dialog = dialogs_dict[folderDialogId]
 
-		if (dialog is TL_dialogFolder) {
+		if (dialog is TLRPC.TLDialogFolder) {
 			if (folderCreated != null) {
 				folderCreated[0] = false
 			}
@@ -8880,12 +8600,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			folderCreated[0] = true
 		}
 
-		val dialogFolder = TL_dialogFolder()
+		val dialogFolder = TLRPC.TLDialogFolder()
 		dialogFolder.id = folderDialogId
-		dialogFolder.peer = TL_peerUser()
-		dialogFolder.folder = TL_folder()
-		dialogFolder.folder.id = folderId
-		dialogFolder.folder.title = ApplicationLoader.applicationContext.getString(R.string.ArchivedChats)
+		dialogFolder.peer = TLRPC.TLPeerUser()
+		dialogFolder.folder = TLRPC.TLFolder()
+		dialogFolder.folder?.id = folderId
+		dialogFolder.folder?.title = ApplicationLoader.applicationContext.getString(R.string.ArchivedChats)
 		dialogFolder.pinned = true
 
 		var maxPinnedNum = 0
@@ -8904,7 +8624,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		dialogFolder.pinnedNum = maxPinnedNum + 1
 
-		val dialogs = TL_messages_dialogs()
+		val dialogs = TLRPC.TLMessagesDialogs()
 		dialogs.dialogs.add(dialogFolder)
 
 		messagesStorage.putDialogs(dialogs, 1)
@@ -8954,8 +8674,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		return addDialogToFolder(listOf(dialogId), folderId, pinnedNum, null, taskId)
 	}
 
-	fun addDialogToFolder(dialogIds: List<Long>?, folderId: Int, pinnedNum: Int, peers: ArrayList<TL_inputFolderPeer>?, taskId: Long): Int {
-		val req = TL_folders_editPeerFolders()
+	fun addDialogToFolder(dialogIds: List<Long>?, folderId: Int, pinnedNum: Int, peers: ArrayList<TLRPC.TLInputFolderPeer>?, taskId: Long): Int {
+		val req = TLRPC.TLFoldersEditPeerFolders()
 		var folderCreated: BooleanArray? = null
 		val newTaskId: Long
 
@@ -8993,7 +8713,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				added = true
 
-				dialog.folder_id = folderId
+				dialog.folderId = folderId
 
 				if (pinnedNum > 0) {
 					dialog.pinned = true
@@ -9013,11 +8733,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					messagesStorage.setDialogsFolderId(null, null, dialogId, folderId)
 				}
 				else {
-					val folderPeer = TL_inputFolderPeer()
-					folderPeer.folder_id = folderId
+					val folderPeer = TLRPC.TLInputFolderPeer()
+					folderPeer.folderId = folderId
 					folderPeer.peer = getInputPeer(dialogId)
 
-					req.folder_peers.add(folderPeer)
+					req.folderPeers.add(folderPeer)
 
 					size += folderPeer.objectSize
 				}
@@ -9038,9 +8758,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					NativeByteBuffer(4 + 4 + 4 + size).apply {
 						writeInt32(17)
 						writeInt32(folderId)
-						writeInt32(req.folder_peers.size)
+						writeInt32(req.folderPeers.size)
 
-						for (folderPeer in req.folder_peers) {
+						for (folderPeer in req.folderPeers) {
 							folderPeer.serializeToStream(this)
 						}
 					}
@@ -9057,11 +8777,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			req.folder_peers = peers ?: ArrayList()
+			peers?.let {
+				req.folderPeers.addAll(it)
+			}
+
 			newTaskId = taskId
 		}
 
-		if (req.folder_peers.isNotEmpty()) {
+		if (req.folderPeers.isNotEmpty()) {
 			connectionsManager.sendRequest(req) { response, _ ->
 				if (response is Updates) {
 					processUpdates(response, false)
@@ -9072,18 +8795,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			messagesStorage.setDialogsFolderId(null, req.folder_peers, 0, folderId)
+			messagesStorage.setDialogsFolderId(null, req.folderPeers, 0, folderId)
 		}
 
 		return if (folderCreated == null) 0 else if (folderCreated[0]) 2 else 1
 	}
 
-	@JvmOverloads
 	fun loadDialogs(folderId: Int, offset: Int, count: Int, fromCache: Boolean, onEmptyCallback: Runnable? = null) {
 		loadDialogs(folderId, offset, count, fromCache, false, onEmptyCallback)
 	}
 
-	@JvmOverloads
 	fun loadDialogs(folderId: Int, offset: Int, count: Int, fromCache: Boolean, force: Boolean, onEmptyCallback: Runnable? = null) {
 		if (loadingDialogs[folderId] || resettingDialogs) {
 			return
@@ -9095,106 +8816,107 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		if (fromCache) {
 			messagesStorage.getDialogs(folderId, if (offset == 0) 0 else nextDialogsCacheOffset[folderId, 0], count, folderId == 0 && offset == 0)
+			return
 		}
-		else {
-			val req = TL_messages_getDialogs()
-			req.limit = count
-			req.excludePinned = false
 
-			if (folderId != 0) {
-				req.flags = req.flags or 2
-				req.folderId = folderId
+		val req = TLRPC.TLMessagesGetDialogs()
+		req.limit = count
+		req.excludePinned = false
+
+		if (folderId != 0) {
+			req.flags = req.flags or 2
+			req.folderId = folderId
+		}
+
+		val dialogsLoadOffset = userConfig.getDialogLoadOffsets(folderId)
+
+		if (force) {
+			Arrays.fill(dialogsLoadOffset, 0L)
+		}
+
+		if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetId] != -1L) {
+			if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetId] == Int.MAX_VALUE.toLong()) {
+				dialogsEndReached.put(folderId, true)
+				serverDialogsEndReached.put(folderId, true)
+				loadingDialogs.put(folderId, false)
+
+				notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
+
+				return
 			}
 
-			val dialogsLoadOffset = userConfig.getDialogLoadOffsets(folderId)
+			req.offsetId = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetId].toInt()
+			req.offsetDate = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetDate].toInt()
 
-			if (force) {
-				Arrays.fill(dialogsLoadOffset, 0L)
-			}
-
-			if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetId] != -1L) {
-				if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetId] == Int.MAX_VALUE.toLong()) {
-					dialogsEndReached.put(folderId, true)
-					serverDialogsEndReached.put(folderId, true)
-					loadingDialogs.put(folderId, false)
-
-					notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
-
-					return
-				}
-
-				req.offsetId = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetId].toInt()
-				req.offsetDate = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetDate].toInt()
-
-				if (req.offsetId == 0) {
-					req.offsetPeer = TL_inputPeerEmpty()
-				}
-				else {
-					if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetChannelId] != 0L) {
-						req.offsetPeer = TL_inputPeerChannel()
-						req.offsetPeer?.channel_id = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetChannelId]
-					}
-					else if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetUserId] != 0L) {
-						req.offsetPeer = TL_inputPeerUser()
-						req.offsetPeer?.user_id = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetUserId]
-					}
-					else {
-						req.offsetPeer = TL_inputPeerChat()
-						req.offsetPeer?.chat_id = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetChatId]
-					}
-
-					req.offsetPeer?.access_hash = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetAccess]
-				}
+			if (req.offsetId == 0) {
+				req.offsetPeer = TLRPC.TLInputPeerEmpty()
 			}
 			else {
-				var found = false
-				val dialogs = getDialogs(folderId)
-
-				for (a in dialogs.indices.reversed()) {
-					val dialog = dialogs[a]
-
-					if (dialog.pinned) {
-						continue
-					}
-
-					if (!DialogObject.isEncryptedDialog(dialog.id) && dialog.top_message > 0) {
-						val message = dialogMessage[dialog.id]
-
-						if (message != null && message.id > 0) {
-							req.offsetDate = message.messageOwner!!.date
-							req.offsetId = message.messageOwner!!.id
-
-							val id = if (message.messageOwner!!.peer_id!!.channel_id != 0L) {
-								-message.messageOwner!!.peer_id!!.channel_id
-							}
-							else if (message.messageOwner!!.peer_id!!.chat_id != 0L) {
-								-message.messageOwner!!.peer_id!!.chat_id
-							}
-							else {
-								message.messageOwner!!.peer_id!!.user_id
-							}
-
-							req.offsetPeer = getInputPeer(id)
-
-							found = true
-
-							break
-						}
+				if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetChannelId] != 0L) {
+					req.offsetPeer = TLRPC.TLInputPeerChannel()
+					req.offsetPeer?.channelId = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetChannelId]
+				}
+				else if (dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetUserId] != 0L) {
+					req.offsetPeer = TLRPC.TLInputPeerUser()
+					req.offsetPeer?.userId = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetUserId]
+				}
+				else {
+					req.offsetPeer = TLRPC.TLInputPeerChat().also {
+						it.chatId = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetChatId]
 					}
 				}
 
-				if (!found) {
-					req.offsetPeer = TL_inputPeerEmpty()
+				req.offsetPeer?.accessHash = dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetAccess]
+			}
+		}
+		else {
+			var found = false
+			val dialogs = getDialogs(folderId)
+
+			for (a in dialogs.indices.reversed()) {
+				val dialog = dialogs[a]
+
+				if (dialog.pinned) {
+					continue
+				}
+
+				if (!DialogObject.isEncryptedDialog(dialog.id) && dialog.topMessage > 0) {
+					val message = dialogMessage[dialog.id]
+
+					if (message != null && message.id > 0) {
+						req.offsetDate = message.messageOwner!!.date
+						req.offsetId = message.messageOwner!!.id
+
+						val id = if (message.messageOwner!!.peerId!!.channelId != 0L) {
+							-message.messageOwner!!.peerId!!.channelId
+						}
+						else if (message.messageOwner!!.peerId!!.chatId != 0L) {
+							-message.messageOwner!!.peerId!!.chatId
+						}
+						else {
+							message.messageOwner!!.peerId!!.userId
+						}
+
+						req.offsetPeer = getInputPeer(id)
+
+						found = true
+
+						break
+					}
 				}
 			}
 
-			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is messages_Dialogs) {
-					processLoadedDialogs(response, null, folderId, 0, count, 0, resetEnd = false, migrate = false, fromCache = false)
+			if (!found) {
+				req.offsetPeer = TLRPC.TLInputPeerEmpty()
+			}
+		}
 
-					if (onEmptyCallback != null && response.dialogs.isEmpty()) {
-						AndroidUtilities.runOnUIThread(onEmptyCallback)
-					}
+		connectionsManager.sendRequest(req) { response, _ ->
+			if (response is TLRPC.MessagesDialogs) {
+				processLoadedDialogs(response, null, folderId, 0, count, 0, resetEnd = false, migrate = false, fromCache = false)
+
+				if (onEmptyCallback != null && response.dialogs.isEmpty()) {
+					AndroidUtilities.runOnUIThread(onEmptyCallback)
 				}
 			}
 		}
@@ -9203,86 +8925,78 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	fun loadGlobalNotificationsSettings() {
 		if (loadingNotificationSettings == 0 && !userConfig.notificationsSettingsLoaded) {
 			val preferences = getNotificationsSettings(currentAccount)
-			var editor1: SharedPreferences.Editor? = null
 
-			if (preferences.contains("EnableGroup")) {
-				val enabled = preferences.getBoolean("EnableGroup", true)
+			preferences.edit {
+				if (preferences.contains("EnableGroup")) {
+					val enabled = preferences.getBoolean("EnableGroup", true)
 
-				editor1 = preferences.edit()
+					if (!enabled) {
+						putInt("EnableGroup2", Int.MAX_VALUE)
+						putInt("EnableChannel2", Int.MAX_VALUE)
+					}
 
-				if (!enabled) {
-					editor1.putInt("EnableGroup2", Int.MAX_VALUE)
-					editor1.putInt("EnableChannel2", Int.MAX_VALUE)
+					remove("EnableGroup").apply()
 				}
 
-				editor1.remove("EnableGroup").commit()
+				if (preferences.contains("EnableAll")) {
+					val enabled = preferences.getBoolean("EnableAll", true)
+
+					if (!enabled) {
+						putInt("EnableAll2", Int.MAX_VALUE)
+					}
+
+					remove("EnableAll")?.apply()
+				}
 			}
-
-			if (preferences.contains("EnableAll")) {
-				val enabled = preferences.getBoolean("EnableAll", true)
-
-				if (editor1 == null) {
-					editor1 = preferences.edit()
-				}
-
-				if (!enabled) {
-					editor1?.putInt("EnableAll2", Int.MAX_VALUE)
-				}
-
-				editor1?.remove("EnableAll")?.commit()
-			}
-
-			editor1?.commit()
 
 			loadingNotificationSettings = 3
 
 			for (a in 0..2) {
-				val req = TL_account_getNotifySettings()
+				val req = TLRPC.TLAccountGetNotifySettings()
 
 				when (a) {
-					0 -> req.peer = TL_inputNotifyChats()
-					1 -> req.peer = TL_inputNotifyUsers()
-					else -> req.peer = TL_inputNotifyBroadcasts()
+					0 -> req.peer = TLRPC.TLInputNotifyChats()
+					1 -> req.peer = TLRPC.TLInputNotifyUsers()
+					else -> req.peer = TLRPC.TLInputNotifyBroadcasts()
 				}
 
 				connectionsManager.sendRequest(req) { response, _ ->
 					AndroidUtilities.runOnUIThread {
-						if (response is TL_peerNotifySettings) {
+						if (response is TLRPC.TLPeerNotifySettings) {
 							loadingNotificationSettings--
 
-							val editor = notificationsPreferences.edit()
+							notificationsPreferences.edit {
+								if (a == 0) {
+									if (response.flags and 1 != 0) {
+										putBoolean("EnablePreviewGroup", response.showPreviews)
+									}
 
-							if (a == 0) {
-								if (response.flags and 1 != 0) {
-									editor.putBoolean("EnablePreviewGroup", response.show_previews)
+									if (response.flags and 4 != 0) {
+										putInt("EnableGroup2", response.muteUntil)
+									}
+								}
+								else if (a == 1) {
+									if (response.flags and 1 != 0) {
+										putBoolean("EnablePreviewAll", response.showPreviews)
+									}
+
+									if (response.flags and 4 != 0) {
+										putInt("EnableAll2", response.muteUntil)
+									}
+								}
+								else {
+									if (response.flags and 1 != 0) {
+										putBoolean("EnablePreviewChannel", response.showPreviews)
+									}
+
+									if (response.flags and 4 != 0) {
+										putInt("EnableChannel2", response.muteUntil)
+									}
 								}
 
-								if (response.flags and 4 != 0) {
-									editor.putInt("EnableGroup2", response.mute_until)
-								}
+								applySoundSettings(response.androidSound, this, 0, a, false)
+
 							}
-							else if (a == 1) {
-								if (response.flags and 1 != 0) {
-									editor.putBoolean("EnablePreviewAll", response.show_previews)
-								}
-
-								if (response.flags and 4 != 0) {
-									editor.putInt("EnableAll2", response.mute_until)
-								}
-							}
-							else {
-								if (response.flags and 1 != 0) {
-									editor.putBoolean("EnablePreviewChannel", response.show_previews)
-								}
-
-								if (response.flags and 4 != 0) {
-									editor.putInt("EnableChannel2", response.mute_until)
-								}
-							}
-
-							applySoundSettings(response.android_sound, editor, 0, a, false)
-
-							editor.commit()
 
 							if (loadingNotificationSettings == 0) {
 								userConfig.notificationsSettingsLoaded = true
@@ -9303,18 +9017,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		if (!loadingNotificationSignUpSettings) {
 			loadingNotificationSignUpSettings = true
 
-			val req = TL_account_getContactSignUpNotification()
+			val req = TLRPC.TLAccountGetContactSignUpNotification()
 
 			connectionsManager.sendRequest(req) { response, _ ->
 				AndroidUtilities.runOnUIThread {
 					loadingNotificationSignUpSettings = false
 
-					val editor = notificationsPreferences.edit()
+					enableJoined = response is TLRPC.TLBoolFalse
 
-					enableJoined = response is TL_boolFalse
-
-					editor.putBoolean("EnableContactJoined", enableJoined)
-					editor.commit()
+					notificationsPreferences.edit() {
+						putBoolean("EnableContactJoined", enableJoined)
+					}
 
 					userConfig.notificationsSignUpSettingsLoaded = true
 
@@ -9342,9 +9055,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		gettingUnknownDialogs.put(dialogId, true)
 
-		val req = TL_messages_getPeerDialogs()
+		val req = TLRPC.TLMessagesGetPeerDialogs()
 
-		val inputDialogPeer = TL_inputDialogPeer()
+		val inputDialogPeer = TLRPC.TLInputDialogPeer()
 		inputDialogPeer.peer = peer
 
 		req.peers.add(inputDialogPeer)
@@ -9370,17 +9083,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_peerDialogs) {
+			if (response is TLRPC.TLMessagesPeerDialogs) {
 				if (response.dialogs.isNotEmpty()) {
-					val dialog = response.dialogs[0] as TL_dialog
+					val dialog = response.dialogs[0] as TLDialog
 
-					val dialogs = TL_messages_dialogs()
+					val dialogs = TLRPC.TLMessagesDialogs()
 					dialogs.dialogs.addAll(response.dialogs)
 					dialogs.messages.addAll(response.messages)
 					dialogs.users.addAll(response.users)
 					dialogs.chats.addAll(response.chats)
 
-					processLoadedDialogs(dialogs, null, dialog.folder_id, 0, 1, DIALOGS_LOAD_TYPE_UNKNOWN, resetEnd = false, migrate = false, fromCache = false)
+					processLoadedDialogs(dialogs, null, dialog.folderId, 0, 1, DIALOGS_LOAD_TYPE_UNKNOWN, resetEnd = false, migrate = false, fromCache = false)
 				}
 			}
 
@@ -9392,17 +9105,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	private fun fetchFolderInLoadedPinnedDialogs(res: TL_messages_peerDialogs) {
+	private fun fetchFolderInLoadedPinnedDialogs(res: TLRPC.TLMessagesPeerDialogs) {
 		var a = 0
 		val n = res.dialogs.size
 
 		while (a < n) {
 			val dialog = res.dialogs[a]
 
-			if (dialog is TL_dialogFolder) {
+			if (dialog is TLRPC.TLDialogFolder) {
 				val folderTopDialogId = DialogObject.getPeerDialogId(dialog.peer)
 
-				if (dialog.top_message == 0 || folderTopDialogId == 0L) {
+				if (dialog.topMessage == 0 || folderTopDialogId == 0L) {
 					res.dialogs.remove(dialog)
 					a++
 					continue
@@ -9415,20 +9128,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val message = res.messages[b]
 					val messageDialogId = MessageObject.getDialogId(message)
 
-					if (folderTopDialogId == messageDialogId && dialog.top_message == message.id) {
-						val newDialog = TL_dialog()
+					if (folderTopDialogId == messageDialogId && dialog.topMessage == message.id) {
+						val newDialog = TLDialog()
 						newDialog.peer = dialog.peer
-						newDialog.top_message = dialog.top_message
-						newDialog.folder_id = dialog.folder.id
+						newDialog.topMessage = dialog.topMessage
+						newDialog.folderId = dialog.folder?.id ?: 0
 						newDialog.flags = newDialog.flags or 16
 
 						res.dialogs.add(newDialog)
 
 						val inputPeer: InputPeer
 
-						if (dialog.peer is TL_peerChannel) {
-							inputPeer = TL_inputPeerChannel()
-							inputPeer.channel_id = dialog.peer.channel_id
+						if (dialog.peer is TLRPC.TLPeerChannel) {
+							inputPeer = TLRPC.TLInputPeerChannel()
+							inputPeer.channelId = dialog.peer.channelId
 
 							var c = 0
 							val n3 = res.chats.size
@@ -9436,30 +9149,30 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							while (c < n3) {
 								val chat = res.chats[c]
 
-								if (chat.id == inputPeer.channel_id) {
-									inputPeer.access_hash = chat.access_hash
+								if (chat.id == inputPeer.channelId) {
+									inputPeer.accessHash = chat.accessHash
 									break
 								}
 
 								c++
 							}
 						}
-						else if (dialog.peer is TL_peerChat) {
-							inputPeer = TL_inputPeerChat()
-							inputPeer.chat_id = dialog.peer.chat_id
+						else if (dialog.peer is TLRPC.TLPeerChat) {
+							inputPeer = TLRPC.TLInputPeerChat()
+							inputPeer.chatId = dialog.peer.chatId
 						}
 						else {
-							inputPeer = TL_inputPeerUser()
-							inputPeer.user_id = dialog.peer.user_id
+							inputPeer = TLRPC.TLInputPeerUser()
+							inputPeer.userId = dialog.peer.userId
 
 							var c = 0
 							val n3 = res.users.size
 
 							while (c < n3) {
-								val user = res.users[c]
+								val user = res.users[c] as? TLUser
 
-								if (user.id == inputPeer.user_id) {
-									inputPeer.access_hash = user.access_hash
+								if (user?.id == inputPeer.userId) {
+									inputPeer.accessHash = user.accessHash ?: 0L
 									break
 								}
 
@@ -9492,10 +9205,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			resettingDialogs = true
 
-			val req = TL_messages_getPinnedDialogs()
+			val req = TLRPC.TLMessagesGetPinnedDialogs()
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_messages_peerDialogs) {
+				if (response is TLRPC.TLMessagesPeerDialogs) {
 					resetDialogsPinned = response
 
 					resetDialogsPinned?.dialogs?.forEach {
@@ -9506,13 +9219,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			val req2 = TL_messages_getDialogs()
+			val req2 = TLRPC.TLMessagesGetDialogs()
 			req2.limit = 100
 			req2.excludePinned = false
-			req2.offsetPeer = TL_inputPeerEmpty()
+			req2.offsetPeer = TLRPC.TLInputPeerEmpty()
 
 			connectionsManager.sendRequest(req2) { response, _ ->
-				if (response is messages_Dialogs) {
+				if (response is TLRPC.MessagesDialogs) {
 					resetDialogsAll = response
 					resetDialogs(false, seq, newPts, date, qts)
 				}
@@ -9557,24 +9270,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 
-					if (message.peer_id!!.channel_id != 0L) {
-						val chat = chatsDict[message.peer_id!!.channel_id]
+					if (message.peerId!!.channelId != 0L) {
+						val chat = chatsDict[message.peerId!!.channelId]
 
 						if (chat != null && chat.left) {
 							continue
 						}
 					}
-					else if (message.peer_id!!.chat_id != 0L) {
-						val chat = chatsDict[message.peer_id!!.chat_id]
+					else if (message.peerId!!.chatId != 0L) {
+						val chat = chatsDict[message.peerId!!.chatId]
 
-						if (chat?.migrated_to != null) {
+						if (chat?.migratedTo != null) {
 							continue
 						}
-					}
-
-					// MARK: remove check for service messages
-					if (message is TL_messageService) {
-						continue
 					}
 
 					val messageObject = MessageObject(currentAccount, message, usersDict, chatsDict, generateLayout = false, checkMediaExists = true)
@@ -9589,11 +9297,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						continue
 					}
 
-					if (d.last_message_date == 0) {
+					if (d.lastMessageDate == 0) {
 						val mess = newDialogMessage[d.id]
 
 						if (mess != null) {
-							d.last_message_date = mess.messageOwner!!.date
+							d.lastMessageDate = mess.messageOwner!!.date
 						}
 					}
 
@@ -9604,12 +9312,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							continue
 						}
 
-						channelsPts.put(-d.id, d.pts)
+						channelsPts.put(-d.id, (d as? TLDialog)?.pts ?: 0)
 					}
 					else if (DialogObject.isChatDialog(d.id)) {
 						val chat = chatsDict[-d.id]
 
-						if (chat?.migrated_to != null) {
+						if (chat?.migratedTo != null) {
 							continue
 						}
 					}
@@ -9622,7 +9330,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = 0
 					}
 
-					dialogs_read_inbox_max[d.id] = max(value, d.read_inbox_max_id)
+					dialogs_read_inbox_max[d.id] = max(value, d.readInboxMaxId)
 
 					value = dialogs_read_outbox_max[d.id]
 
@@ -9630,7 +9338,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = 0
 					}
 
-					dialogs_read_outbox_max[d.id] = max(value, d.read_outbox_max_id)
+					dialogs_read_outbox_max[d.id] = max(value, d.readOutboxMaxId)
 				}
 
 				ImageLoader.saveMessagesThumbs(resetDialogsAll.messages)
@@ -9638,26 +9346,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				for (message in resetDialogsAll.messages) {
 					val action = message.action
 
-					if (action is TL_messageActionChatDeleteUser) {
-						val user = usersDict[action.user_id]
+					if (action is TLRPC.TLMessageActionChatDeleteUser) {
+						val user = usersDict[action.userId] as? TLUser
 
 						if (user != null && user.bot) {
-							message.reply_markup = TL_replyKeyboardHide()
+							message.replyMarkup = TLRPC.TLReplyKeyboardHide()
 							message.flags = message.flags or 64
 						}
 					}
 
-					if (action is TL_messageActionChatMigrateTo || action is TL_messageActionChannelCreate) {
+					if (action is TLRPC.TLMessageActionChatMigrateTo || action is TLRPC.TLMessageActionChannelCreate) {
 						message.unread = false
-						message.media_unread = false
+						message.mediaUnread = false
 					}
 					else {
 						val readMax = if (message.out) dialogs_read_outbox_max else dialogs_read_inbox_max
-						var value = readMax[message.dialog_id]
+						var value = readMax[message.dialogId]
 
 						if (value == null) {
-							value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-							readMax[message.dialog_id] = value
+							value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+							readMax[message.dialogId] = value
 						}
 
 						message.unread = value < message.id
@@ -9672,7 +9380,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun completeDialogsReset(dialogsRes: messages_Dialogs, newPts: Int, date: Int, qts: Int, newDialogsDict: LongSparseArray<Dialog>, newDialogMessage: LongSparseArray<MessageObject?>) {
+	fun completeDialogsReset(dialogsRes: TLRPC.MessagesDialogs, newPts: Int, date: Int, qts: Int, newDialogsDict: LongSparseArray<Dialog>, newDialogMessage: LongSparseArray<MessageObject?>) {
 		Utilities.stageQueue.postRunnable {
 			gettingDifference = false
 
@@ -9703,12 +9411,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						dialogMessage.remove(oldDialog.id)
 
 						if (messageObject != null) {
-							if (messageObject.messageOwner!!.peer_id!!.channel_id == 0L) {
+							if (messageObject.messageOwner!!.peerId!!.channelId == 0L) {
 								dialogMessagesByIds.remove(messageObject.id)
 							}
 
-							if (messageObject.messageOwner!!.random_id != 0L) {
-								dialogMessagesByRandomIds.remove(messageObject.messageOwner!!.random_id)
+							if (messageObject.messageOwner!!.randomId != 0L) {
+								dialogMessagesByRandomIds.remove(messageObject.messageOwner!!.randomId)
 							}
 						}
 					}
@@ -9718,22 +9426,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val key = newDialogsDict.keyAt(a)
 					val value = newDialogsDict.valueAt(a)
 
-					if (value.draft is TL_draftMessage) {
-						mediaDataController.saveDraft(value.id, 0, value.draft, null, false)
+					if (value is TLDialog) {
+						if (value.draft is TLRPC.TLDraftMessage) {
+							mediaDataController.saveDraft(value.id, 0, value.draft, null, false)
+						}
 					}
 
 					dialogs_dict.put(key, value)
 
 					val messageObject = newDialogMessage[value.id]
 
-					dialogMessage.put(key, messageObject)
+					messageObject?.let {
+						dialogMessage.put(key, it)
+					}
 
-					if (messageObject != null && messageObject.messageOwner!!.peer_id!!.channel_id == 0L) {
+					if (messageObject != null && messageObject.messageOwner!!.peerId!!.channelId == 0L) {
 						dialogMessagesByIds.put(messageObject.id, messageObject)
 						dialogsLoadedTillDate = min(dialogsLoadedTillDate, messageObject.messageOwner!!.date)
 
-						if (messageObject.messageOwner!!.random_id != 0L) {
-							dialogMessagesByRandomIds.put(messageObject.messageOwner!!.random_id, messageObject)
+						if (messageObject.messageOwner!!.randomId != 0L) {
+							dialogMessagesByRandomIds.put(messageObject.messageOwner!!.randomId, messageObject)
 						}
 					}
 				}
@@ -9745,7 +9457,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				while (a < size) {
 					val dialog = dialogs_dict.valueAt(a)
 
-					if (deletingDialogs.indexOfKey(dialog!!.id) >= 0) {
+					if (deletingDialogs.indexOfKey(dialog.id) >= 0) {
 						a++
 						continue
 					}
@@ -9781,34 +9493,31 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		migratingDialogs = true
 
-		val req = TL_messages_getDialogs()
+		val req = TLRPC.TLMessagesGetDialogs()
 		req.excludePinned = false
 		req.limit = 100
 		req.offsetId = offset
 		req.offsetDate = offsetDate
 
 		if (offset == 0) {
-			req.offsetPeer = TL_inputPeerEmpty()
+			req.offsetPeer = TLRPC.TLInputPeerEmpty()
 		}
 		else {
 			if (offsetChannel != 0L) {
-				req.offsetPeer = TL_inputPeerChannel()
-				req.offsetPeer?.channel_id = offsetChannel
+				req.offsetPeer = TLRPC.TLInputPeerChannel().also { it.channelId = offsetChannel }
 			}
 			else if (offsetUser != 0L) {
-				req.offsetPeer = TL_inputPeerUser()
-				req.offsetPeer?.user_id = offsetUser
+				req.offsetPeer = TLRPC.TLInputPeerUser().also { it.userId = offsetUser }
 			}
 			else {
-				req.offsetPeer = TL_inputPeerChat()
-				req.offsetPeer?.chat_id = offsetChat
+				req.offsetPeer = TLRPC.TLInputPeerChat().also { it.chatId = offsetChat }
 			}
 
-			req.offsetPeer?.access_hash = accessPeer
+			req.offsetPeer?.accessHash = accessPeer
 		}
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is messages_Dialogs) {
+			if (response is TLRPC.MessagesDialogs) {
 				messagesStorage.storageQueue.postRunnable {
 					try {
 						var offsetId: Int
@@ -9861,7 +9570,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							val dialog = dialogHashMap[did]
 
 							if (dialog != null) {
-								if (dialog.folder_id != folderId) {
+								if (dialog.folderId != folderId) {
 									continue
 								}
 
@@ -9881,8 +9590,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 									a--
 
-									if (message.id == dialog.top_message) {
-										dialog.top_message = 0
+									if (message.id == dialog.topMessage) {
+										dialog.topMessage = 0
 										break
 									}
 
@@ -9944,8 +9653,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						if (lastMessage != null) {
 							userConfig.migrateOffsetDate = lastMessage.date
 
-							if (lastMessage.peer_id!!.channel_id != 0L) {
-								userConfig.migrateOffsetChannelId = lastMessage.peer_id!!.channel_id
+							if (lastMessage.peerId!!.channelId != 0L) {
+								userConfig.migrateOffsetChannelId = lastMessage.peerId!!.channelId
 								userConfig.migrateOffsetChatId = 0
 								userConfig.migrateOffsetUserId = 0
 
@@ -9953,13 +9662,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									val chat = response.chats[a]
 
 									if (chat.id == userConfig.migrateOffsetChannelId) {
-										userConfig.migrateOffsetAccess = chat.access_hash
+										userConfig.migrateOffsetAccess = chat.accessHash
 										break
 									}
 								}
 							}
-							else if (lastMessage.peer_id!!.chat_id != 0L) {
-								userConfig.migrateOffsetChatId = lastMessage.peer_id!!.chat_id
+							else if (lastMessage.peerId!!.chatId != 0L) {
+								userConfig.migrateOffsetChatId = lastMessage.peerId!!.chatId
 								userConfig.migrateOffsetChannelId = 0
 								userConfig.migrateOffsetUserId = 0
 
@@ -9967,21 +9676,21 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									val chat = response.chats[a]
 
 									if (chat.id == userConfig.migrateOffsetChatId) {
-										userConfig.migrateOffsetAccess = chat.access_hash
+										userConfig.migrateOffsetAccess = chat.accessHash
 										break
 									}
 								}
 							}
-							else if (lastMessage.peer_id!!.user_id != 0L) {
-								userConfig.migrateOffsetUserId = lastMessage.peer_id!!.user_id
+							else if (lastMessage.peerId!!.userId != 0L) {
+								userConfig.migrateOffsetUserId = lastMessage.peerId!!.userId
 								userConfig.migrateOffsetChatId = 0
 								userConfig.migrateOffsetChannelId = 0
 
 								for (a in response.users.indices) {
-									val user = response.users[a]
+									val user = response.users[a] as? TLUser
 
-									if (user.id == userConfig.migrateOffsetUserId) {
-										userConfig.migrateOffsetAccess = user.access_hash
+									if (user?.id == userConfig.migrateOffsetUserId) {
+										userConfig.migrateOffsetAccess = user.accessHash
 										break
 									}
 								}
@@ -10007,7 +9716,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun processLoadedDialogs(dialogsRes: messages_Dialogs, encChats: List<EncryptedChat>?, folderId: Int, offset: Int, count: Int, loadType: Int, resetEnd: Boolean, migrate: Boolean, fromCache: Boolean) {
+	fun processLoadedDialogs(dialogsRes: TLRPC.MessagesDialogs, encChats: List<EncryptedChat>?, folderId: Int, offset: Int, count: Int, loadType: Int, resetEnd: Boolean, migrate: Boolean, fromCache: Boolean) {
 		Utilities.stageQueue.postRunnable {
 			if (!firstGettingTask) {
 				getNewDeleteTask(null, null)
@@ -10077,17 +9786,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					lastMessage = message
 				}
 
-				if (message.peer_id!!.channel_id != 0L) {
-					val chat = chatsDict[message.peer_id!!.channel_id]
+				if (message.peerId!!.channelId != 0L) {
+					val chat = chatsDict[message.peerId!!.channelId]
 
 					if (chat != null && chat.left && (promoDialogId == 0L || promoDialogId != -chat.id)) {
 						continue
 					}
 				}
-				else if (message.peer_id!!.chat_id != 0L) {
-					val chat = chatsDict[message.peer_id!!.chat_id]
+				else if (message.peerId!!.chatId != 0L) {
+					val chat = chatsDict[message.peerId!!.chatId]
 
-					if (chat?.migrated_to != null) {
+					if (chat?.migratedTo != null) {
 						continue
 					}
 				}
@@ -10096,11 +9805,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				newMessages.add(messageObject)
 
-				// MARK: remove check for service messages
-				if (message !is TL_messageService) {
-					// MARK: but keep this line
-					newDialogMessage.put(messageObject.dialogId, messageObject)
-				}
+				newDialogMessage.put(messageObject.dialogId, messageObject)
 			}
 
 			fileLoader.checkMediaExistence(newMessages)
@@ -10119,38 +9824,38 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					dialogsLoadOffsetId = lastMessage.id
 					dialogsLoadOffsetDate = lastMessage.date
 
-					if (lastMessage.peer_id!!.channel_id != 0L) {
-						dialogsLoadOffsetChannelId = lastMessage.peer_id!!.channel_id
+					if (lastMessage.peerId!!.channelId != 0L) {
+						dialogsLoadOffsetChannelId = lastMessage.peerId!!.channelId
 						dialogsLoadOffsetChatId = 0
 						dialogsLoadOffsetUserId = 0
 
 						for (chat in dialogsRes.chats) {
 							if (chat.id == dialogsLoadOffsetChannelId) {
-								dialogsLoadOffsetAccess = chat.access_hash
+								dialogsLoadOffsetAccess = chat.accessHash
 								break
 							}
 						}
 					}
-					else if (lastMessage.peer_id!!.chat_id != 0L) {
-						dialogsLoadOffsetChatId = lastMessage.peer_id!!.chat_id
+					else if (lastMessage.peerId!!.chatId != 0L) {
+						dialogsLoadOffsetChatId = lastMessage.peerId!!.chatId
 						dialogsLoadOffsetChannelId = 0
 						dialogsLoadOffsetUserId = 0
 
 						for (chat in dialogsRes.chats) {
 							if (chat.id == dialogsLoadOffsetChatId) {
-								dialogsLoadOffsetAccess = chat.access_hash
+								dialogsLoadOffsetAccess = chat.accessHash
 								break
 							}
 						}
 					}
-					else if (lastMessage.peer_id!!.user_id != 0L) {
-						dialogsLoadOffsetUserId = lastMessage.peer_id!!.user_id
+					else if (lastMessage.peerId!!.userId != 0L) {
+						dialogsLoadOffsetUserId = lastMessage.peerId!!.userId
 						dialogsLoadOffsetChatId = 0
 						dialogsLoadOffsetChannelId = 0
 
 						for (user in dialogsRes.users) {
-							if (user.id == dialogsLoadOffsetUserId) {
-								dialogsLoadOffsetAccess = user.access_hash
+							if (user.id == dialogsLoadOffsetUserId && user is TLUser) {
+								dialogsLoadOffsetAccess = user.accessHash
 								break
 							}
 						}
@@ -10184,11 +9889,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					promoDialog = d
 				}
 
-				if (d.last_message_date == 0) {
+				if (d.lastMessageDate == 0) {
 					val mess = newDialogMessage[d.id]
 
 					if (mess != null) {
-						d.last_message_date = mess.messageOwner!!.date
+						d.lastMessageDate = mess.messageOwner!!.date
 					}
 				}
 
@@ -10207,19 +9912,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 
-					channelsPts.put(-d.id, d.pts)
+					channelsPts.put(-d.id, (d as? TLDialog)?.pts ?: 0)
 				}
 				else if (DialogObject.isChatDialog(d.id)) {
 					val chat = chatsDict[-d.id]
 
-					if (chat != null && (chat.migrated_to != null || ChatObject.isNotInChat(chat))) {
+					if (chat != null && (chat.migratedTo != null || ChatObject.isNotInChat(chat))) {
 						continue
 					}
 				}
 
 				newDialogsDict.put(d.id, d)
 
-				if (allowCheck && loadType == DIALOGS_LOAD_TYPE_CACHE && (d.read_outbox_max_id == 0 || d.read_inbox_max_id == 0) && d.top_message != 0) {
+				if (allowCheck && loadType == DIALOGS_LOAD_TYPE_CACHE && (d.readOutboxMaxId == 0 || d.readInboxMaxId == 0) && d.topMessage != 0) {
 					dialogsToReload.add(d)
 				}
 
@@ -10229,7 +9934,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					value = 0
 				}
 
-				dialogs_read_inbox_max[d.id] = max(value, d.read_inbox_max_id)
+				dialogs_read_inbox_max[d.id] = max(value, d.readInboxMaxId)
 
 				value = dialogs_read_outbox_max[d.id]
 
@@ -10237,7 +9942,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					value = 0
 				}
 
-				dialogs_read_outbox_max[d.id] = max(value, d.read_outbox_max_id)
+				dialogs_read_outbox_max[d.id] = max(value, d.readOutboxMaxId)
 			}
 
 			if (loadType != DIALOGS_LOAD_TYPE_CACHE) {
@@ -10246,26 +9951,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				for (message in dialogsRes.messages) {
 					val action = message.action
 
-					if (action is TL_messageActionChatDeleteUser) {
-						val user = usersDict[action.user_id]
+					if (action is TLRPC.TLMessageActionChatDeleteUser) {
+						val user = usersDict[action.userId] as? TLUser
 
 						if (user != null && user.bot) {
-							message.reply_markup = TL_replyKeyboardHide()
+							message.replyMarkup = TLRPC.TLReplyKeyboardHide()
 							message.flags = message.flags or 64
 						}
 					}
 
-					if (action is TL_messageActionChatMigrateTo || action is TL_messageActionChannelCreate) {
+					if (action is TLRPC.TLMessageActionChatMigrateTo || action is TLRPC.TLMessageActionChannelCreate) {
 						message.unread = false
-						message.media_unread = false
+						message.mediaUnread = false
 					}
 					else {
 						val readMax = if (message.out) dialogs_read_outbox_max else dialogs_read_inbox_max
-						var value = readMax[message.dialog_id]
+						var value = readMax[message.dialogId]
 
 						if (value == null) {
-							value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-							readMax[message.dialog_id] = value
+							value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+							readMax[message.dialogId] = value
 						}
 
 						message.unread = value < message.id
@@ -10304,9 +10009,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				if (encChats != null) {
 					for (encryptedChat in encChats) {
-						if (encryptedChat is TL_encryptedChat && AndroidUtilities.getMyLayerVersion(encryptedChat.layer) < SecretChatHelper.CURRENT_SECRET_CHAT_LAYER) {
-							secretChatHelper.sendNotifyLayerMessage(encryptedChat, null)
-						}
+						// MARK: uncomment to enable secret chats
+//						if (encryptedChat is TLRPC.TLEncryptedChat && AndroidUtilities.getMyLayerVersion(encryptedChat.layer) < SecretChatHelper.CURRENT_SECRET_CHAT_LAYER) {
+//							secretChatHelper.sendNotifyLayerMessage(encryptedChat, null)
+//						}
 
 						putEncryptedChat(encryptedChat, true)
 					}
@@ -10321,7 +10027,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				dialogsLoaded = true
 
 				var archivedDialogsCount = 0
-				val lastDialogDate = if (migrate && allDialogs.isNotEmpty()) allDialogs.last().last_message_date else 0
+				val lastDialogDate = if (migrate && allDialogs.isNotEmpty()) allDialogs.last().lastMessageDate else 0
 
 				for (a in 0 until newDialogsDict.size()) {
 					val key = newDialogsDict.keyAt(a)
@@ -10329,18 +10035,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val currentDialog = dialogs_dict[key]
 
 					if (migrate && currentDialog != null) {
-						currentDialog.folder_id = value.folder_id
+						currentDialog.folderId = value.folderId
 					}
 
-					if (migrate && lastDialogDate != 0 && value.last_message_date < lastDialogDate) {
+					if (migrate && lastDialogDate != 0 && value.lastMessageDate < lastDialogDate) {
 						continue
 					}
 
-					if (loadType != DIALOGS_LOAD_TYPE_CACHE && value.draft is TL_draftMessage) {
-						mediaDataController.saveDraft(value.id, 0, value.draft, null, false)
+					if (value is TLDialog) {
+						if (loadType != DIALOGS_LOAD_TYPE_CACHE && value.draft is TLRPC.TLDraftMessage) {
+							mediaDataController.saveDraft(value.id, 0, value.draft, null, false)
+						}
 					}
 
-					if (value.folder_id != folderId) {
+					if (value.folderId != folderId) {
 						archivedDialogsCount++
 					}
 
@@ -10350,19 +10058,22 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						added = true
 
 						dialogs_dict.put(key, value)
-						dialogMessage.put(key, newMsg)
 
-						if (newMsg != null && newMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+						newMsg?.let {
+							dialogMessage.put(key, it)
+						}
+
+						if (newMsg != null && newMsg.messageOwner!!.peerId!!.channelId == 0L) {
 							dialogMessagesByIds.put(newMsg.id, newMsg)
 
-							if (newMsg.messageOwner!!.random_id != 0L) {
-								dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+							if (newMsg.messageOwner!!.randomId != 0L) {
+								dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 							}
 						}
 					}
 					else {
 						if (loadType != DIALOGS_LOAD_TYPE_CACHE) {
-							currentDialog.notify_settings = value.notify_settings
+							currentDialog.notifySettings = value.notifySettings
 						}
 
 						currentDialog.pinned = value.pinned
@@ -10370,18 +10081,21 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 						val oldMsg = dialogMessage[key]
 
-						if (oldMsg != null && oldMsg.deleted || oldMsg == null || currentDialog.top_message > 0) {
-							if (value.top_message >= currentDialog.top_message) {
+						if (oldMsg != null && oldMsg.deleted || oldMsg == null || currentDialog.topMessage > 0) {
+							if (value.topMessage >= currentDialog.topMessage) {
 								dialogs_dict.put(key, value)
-								dialogMessage.put(key, newMsg)
+
+								newMsg?.let {
+									dialogMessage.put(key, it)
+								}
 
 								if (oldMsg != null) {
-									if (oldMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+									if (oldMsg.messageOwner!!.peerId!!.channelId == 0L) {
 										dialogMessagesByIds.remove(oldMsg.id)
 									}
 
-									if (oldMsg.messageOwner!!.random_id != 0L) {
-										dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.random_id)
+									if (oldMsg.messageOwner!!.randomId != 0L) {
+										dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.randomId)
 									}
 								}
 
@@ -10390,11 +10104,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										newMsg.deleted = oldMsg.deleted
 									}
 
-									if (newMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+									if (newMsg.messageOwner!!.peerId!!.channelId == 0L) {
 										dialogMessagesByIds.put(newMsg.id, newMsg)
 
-										if (newMsg.messageOwner!!.random_id != 0L) {
-											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+										if (newMsg.messageOwner!!.randomId != 0L) {
+											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 										}
 									}
 								}
@@ -10403,24 +10117,27 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						else {
 							if (newMsg == null && oldMsg.id > 0 || newMsg != null && newMsg.messageOwner!!.date > oldMsg.messageOwner!!.date) {
 								dialogs_dict.put(key, value)
-								dialogMessage.put(key, newMsg)
 
-								if (oldMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+								newMsg?.let {
+									dialogMessage.put(key, it)
+								}
+
+								if (oldMsg.messageOwner!!.peerId!!.channelId == 0L) {
 									dialogMessagesByIds.remove(oldMsg.id)
 								}
 
 								if (newMsg != null) {
-									if (newMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+									if (newMsg.messageOwner!!.peerId!!.channelId == 0L) {
 										dialogMessagesByIds.put(newMsg.id, newMsg)
 
-										if (newMsg.messageOwner!!.random_id != 0L) {
-											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+										if (newMsg.messageOwner!!.randomId != 0L) {
+											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 										}
 									}
 								}
 
-								if (oldMsg.messageOwner!!.random_id != 0L) {
-									dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.random_id)
+								if (oldMsg.messageOwner!!.randomId != 0L) {
+									dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.randomId)
 								}
 							}
 						}
@@ -10435,7 +10152,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				while (a < size) {
 					val dialog = dialogs_dict.valueAt(a)
 
-					if (deletingDialogs.indexOfKey(dialog!!.id) >= 0) {
+					if (deletingDialogs.indexOfKey(dialog.id) >= 0) {
 						a++
 						continue
 					}
@@ -10517,7 +10234,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val dialog = dialogs_dict[dialogId]
 
 		if (dialog != null) {
-			dialog.notify_settings = notifySettings
+			dialog.notifySettings = notifySettings
 		}
 
 		if (notifySettings.flags and 2 != 0) {
@@ -10528,29 +10245,29 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		if (notifySettings.flags and 4 != 0) {
-			if (notifySettings.mute_until > connectionsManager.currentTime) {
+			if (notifySettings.muteUntil > connectionsManager.currentTime) {
 				var until = 0
 
-				if (notifySettings.mute_until > connectionsManager.currentTime + 60 * 60 * 24 * 365) {
+				if (notifySettings.muteUntil > connectionsManager.currentTime + 60 * 60 * 24 * 365) {
 					if (currentValue != 2) {
 						updated = true
 
 						editor.putInt("notify2_$dialogId", 2)
 
-						dialog?.notify_settings?.mute_until = Int.MAX_VALUE
+						dialog?.notifySettings?.muteUntil = Int.MAX_VALUE
 					}
 				}
 				else {
-					if (currentValue != 3 || currentValue2 != notifySettings.mute_until) {
+					if (currentValue != 3 || currentValue2 != notifySettings.muteUntil) {
 						updated = true
 
 						editor.putInt("notify2_$dialogId", 3)
-						editor.putInt("notifyuntil_$dialogId", notifySettings.mute_until)
+						editor.putInt("notifyuntil_$dialogId", notifySettings.muteUntil)
 
-						dialog?.notify_settings?.mute_until = 0
+						dialog?.notifySettings?.muteUntil = 0
 					}
 
-					until = notifySettings.mute_until
+					until = notifySettings.muteUntil
 				}
 
 				messagesStorage.setDialogFlags(dialogId, until.toLong() shl 32 or 1L)
@@ -10560,7 +10277,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			else {
 				if (currentValue != 0 && currentValue != 1) {
 					updated = true
-					dialog?.notify_settings?.mute_until = 0
+					dialog?.notifySettings?.muteUntil = 0
 
 					editor.putInt("notify2_$dialogId", 0)
 				}
@@ -10571,7 +10288,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		else {
 			if (currentValue != -1) {
 				updated = true
-				dialog?.notify_settings?.mute_until = 0
+				dialog?.notifySettings?.muteUntil = 0
 
 				editor.remove("notify2_$dialogId")
 			}
@@ -10579,9 +10296,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			messagesStorage.setDialogFlags(dialogId, 0)
 		}
 
-		applySoundSettings(notifySettings.android_sound, editor, dialogId, 0, false)
+		applySoundSettings(notifySettings.androidSound, editor, dialogId, 0, false)
 
-		editor.commit()
+		editor.apply()
 
 		if (updated) {
 			notificationCenter.postNotificationName(NotificationCenter.notificationsSettingsUpdated)
@@ -10589,45 +10306,41 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	private fun applyDialogsNotificationsSettings(dialogs: List<Dialog>) {
-		var editor: SharedPreferences.Editor? = null
+		notificationsPreferences.edit {
+			for (dialog in dialogs) {
+				val notifySettings = dialog.notifySettings
 
-		for (dialog in dialogs) {
-			if (dialog.peer != null && dialog.notify_settings is TL_peerNotifySettings) {
-				if (editor == null) {
-					editor = notificationsPreferences.edit()
-				}
+				if (dialog.peer != null && notifySettings is TLRPC.TLPeerNotifySettings) {
+					val dialogId = MessageObject.getPeerId(dialog.peer)
 
-				val dialogId = MessageObject.getPeerId(dialog.peer)
+					if (notifySettings.flags and 2 != 0) {
+						putBoolean("silent_$dialogId", notifySettings.silent)
+					}
+					else {
+						remove("silent_$dialogId")
+					}
 
-				if (dialog.notify_settings.flags and 2 != 0) {
-					editor?.putBoolean("silent_$dialogId", dialog.notify_settings.silent)
-				}
-				else {
-					editor?.remove("silent_$dialogId")
-				}
-
-				if (dialog.notify_settings.flags and 4 != 0) {
-					if (dialog.notify_settings.mute_until > connectionsManager.currentTime) {
-						if (dialog.notify_settings.mute_until > connectionsManager.currentTime + 60 * 60 * 24 * 365) {
-							editor?.putInt("notify2_$dialogId", 2)
-							dialog.notify_settings.mute_until = Int.MAX_VALUE
+					if (notifySettings.flags and 4 != 0) {
+						if (notifySettings.muteUntil > connectionsManager.currentTime) {
+							if (notifySettings.muteUntil > connectionsManager.currentTime + 60 * 60 * 24 * 365) {
+								putInt("notify2_$dialogId", 2)
+								notifySettings.muteUntil = Int.MAX_VALUE
+							}
+							else {
+								putInt("notify2_$dialogId", 3)
+								putInt("notifyuntil_$dialogId", notifySettings.muteUntil)
+							}
 						}
 						else {
-							editor?.putInt("notify2_$dialogId", 3)
-							editor?.putInt("notifyuntil_$dialogId", dialog.notify_settings.mute_until)
+							putInt("notify2_$dialogId", 0)
 						}
 					}
 					else {
-						editor?.putInt("notify2_$dialogId", 0)
+						remove("notify2_$dialogId")
 					}
-				}
-				else {
-					editor?.remove("notify2_$dialogId")
 				}
 			}
 		}
-
-		editor?.commit()
 	}
 
 	fun reloadMentionsCountForChannel(peer: InputPeer, taskId: Long) {
@@ -10651,12 +10364,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			newTaskId = taskId
 		}
 
-		val req = TL_messages_getUnreadMentions()
+		val req = TLRPC.TLMessagesGetUnreadMentions()
 		req.peer = peer
 		req.limit = 1
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is messages_Messages) {
+			if (response is MessagesMessages) {
 				val newCount = if (response.count != 0) {
 					response.count
 				}
@@ -10664,7 +10377,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					response.messages.size
 				}
 
-				messagesStorage.resetMentionsCount(-peer.channel_id, newCount)
+				messagesStorage.resetMentionsCount(-peer.channelId, newCount)
 			}
 
 			if (newTaskId != 0L) {
@@ -10701,11 +10414,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 
 					if (currentDialog != null) {
-						val prevCount = currentDialog.unread_count
+						val prevCount = currentDialog.unreadCount
 
-						currentDialog.unread_count = dialogsToUpdate.valueAt(a)
+						currentDialog.unreadCount = dialogsToUpdate.valueAt(a)
 
-						if (prevCount != 0 && currentDialog.unread_count == 0) {
+						if (prevCount != 0 && currentDialog.unreadCount == 0) {
 							if (!isDialogMuted(dialogId)) {
 								unreadUnmutedDialogs--
 							}
@@ -10719,7 +10432,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 							}
 						}
-						else if (prevCount == 0 && !currentDialog.unread_mark && currentDialog.unread_count != 0) {
+						else if (prevCount == 0 && !currentDialog.unreadMark && currentDialog.unreadCount != 0) {
 							if (!isDialogMuted(dialogId)) {
 								unreadUnmutedDialogs++
 							}
@@ -10743,10 +10456,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val currentDialog = dialogs_dict[dialogId]
 
 					if (currentDialog != null) {
-						currentDialog.unread_mentions_count = dialogsMentionsToUpdate.valueAt(a)
+						currentDialog.unreadMentionsCount = dialogsMentionsToUpdate.valueAt(a)
 
 						if (createdDialogMainThreadIds.contains(currentDialog.id)) {
-							notificationCenter.postNotificationName(NotificationCenter.updateMentionsCount, currentDialog.id, currentDialog.unread_mentions_count)
+							notificationCenter.postNotificationName(NotificationCenter.updateMentionsCount, currentDialog.id, currentDialog.unreadMentionsCount)
 						}
 
 						if (!filterDialogsChanged) {
@@ -10779,10 +10492,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val req = TL_messages_getHistory()
+		val req = TLRPC.TLMessagesGetHistory()
 		req.peer = peer ?: getInputPeer(dialog.id)
 
-		if (req.peer == null) {
+		if (req.peer is TLRPC.TLInputPeerEmpty) {
 			return
 		}
 
@@ -10796,22 +10509,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			var data: NativeByteBuffer? = null
 
 			try {
-				data = NativeByteBuffer(60 + req.peer.objectSize)
+				data = NativeByteBuffer(60 + (req.peer?.objectSize ?: 0))
 				data.writeInt32(14)
 				data.writeInt64(dialog.id)
-				data.writeInt32(dialog.top_message)
-				data.writeInt32(dialog.read_inbox_max_id)
-				data.writeInt32(dialog.read_outbox_max_id)
-				data.writeInt32(dialog.unread_count)
-				data.writeInt32(dialog.last_message_date)
-				data.writeInt32(dialog.pts)
+				data.writeInt32(dialog.topMessage)
+				data.writeInt32(dialog.readInboxMaxId)
+				data.writeInt32(dialog.readOutboxMaxId)
+				data.writeInt32(dialog.unreadCount)
+				data.writeInt32(dialog.lastMessageDate)
+				data.writeInt32((dialog as? TLDialog)?.pts ?: 0)
 				data.writeInt32(dialog.flags)
 				data.writeBool(dialog.pinned)
 				data.writeInt32(dialog.pinnedNum)
-				data.writeInt32(dialog.unread_mentions_count)
-				data.writeBool(dialog.unread_mark)
-				data.writeInt32(dialog.folder_id)
-				req.peer.serializeToStream(data)
+				data.writeInt32(dialog.unreadMentionsCount)
+				data.writeBool(dialog.unreadMark)
+				data.writeInt32(dialog.folderId)
+
+				req.peer?.serializeToStream(data)
 			}
 			catch (e: Exception) {
 				FileLog.e(e)
@@ -10824,31 +10538,31 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is messages_Messages) {
+			if (response is MessagesMessages) {
 				removeDeletedMessagesFromArray(dialog.id, response.messages)
 
 				if (response.messages.isNotEmpty()) {
-					val dialogs = TL_messages_dialogs()
+					val dialogs = TLRPC.TLMessagesDialogs()
 					val newMessage = response.messages[0]
 
-					val newDialog: Dialog = TL_dialog()
+					val newDialog = TLDialog()
 					newDialog.flags = dialog.flags
-					newDialog.top_message = newMessage.id
-					newDialog.last_message_date = newMessage.date
-					newDialog.notify_settings = dialog.notify_settings
-					newDialog.pts = dialog.pts
-					newDialog.unread_count = dialog.unread_count
-					newDialog.unread_mark = dialog.unread_mark
-					newDialog.unread_mentions_count = dialog.unread_mentions_count
-					newDialog.unread_reactions_count = dialog.unread_reactions_count
-					newDialog.read_inbox_max_id = dialog.read_inbox_max_id
-					newDialog.read_outbox_max_id = dialog.read_outbox_max_id
+					newDialog.topMessage = newMessage.id
+					newDialog.lastMessageDate = newMessage.date
+					newDialog.notifySettings = dialog.notifySettings
+					newDialog.pts = (dialog as? TLDialog)?.pts ?: 0
+					newDialog.unreadCount = dialog.unreadCount
+					newDialog.unreadMark = dialog.unreadMark
+					newDialog.unreadMentionsCount = dialog.unreadMentionsCount
+					newDialog.unreadReactionsCount = dialog.unreadReactionsCount
+					newDialog.readInboxMaxId = dialog.readInboxMaxId
+					newDialog.readOutboxMaxId = dialog.readOutboxMaxId
 					newDialog.pinned = dialog.pinned
 					newDialog.pinnedNum = dialog.pinnedNum
-					newDialog.folder_id = dialog.folder_id
+					newDialog.folderId = dialog.folderId
 					newDialog.id = dialog.id
 
-					newMessage.dialog_id = newDialog.id
+					newMessage.dialogId = newDialog.id
 
 					dialogs.users.addAll(response.users)
 					dialogs.chats.addAll(response.chats)
@@ -10869,7 +10583,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								messagesStorage.isDialogHasTopMessage(dialog.id) { deleteDialog(dialog.id, 3) }
 							}
 							else {
-								if (currentDialog.top_message == 0) {
+								if (currentDialog.topMessage == 0) {
 									deleteDialog(dialog.id, 3)
 								}
 							}
@@ -10888,7 +10602,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun processDialogsUpdate(dialogsRes: messages_Dialogs, fromCache: Boolean) {
+	fun processDialogsUpdate(dialogsRes: TLRPC.MessagesDialogs, fromCache: Boolean) {
 		Utilities.stageQueue.postRunnable {
 			val newDialogsDict = LongSparseArray<Dialog>()
 			val newDialogMessage = LongSparseArray<MessageObject>()
@@ -10909,18 +10623,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			for (a in dialogsRes.messages.indices) {
 				val message = dialogsRes.messages[a]
 
-				if (promoDialogId == 0L || promoDialogId != message.dialog_id) {
-					if (message.peer_id!!.channel_id != 0L) {
-						val chat = chatsDict[message.peer_id!!.channel_id]
+				if (promoDialogId == 0L || promoDialogId != message.dialogId) {
+					if (message.peerId!!.channelId != 0L) {
+						val chat = chatsDict[message.peerId!!.channelId]
 
 						if (chat != null && ChatObject.isNotInChat(chat)) {
 							continue
 						}
 					}
-					else if (message.peer_id!!.chat_id != 0L) {
-						val chat = chatsDict[message.peer_id!!.chat_id]
+					else if (message.peerId!!.chatId != 0L) {
+						val chat = chatsDict[message.peerId!!.chatId]
 
-						if (chat != null && (chat.migrated_to != null || ChatObject.isNotInChat(chat))) {
+						if (chat != null && (chat.migratedTo != null || ChatObject.isNotInChat(chat))) {
 							continue
 						}
 					}
@@ -10930,11 +10644,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				newMessages.add(messageObject)
 
-				// MARK: remove check for service messages
-				if (message !is TL_messageService) {
-					// MARK: but keep this line
-					newDialogMessage.put(messageObject.dialogId, messageObject)
-				}
+				newDialogMessage.put(messageObject.dialogId, messageObject)
 			}
 
 			fileLoader.checkMediaExistence(newMessages)
@@ -10955,23 +10665,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					else if (DialogObject.isChatDialog(d.id)) {
 						val chat = chatsDict[-d.id]
 
-						if (chat != null && (chat.migrated_to != null || ChatObject.isNotInChat(chat))) {
+						if (chat != null && (chat.migratedTo != null || ChatObject.isNotInChat(chat))) {
 							continue
 						}
 					}
 				}
 
-				if (d.last_message_date == 0) {
+				if (d.lastMessageDate == 0) {
 					val mess = newDialogMessage[d.id]
 
 					if (mess != null) {
-						d.last_message_date = mess.messageOwner!!.date
+						d.lastMessageDate = mess.messageOwner!!.date
 					}
 				}
 
 				newDialogsDict.put(d.id, d)
 
-				dialogsToUpdate.put(d.id, d.unread_count)
+				dialogsToUpdate.put(d.id, d.unreadCount)
 
 				var value = dialogs_read_inbox_max[d.id]
 
@@ -10979,15 +10689,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					value = 0
 				}
 
-				if (d.read_inbox_max_id > d.top_message) {
-					d.read_inbox_max_id = d.top_message
+				if (d.readInboxMaxId > d.topMessage) {
+					d.readInboxMaxId = d.topMessage
 				}
 
-				if (value > d.top_message) {
-					value = d.top_message
+				if (value > d.topMessage) {
+					value = d.topMessage
 				}
 
-				dialogs_read_inbox_max[d.id] = max(value, d.read_inbox_max_id)
+				dialogs_read_inbox_max[d.id] = max(value, d.readInboxMaxId)
 
 				value = dialogs_read_outbox_max[d.id]
 
@@ -10995,7 +10705,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					value = 0
 				}
 
-				dialogs_read_outbox_max[d.id] = max(value, d.read_outbox_max_id)
+				dialogs_read_outbox_max[d.id] = max(value, d.readOutboxMaxId)
 			}
 
 			AndroidUtilities.runOnUIThread {
@@ -11009,54 +10719,60 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val newMsg = newDialogMessage[value.id]
 
 					if (currentDialog == null) {
-						val offset = nextDialogsCacheOffset[value.folder_id, 0] + 1
+						val offset = nextDialogsCacheOffset[value.folderId, 0] + 1
 
-						nextDialogsCacheOffset.put(value.folder_id, offset)
+						nextDialogsCacheOffset.put(value.folderId, offset)
 						dialogs_dict.put(key, value)
-						dialogMessage.put(key, newMsg)
+
+						newMsg?.let {
+							dialogMessage.put(key, it)
+						}
 
 						if (newMsg == null) {
 							if (fromCache) {
 								checkLastDialogMessage(value, null, 0)
 							}
 						}
-						else if (newMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+						else if (newMsg.messageOwner!!.peerId!!.channelId == 0L) {
 							dialogMessagesByIds.put(newMsg.id, newMsg)
 							dialogsLoadedTillDate = min(dialogsLoadedTillDate, newMsg.messageOwner!!.date)
 
-							if (newMsg.messageOwner!!.random_id != 0L) {
-								dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+							if (newMsg.messageOwner!!.randomId != 0L) {
+								dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 							}
 						}
 					}
 					else {
-						currentDialog.unread_count = value.unread_count
+						currentDialog.unreadCount = value.unreadCount
 
-						if (currentDialog.unread_mentions_count != value.unread_mentions_count) {
-							currentDialog.unread_mentions_count = value.unread_mentions_count
+						if (currentDialog.unreadMentionsCount != value.unreadMentionsCount) {
+							currentDialog.unreadMentionsCount = value.unreadMentionsCount
 
 							if (createdDialogMainThreadIds.contains(currentDialog.id)) {
-								notificationCenter.postNotificationName(NotificationCenter.updateMentionsCount, currentDialog.id, currentDialog.unread_mentions_count)
+								notificationCenter.postNotificationName(NotificationCenter.updateMentionsCount, currentDialog.id, currentDialog.unreadMentionsCount)
 							}
 						}
 
-						if (currentDialog.unread_reactions_count != value.unread_reactions_count) {
-							currentDialog.unread_reactions_count = value.unread_reactions_count
-							notificationCenter.postNotificationName(NotificationCenter.dialogsUnreadReactionsCounterChanged, currentDialog.id, currentDialog.unread_reactions_count, null)
+						if (currentDialog.unreadReactionsCount != value.unreadReactionsCount) {
+							currentDialog.unreadReactionsCount = value.unreadReactionsCount
+							notificationCenter.postNotificationName(NotificationCenter.dialogsUnreadReactionsCounterChanged, currentDialog.id, currentDialog.unreadReactionsCount, null)
 						}
 
 						val oldMsg = dialogMessage[key]
 
-						if (oldMsg == null || currentDialog.top_message > 0) {
-							if (oldMsg != null && oldMsg.deleted || value.top_message > currentDialog.top_message) {
+						if (oldMsg == null || currentDialog.topMessage > 0) {
+							if (oldMsg != null && oldMsg.deleted || value.topMessage > currentDialog.topMessage) {
 								dialogs_dict.put(key, value)
-								dialogMessage.put(key, newMsg)
 
-								if (oldMsg != null && oldMsg.messageOwner?.peer_id?.channel_id == 0L) {
+								newMsg?.let {
+									dialogMessage.put(key, it)
+								}
+
+								if (oldMsg != null && oldMsg.messageOwner?.peerId?.channelId == 0L) {
 									dialogMessagesByIds.remove(oldMsg.id)
 
-									if (oldMsg.messageOwner!!.random_id != 0L) {
-										dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.random_id)
+									if (oldMsg.messageOwner!!.randomId != 0L) {
+										dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.randomId)
 									}
 								}
 
@@ -11065,12 +10781,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										newMsg.deleted = oldMsg.deleted
 									}
 
-									if (newMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+									if (newMsg.messageOwner!!.peerId!!.channelId == 0L) {
 										dialogMessagesByIds.put(newMsg.id, newMsg)
 										dialogsLoadedTillDate = min(dialogsLoadedTillDate, newMsg.messageOwner!!.date)
 
-										if (newMsg.messageOwner!!.random_id != 0L) {
-											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+										if (newMsg.messageOwner!!.randomId != 0L) {
+											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 										}
 									}
 								}
@@ -11083,9 +10799,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						else {
 							if (oldMsg.deleted || newMsg == null || newMsg.messageOwner!!.date > oldMsg.messageOwner!!.date) {
 								dialogs_dict.put(key, value)
-								dialogMessage.put(key, newMsg)
 
-								if (oldMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+								newMsg?.let {
+									dialogMessage.put(key, it)
+								}
+
+								if (oldMsg.messageOwner!!.peerId!!.channelId == 0L) {
 									dialogMessagesByIds.remove(oldMsg.id)
 								}
 
@@ -11094,18 +10813,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										newMsg.deleted = oldMsg.deleted
 									}
 
-									if (newMsg.messageOwner!!.peer_id!!.channel_id == 0L) {
+									if (newMsg.messageOwner!!.peerId!!.channelId == 0L) {
 										dialogMessagesByIds.put(newMsg.id, newMsg)
 										dialogsLoadedTillDate = min(dialogsLoadedTillDate, newMsg.messageOwner!!.date)
 
-										if (newMsg.messageOwner!!.random_id != 0L) {
-											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.random_id, newMsg)
+										if (newMsg.messageOwner!!.randomId != 0L) {
+											dialogMessagesByRandomIds.put(newMsg.messageOwner!!.randomId, newMsg)
 										}
 									}
 								}
 
-								if (oldMsg.messageOwner?.random_id != 0L) {
-									dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.random_id)
+								if (oldMsg.messageOwner?.randomId != 0L) {
+									dialogMessagesByRandomIds.remove(oldMsg.messageOwner!!.randomId)
 								}
 							}
 						}
@@ -11119,7 +10838,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				while (a < size) {
 					val dialog = dialogs_dict.valueAt(a)
 
-					if (deletingDialogs.indexOfKey(dialog!!.id) >= 0) {
+					if (deletingDialogs.indexOfKey(dialog.id) >= 0) {
 						a++
 						continue
 					}
@@ -11160,7 +10879,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val req = TL_messages_getExtendedMedia()
+		val req = TLRPC.TLMessagesGetExtendedMedia()
 		req.peer = getInputPeer(dialogId)
 
 		for (messageObject in visibleObjects) {
@@ -11179,7 +10898,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val req = TL_messages_getMessagesReactions()
+		val req = TLRPC.TLMessagesGetMessagesReactions()
 		req.peer = getInputPeer(dialogId)
 
 		for (messageObject in visibleObjects) {
@@ -11188,8 +10907,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			if (response is Updates) {
-				response.updates?.forEach {
-					(it as? TL_updateMessageReactions)?.updateUnreadState = false
+				for (update in response.updates) {
+					(update as? TLRPC.TLUpdateMessageReactions)?.updateUnreadState = false
 				}
 
 				processUpdates(response, false)
@@ -11208,7 +10927,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		run {
 			var a = 0
-			val n = array.size()
+			val n = array.size
 
 			while (a < n) {
 				val `object` = array.valueAt(a)
@@ -11231,14 +10950,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				continue
 			}
 
-			val mediaPoll = messageObject.messageOwner?.media as? TL_messageMediaPoll
+			val mediaPoll = messageObject.messageOwner?.media as? TLRPC.TLMessageMediaPoll
+			val poll = mediaPoll?.poll
 
-			if (!mediaPoll!!.poll.closed && mediaPoll.poll.close_date != 0) {
-				if (mediaPoll.poll.close_date <= time) {
-					hasExpiredPolls = true
-				}
-				else {
-					minExpireTime = min(minExpireTime, mediaPoll.poll.close_date - time)
+			if (poll != null) {
+				if (!poll.closed && poll.closeDate != 0) {
+					if (poll.closeDate <= time) {
+						hasExpiredPolls = true
+					}
+					else {
+						minExpireTime = min(minExpireTime, poll.closeDate - time)
+					}
 				}
 			}
 
@@ -11269,7 +10991,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		if (messageObject.messageOwner?.mentioned == true) {
-			messagesStorage.markMentionMessageAsRead(-messageObject.messageOwner!!.peer_id!!.channel_id, messageObject.id, messageObject.dialogId)
+			messagesStorage.markMentionMessageAsRead(-messageObject.messageOwner!!.peerId!!.channelId, messageObject.id, messageObject.dialogId)
 		}
 
 		val arrayList = listOf(messageObject.id)
@@ -11280,14 +11002,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		notificationCenter.postNotificationName(NotificationCenter.messagesReadContent, dialogId, arrayList)
 
 		if (messageObject.id < 0) {
-			markMessageAsRead(messageObject.dialogId, messageObject.messageOwner!!.random_id, Int.MIN_VALUE)
+			markMessageAsRead(messageObject.dialogId, messageObject.messageOwner!!.randomId, Int.MIN_VALUE)
 		}
 		else {
-			if (messageObject.messageOwner?.peer_id?.channel_id != 0L) {
-				val req = TL_channels_readMessageContents()
-				req.channel = getInputChannel(messageObject.messageOwner?.peer_id?.channel_id)
+			if (messageObject.messageOwner?.peerId?.channelId != 0L) {
+				val req = TLRPC.TLChannelsReadMessageContents()
+				req.channel = getInputChannel(messageObject.messageOwner?.peerId?.channelId)
 
-				if (req.channel == null) {
+				if (req.channel is TLRPC.TLInputChannelEmpty) {
 					return
 				}
 
@@ -11296,12 +11018,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				connectionsManager.sendRequest(req)
 			}
 			else {
-				val req = TL_messages_readMessageContents()
+				val req = TLRPC.TLMessagesReadMessageContents()
 				req.id.add(messageObject.id)
 
 				connectionsManager.sendRequest(req) { response, _ ->
-					if (response is TL_messages_affectedMessages) {
-						processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+					if (response is TLRPC.TLMessagesAffectedMessages) {
+						processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 					}
 				}
 			}
@@ -11312,10 +11034,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		messagesStorage.markMentionMessageAsRead(-channelId, mid, did)
 
 		if (channelId != 0L) {
-			val req = TL_channels_readMessageContents()
+			val req = TLRPC.TLChannelsReadMessageContents()
 			req.channel = getInputChannel(channelId)
 
-			if (req.channel == null) {
+			if (req.channel is TLRPC.TLInputChannelEmpty) {
 				return
 			}
 
@@ -11324,18 +11046,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			connectionsManager.sendRequest(req)
 		}
 		else {
-			val req = TL_messages_readMessageContents()
+			val req = TLRPC.TLMessagesReadMessageContents()
 			req.id.add(mid)
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_messages_affectedMessages) {
-					processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+				if (response is TLRPC.TLMessagesAffectedMessages) {
+					processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 				}
 			}
 		}
 	}
 
-	fun markMessageAsRead2(dialogId: Long, mid: Int, inputChannel: InputChannel?, ttl: Int, taskId: Long) {
+	fun markMessageAsRead2(dialogId: Long, mid: Int, inputChannel: TLRPC.InputChannel?, ttl: Int, taskId: Long) {
 		@Suppress("NAME_SHADOWING") var inputChannel = inputChannel
 
 		if (mid == 0 || ttl <= 0) {
@@ -11375,7 +11097,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		messagesStorage.createTaskForMid(dialogId, mid, time, time, ttl, false)
 
 		if (inputChannel != null) {
-			val req = TL_channels_readMessageContents()
+			val req = TLRPC.TLChannelsReadMessageContents()
 			req.channel = inputChannel
 			req.id.add(mid)
 
@@ -11386,12 +11108,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			val req = TL_messages_readMessageContents()
+			val req = TLRPC.TLMessagesReadMessageContents()
 			req.id.add(mid)
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_messages_affectedMessages) {
-					processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+				if (response is TLRPC.TLMessagesAffectedMessages) {
+					processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 				}
 
 				if (newTaskId != 0L) {
@@ -11415,7 +11137,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val randomIds = ArrayList<Long>()
 		randomIds.add(randomId)
 
-		secretChatHelper.sendMessagesReadMessage(chat, randomIds, null)
+		// MARK: uncomment to enable secret chats
+		// secretChatHelper.sendMessagesReadMessage(chat, randomIds, null)
 
 		if (ttl > 0) {
 			val time = connectionsManager.currentTime
@@ -11426,10 +11149,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 	private fun completeReadTask(task: ReadTask) {
 		if (task.replyId != 0L) {
-			val req = TL_messages_readDiscussion()
-			req.msg_id = task.replyId.toInt()
+			val req = TLRPC.TLMessagesReadDiscussion()
+			req.msgId = task.replyId.toInt()
 			req.peer = getInputPeer(task.dialogId)
-			req.read_max_id = task.maxId
+			req.readMaxId = task.maxId
 
 			connectionsManager.sendRequest(req)
 		}
@@ -11437,36 +11160,39 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val inputPeer = getInputPeer(task.dialogId)
 			val req: TLObject
 
-			if (inputPeer is TL_inputPeerChannel) {
-				val request = TL_channels_readHistory()
+			if (inputPeer is TLRPC.TLInputPeerChannel) {
+				val request = TLRPC.TLChannelsReadHistory()
 				request.channel = getInputChannel(-task.dialogId)
-				request.max_id = task.maxId
+				request.maxId = task.maxId
 
 				req = request
 			}
 			else {
-				val request = TL_messages_readHistory()
+				val request = TLRPC.TLMessagesReadHistory()
 				request.peer = inputPeer
-				request.max_id = task.maxId
+				request.maxId = task.maxId
 
 				req = request
 			}
 
 			connectionsManager.sendRequest(req) { response, _ ->
-				if (response is TL_messages_affectedMessages) {
-					processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+				if (response is TLRPC.TLMessagesAffectedMessages) {
+					processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 				}
 			}
 		}
 		else {
 			val chat = getEncryptedChat(DialogObject.getEncryptedChatId(task.dialogId))
 
-			if (chat?.auth_key != null && chat.auth_key.size > 1 && chat is TL_encryptedChat) {
-				val req = TL_messages_readEncryptedHistory()
-				req.peer = TL_inputEncryptedChat()
-				req.peer.chat_id = chat.id
-				req.peer.access_hash = chat.access_hash
-				req.max_date = task.maxDate
+			if (chat?.authKey != null && chat.authKey!!.size > 1 && chat is TLRPC.TLEncryptedChat) {
+				val req = TLRPC.TLMessagesReadEncryptedHistory()
+
+				req.peer = TLRPC.TLInputEncryptedChat().also {
+					it.chatId = chat.id
+					it.accessHash = chat.accessHash
+				}
+
+				req.maxDate = task.maxDate
 
 				connectionsManager.sendRequest(req)
 			}
@@ -11545,7 +11271,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		messagesStorage.resetMentionsCount(dialogId, 0)
 
-		val req = TL_messages_readMentions()
+		val req = TLRPC.TLMessagesReadMentions()
 		req.peer = getInputPeer(dialogId)
 
 		connectionsManager.sendRequest(req)
@@ -11578,28 +11304,28 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val dialog = dialogs_dict[dialogId]
 
 						if (dialog != null) {
-							val prevCount = dialog.unread_count
+							val prevCount = dialog.unreadCount
 
-							if (countDiff == 0 || maxPositiveId >= dialog.top_message) {
-								dialog.unread_count = 0
+							if (countDiff == 0 || maxPositiveId >= dialog.topMessage) {
+								dialog.unreadCount = 0
 							}
 							else {
-								dialog.unread_count = max(dialog.unread_count - countDiff, 0)
+								dialog.unreadCount = max(dialog.unreadCount - countDiff, 0)
 
-								if (maxPositiveId != Int.MIN_VALUE && dialog.unread_count > dialog.top_message - maxPositiveId) {
-									dialog.unread_count = dialog.top_message - maxPositiveId
+								if (maxPositiveId != Int.MIN_VALUE && dialog.unreadCount > dialog.topMessage - maxPositiveId) {
+									dialog.unreadCount = dialog.topMessage - maxPositiveId
 								}
 							}
 
 							var wasUnread: Boolean
 
-							if (dialog.unread_mark.also { wasUnread = it }) {
-								dialog.unread_mark = false
+							if (dialog.unreadMark.also { wasUnread = it }) {
+								dialog.unreadMark = false
 
 								messagesStorage.setDialogUnread(dialog.id, false)
 							}
 
-							if ((prevCount != 0 || wasUnread) && dialog.unread_count == 0) {
+							if ((prevCount != 0 || wasUnread) && dialog.unreadCount == 0) {
 								if (!isDialogMuted(dialogId)) {
 									unreadUnmutedDialogs--
 								}
@@ -11655,27 +11381,27 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val dialog = dialogs_dict[dialogId]
 
 						if (dialog != null) {
-							val prevCount = dialog.unread_count
+							val prevCount = dialog.unreadCount
 
-							if (countDiff == 0 || maxNegativeId <= dialog.top_message) {
-								dialog.unread_count = 0
+							if (countDiff == 0 || maxNegativeId <= dialog.topMessage) {
+								dialog.unreadCount = 0
 							}
 							else {
-								dialog.unread_count = max(dialog.unread_count - countDiff, 0)
+								dialog.unreadCount = max(dialog.unreadCount - countDiff, 0)
 
-								if (maxNegativeId != Int.MAX_VALUE && dialog.unread_count > maxNegativeId - dialog.top_message) {
-									dialog.unread_count = maxNegativeId - dialog.top_message
+								if (maxNegativeId != Int.MAX_VALUE && dialog.unreadCount > maxNegativeId - dialog.topMessage) {
+									dialog.unreadCount = maxNegativeId - dialog.topMessage
 								}
 							}
 
 							var wasUnread: Boolean
 
-							if (dialog.unread_mark.also { wasUnread = it }) {
-								dialog.unread_mark = false
+							if (dialog.unreadMark.also { wasUnread = it }) {
+								dialog.unreadMark = false
 								messagesStorage.setDialogUnread(dialog.id, false)
 							}
 
-							if ((prevCount != 0 || wasUnread) && dialog.unread_count == 0) {
+							if ((prevCount != 0 || wasUnread) && dialog.unreadCount == 0) {
 								if (!isDialogMuted(dialogId)) {
 									unreadUnmutedDialogs--
 								}
@@ -11749,7 +11475,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 	fun createChat(title: String?, selectedContacts: List<Long>, about: String?, type: Int, forImport: Boolean, location: Location?, locationAddress: String?, fragment: BaseFragment?, adult: Boolean, payType: Int, country: String?, cost: Double, category: String?, startDate: Long, endDate: Long, genre: String?, subgenre: String?, channelName: String?): Int {
 		if (type == ChatObject.CHAT_TYPE_CHAT && !forImport) {
-			val req = TL_messages_createChat()
+			val req = TLRPC.TLMessagesCreateChat()
 			req.title = title
 
 			for (contact in selectedContacts) {
@@ -11777,7 +11503,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					putUsers(response.users, false)
 					putChats(response.chats, false)
 
-					if (!response.chats.isNullOrEmpty()) {
+					if (response.chats.isNotEmpty()) {
 						notificationCenter.postNotificationName(NotificationCenter.chatDidCreated, response.chats.first().id)
 					}
 					else {
@@ -11787,20 +11513,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}, ConnectionsManager.RequestFlagFailOnServerErrors)
 		}
 		else if (forImport || type == ChatObject.CHAT_TYPE_CHANNEL || type == ChatObject.CHAT_TYPE_MEGAGROUP) {
-			val req = TL_channels_createChannel()
+			val req = TLRPC.TLChannelsCreateChannel()
 			req.title = title
 			req.about = about ?: ""
-			req.for_import = forImport
+			req.forImport = forImport
 			req.adult = adult
-			req.pay_type = payType
+			req.payType = payType
 			req.country = country ?: ""
 			req.cost = cost
 			req.category = category
 			req.startDate = startDate
 			req.endDate = endDate
 			req.genre = genre
-			req.sub_genre = subgenre
-			req.channel_name = channelName
+			req.subGenre = subgenre
+			req.channelName = channelName
 
 			if (forImport || type == ChatObject.CHAT_TYPE_MEGAGROUP) {
 				req.megagroup = true
@@ -11810,9 +11536,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 
 			if (location != null) {
-				req.geo_point = TL_inputGeoPoint()
-				req.geo_point.lat = location.latitude
-				req.geo_point._long = location.longitude
+				req.geoPoint = TLRPC.TLInputGeoPoint().also {
+					it.lat = location.latitude
+					it.lon = location.longitude
+				}
+
 				req.address = locationAddress
 				req.flags = req.flags or 4
 			}
@@ -11840,20 +11568,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					putUsers(updates.users, false)
 					putChats(updates.chats, false)
 
-					if (updates.chats != null && updates.chats.isNotEmpty()) {
+					if (updates.chats.isNotEmpty()) {
 						if (type == ChatObject.CHAT_TYPE_MEGAGROUP) {
-							val usersToAdd = ArrayList<InputUser>()
-
-							for (a in selectedContacts.indices) {
-								val user = getInputUser(selectedContacts[a])
-
-								if (user !is TL_inputUserEmpty) {
-									usersToAdd.add(user)
-								}
-							}
+							val usersToAdd = selectedContacts.mapNotNull { getInputUser(it).takeIf { inputUser -> inputUser !is TLRPC.TLInputUserEmpty } }
 
 							if (usersToAdd.isNotEmpty()) {
-								addUsersToChannel(updates.chats.first().id, usersToAdd, null)
+								addUsersToChannel(updates.chats.first().id, usersToAdd, fragment)
 							}
 						}
 
@@ -11865,13 +11585,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}, ConnectionsManager.RequestFlagFailOnServerErrors)
 		}
+
 		return 0
 	}
 
 	@JvmOverloads
 	fun convertToMegaGroup(context: Context?, chatId: Long, fragment: BaseFragment?, convertRunnable: LongCallback? = null, errorRunnable: Runnable? = null) {
-		val req = TL_messages_migrateChat()
-		req.chat_id = chatId
+		val req = TLRPC.TLMessagesMigrateChat()
+		req.chatId = chatId
 
 		val progressDialog = context?.let { AlertDialog(it, 3) }
 
@@ -11939,7 +11660,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun convertToGigaGroup(context: Context?, chat: Chat?, fragment: BaseFragment?, convertRunnable: BooleanCallback?) {
-		val req = TL_channels_convertToGigagroup()
+		val req = TLRPC.TLChannelsConvertToGigagroup()
 		req.channel = getInputChannel(chat)
 
 		val progressDialog = context?.let { AlertDialog(it, 3) }
@@ -11996,14 +11717,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun addUsersToChannel(chatId: Long, users: ArrayList<InputUser>?, fragment: BaseFragment?) {
+	fun addUsersToChannel(chatId: Long, users: List<InputUser>?, fragment: BaseFragment?) {
 		if (users.isNullOrEmpty()) {
 			return
 		}
 
-		val req = TL_channels_inviteToChannel()
+		val req = TLRPC.TLChannelsInviteToChannel()
 		req.channel = getInputChannel(chatId)
-		req.users = users
+		req.users.addAll(users)
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (error != null) {
@@ -12022,19 +11743,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val cachedFull = getChatFull(-chatId)
 
 		if (cachedFull != null) {
-			cachedFull.default_send_as = getPeer(newPeer)
+			cachedFull.defaultSendAs = getPeer(newPeer)
 
 			messagesStorage.updateChatInfo(cachedFull, false)
 
-			notificationCenter.postNotificationName(NotificationCenter.updateDefaultSendAsPeer, chatId, cachedFull.default_send_as)
+			notificationCenter.postNotificationName(NotificationCenter.updateDefaultSendAsPeer, chatId, cachedFull.defaultSendAs)
 		}
 
-		val req = TL_messages_saveDefaultSendAs()
+		val req = TLRPC.TLMessagesSaveDefaultSendAs()
 		req.peer = getInputPeer(chatId)
-		req.send_as = getInputPeer(newPeer)
+		req.sendAs = getInputPeer(newPeer)
 
 		connectionsManager.sendRequest(req, { response, error ->
-			if (response is TL_boolTrue) {
+			if (response is TLRPC.TLBoolTrue) {
 				val full = getChatFull(-chatId)
 
 				if (full == null) {
@@ -12048,7 +11769,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun toggleChatNoForwards(chatId: Long, enabled: Boolean) {
-		val req = TL_messages_toggleNoForwards()
+		val req = TLRPC.TLMessagesToggleNoForwards()
 		req.peer = getInputPeer(-chatId)
 		req.enabled = enabled
 
@@ -12064,7 +11785,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun toggleChatJoinToSend(chatId: Long, enabled: Boolean, onSuccess: Runnable?, onError: Runnable?) {
-		val req = TL_channels_toggleJoinToSend()
+		val req = TLRPC.TLChannelsToggleJoinToSend()
 		req.channel = getInputChannel(chatId)
 		req.enabled = enabled
 
@@ -12088,7 +11809,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun toggleChatJoinRequest(chatId: Long, enabled: Boolean, onSuccess: Runnable?, onError: Runnable?) {
-		val req = TL_channels_toggleJoinRequest()
+		val req = TLRPC.TLChannelsToggleJoinRequest()
 		req.channel = getInputChannel(chatId)
 		req.enabled = enabled
 
@@ -12112,7 +11833,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun toggleChannelSignatures(chatId: Long, enabled: Boolean) {
-		val req = TL_channels_toggleSignatures()
+		val req = TLRPC.TLChannelsToggleSignatures()
 		req.channel = getInputChannel(chatId)
 		req.enabled = enabled
 
@@ -12128,7 +11849,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun toggleChannelInvitesHistory(chatId: Long, enabled: Boolean) {
-		val req = TL_channels_togglePreHistoryHidden()
+		val req = TLRPC.TLChannelsTogglePreHistoryHidden()
 		req.channel = getInputChannel(chatId)
 		req.enabled = enabled
 
@@ -12144,9 +11865,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun toggleGroupInvitesHistory(chatId: Long, historyEnabled: Boolean) {
-		val req = TL_messages_migrateChat()
-		req.chat_id = chatId
-		req.show_history = historyEnabled
+		val req = TLRPC.TLMessagesMigrateChat()
+		req.chatId = chatId
+		// req.show_history = historyEnabled
 
 		connectionsManager.sendRequest(req, { response, _ ->
 			if (response != null) {
@@ -12160,12 +11881,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun updateChatAbout(chatId: Long, about: String?, info: ChatFull?) {
-		val req = TL_messages_editChatAbout()
+		val req = TLRPC.TLMessagesEditChatAbout()
 		req.peer = getInputPeer(-chatId)
 		req.about = about
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TL_boolTrue && info != null) {
+			if (response is TLRPC.TLBoolTrue && info != null) {
 				AndroidUtilities.runOnUIThread {
 					info.about = about
 					messagesStorage.updateChatInfo(info, false)
@@ -12176,11 +11897,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun updateChannelUserName(chatId: Long, userName: String) {
-		val req = TL_channels_updateUsername()
+		val req = TLRPC.TLChannelsUpdateUsername()
 
-		if (getChat(chatId) is TL_chat) {
-			val inputChat: InputChannel = TL_inputChannel()
-			inputChat.channel_id = chatId
+		if (getChat(chatId) is TLChat) {
+			val inputChat = TLRPC.TLInputChannel()
+			inputChat.channelId = chatId
 			req.channel = inputChat
 		}
 		else {
@@ -12190,15 +11911,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		req.username = userName
 
 		connectionsManager.sendRequest(req, { response, _ ->
-			if (response is TL_boolTrue) {
+			if (response is TLRPC.TLBoolTrue) {
 				AndroidUtilities.runOnUIThread {
 					val chat = getChat(chatId) ?: return@runOnUIThread
 
 					if (userName.isNotEmpty()) {
-						chat.flags = chat.flags or CHAT_FLAG_IS_PUBLIC
+						chat.flags = chat.flags or TLRPC.CHAT_FLAG_IS_PUBLIC
 					}
 					else {
-						chat.flags = chat.flags and CHAT_FLAG_IS_PUBLIC.inv()
+						chat.flags = chat.flags and TLRPC.CHAT_FLAG_IS_PUBLIC.inv()
 					}
 
 					chat.username = userName
@@ -12216,11 +11937,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val req = TL_messages_startBot()
+		val req = TLRPC.TLMessagesStartBot()
 		req.bot = getInputUser(user)
 		req.peer = getInputPeer(user.id)
-		req.start_param = botHash
-		req.random_id = Utilities.random.nextLong()
+		req.startParam = botHash
+		req.randomId = Utilities.random.nextLong()
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (error != null) {
@@ -12252,13 +11973,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		if (botHash == null || isChannel && !isMegagroup) {
 			if (isChannel) {
-				if (inputUser is TL_inputUserSelf) {
+				if (inputUser is TLRPC.TLInputUserSelf) {
 					if (joiningToChannels.contains(chatId)) {
 						onError?.run(null)
 						return
 					}
 
-					val req = TL_channels_joinChannel()
+					val req = TLRPC.TLChannelsJoinChannel()
 					req.channel = getInputChannel(chatId)
 
 					request = req
@@ -12266,7 +11987,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					joiningToChannels.add(chatId)
 				}
 				else {
-					val req = TL_channels_inviteToChannel()
+					val req = TLRPC.TLChannelsInviteToChannel()
 					req.channel = getInputChannel(chatId)
 					req.users.add(inputUser)
 
@@ -12274,34 +11995,33 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 			else {
-				val req = TL_messages_addChatUser()
-				req.chat_id = chatId
-				req.fwd_limit = forwardCount
-				req.user_id = inputUser
+				val req = TLRPC.TLMessagesAddChatUser()
+				req.chatId = chatId
+				req.fwdLimit = forwardCount
+				req.userId = inputUser
 
 				request = req
 			}
 		}
 		else {
-			val req = TL_messages_startBot()
+			val req = TLRPC.TLMessagesStartBot()
 			req.bot = inputUser
 
 			if (isChannel) {
 				req.peer = getInputPeer(-chatId)
 			}
 			else {
-				req.peer = TL_inputPeerChat()
-				req.peer.chat_id = chatId
+				req.peer = TLRPC.TLInputPeerChat().also { it.chatId = chatId }
 			}
 
-			req.start_param = botHash
-			req.random_id = Utilities.random.nextLong()
+			req.startParam = botHash
+			req.randomId = Utilities.random.nextLong()
 
 			request = req
 		}
 
 		connectionsManager.sendRequest(request) { response, error ->
-			if (isChannel && inputUser is TL_inputUserSelf) {
+			if (isChannel && inputUser is TLRPC.TLInputUserSelf) {
 				AndroidUtilities.runOnUIThread {
 					joiningToChannels.remove(chatId)
 				}
@@ -12330,7 +12050,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						AlertsCreator.processError(currentAccount, error, fragment, request, isChannel && !isMegagroup)
 					}
 
-					if (isChannel && inputUser is TL_inputUserSelf) {
+					if (isChannel && inputUser is TLRPC.TLInputUserSelf) {
 						notificationCenter.postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_CHAT)
 					}
 				}
@@ -12345,8 +12065,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				for (a in updates.updates.indices) {
 					val update = updates.updates[a]
 
-					if (update is TL_updateNewChannelMessage) {
-						if (update.message.action is TL_messageActionChatAddUser) {
+					if (update is TLRPC.TLUpdateNewChannelMessage) {
+						if (update.message?.action is TLRPC.TLMessageActionChatAddUser) {
 							hasJoinMessage = true
 							break
 						}
@@ -12357,25 +12077,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			processUpdates(updates, false)
 
 			if (isChannel) {
-				if (!hasJoinMessage && inputUser is TL_inputUserSelf) {
-					generateJoinMessage(chatId, true)
+				AndroidUtilities.runOnUIThread {
+					loadFullChat(chatId, 0, true) {
+						if (inputUser is TLRPC.TLInputUserSelf) {
+							if (!hasJoinMessage) {
+								generateJoinMessage(chatId, true)
+							}
+
+							messagesStorage.updateDialogsWithDeletedMessages(-chatId, chatId, listOf(), null, false)
+
+							AndroidUtilities.runOnUIThread {
+								loadDialogs(0, 0, 100, true)
+							}
+						}
+					}
 				}
-
-				AndroidUtilities.runOnUIThread({
-					loadFullChat(chatId, 0, true)
-				}, 1000)
 			}
-
-			if (isChannel && inputUser is TL_inputUserSelf) {
-				messagesStorage.updateDialogsWithDeletedMessages(-chatId, chatId, listOf(), null, true)
-
-				AndroidUtilities.runOnUIThread({
-					loadDialogs(0, 0, 100, true)
-				}, 1000)
-			}
-
-			if (onFinishRunnable != null) {
-				AndroidUtilities.runOnUIThread(onFinishRunnable)
+			else {
+				if (onFinishRunnable != null) {
+					AndroidUtilities.runOnUIThread(onFinishRunnable)
+				}
 			}
 		}
 	}
@@ -12400,53 +12121,53 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		if (isChannel) {
 			if (UserObject.isUserSelf(user)) {
 				if (ownerChat?.creator == true && forceDelete) {
-					val req = TL_channels_deleteChannel()
+					val req = TLRPC.TLChannelsDeleteChannel()
 					req.channel = getInputChannel(ownerChat)
 
 					request = req
 				}
 				else {
-					val req = TL_channels_leaveChannel()
+					val req = TLRPC.TLChannelsLeaveChannel()
 					req.channel = getInputChannel(ownerChat)
 
 					request = req
 				}
 			}
 			else {
-				val req = TL_channels_editBanned()
+				val req = TLRPC.TLChannelsEditBanned()
 				req.channel = getInputChannel(ownerChat)
 				req.participant = inputPeer
-				req.banned_rights = TL_chatBannedRights()
-				req.banned_rights?.view_messages = true
-				req.banned_rights?.send_media = true
-				req.banned_rights?.send_messages = true
-				req.banned_rights?.send_stickers = true
-				req.banned_rights?.send_gifs = true
-				req.banned_rights?.send_games = true
-				req.banned_rights?.send_inline = true
-				req.banned_rights?.embed_links = true
-				req.banned_rights?.pin_messages = true
-				req.banned_rights?.send_polls = true
-				req.banned_rights?.invite_users = true
-				req.banned_rights?.change_info = true
+				req.bannedRights = TLRPC.TLChatBannedRights()
+				req.bannedRights?.viewMessages = true
+				req.bannedRights?.sendMedia = true
+				req.bannedRights?.sendMessages = true
+				req.bannedRights?.sendStickers = true
+				req.bannedRights?.sendGifs = true
+				req.bannedRights?.sendGames = true
+				req.bannedRights?.sendInline = true
+				req.bannedRights?.embedLinks = true
+				req.bannedRights?.pinMessages = true
+				req.bannedRights?.sendPolls = true
+				req.bannedRights?.inviteUsers = true
+				req.bannedRights?.changeInfo = true
 
 				request = req
 			}
 		}
 		else {
 			if (forceDelete) {
-				val req = TL_messages_deleteChat()
-				req.chat_id = chatId
+				val req = TLRPC.TLMessagesDeleteChat()
+				req.chatId = chatId
 
 				connectionsManager.sendRequest(req)
 
 				return
 			}
 
-			val req = TL_messages_deleteChatUser()
-			req.chat_id = chatId
-			req.user_id = getInputUser(user)
-			req.revoke_history = true
+			val req = TLRPC.TLMessagesDeleteChatUser()
+			req.chatId = chatId
+			req.userId = getInputUser(user)
+			req.revokeHistory = true
 
 			request = req
 		}
@@ -12477,15 +12198,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val request: TLObject
 
 		if (ChatObject.isChannel(chatId, currentAccount)) {
-			val req = TL_channels_editTitle()
+			val req = TLRPC.TLChannelsEditTitle()
 			req.channel = getInputChannel(chatId)
 			req.title = title
 
 			request = req
 		}
 		else {
-			val req = TL_messages_editChatTitle()
-			req.chat_id = chatId
+			val req = TLRPC.TLMessagesEditChatTitle()
+			req.chatId = chatId
 			req.title = title
 
 			request = req
@@ -12502,7 +12223,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}, ConnectionsManager.RequestFlagInvokeAfter)
 	}
 
-	fun changeChatAvatar(chatId: Long, oldPhoto: TL_inputChatPhoto?, inputPhoto: InputFile?, inputVideo: InputFile?, videoStartTimestamp: Double, videoPath: String?, smallSize: FileLocation?, bigSize: FileLocation?, callback: Runnable?) {
+	fun changeChatAvatar(chatId: Long, oldPhoto: TLRPC.TLInputChatPhoto?, inputPhoto: InputFile?, inputVideo: InputFile?, videoStartTimestamp: Double, videoPath: String?, smallSize: FileLocation?, bigSize: FileLocation?, callback: Runnable?) {
 		val request: TLObject
 		val inputChatPhoto: InputChatPhoto
 
@@ -12510,7 +12231,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			inputChatPhoto = oldPhoto
 		}
 		else if (inputPhoto != null || inputVideo != null) {
-			val uploadedPhoto = TL_inputChatUploadedPhoto()
+			val uploadedPhoto = TLRPC.TLInputChatUploadedPhoto()
 
 			if (inputPhoto != null) {
 				uploadedPhoto.file = inputPhoto
@@ -12520,26 +12241,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			if (inputVideo != null) {
 				uploadedPhoto.video = inputVideo
 				uploadedPhoto.flags = uploadedPhoto.flags or 2
-				uploadedPhoto.video_start_ts = videoStartTimestamp
+				uploadedPhoto.videoStartTs = videoStartTimestamp
 				uploadedPhoto.flags = uploadedPhoto.flags or 4
 			}
 
 			inputChatPhoto = uploadedPhoto
 		}
 		else {
-			inputChatPhoto = TL_inputChatPhotoEmpty()
+			inputChatPhoto = TLRPC.TLInputChatPhotoEmpty()
 		}
 
 		if (ChatObject.isChannel(chatId, currentAccount)) {
-			val req = TL_channels_editPhoto()
+			val req = TLRPC.TLChannelsEditPhoto()
 			req.channel = getInputChannel(chatId)
 			req.photo = inputChatPhoto
 
 			request = req
 		}
 		else {
-			val req = TL_messages_editChatPhoto()
-			req.chat_id = chatId
+			val req = TLRPC.TLMessagesEditChatPhoto()
+			req.chatId = chatId
 			req.photo = inputChatPhoto
 
 			request = req
@@ -12560,17 +12281,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				while (a < n) {
 					val update = updates.updates[a]
 
-					if (update is TL_updateNewChannelMessage) {
+					if (update is TLRPC.TLUpdateNewChannelMessage) {
 						val message = update.message
-						if (message.action is TL_messageActionChatEditPhoto && message.action?.photo is TL_photo) {
+
+						if (message?.action is TLRPC.TLMessageActionChatEditPhoto && message.action?.photo is TLPhoto) {
 							photo = message.action?.photo
 							break
 						}
 					}
-					else if (update is TL_updateNewMessage) {
+					else if (update is TLRPC.TLUpdateNewMessage) {
 						val message = update.message
 
-						if (message.action is TL_messageActionChatEditPhoto && message.action?.photo is TL_photo) {
+						if (message?.action is TLRPC.TLMessageActionChatEditPhoto && message.action?.photo is TLPhoto) {
 							photo = message.action?.photo
 							break
 						}
@@ -12579,9 +12301,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					a++
 				}
 
-				if (photo != null) {
+				if (photo is TLPhoto) {
 					val small = FileLoader.getClosestPhotoSizeWithSize(photo.sizes, 150)
-					val videoSize = if (photo.video_sizes.isEmpty()) null else photo.video_sizes[0]
+					val videoSize = photo.videoSizes.firstOrNull()
 
 					if (small != null && smallSize != null) {
 						val destFile = fileLoader.getPathToAttach(small, true)
@@ -12589,8 +12311,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val src = fileLoader.getPathToAttach(smallSize, true)
 						src.renameTo(destFile)
 
-						val oldKey = smallSize.volume_id.toString() + "_" + smallSize.local_id + "@50_50"
-						val newKey = small.location.volume_id.toString() + "_" + small.location.local_id + "@50_50"
+						val oldKey = smallSize.volumeId.toString() + "_" + smallSize.localId + "@50_50"
+						val newKey = small.location?.volumeId?.toString() + "_" + small.location?.localId + "@50_50"
 
 						ImageLocation.getForPhoto(small, photo)?.let {
 							ImageLoader.instance.replaceImageInCache(oldKey, newKey, it, true)
@@ -12624,50 +12346,47 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}, ConnectionsManager.RequestFlagInvokeAfter)
 	}
 
-	fun unregisterPush() {
-		if (userConfig.registeredForPush && SharedConfig.pushString.isEmpty()) {
-			val req = TL_account_unregisterDevice()
+	private suspend fun unregisterPush() {
+		if (userConfig.registeredForPush && !SharedConfig.pushString.isNullOrEmpty()) {
+			val req = TLRPC.TLAccountUnregisterDevice()
 			req.token = SharedConfig.pushString
-			req.token_type = SharedConfig.pushType
+			req.tokenType = SharedConfig.pushType
 
 			for (a in 0 until UserConfig.MAX_ACCOUNT_COUNT) {
 				val userConfig = UserConfig.getInstance(a)
 
 				if (a != currentAccount && userConfig.isClientActivated) {
-					req.other_uids.add(userConfig.getClientUserId())
+					req.otherUids.add(userConfig.getClientUserId())
 				}
 			}
 
-			connectionsManager.sendRequest(req)
+			connectionsManager.performRequest(req)
 		}
 	}
 
 	fun performLogout(type: Int) {
+		mainScope.launch {
+			logout(type)
+		}
+	}
+
+	private suspend fun logout(type: Int) {
 		if (type == 1) {
 			unregisterPush()
 
-			val req = TL_auth_logOut()
-
-			connectionsManager.sendRequest(req) { response, _ ->
-				connectionsManager.cleanup(false)
-
-				AndroidUtilities.runOnUIThread {
-					if (response is TL_auth_loggedOut) {
-						if (response.future_auth_token != null) {
-							val preferences = ApplicationLoader.applicationContext.getSharedPreferences("saved_tokens", Context.MODE_PRIVATE)
-							val count = preferences.getInt("count", 0)
-							val data = SerializedData(response.objectSize)
-
-							response.serializeToStream(data)
-
-							preferences.edit().putString("log_out_token_$count", Utilities.bytesToHex(data.toByteArray())).putInt("count", count + 1).commit()
-						}
-					}
-				}
+			val response = withContext(ioScope.coroutineContext) {
+				connectionsManager.performRequest(TLRPC.TLAuthLogOut())
 			}
-		}
-		else {
-			connectionsManager.cleanup(type == 2)
+
+			if (response is TLRPC.TLAuthLoggedOut && response.futureAuthToken != null) {
+				val preferences = ApplicationLoader.applicationContext.getSharedPreferences("saved_tokens", Context.MODE_PRIVATE)
+				val count = preferences.getInt("count", 0)
+				val data = SerializedData(response.objectSize)
+
+				response.serializeToStream(data)
+
+				preferences.edit { putString("log_out_token_$count", Utilities.bytesToHex(data.toByteArray())).putInt("count", count + 1) }
+			}
 		}
 
 		userConfig.clearConfig()
@@ -12706,13 +12425,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		notificationCenter.postNotificationName(NotificationCenter.appDidLogout)
-
 		messagesStorage.cleanup(false)
 
 		cleanup()
 
 		contactsController.deleteUnknownAppAccounts()
+
+		notificationCenter.postNotificationName(NotificationCenter.appDidLogout)
+
+		ioScope.launch {
+			delay(1_000)
+			connectionsManager.cleanup(type == 2)
+		}
 	}
 
 	fun generateUpdateMessage() {
@@ -12722,8 +12446,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		gettingAppChangelog = true
 
-		val req = TL_help_getAppChangelog()
-		req.prev_app_version = SharedConfig.lastUpdateVersion
+		val req = TLRPC.TLHelpGetAppChangelog()
+		req.prevAppVersion = SharedConfig.lastUpdateVersion
 
 		connectionsManager.sendRequest(req) { response, error ->
 			if (error == null) {
@@ -12755,10 +12479,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			SharedConfig.saveConfig()
 		}
 
-		val req = TL_account_registerDevice()
-		req.token_type = pushType
+		val req = TLRPC.TLAccountRegisterDevice()
+		req.tokenType = pushType
 		req.token = regid
-		req.no_muted = false
+		req.noMuted = false
 		req.secret = SharedConfig.pushAuthKey
 
 		for (a in 0 until UserConfig.MAX_ACCOUNT_COUNT) {
@@ -12766,12 +12490,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			if (a != currentAccount && userConfig.isClientActivated) {
 				val uid = userConfig.getClientUserId()
-				req.other_uids.add(uid)
+				req.otherUids.add(uid)
 			}
 		}
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_boolTrue) {
+			if (response is TLRPC.TLBoolTrue) {
 				userConfig.registeredForPush = true
 
 				SharedConfig.pushString = regid
@@ -12793,13 +12517,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		updatingState = true
 
-		val req = TL_updates_getState()
+		val req = TLRPC.TLUpdatesGetState()
 
 		connectionsManager.sendRequest(req) { response, error ->
 			updatingState = false
 
 			if (error == null) {
-				val res = response as? TL_updates_state ?: return@sendRequest
+				val res = response as? TLRPC.TLUpdatesState ?: return@sendRequest
 
 				messagesStorage.lastDateValue = res.date
 				messagesStorage.lastPtsValue = res.pts
@@ -12821,7 +12545,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	private fun getUpdateSeq(updates: Updates): Int {
-		return (updates as? TL_updatesCombined)?.seq_start ?: updates.seq
+		return (updates as? TLRPC.TLUpdatesCombined)?.seqStart ?: updates.seq
 	}
 
 	private fun setUpdatesStartTime(type: Int, time: Long) {
@@ -12861,7 +12585,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return if (updates.pts <= messagesStorage.lastPtsValue) {
 					2
 				}
-				else if (messagesStorage.lastPtsValue + updates.pts_count == updates.pts) {
+				else if (messagesStorage.lastPtsValue + updates.ptsCount == updates.pts) {
 					0
 				}
 				else {
@@ -12914,7 +12638,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val updateState = if (updates.pts <= channelPts) {
 				2
 			}
-			else if (channelPts + updates.pts_count == updates.pts) {
+			else if (channelPts + updates.ptsCount == updates.pts) {
 				0
 			}
 			else {
@@ -12933,18 +12657,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					val updatesStartWaitTime = updatesStartWaitTimeChannels[channelId]
 
 					if (updatesStartWaitTime != 0L && (anyProceed || abs(System.currentTimeMillis() - updatesStartWaitTime) <= 1500)) {
-						if (BuildConfig.DEBUG) {
-							FileLog.d("HOLE IN CHANNEL $channelId UPDATES QUEUE - will wait more time")
-						}
+						FileLog.d("HOLE IN CHANNEL $channelId UPDATES QUEUE - will wait more time")
 
 						if (anyProceed) {
 							updatesStartWaitTimeChannels.put(channelId, System.currentTimeMillis())
 						}
 					}
 					else {
-						if (BuildConfig.DEBUG) {
-							FileLog.d("HOLE IN CHANNEL $channelId UPDATES QUEUE - getChannelDifference ")
-						}
+						FileLog.d("HOLE IN CHANNEL $channelId UPDATES QUEUE - getChannelDifference ")
 
 						updatesStartWaitTimeChannels.delete(channelId)
 						updatesQueueChannels.remove(channelId)
@@ -12966,9 +12686,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		updatesQueueChannels.remove(channelId)
 		updatesStartWaitTimeChannels.delete(channelId)
 
-		if (BuildConfig.DEBUG) {
-			FileLog.d("UPDATES CHANNEL $channelId QUEUE PROCEED - OK")
-		}
+		FileLog.d("UPDATES CHANNEL $channelId QUEUE PROCEED - OK")
 	}
 
 	private fun processUpdatesQueue(type: Int, state: Int) {
@@ -13028,18 +12746,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					1 -> {
 						if (getUpdatesStartTime(type) != 0L && (anyProceed || abs(System.currentTimeMillis() - getUpdatesStartTime(type)) <= 1500)) {
-							if (BuildConfig.DEBUG) {
-								FileLog.d("HOLE IN UPDATES QUEUE - will wait more time")
-							}
+							FileLog.d("HOLE IN UPDATES QUEUE - will wait more time")
 
 							if (anyProceed) {
 								setUpdatesStartTime(type, System.currentTimeMillis())
 							}
 						}
 						else {
-							if (BuildConfig.DEBUG) {
-								FileLog.d("HOLE IN UPDATES QUEUE - getDifference")
-							}
+							FileLog.d("HOLE IN UPDATES QUEUE - getDifference")
 
 							setUpdatesStartTime(type, 0)
 							updatesQueue.clear()
@@ -13059,20 +12773,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			updatesQueue.clear()
 
-			if (BuildConfig.DEBUG) {
-				FileLog.d("UPDATES QUEUE PROCEED - OK")
-			}
+			FileLog.d("UPDATES QUEUE PROCEED - OK")
 		}
 
 		setUpdatesStartTime(type, 0)
 	}
 
 	fun loadUnknownChannel(channel: Chat, taskId: Long) {
-		if (channel !is TL_channel || gettingUnknownChannels.indexOfKey(channel.id) >= 0) {
+		if (channel !is TLRPC.TLChannel || gettingUnknownChannels.indexOfKey(channel.id) >= 0) {
 			return
 		}
 
-		if (channel.access_hash == 0L) {
+		if (channel.accessHash == 0L) {
 			if (taskId != 0L) {
 				messagesStorage.removePendingTask(taskId)
 			}
@@ -13080,15 +12792,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return
 		}
 
-		val inputPeer = TL_inputPeerChannel()
-		inputPeer.channel_id = channel.id
-		inputPeer.access_hash = channel.access_hash
+		val inputPeer = TLRPC.TLInputPeerChannel()
+		inputPeer.channelId = channel.id
+		inputPeer.accessHash = channel.accessHash
 
 		gettingUnknownChannels.put(channel.id, true)
 
-		val req = TL_messages_getPeerDialogs()
+		val req = TLRPC.TLMessagesGetPeerDialogs()
 
-		val inputDialogPeer = TL_inputDialogPeer()
+		val inputDialogPeer = TLRPC.TLInputDialogPeer()
 		inputDialogPeer.peer = inputPeer
 
 		req.peers.add(inputDialogPeer)
@@ -13114,17 +12826,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_peerDialogs) {
+			if (response is TLRPC.TLMessagesPeerDialogs) {
 				if (response.dialogs.isNotEmpty() && response.chats.isNotEmpty()) {
-					val dialog = response.dialogs[0] as TL_dialog
+					val dialog = response.dialogs[0] as TLDialog
 
-					val dialogs = TL_messages_dialogs()
+					val dialogs = TLRPC.TLMessagesDialogs()
 					dialogs.dialogs.addAll(response.dialogs)
 					dialogs.messages.addAll(response.messages)
 					dialogs.users.addAll(response.users)
 					dialogs.chats.addAll(response.chats)
 
-					processLoadedDialogs(dialogs, null, dialog.folder_id, 0, 1, DIALOGS_LOAD_TYPE_CHANNEL, resetEnd = false, migrate = false, fromCache = false)
+					processLoadedDialogs(dialogs, null, dialog.folderId, 0, 1, DIALOGS_LOAD_TYPE_CHANNEL, resetEnd = false, migrate = false, fromCache = false)
 				}
 			}
 
@@ -13192,14 +12904,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	private fun getChannelDifference(channelId: Long) {
+	fun getChannelDifference(channelId: Long) {
 		getChannelDifference(channelId, 0, 0, null)
 	}
 
-	fun getChannelDifference(channelId: Long, newDialogType: Int, taskId: Long, inputChannel: InputChannel?) {
+	fun getChannelDifference(channelId: Long, newDialogType: Int, taskId: Long, inputChannel: TLRPC.InputChannel?) {
 		@Suppress("NAME_SHADOWING") var inputChannel = inputChannel
 
-		val gettingDifferenceChannel = gettingDifferenceChannels[channelId, false]
+		val gettingDifferenceChannel = gettingDifferenceChannels.get(channelId, false)
 
 		if (gettingDifferenceChannel) {
 			return
@@ -13252,7 +12964,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			inputChannel = getInputChannel(chat)
 		}
 
-		if (inputChannel.access_hash == 0L) {
+		if ((inputChannel as? TLRPC.TLInputChannel)?.accessHash == 0L) {
 			if (taskId != 0L) {
 				messagesStorage.removePendingTask(taskId)
 			}
@@ -13285,19 +12997,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		gettingDifferenceChannels.put(channelId, true)
 
-		val req = TL_updates_getChannelDifference()
+		val req = TLRPC.TLUpdatesGetChannelDifference()
 		req.channel = inputChannel
-		req.filter = TL_channelMessagesFilterEmpty()
+		req.filter = TLRPC.TLChannelMessagesFilterEmpty()
 		req.pts = channelPts
 		req.limit = limit
 		req.force = newDialogType != 3
 
-		if (BuildConfig.DEBUG) {
-			FileLog.d("start getChannelDifference with pts = $channelPts channelId = $channelId")
-		}
+		FileLog.d("start getChannelDifference with pts = $channelPts channelId = $channelId")
 
 		connectionsManager.sendRequest(req) { response, error ->
-			if (response is updates_ChannelDifference) {
+			if (response is TLRPC.UpdatesChannelDifference) {
 				val usersDict = LongSparseArray<User>()
 
 				for (user in response.users) {
@@ -13314,21 +13024,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 
 				val channelFinal = channel
-				val msgUpdates = mutableListOf<TL_updateMessageID>()
+				val msgUpdates = mutableListOf<TLRPC.TLUpdateMessageID>()
 
-				if (response.other_updates.isNotEmpty()) {
-					var a = 0
+				if (response is TLUpdatesChannelDifference) {
+					if (response.otherUpdates.isNotEmpty()) {
+						var a = 0
 
-					while (a < response.other_updates.size) {
-						val upd = response.other_updates[a]
+						while (a < response.otherUpdates.size) {
+							val upd = response.otherUpdates[a]
 
-						if (upd is TL_updateMessageID) {
-							msgUpdates.add(upd)
-							response.other_updates.removeAt(a)
-							a--
+							if (upd is TLRPC.TLUpdateMessageID) {
+								msgUpdates.add(upd)
+								response.otherUpdates.removeAt(a)
+								a--
+							}
+
+							a++
 						}
-
-						a++
 					}
 				}
 
@@ -13344,16 +13056,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val corrected = SparseArray<LongArray>()
 
 						for (update in msgUpdates) {
-							val ids = messagesStorage.updateMessageStateAndId(update.random_id, -channelId, null, update.id, 0, false, -1)
+							val ids = messagesStorage.updateMessageStateAndId(update.randomId, -channelId, null, update.id, 0, false, -1)
 
 							if (ids != null) {
 								corrected.put(update.id, ids)
 							}
 						}
 
-						if (corrected.size() != 0) {
+						if (corrected.isNotEmpty()) {
 							AndroidUtilities.runOnUIThread {
-								for (a in 0 until corrected.size()) {
+								for (a in 0 until corrected.size) {
 									val newId = corrected.keyAt(a)
 									val ids = corrected.valueAt(a)
 
@@ -13366,11 +13078,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 
 					Utilities.stageQueue.postRunnable {
-						if (response is TL_updates_channelDifference || response is TL_updates_channelDifferenceEmpty) {
-							if (response.new_messages.isNotEmpty()) {
+						FileLog.d("received channel difference with pts = " + response.pts + " channelId = " + channelId)
+
+						if (response is TLUpdatesChannelDifference) { // || response is TLRPC.TLUpdatesChannelDifferenceEmpty) {
+							if (response.newMessages.isNotEmpty()) {
 								val messages = LongSparseArray<ArrayList<MessageObject>>()
 
-								ImageLoader.saveMessagesThumbs(response.new_messages)
+								ImageLoader.saveMessagesThumbs(response.newMessages)
 
 								val pushMessages = ArrayList<MessageObject>()
 								val dialogId = -channelId
@@ -13388,19 +13102,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									dialogs_read_outbox_max[dialogId] = outboxValue
 								}
 
-								for (a in response.new_messages.indices) {
-									val message = response.new_messages[a]
+								for (a in response.newMessages.indices) {
+									val message = response.newMessages[a]
 
-									if (message is TL_messageEmpty) {
+									if (message is TLRPC.TLMessageEmpty) {
 										continue
 									}
 
-									message.unread = !(channelFinal != null && channelFinal.left || (if (message.out) outboxValue else inboxValue) >= message.id || message.action is TL_messageActionChannelCreate)
+									message.unread = !(channelFinal != null && channelFinal.left || (if (message.out) outboxValue else inboxValue) >= message.id || message.action is TLRPC.TLMessageActionChannelCreate)
 
 									val isDialogCreated = createdDialogIds.contains(dialogId)
 									val obj = MessageObject(currentAccount, message, usersDict, isDialogCreated, isDialogCreated)
 
-									if ((!obj.isOut || obj.messageOwner?.from_scheduled == true) && obj.isUnread) {
+									if ((!obj.isOut || obj.messageOwner?.fromScheduled == true) && obj.isUnread) {
 										pushMessages.add(obj)
 									}
 
@@ -13433,19 +13147,21 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										}
 									}
 
-									messagesStorage.putMessages(response.new_messages, true, false, false, downloadController.autodownloadMask, false)
+									messagesStorage.putMessages(response.newMessages, true, false, false, downloadController.autodownloadMask, false)
 								}
 							}
 
-							if (response.other_updates.isNotEmpty()) {
-								processUpdateArray(response.other_updates, response.users, response.chats, true, 0)
+							if (response.otherUpdates.isNotEmpty()) {
+								processUpdateArray(response.otherUpdates, response.users, response.chats, true, 0)
 							}
 
 							processChannelsUpdatesQueue(channelId, 1)
 
 							messagesStorage.saveChannelPts(channelId, response.pts)
+
+							FileLog.d("new_messages = " + response.newMessages.size + " users = " + response.users.size + " chats = " + response.chats.size + " other updates = " + response.otherUpdates.size)
 						}
-						else if (response is TL_updates_channelDifferenceTooLong) {
+						else if (response is TLRPC.TLUpdatesChannelDifferenceTooLong) {
 							val dialogId = -channelId
 							var inboxValue = dialogs_read_inbox_max[dialogId]
 
@@ -13463,11 +13179,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							for (a in response.messages.indices) {
 								val message = response.messages[a]
-								message.dialog_id = -channelId
-								message.unread = !(message.action is TL_messageActionChannelCreate || channelFinal != null && channelFinal.left || (if (message.out) outboxValue else inboxValue) >= message.id)
+								message.dialogId = -channelId
+								message.unread = !(message.action is TLRPC.TLMessageActionChannelCreate || channelFinal != null && channelFinal.left || (if (message.out) outboxValue else inboxValue) >= message.id)
 							}
 
 							messagesStorage.overwriteChannel(channelId, response, newDialogType)
+
+							FileLog.d("messages = " + response.messages.size + " users = " + response.users.size + " chats = " + response.chats.size)
 						}
 
 						gettingDifferenceChannels.remove(channelId)
@@ -13480,11 +13198,6 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 						if (!response.isFinal) {
 							getChannelDifference(channelId)
-						}
-
-						if (BuildConfig.DEBUG) {
-							FileLog.d("received channel difference with pts = " + response.pts + " channelId = " + channelId)
-							FileLog.d("new_messages = " + response.new_messages.size + " messages = " + response.messages.size + " users = " + response.users.size + " chats = " + response.chats.size + " other updates = " + response.other_updates.size)
 						}
 
 						if (newTaskId != 0L) {
@@ -13533,7 +13246,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		gettingDifference = true
 
-		val req = TL_updates_getDifference()
+		val req = TLRPC.TLUpdatesGetDifference()
 		req.pts = pts
 		req.date = date
 		req.qts = qts
@@ -13542,10 +13255,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			req.flags = req.flags or 1
 
 			if (ApplicationLoader.isConnectedOrConnectingToWiFi) {
-				req.pts_total_limit = 5000
+				req.ptsTotalLimit = 5000
 			}
 			else {
-				req.pts_total_limit = 1000
+				req.ptsTotalLimit = 1000
 			}
 
 			getDifferenceFirstSync = false
@@ -13555,16 +13268,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			req.date = connectionsManager.currentTime
 		}
 
-		if (BuildConfig.DEBUG) {
-			FileLog.d("start getDifference with date = $date pts = $pts qts = $qts")
-		}
+		FileLog.d("start getDifference with date = $date pts = $pts qts = $qts")
 
 		connectionsManager.setIsUpdating(true)
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is updates_Difference) {
+			if (response is TLRPC.UpdatesDifference) {
 
-				if (response is TL_updates_differenceTooLong) {
+				if (response is TLRPC.TLUpdatesDifferenceTooLong) {
 					AndroidUtilities.runOnUIThread {
 						loadedFullUsers.clear()
 						loadedFullChats.clear()
@@ -13573,8 +13284,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 				else {
-					if (response is TL_updates_differenceSlice) {
-						getDifference(response.intermediate_state.pts, response.intermediate_state.date, response.intermediate_state.qts, true)
+					if (response is TLRPC.TLUpdatesDifferenceSlice) {
+						getDifference(response.intermediateState?.pts ?: 0, response.intermediateState?.date ?: 0, response.intermediateState?.qts ?: 0, true)
 					}
 
 					val usersDict = LongSparseArray<User>()
@@ -13588,17 +13299,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						chatsDict.put(chat.id, chat)
 					}
 
-					val msgUpdates = mutableListOf<TL_updateMessageID>()
+					val msgUpdates = mutableListOf<TLRPC.TLUpdateMessageID>()
 
-					if (response.other_updates.isNotEmpty()) {
+					if (response.otherUpdates.isNotEmpty()) {
 						var a = 0
 
-						while (a < response.other_updates.size) {
-							val upd = response.other_updates[a]
+						while (a < response.otherUpdates.size) {
+							val upd = response.otherUpdates[a]
 
-							if (upd is TL_updateMessageID) {
+							if (upd is TLRPC.TLUpdateMessageID) {
 								msgUpdates.add(upd)
-								response.other_updates.removeAt(a)
+								response.otherUpdates.removeAt(a)
 								a--
 							}
 							else if (getUpdateType(upd) == 2) {
@@ -13614,7 +13325,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 
 								if (channelPts != 0 && getUpdatePts(upd) <= channelPts) {
-									response.other_updates.removeAt(a)
+									response.otherUpdates.removeAt(a)
 									a--
 								}
 							}
@@ -13639,16 +13350,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							for (a in msgUpdates.indices) {
 								val update = msgUpdates[a]
-								val ids = messagesStorage.updateMessageStateAndId(update.random_id, 0, null, update.id, 0, false, -1)
+								val ids = messagesStorage.updateMessageStateAndId(update.randomId, 0, null, update.id, 0, false, -1)
 
 								if (ids != null) {
 									corrected.put(update.id, ids)
 								}
 							}
 
-							if (corrected.size() != 0) {
+							if (corrected.isNotEmpty()) {
 								AndroidUtilities.runOnUIThread {
-									for (a in 0 until corrected.size()) {
+									for (a in 0 until corrected.size) {
 										val newId = corrected.keyAt(a)
 										val ids = corrected.valueAt(a)
 
@@ -13661,76 +13372,77 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 
 						Utilities.stageQueue.postRunnable {
-							if (response.new_messages.isNotEmpty() || response.new_encrypted_messages.isNotEmpty()) {
+							if (response.newMessages.isNotEmpty() || response.newEncryptedMessages.isNotEmpty()) {
 								val messages = LongSparseArray<ArrayList<MessageObject>>()
 
-								for (encryptedMessage in response.new_encrypted_messages) {
-									val decryptedMessages = secretChatHelper.decryptMessage(encryptedMessage)
+								// MARK: uncomment to enable secret chats
+//								for (encryptedMessage in response.newEncryptedMessages) {
+//									val decryptedMessages = secretChatHelper.decryptMessage(encryptedMessage)
+//
+//									if (!decryptedMessages.isNullOrEmpty()) {
+//										response.newMessages.addAll(decryptedMessages)
+//									}
+//								}
 
-									if (!decryptedMessages.isNullOrEmpty()) {
-										response.new_messages.addAll(decryptedMessages)
-									}
-								}
+								ImageLoader.saveMessagesThumbs(response.newMessages)
 
-								ImageLoader.saveMessagesThumbs(response.new_messages)
-
-								val pushMessages = ArrayList<MessageObject>()
+								val pushMessages = mutableListOf<MessageObject>()
 								val clientUserId = userConfig.getClientUserId()
 
-								for (message in response.new_messages) {
-									if (message is TL_messageEmpty) {
+								for (message in response.newMessages) {
+									if (message is TLRPC.TLMessageEmpty) {
 										continue
 									}
 
 									MessageObject.getDialogId(message)
 
-									if (!DialogObject.isEncryptedDialog(message.dialog_id)) {
+									if (!DialogObject.isEncryptedDialog(message.dialogId)) {
 										val action = message.action
 
-										if (action is TL_messageActionChatDeleteUser) {
-											val user = usersDict[action.user_id]
+										if (action is TLRPC.TLMessageActionChatDeleteUser) {
+											val user = usersDict[action.userId] as? TLUser
 
 											if (user != null && user.bot) {
-												message.reply_markup = TL_replyKeyboardHide()
+												message.replyMarkup = TLRPC.TLReplyKeyboardHide()
 												message.flags = message.flags or 64
 											}
 										}
 
-										if (action is TL_messageActionChatMigrateTo || action is TL_messageActionChannelCreate) {
+										if (action is TLRPC.TLMessageActionChatMigrateTo || action is TLRPC.TLMessageActionChannelCreate) {
 											message.unread = false
-											message.media_unread = false
+											message.mediaUnread = false
 										}
 										else {
 											val readMax = if (message.out) dialogs_read_outbox_max else dialogs_read_inbox_max
-											var value = readMax[message.dialog_id]
+											var value = readMax[message.dialogId]
 
 											if (value == null) {
-												value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-												readMax[message.dialog_id] = value
+												value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+												readMax[message.dialogId] = value
 											}
 
 											message.unread = value < message.id
 										}
 									}
 
-									if (message.dialog_id == clientUserId) {
+									if (message.dialogId == clientUserId) {
 										message.unread = false
-										message.media_unread = false
+										message.mediaUnread = false
 										message.out = true
 									}
 
-									val isDialogCreated = createdDialogIds.contains(message.dialog_id)
+									val isDialogCreated = createdDialogIds.contains(message.dialogId)
 									val obj = MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated)
 
-									if ((!obj.isOut || obj.messageOwner?.from_scheduled == true) && obj.isUnread) {
+									if ((!obj.isOut || obj.messageOwner?.fromScheduled == true) && obj.isUnread) {
 										pushMessages.add(obj)
 									}
 
-									var arr = messages[message.dialog_id]
+									var arr = messages[message.dialogId]
 
 									if (arr == null) {
 										arr = ArrayList()
-										messages.put(message.dialog_id, arr)
+										messages.put(message.dialogId, arr)
 									}
 
 									arr.add(obj)
@@ -13739,11 +13451,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								messagesStorage.storageQueue.postRunnable {
 									if (pushMessages.isNotEmpty()) {
 										AndroidUtilities.runOnUIThread {
-											notificationsController.processNewMessages(pushMessages, response !is TL_updates_differenceSlice, false, null)
+											notificationsController.processNewMessages(pushMessages, response !is TLRPC.TLUpdatesDifferenceSlice, false, null)
 										}
 									}
 
-									messagesStorage.putMessages(response.new_messages, true, false, false, downloadController.autodownloadMask, false)
+									messagesStorage.putMessages(response.newMessages, true, false, false, downloadController.autodownloadMask, false)
 
 									for (a in 0 until messages.size()) {
 										val dialogId = messages.keyAt(a)
@@ -13757,21 +13469,25 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										}
 									}
 								}
-								secretChatHelper.processPendingEncMessages()
+
+								// MARK: uncomment to enable secret chats
+								// secretChatHelper.processPendingEncMessages()
 							}
 
-							if (response.other_updates.isNotEmpty()) {
-								processUpdateArray(response.other_updates, response.users, response.chats, true, 0)
+							if (response.otherUpdates.isNotEmpty()) {
+								processUpdateArray(response.otherUpdates, response.users, response.chats, true, 0)
 							}
 
 							when (response) {
-								is TL_updates_difference -> {
+								is TLRPC.TLUpdatesDifference -> {
 									gettingDifference = false
 
-									messagesStorage.lastSeqValue = response.state.seq
-									messagesStorage.lastDateValue = response.state.date
-									messagesStorage.lastPtsValue = response.state.pts
-									messagesStorage.lastQtsValue = response.state.qts
+									response.state?.let {
+										messagesStorage.lastSeqValue = it.seq
+										messagesStorage.lastDateValue = it.date
+										messagesStorage.lastPtsValue = it.pts
+										messagesStorage.lastQtsValue = it.qts
+									}
 
 									connectionsManager.setIsUpdating(false)
 
@@ -13780,13 +13496,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									}
 								}
 
-								is TL_updates_differenceSlice -> {
-									messagesStorage.lastDateValue = response.intermediate_state.date
-									messagesStorage.lastPtsValue = response.intermediate_state.pts
-									messagesStorage.lastQtsValue = response.intermediate_state.qts
+								is TLRPC.TLUpdatesDifferenceSlice -> {
+									response.intermediateState?.let {
+										messagesStorage.lastDateValue = it.date
+										messagesStorage.lastPtsValue = it.pts
+										messagesStorage.lastQtsValue = it.qts
+									}
 								}
 
-								is TL_updates_differenceEmpty -> {
+								is TLRPC.TLUpdatesDifferenceEmpty -> {
 									gettingDifference = false
 
 									messagesStorage.lastSeqValue = response.seq
@@ -13802,9 +13520,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							messagesStorage.saveDiffParams(messagesStorage.lastSeqValue, messagesStorage.lastPtsValue, messagesStorage.lastDateValue, messagesStorage.lastQtsValue)
 
-							if (BuildConfig.DEBUG) {
-								FileLog.d("received difference with date = " + messagesStorage.lastDateValue + " pts = " + messagesStorage.lastPtsValue + " seq = " + messagesStorage.lastSeqValue + " messages = " + response.new_messages.size + " users = " + response.users.size + " chats = " + response.chats.size + " other updates = " + response.other_updates.size)
-							}
+							FileLog.d("received difference with date = " + messagesStorage.lastDateValue + " pts = " + messagesStorage.lastPtsValue + " seq = " + messagesStorage.lastSeqValue + " messages = " + response.newMessages.size + " users = " + response.users.size + " chats = " + response.chats.size + " other updates = " + response.otherUpdates.size)
 						}
 					}
 				}
@@ -13821,9 +13537,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val dialog = dialogs_dict[dialogId]
 
 		if (dialog != null) {
-			dialog.unread_mark = true
+			dialog.unreadMark = true
 
-			if (dialog.unread_count == 0 && !isDialogMuted(dialogId)) {
+			if (dialog.unreadCount == 0 && !isDialogMuted(dialogId)) {
 				unreadUnmutedDialogs++
 			}
 
@@ -13845,14 +13561,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				peer = getInputPeer(dialogId)
 			}
 
-			if (peer is TL_inputPeerEmpty) {
+			if (peer is TLRPC.TLInputPeerEmpty) {
 				return
 			}
 
-			val req = TL_messages_markDialogUnread()
+			val req = TLRPC.TLMessagesMarkDialogUnread()
 			req.unread = true
 
-			val inputDialogPeer = TL_inputDialogPeer()
+			val inputDialogPeer = TLRPC.TLInputDialogPeer()
 			inputDialogPeer.peer = peer
 
 			req.peer = inputDialogPeer
@@ -13894,7 +13610,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		loadingUnreadDialogs = true
 
-		val req = TL_messages_getDialogUnreadMarks()
+		val req = TLRPC.TLMessagesGetDialogUnreadMarks()
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			AndroidUtilities.runOnUIThread {
@@ -13905,25 +13621,25 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					while (a < size) {
 						val peer = response.objects[a] as DialogPeer
 
-						if (peer is TL_dialogPeer) {
-							val did = if (peer.peer.user_id != 0L) {
-								peer.peer.user_id
+						if (peer is TLRPC.TLDialogPeer) {
+							val did = if (peer.peer.userId != 0L) {
+								peer.peer.userId
 							}
-							else if (peer.peer.chat_id != 0L) {
-								-peer.peer.chat_id
+							else if (peer.peer.chatId != 0L) {
+								-peer.peer.chatId
 							}
 							else {
-								-peer.peer.channel_id
+								-peer.peer.channelId
 							}
 
 							messagesStorage.setDialogUnread(did, true)
 
 							val dialog = dialogs_dict[did]
 
-							if (dialog != null && !dialog.unread_mark) {
-								dialog.unread_mark = true
+							if (dialog != null && !dialog.unreadMark) {
+								dialog.unreadMark = true
 
-								if (dialog.unread_count == 0 && !isDialogMuted(did)) {
+								if (dialog.unreadCount == 0 && !isDialogMuted(did)) {
 									unreadUnmutedDialogs++
 								}
 							}
@@ -13943,9 +13659,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun reorderPinnedDialogs(folderId: Int, order: ArrayList<InputDialogPeer>?, taskId: Long) {
-		val req = TL_messages_reorderPinnedDialogs()
-		req.folder_id = folderId
+	fun reorderPinnedDialogs(folderId: Int, order: List<TLRPC.InputDialogPeer>?, taskId: Long) {
+		val req = TLRPC.TLMessagesReorderPinnedDialogs()
+		req.folderId = folderId
 		req.force = true
 
 		val newTaskId: Long
@@ -13966,7 +13682,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			while (a < n) {
 				val dialog = dialogs[a]
 
-				if (dialog is TL_dialogFolder) {
+				if (dialog is TLRPC.TLDialogFolder) {
 					a++
 					continue
 				}
@@ -13987,7 +13703,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				if (!DialogObject.isEncryptedDialog(dialog.id)) {
 					val inputPeer = getInputPeer(dialog.id)
 
-					val inputDialogPeer = TL_inputDialogPeer()
+					val inputDialogPeer = TLRPC.TLInputDialogPeer()
 					inputDialogPeer.peer = inputPeer
 
 					req.order.add(inputDialogPeer)
@@ -14019,7 +13735,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			newTaskId = messagesStorage.createPendingTask(data)
 		}
 		else {
-			req.order = order
+			order?.let {
+				req.order.addAll(it)
+			}
+
 			newTaskId = taskId
 		}
 
@@ -14030,7 +13749,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun pinDialog(dialogId: Long, pin: Boolean, peer: InputPeer?, taskId: Long): Boolean {
+	fun pinDialog(dialogId: Long, pin: Boolean, peer: InputPeer?): Boolean {
 		@Suppress("NAME_SHADOWING") var peer = peer
 		val dialog = dialogs_dict[dialogId]
 
@@ -14038,7 +13757,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return dialog != null
 		}
 
-		val folderId = dialog.folder_id
+		val folderId = dialog.folderId
 		val dialogs = getDialogs(folderId)
 
 		dialog.pinned = pin
@@ -14049,7 +13768,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			for (a in dialogs.indices) {
 				val d = dialogs[a]
 
-				if (d is TL_dialogFolder) {
+				if (d is TLRPC.TLDialogFolder) {
 					continue
 				}
 
@@ -14079,52 +13798,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 
 		if (!DialogObject.isEncryptedDialog(dialogId)) {
-			if (taskId != -1L) {
-				if (peer == null) {
-					peer = getInputPeer(dialogId)
-				}
-
-				if (peer is TL_inputPeerEmpty) {
-					return false
-				}
-
-				val req = TL_messages_toggleDialogPin()
-				req.pinned = pin
-
-				val inputDialogPeer = TL_inputDialogPeer()
-				inputDialogPeer.peer = peer
-
-				req.peer = inputDialogPeer
-
-				val newTaskId: Long
-
-				if (taskId == 0L) {
-					val data = try {
-						NativeByteBuffer(16 + peer.objectSize).apply {
-							writeInt32(4)
-							writeInt64(dialogId)
-							writeBool(pin)
-
-							peer.serializeToStream(this)
-						}
-					}
-					catch (e: Exception) {
-						FileLog.e(e)
-						null
-					}
-
-					newTaskId = messagesStorage.createPendingTask(data)
-				}
-				else {
-					newTaskId = taskId
-				}
-
-				connectionsManager.sendRequest(req) { _, _ ->
-					if (newTaskId != 0L) {
-						messagesStorage.removePendingTask(newTaskId)
-					}
-				}
+			if (peer == null) {
+				peer = getInputPeer(dialogId)
 			}
+
+			if (peer is TLRPC.TLInputPeerEmpty) {
+				return false
+			}
+
+			val req = TLRPC.TLMessagesToggleDialogPin()
+			req.pinned = pin
+
+			val inputDialogPeer = TLRPC.TLInputDialogPeer()
+			inputDialogPeer.peer = peer
+
+			req.peer = inputDialogPeer
+
+			connectionsManager.sendRequest(req)
 		}
 
 		messagesStorage.setDialogPinned(dialogId, dialog.pinnedNum)
@@ -14139,16 +13829,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		loadingPinnedDialogs.put(folderId, 1)
 
-		val req = TL_messages_getPinnedDialogs()
-		req.folder_id = folderId
+		val req = TLRPC.TLMessagesGetPinnedDialogs()
+		req.folderId = folderId
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_peerDialogs) {
+			if (response is TLRPC.TLMessagesPeerDialogs) {
 				val newPinnedDialogs = ArrayList(response.dialogs)
 
 				fetchFolderInLoadedPinnedDialogs(response)
 
-				val toCache = TL_messages_dialogs()
+				val toCache = TLRPC.TLMessagesDialogs()
 				toCache.users.addAll(response.users)
 				toCache.chats.addAll(response.chats)
 				toCache.dialogs.addAll(response.dialogs)
@@ -14169,19 +13859,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				val newMessages = mutableListOf<MessageObject>()
 
 				for (message in response.messages) {
-					val peerId = message.peer_id ?: continue
+					val peerId = message.peerId ?: continue
 
-					if (peerId.channel_id != 0L) {
-						val chat = chatsDict[peerId.channel_id]
+					if (peerId.channelId != 0L) {
+						val chat = chatsDict[peerId.channelId]
 
 						if (chat != null && chat.left) {
 							continue
 						}
 					}
-					else if (peerId.chat_id != 0L) {
-						val chat = chatsDict[peerId.chat_id]
+					else if (peerId.chatId != 0L) {
+						val chat = chatsDict[peerId.chatId]
 
-						if (chat?.migrated_to != null) {
+						if (chat?.migratedTo != null) {
 							continue
 						}
 					}
@@ -14190,16 +13880,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					newMessages.add(messageObject)
 
-					// MARK: remove check for service messages
-					if (message !is TL_messageService) {
-						// MARK: but keep this line
-						newDialogMessage.put(messageObject.dialogId, messageObject)
-					}
+					newDialogMessage.put(messageObject.dialogId, messageObject)
 				}
 
 				fileLoader.checkMediaExistence(newMessages)
 
-				val firstIsFolder = newPinnedDialogs.isNotEmpty() && newPinnedDialogs[0] is TL_dialogFolder
+				val firstIsFolder = newPinnedDialogs.isNotEmpty() && newPinnedDialogs[0] is TLRPC.TLDialogFolder
 				var a = 0
 				val n = newPinnedDialogs.size
 
@@ -14221,16 +13907,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					else if (DialogObject.isChatDialog(d.id)) {
 						val chat = chatsDict[-d.id]
 
-						if (chat?.migrated_to != null) {
+						if (chat?.migratedTo != null) {
 							a++
 							continue
 						}
 					}
 
-					if (d.last_message_date == 0) {
+					if (d.lastMessageDate == 0) {
 						val mess = newDialogMessage[d.id]
 						if (mess != null) {
-							d.last_message_date = mess.messageOwner!!.date
+							d.lastMessageDate = mess.messageOwner!!.date
 						}
 					}
 
@@ -14240,7 +13926,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = 0
 					}
 
-					dialogs_read_inbox_max[d.id] = max(value, d.read_inbox_max_id)
+					dialogs_read_inbox_max[d.id] = max(value, d.readInboxMaxId)
 
 					value = dialogs_read_outbox_max[d.id]
 
@@ -14248,7 +13934,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = 0
 					}
 
-					dialogs_read_outbox_max[d.id] = max(value, d.read_outbox_max_id)
+					dialogs_read_outbox_max[d.id] = max(value, d.readOutboxMaxId)
 
 					a++
 				}
@@ -14266,7 +13952,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						var pinnedNum = if (firstIsFolder) 1 else 0
 
 						for (dialog in dialogs) {
-							if (dialog is TL_dialogFolder) {
+							if (dialog is TLRPC.TLDialogFolder) {
 								continue
 							}
 
@@ -14335,15 +14021,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 									val messageObject = newDialogMessage[dialog.id]
 
-									dialogMessage.put(dialog.id, messageObject)
+									messageObject?.let {
+										dialogMessage.put(dialog.id, it)
+									}
 
-									if (messageObject != null && messageObject.messageOwner?.peer_id?.channel_id == 0L) {
+									if (messageObject != null && messageObject.messageOwner?.peerId?.channelId == 0L) {
 										dialogMessagesByIds.put(messageObject.id, messageObject)
 
 										dialogsLoadedTillDate = min(dialogsLoadedTillDate, messageObject.messageOwner!!.date)
 
-										if (messageObject.messageOwner!!.random_id != 0L) {
-											dialogMessagesByRandomIds.put(messageObject.messageOwner!!.random_id, messageObject)
+										if (messageObject.messageOwner!!.randomId != 0L) {
+											dialogMessagesByRandomIds.put(messageObject.messageOwner!!.randomId, messageObject)
 										}
 									}
 								}
@@ -14366,14 +14054,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								while (a < size) {
 									val dialog = dialogs_dict.valueAt(a)
 
-									if (dialog != null) {
-										if (deletingDialogs.indexOfKey(dialog.id) >= 0) {
-											a++
-											continue
-										}
-
-										allDialogs.add(dialog)
+									if (deletingDialogs.indexOfKey(dialog.id) >= 0) {
+										a++
+										continue
 									}
+
+									allDialogs.add(dialog)
 
 									a++
 								}
@@ -14396,47 +14082,48 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun generateJoinMessage(chatId: Long, ignoreLeft: Boolean) {
-		val chat = getChat(chatId)
-
-		if (chat == null || !ChatObject.isChannel(chatId, currentAccount) || (chat.left || chat.kicked) && !ignoreLeft) {
-			return
-		}
-
-		val message = TL_messageService()
-		message.flags = MESSAGE_FLAG_HAS_FROM_ID
-		message.id = userConfig.newMessageId
-		message.local_id = message.id
-		message.date = connectionsManager.currentTime
-		message.from_id = TL_peerUser()
-		message.from_id?.user_id = userConfig.getClientUserId()
-		message.peer_id = TL_peerChannel()
-		message.peer_id?.channel_id = chatId
-		message.dialog_id = -chatId
-		message.post = true
-		message.action = TL_messageActionChatAddUser()
-		message.action?.users?.add(userConfig.getClientUserId())
-
-		userConfig.saveConfig(false)
-
-		val messagesArr = listOf(message)
-
-		val obj = MessageObject(currentAccount, message, generateLayout = true, checkMediaExists = false)
-
-		val pushMessages = listOf(obj)
-
-		messagesStorage.storageQueue.postRunnable {
-			AndroidUtilities.runOnUIThread {
-				notificationsController.processNewMessages(pushMessages, isLast = true, isFcm = false, countDownLatch = null)
-				messagesController.markMessageContentAsRead(obj)
-			}
-		}
-
-		messagesStorage.putMessages(messagesArr, true, true, false, 0, false)
-
-		AndroidUtilities.runOnUIThread {
-			updateInterfaceWithMessages(-chatId, pushMessages, false)
-			notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
-		}
+		// MARK: uncomment to enable autogenerated join message
+//		val chat = getChat(chatId)
+//
+//		if (chat == null || !ChatObject.isChannel(chatId, currentAccount) || (chat.left || chat.kicked) && !ignoreLeft) {
+//			return
+//		}
+//
+//		val message = TL_messageService()
+//		message.flags = MESSAGE_FLAG_HAS_FROM_ID
+//		message.id = userConfig.newMessageId
+//		message.local_id = message.id
+//		message.date = connectionsManager.currentTime
+//		message.from_id = TL_peerUser()
+//		message.from_id?.user_id = userConfig.getClientUserId()
+//		message.peer_id = TL_peerChannel()
+//		message.peer_id?.channel_id = chatId
+//		message.dialog_id = -chatId
+//		message.post = true
+//		message.action = TL_messageActionChatAddUser()
+//		message.action?.users?.add(userConfig.getClientUserId())
+//
+//		userConfig.saveConfig(false)
+//
+//		val messagesArr = listOf(message)
+//
+//		val obj = MessageObject(currentAccount, message, generateLayout = true, checkMediaExists = false)
+//
+//		val pushMessages = listOf(obj)
+//
+//		messagesStorage.storageQueue.postRunnable {
+//			AndroidUtilities.runOnUIThread {
+//				notificationsController.processNewMessages(pushMessages, isLast = true, isFcm = false, countDownLatch = null)
+//				messagesController.markMessageContentAsRead(obj)
+//			}
+//		}
+//
+//		messagesStorage.putMessages(messagesArr, true, true, false, 0, false)
+//
+//		AndroidUtilities.runOnUIThread {
+//			updateInterfaceWithMessages(-chatId, pushMessages, false)
+//			notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
+//		}
 	}
 
 	fun deleteMessagesByPush(dialogId: Long, ids: List<Int>, channelId: Long) {
@@ -14493,17 +14180,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		gettingChatInviters.put(chatId, true)
 
-		val req = TL_channels_getParticipant()
+		val req = TLRPC.TLChannelsGetParticipant()
 		req.channel = getInputChannel(chatId)
 		req.participant = getInputPeer(userConfig.getClientUserId())
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			val res = response as TL_channels_channelParticipant?
+			val res = response as TLRPC.TLChannelsChannelParticipant?
 
-			if (res != null && res.participant is TL_channelParticipantSelf) {
-				val selfParticipant = res.participant as TL_channelParticipantSelf
+			if (res != null && res.participant is TLRPC.TLChannelParticipantSelf) {
+				val selfParticipant = res.participant as TLRPC.TLChannelParticipantSelf
 
-				if (selfParticipant.inviter_id != userConfig.getClientUserId() || selfParticipant.via_invite) {
+				if (selfParticipant.inviterId != userConfig.getClientUserId() || selfParticipant.viaRequest) {
 					if (chat.megagroup && messagesStorage.isMigratedChat(chat.id)) {
 						return@sendRequest
 					}
@@ -14517,29 +14204,34 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					val pushMessages: ArrayList<MessageObject>?
 
-					if (createMessage && abs(connectionsManager.currentTime - res.participant.date) < 24 * 60 * 60 && !messagesStorage.hasInviteMeMessage(chatId)) {
-						val message = TL_messageService()
-						message.media_unread = true
+					if (createMessage && abs(connectionsManager.currentTime - (res.participant?.date ?: 0)) < 24 * 60 * 60 && !messagesStorage.hasInviteMeMessage(chatId)) {
+						val message = TLRPC.TLMessageService()
+						message.mediaUnread = true
 						message.unread = true
-						message.flags = MESSAGE_FLAG_HAS_FROM_ID
+						message.flags = TLRPC.MESSAGE_FLAG_HAS_FROM_ID
 						message.post = true
 						message.id = userConfig.newMessageId
-						message.local_id = message.id
-						message.date = res.participant.date
+						message.localId = message.id
+						message.date = res.participant?.date ?: 0
 
-						if (selfParticipant.inviter_id != userConfig.getClientUserId()) {
-							message.action = TL_messageActionChatAddUser()
+						if (selfParticipant.inviterId != userConfig.getClientUserId()) {
+							message.action = TLRPC.TLMessageActionChatAddUser()
 						}
-						else if (selfParticipant.via_invite) {
-							message.action = TL_messageActionChatJoinedByRequest()
+						else if (selfParticipant.viaRequest) {
+							message.action = TLRPC.TLMessageActionChatJoinedByRequest()
 						}
 
-						message.from_id = TL_peerUser()
-						message.from_id?.user_id = res.participant.inviter_id
+						message.fromId = TLRPC.TLPeerUser().also {
+							it.userId = res.participant?.inviterId ?: 0L
+						}
+
 						message.action?.users?.add(userConfig.getClientUserId())
-						message.peer_id = TL_peerChannel()
-						message.peer_id?.channel_id = chatId
-						message.dialog_id = -chatId
+
+						message.peerId = TLRPC.TLPeerChannel().also {
+							it.channelId = chatId
+						}
+
+						message.dialogId = -chatId
 
 						userConfig.saveConfig(false)
 
@@ -14568,7 +14260,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						pushMessages = null
 					}
 
-					messagesStorage.saveChatInviter(chatId, res.participant.inviter_id)
+					res.participant?.let {
+						messagesStorage.saveChatInviter(chatId, it.inviterId)
+					}
 
 					AndroidUtilities.runOnUIThread {
 						gettingChatInviters.remove(chatId)
@@ -14578,7 +14272,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 						}
 
-						notificationCenter.postNotificationName(NotificationCenter.didLoadChatInviter, chatId, res.participant.inviter_id)
+						res.participant?.let {
+							notificationCenter.postNotificationName(NotificationCenter.didLoadChatInviter, chatId, it.inviterId)
+						}
 					}
 				}
 			}
@@ -14587,15 +14283,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 	private fun getUpdateType(update: Update): Int {
 		return when (update) {
-			is TL_updateNewMessage, is TL_updateReadMessagesContents, is TL_updateReadHistoryInbox, is TL_updateReadHistoryOutbox, is TL_updateDeleteMessages, is TL_updateWebPage, is TL_updateEditMessage, is TL_updateFolderPeers, is TL_updatePinnedMessages -> {
+			is TLRPC.TLUpdateNewMessage, is TLRPC.TLUpdateReadMessagesContents, is TLRPC.TLUpdateReadHistoryInbox, is TLRPC.TLUpdateReadHistoryOutbox, is TLRPC.TLUpdateDeleteMessages, is TLRPC.TLUpdateWebPage, is TLRPC.TLUpdateEditMessage, is TLRPC.TLUpdateFolderPeers, is TLRPC.TLUpdatePinnedMessages -> {
 				0
 			}
 
-			is TL_updateNewEncryptedMessage -> {
+			is TLRPC.TLUpdateNewEncryptedMessage -> {
 				1
 			}
 
-			is TL_updateNewChannelMessage, is TL_updateDeleteChannelMessages, is TL_updateEditChannelMessage, is TL_updateChannelWebPage, is TL_updatePinnedChannelMessages -> {
+			is TLRPC.TLUpdateNewChannelMessage, is TLRPC.TLUpdateDeleteChannelMessages, is TLRPC.TLUpdateEditChannelMessage, is TLRPC.TLUpdateChannelWebPage, is TLRPC.TLUpdatePinnedChannelMessages -> {
 				2
 			}
 
@@ -14612,13 +14308,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		var updateStatus = false
 
 		when (updates) {
-			is TL_updateShort -> {
-				processUpdateArray(listOf(updates.update), null, null, false, updates.date)
+			is TLRPC.TLUpdateShort -> {
+				updates.update?.let {
+					processUpdateArray(listOf(it), null, null, false, updates.date)
+				}
 			}
 
-			is TL_updateShortChatMessage, is TL_updateShortMessage -> {
-				val userId = (updates as? TL_updateShortChatMessage)?.from_id ?: updates.user_id
-				var user = getUser(userId)
+			is TLRPC.TLUpdateShortChatMessage, is TLRPC.TLUpdateShortMessage -> {
+				val userId = (updates as? TLRPC.TLUpdateShortChatMessage)?.fromId ?: (updates as? TLRPC.TLUpdateShortMessage)?.userId ?: 0
+				var user = getUser(userId) as? TLUser
 				var user2: User? = null
 				var user3: User? = null
 				var channel: Chat? = null
@@ -14626,7 +14324,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				FileLog.d("update message short userId = $userId")
 
 				if (user == null || user.min) {
-					user = messagesStorage.getUserSync(userId)
+					user = messagesStorage.getUserSync(userId) as? TLUser
 
 					if (user != null && user.min) {
 						user = null
@@ -14637,35 +14335,37 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				var needFwdUser = false
 
-				if (updates.fwd_from != null) {
-					when (updates.fwd_from.from_id) {
-						is TL_peerUser -> {
-							user2 = getUser(updates.fwd_from.from_id.user_id)
+				val fwdFrom = updates.fwdFrom
+
+				if (fwdFrom != null) {
+					when (fwdFrom.fromId) {
+						is TLRPC.TLPeerUser -> {
+							user2 = getUser(fwdFrom.fromId.userId)
 
 							if (user2 == null) {
-								user2 = messagesStorage.getUserSync(updates.fwd_from.from_id.user_id)
+								user2 = messagesStorage.getUserSync(fwdFrom.fromId.userId)
 								putUser(user2, true)
 							}
 
 							needFwdUser = true
 						}
 
-						is TL_peerChannel -> {
-							channel = getChat(updates.fwd_from.from_id.channel_id)
+						is TLRPC.TLPeerChannel -> {
+							channel = getChat(fwdFrom.fromId.channelId)
 
 							if (channel == null) {
-								channel = messagesStorage.getChatSync(updates.fwd_from.from_id.channel_id)
+								channel = messagesStorage.getChatSync(fwdFrom.fromId.channelId)
 								putChat(channel, true)
 							}
 
 							needFwdUser = true
 						}
 
-						is TL_peerChat -> {
-							channel = getChat(updates.fwd_from.from_id.chat_id)
+						is TLRPC.TLPeerChat -> {
+							channel = getChat(fwdFrom.fromId.chatId)
 
 							if (channel == null) {
-								channel = messagesStorage.getChatSync(updates.fwd_from.from_id.chat_id)
+								channel = messagesStorage.getChatSync(fwdFrom.fromId.chatId)
 								putChat(channel, true)
 							}
 
@@ -14676,11 +14376,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				var needBotUser = false
 
-				if (updates.via_bot_id != 0L) {
-					user3 = getUser(updates.via_bot_id)
+				if (updates.viaBotId != 0L) {
+					user3 = getUser(updates.viaBotId)
 
 					if (user3 == null) {
-						user3 = messagesStorage.getUserSync(updates.via_bot_id)
+						user3 = messagesStorage.getUserSync(updates.viaBotId)
 						putUser(user3, true)
 					}
 
@@ -14689,14 +14389,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				var missingData: Boolean
 
-				if (updates is TL_updateShortMessage) {
+				if (updates is TLRPC.TLUpdateShortMessage) {
 					missingData = user == null || needFwdUser && user2 == null && channel == null || needBotUser && user3 == null
 				}
 				else {
-					var chat = getChat(updates.chat_id)
+					var chat = getChat(updates.chatId)
 
 					if (chat == null) {
-						chat = messagesStorage.getChatSync(updates.chat_id)
+						chat = messagesStorage.getChatSync(updates.chatId)
 						putChat(chat, true)
 					}
 
@@ -14707,12 +14407,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					for (a in updates.entities.indices) {
 						val entity = updates.entities[a]
 
-						if (entity is TL_messageEntityMentionName) {
+						if (entity is TLRPC.TLMessageEntityMentionName) {
 							val uid = entity.userId
-							var entityUser = getUser(uid)
+							var entityUser = getUser(uid) as? TLUser
 
 							if (entityUser == null || entityUser.min) {
-								entityUser = messagesStorage.getUserSync(uid)
+								entityUser = messagesStorage.getUserSync(uid) as? TLUser
 
 								if (entityUser != null && entityUser.min) {
 									entityUser = null
@@ -14738,74 +14438,80 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					needGetDiff = true
 				}
 				else {
-					if (messagesStorage.lastPtsValue + updates.pts_count == updates.pts) {
-						val message = TL_message()
+					if (messagesStorage.lastPtsValue + updates.ptsCount == updates.pts) {
+						val message = TLRPC.TLMessage()
 						message.id = updates.id
 
 						val clientUserId = userConfig.getClientUserId()
 
-						if (updates is TL_updateShortMessage) {
-							message.from_id = TL_peerUser()
-
-							if (updates.out) {
-								message.from_id?.user_id = clientUserId
+						if (updates is TLRPC.TLUpdateShortMessage) {
+							message.fromId = TLRPC.TLPeerUser().also {
+								if (updates.out) {
+									it.userId = clientUserId
+								}
+								else {
+									it.userId = userId
+								}
 							}
-							else {
-								message.from_id?.user_id = userId
+
+							message.peerId = TLRPC.TLPeerUser().also {
+								it.userId = userId
 							}
 
-							message.peer_id = TL_peerUser()
-							message.peer_id?.user_id = userId
-							message.dialog_id = userId
+							message.dialogId = userId
 						}
 						else {
-							message.from_id = TL_peerUser()
-							message.from_id?.user_id = userId
-							message.peer_id = TL_peerChat()
-							message.peer_id?.chat_id = updates.chat_id
-							message.dialog_id = -updates.chat_id
+							message.fromId = TLRPC.TLPeerUser().also {
+								it.userId = userId
+							}
+
+							message.peerId = TLRPC.TLPeerChat().also {
+								it.chatId = updates.chatId
+							}
+
+							message.dialogId = -updates.chatId
 						}
 
-						message.fwd_from = updates.fwd_from
+						message.fwdFrom = updates.fwdFrom
 						message.silent = updates.silent
 						message.out = updates.out
 						message.mentioned = updates.mentioned
-						message.media_unread = updates.media_unread
-						message.entities = updates.entities
+						message.mediaUnread = updates.mediaUnread
+						message.entities.addAll(updates.entities)
 						message.message = updates.message
 						message.date = updates.date
-						message.via_bot_id = updates.via_bot_id
-						message.flags = updates.flags or MESSAGE_FLAG_HAS_FROM_ID
-						message.reply_to = updates.reply_to
-						message.ttl_period = updates.ttl_period
-						message.media = TL_messageMediaEmpty()
+						message.viaBotId = updates.viaBotId
+						message.flags = updates.flags or TLRPC.MESSAGE_FLAG_HAS_FROM_ID
+						message.replyTo = updates.replyTo
+						message.ttlPeriod = updates.ttlPeriod
+						message.media = TLRPC.TLMessageMediaEmpty()
 
 						val readMax = if (message.out) dialogs_read_outbox_max else dialogs_read_inbox_max
 
-						var value = readMax[message.dialog_id]
+						var value = readMax[message.dialogId]
 
 						if (value == null) {
-							value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-							readMax[message.dialog_id] = value
+							value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+							readMax[message.dialogId] = value
 						}
 
 						message.unread = value < message.id
 
-						if (message.dialog_id == clientUserId) {
+						if (message.dialogId == clientUserId) {
 							message.unread = false
-							message.media_unread = false
+							message.mediaUnread = false
 							message.out = true
 						}
 
 						messagesStorage.lastPtsValue = updates.pts
 
-						val isDialogCreated = createdDialogIds.contains(message.dialog_id)
+						val isDialogCreated = createdDialogIds.contains(message.dialogId)
 						val obj = MessageObject(currentAccount, message, isDialogCreated, isDialogCreated)
 						val objArr = listOf(obj)
 						val arr = listOf(message)
 
-						if (updates is TL_updateShortMessage) {
-							val printUpdate = !updates.out && updatePrintingUsersWithNewMessages(updates.user_id, objArr)
+						if (updates is TLRPC.TLUpdateShortMessage) {
+							val printUpdate = !updates.out && updatePrintingUsersWithNewMessages(updates.userId, objArr)
 
 							if (printUpdate) {
 								updatePrintingStrings()
@@ -14822,7 +14528,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 						else {
-							val printUpdate = updatePrintingUsersWithNewMessages(-updates.chat_id, objArr)
+							val printUpdate = updatePrintingUsersWithNewMessages(-updates.chatId, objArr)
 
 							if (printUpdate) {
 								updatePrintingStrings()
@@ -14833,7 +14539,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									notificationCenter.postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_USER_PRINT)
 								}
 
-								updateInterfaceWithMessages(-updates.chat_id, objArr, false)
+								updateInterfaceWithMessages(-updates.chatId, objArr, false)
 
 								notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload)
 							}
@@ -14850,18 +14556,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						messagesStorage.putMessages(arr, false, true, false, 0, false)
 					}
 					else if (messagesStorage.lastPtsValue != updates.pts) {
-						if (BuildConfig.DEBUG) {
-							FileLog.d("need get diff short message, pts: " + messagesStorage.lastPtsValue + " " + updates.pts + " count = " + updates.pts_count)
-						}
+						FileLog.d("need get diff short message, pts: " + messagesStorage.lastPtsValue + " " + updates.pts + " count = " + updates.ptsCount)
 
 						if (gettingDifference || updatesStartWaitTimePts == 0L || abs(System.currentTimeMillis() - updatesStartWaitTimePts) <= 1500) {
 							if (updatesStartWaitTimePts == 0L) {
 								updatesStartWaitTimePts = System.currentTimeMillis()
 							}
 
-							if (BuildConfig.DEBUG) {
-								FileLog.d("add to queue")
-							}
+							FileLog.d("add to queue")
 
 							updatesQueuePts.add(updates)
 						}
@@ -14872,18 +14574,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			is TL_updatesCombined, is TL_updates -> {
+			is TLRPC.TLUpdatesCombined, is TLRPC.TLUpdates -> {
 				var minChannels: LongSparseArray<Chat>? = null
 
 				for (a in updates.chats.indices) {
 					val chat = updates.chats[a]
 
-					if (chat is TL_channel) {
+					if (chat is TLRPC.TLChannel) {
 						if (chat.min) {
 							var existChat = getChat(chat.id)
 
 							if (existChat == null || existChat.min) {
-								val cacheChat = messagesStorage.getChatSync(updates.chat_id)
+								val cacheChat = messagesStorage.getChatSync(updates.chatId)
 								putChat(cacheChat, true)
 								existChat = cacheChat
 							}
@@ -14903,26 +14605,22 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					for (a in updates.updates.indices) {
 						val update = updates.updates[a]
 
-						if (update is TL_updateNewChannelMessage) {
+						if (update is TLRPC.TLUpdateNewChannelMessage) {
 							val message = update.message
-							val channelId = message.peer_id!!.channel_id
+							val channelId = message?.peerId?.channelId ?: 0
 
 							if (minChannels.indexOfKey(channelId) >= 0) {
-								if (BuildConfig.DEBUG) {
-									FileLog.d("need get diff because of min channel $channelId")
-								}
+								FileLog.d("need get diff because of min channel $channelId")
 
 								needGetDiff = true
 
 								break
 							}
 
-							/*if (message.fwd_from != null && message.fwd_from.channel_id != 0) {
-								channelId = message.fwd_from.channel_id;
+							/*if (message.fwdFrom != null && message.fwdFrom.channelId != 0) {
+								channelId = message.fwdFrom.channelId;
 								if (minChannels.containsKey(channelId)) {
-									if (BuildConfig.DEBUG) {
-										FileLog.e("need get diff because of min forward channel " + channelId);
-									}
+									FileLog.e("need get diff because of min forward channel " + channelId);
 									needGetDiff = true;
 									break;
 								}
@@ -14942,10 +14640,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						val update = updates.updates[a]
 
 						if (getUpdateType(update) == 0) {
-							val updatesNew = TL_updates()
+							val updatesNew = TLRPC.TLUpdates()
 							updatesNew.updates.add(update)
 							updatesNew.pts = getUpdatePts(update)
-							updatesNew.pts_count = getUpdatePtsCount(update)
+							updatesNew.ptsCount = getUpdatePtsCount(update)
 
 							var b = a + 1
 
@@ -14957,7 +14655,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								if (getUpdateType(update2) == 0 && updatesNew.pts + count2 == pts2) {
 									updatesNew.updates.add(update2)
 									updatesNew.pts = pts2
-									updatesNew.pts_count += count2
+									updatesNew.ptsCount += count2
 
 									updates.updates.removeAt(b)
 
@@ -14970,11 +14668,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								b++
 							}
 
-							if (messagesStorage.lastPtsValue + updatesNew.pts_count == updatesNew.pts) {
+							if (messagesStorage.lastPtsValue + updatesNew.ptsCount == updatesNew.pts) {
 								if (!processUpdateArray(updatesNew.updates, updates.users, updates.chats, false, updates.date)) {
-									if (BuildConfig.DEBUG) {
-										FileLog.d("need get diff inner TL_updates, pts: " + messagesStorage.lastPtsValue + " " + updates.seq)
-									}
+									FileLog.d("need get diff inner TLRPC.TLUpdates, pts: " + messagesStorage.lastPtsValue + " " + updates.seq)
 
 									needGetDiff = true
 								}
@@ -14983,18 +14679,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 							}
 							else if (messagesStorage.lastPtsValue != updatesNew.pts) {
-								if (BuildConfig.DEBUG) {
-									FileLog.d(update.toString() + " need get diff, pts: " + messagesStorage.lastPtsValue + " " + updatesNew.pts + " count = " + updatesNew.pts_count)
-								}
+								FileLog.d(update.toString() + " need get diff, pts: " + messagesStorage.lastPtsValue + " " + updatesNew.pts + " count = " + updatesNew.ptsCount)
 
 								if (gettingDifference || updatesStartWaitTimePts == 0L || abs(System.currentTimeMillis() - updatesStartWaitTimePts) <= 1500) {
 									if (updatesStartWaitTimePts == 0L) {
 										updatesStartWaitTimePts = System.currentTimeMillis()
 									}
 
-									if (BuildConfig.DEBUG) {
-										FileLog.d("add to queue")
-									}
+									FileLog.d("add to queue")
 
 									updatesQueuePts.add(updatesNew)
 								}
@@ -15004,7 +14696,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 						else if (getUpdateType(update) == 1) {
-							val updatesNew = TL_updates()
+							val updatesNew = TLRPC.TLUpdates()
 							updatesNew.updates.add(update)
 							updatesNew.pts = getUpdateQts(update)
 
@@ -15035,18 +14727,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								needReceivedQueue = true
 							}
 							else if (messagesStorage.lastPtsValue != updatesNew.pts) {
-								if (BuildConfig.DEBUG) {
-									FileLog.d(update.toString() + " need get diff, qts: " + messagesStorage.lastQtsValue + " " + updatesNew.pts)
-								}
+								FileLog.d(update.toString() + " need get diff, qts: " + messagesStorage.lastQtsValue + " " + updatesNew.pts)
 
 								if (gettingDifference || updatesStartWaitTimeQts == 0L || abs(System.currentTimeMillis() - updatesStartWaitTimeQts) <= 1500) {
 									if (updatesStartWaitTimeQts == 0L) {
 										updatesStartWaitTimeQts = System.currentTimeMillis()
 									}
 
-									if (BuildConfig.DEBUG) {
-										FileLog.d("add to queue")
-									}
+									FileLog.d("add to queue")
 
 									updatesQueueQts.add(updatesNew)
 								}
@@ -15077,10 +14765,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 							}
 
-							val updatesNew = TL_updates()
+							val updatesNew = TLRPC.TLUpdates()
 							updatesNew.updates.add(update)
 							updatesNew.pts = getUpdatePts(update)
-							updatesNew.pts_count = getUpdatePtsCount(update)
+							updatesNew.ptsCount = getUpdatePtsCount(update)
 
 							var b = a + 1
 
@@ -15092,7 +14780,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								if (getUpdateType(update2) == 2 && channelId == getUpdateChannelId(update2) && updatesNew.pts + count2 == pts2) {
 									updatesNew.updates.add(update2)
 									updatesNew.pts = pts2
-									updatesNew.pts_count += count2
+									updatesNew.ptsCount += count2
 
 									updates.updates.removeAt(b)
 
@@ -15106,11 +14794,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 
 							if (!skipUpdate) {
-								if (channelPts + updatesNew.pts_count == updatesNew.pts) {
+								if (channelPts + updatesNew.ptsCount == updatesNew.pts) {
 									if (!processUpdateArray(updatesNew.updates, updates.users, updates.chats, false, updates.date)) {
-										if (BuildConfig.DEBUG) {
-											FileLog.d("need get channel diff inner TL_updates, channel_id = $channelId")
-										}
+										FileLog.d("need get channel diff inner TLRPC.TLUpdates, channel_id = $channelId")
 
 										if (needGetChannelsDiff == null) {
 											needGetChannelsDiff = ArrayList()
@@ -15125,21 +14811,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									}
 								}
 								else if (channelPts != updatesNew.pts) {
-									if (BuildConfig.DEBUG) {
-										FileLog.d(update.toString() + " need get channel diff, pts: " + channelPts + " " + updatesNew.pts + " count = " + updatesNew.pts_count + " channelId = " + channelId)
-									}
+									FileLog.d(update.toString() + " need get channel diff, pts: " + channelPts + " " + updatesNew.pts + " count = " + updatesNew.ptsCount + " channelId = " + channelId)
 
 									val updatesStartWaitTime = updatesStartWaitTimeChannels[channelId]
-									val gettingDifferenceChannel = gettingDifferenceChannels[channelId, false]
+									val gettingDifferenceChannel = gettingDifferenceChannels.get(channelId, false)
 
 									if (gettingDifferenceChannel || updatesStartWaitTime == 0L || abs(System.currentTimeMillis() - updatesStartWaitTime) <= 1500) {
 										if (updatesStartWaitTime == 0L) {
 											updatesStartWaitTimeChannels.put(channelId, System.currentTimeMillis())
 										}
 
-										if (BuildConfig.DEBUG) {
-											FileLog.d("add to queue")
-										}
+										FileLog.d("add to queue")
 
 										var arrayList = updatesQueueChannels[channelId]
 
@@ -15161,9 +14843,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 							}
 							else {
-								if (BuildConfig.DEBUG) {
-									FileLog.d("need load unknown channel = $channelId")
-								}
+								FileLog.d("need load unknown channel = $channelId")
 							}
 						}
 						else {
@@ -15173,8 +14853,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						updates.updates.removeAt(a)
 					}
 
-					val processUpdate = if (updates is TL_updatesCombined) {
-						messagesStorage.lastSeqValue + 1 == updates.seq_start || messagesStorage.lastSeqValue == updates.seq_start
+					val processUpdate = if (updates is TLRPC.TLUpdatesCombined) {
+						messagesStorage.lastSeqValue + 1 == updates.seqStart || messagesStorage.lastSeqValue == updates.seqStart
 					}
 					else {
 						messagesStorage.lastSeqValue + 1 == updates.seq || updates.seq == 0 || updates.seq == messagesStorage.lastSeqValue
@@ -15192,13 +14872,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 					else {
-						if (BuildConfig.DEBUG) {
-							if (updates is TL_updatesCombined) {
-								FileLog.d("need get diff TL_updatesCombined, seq: " + messagesStorage.lastSeqValue + " " + updates.seq_start)
-							}
-							else {
-								FileLog.d("need get diff TL_updates, seq: " + messagesStorage.lastSeqValue + " " + updates.seq)
-							}
+						if (updates is TLRPC.TLUpdatesCombined) {
+							FileLog.d("need get diff TLRPC.TLUpdatesCombined, seq: " + messagesStorage.lastSeqValue + " " + updates.seqStart)
+						}
+						else {
+							FileLog.d("need get diff TLRPC.TLUpdates, seq: " + messagesStorage.lastSeqValue + " " + updates.seq)
 						}
 
 						if (gettingDifference || updatesStartWaitTimeSeq == 0L || abs(System.currentTimeMillis() - updatesStartWaitTimeSeq) <= 1500) {
@@ -15206,9 +14884,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								updatesStartWaitTimeSeq = System.currentTimeMillis()
 							}
 
-							if (BuildConfig.DEBUG) {
-								FileLog.d("add TL_updates/Combined to queue")
-							}
+							FileLog.d("add TLRPC.TLUpdates/Combined to queue")
 
 							updatesQueueSeq.add(updates)
 						}
@@ -15219,10 +14895,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			is TL_updatesTooLong -> {
-				if (BuildConfig.DEBUG) {
-					FileLog.d("need get diff TL_updatesTooLong")
-				}
+			is TLRPC.TLUpdatesTooLong -> {
+				FileLog.d("need get diff TLRPC.TLUpdatesTooLong")
 
 				needGetDiff = true
 			}
@@ -15232,9 +14906,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 
 			is UserActionUpdatesPts -> {
-				if (updates.chat_id != 0L) {
-					channelsPts.put(updates.chat_id, updates.pts)
-					messagesStorage.saveChannelPts(updates.chat_id, updates.pts)
+				if (updates.chatId != 0L) {
+					channelsPts.put(updates.chatId, updates.pts)
+					messagesStorage.saveChannelPts(updates.chatId, updates.pts)
 				}
 				else {
 					messagesStorage.lastPtsValue = updates.pts
@@ -15242,7 +14916,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		secretChatHelper.processPendingEncMessages()
+		// MARK: uncomment to enable secret chats
+		// secretChatHelper.processPendingEncMessages()
 
 		if (!fromQueue) {
 			for (a in 0 until updatesQueueChannels.size()) {
@@ -15267,8 +14942,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		if (needReceivedQueue) {
-			val req = TL_messages_receivedQueue()
-			req.max_qts = messagesStorage.lastQtsValue
+			val req = TLRPC.TLMessagesReceivedQueue()
+			req.maxQts = messagesStorage.lastQtsValue
 
 			connectionsManager.sendRequest(req)
 		}
@@ -15282,7 +14957,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		messagesStorage.saveDiffParams(messagesStorage.lastSeqValue, messagesStorage.lastPtsValue, messagesStorage.lastDateValue, messagesStorage.lastQtsValue)
 	}
 
-	private fun applyFoldersUpdates(folderUpdates: List<TL_updateFolderPeers>?): Boolean {
+	private fun applyFoldersUpdates(folderUpdates: List<TLRPC.TLUpdateFolderPeers>?): Boolean {
 		if (folderUpdates == null) {
 			return false
 		}
@@ -15290,22 +14965,22 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		var updated = false
 
 		for (update in folderUpdates) {
-			for (folderPeer in update.folder_peers) {
+			for (folderPeer in update.folderPeers) {
 				val dialogId = DialogObject.getPeerDialogId(folderPeer.peer)
 				val dialog = dialogs_dict[dialogId] ?: continue
 
-				if (dialog.folder_id != folderPeer.folder_id) {
+				if (dialog.folderId != folderPeer.folderId) {
 					dialog.pinned = false
 					dialog.pinnedNum = 0
-					dialog.folder_id = folderPeer.folder_id
+					dialog.folderId = folderPeer.folderId
 
-					ensureFolderDialogExists(folderPeer.folder_id, null)
+					ensureFolderDialogExists(folderPeer.folderId, null)
 				}
 			}
 
 			updated = true
 
-			messagesStorage.setDialogsFolderId(update.folder_peers, null, 0, 0)
+			messagesStorage.setDialogsFolderId(update.folderPeers, null, 0, 0)
 		}
 
 		return updated
@@ -15335,7 +15010,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val editingMessages = LongSparseArray<ArrayList<MessageObject>>()
 		val channelViews = LongSparseArray<SparseIntArray>()
 		val channelForwards = LongSparseArray<SparseIntArray>()
-		val channelReplies = LongSparseArray<SparseArray<MessageReplies>>()
+		val channelReplies = LongSparseArray<SparseArray<TLMessageReplies>>()
 		val markAsReadMessagesInbox = LongSparseIntArray()
 		val stillUnreadMessagesCount = LongSparseIntArray()
 		val markAsReadMessagesOutbox = LongSparseIntArray()
@@ -15348,8 +15023,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val clearHistoryMessages = LongSparseIntArray()
 		val chatInfoToUpdate = mutableListOf<ChatParticipants>()
 		val updatesOnMainThread = mutableListOf<Update>()
-		val folderUpdates = mutableListOf<TL_updateFolderPeers>()
-		val tasks = mutableListOf<TL_updateEncryptedMessagesRead>()
+		val folderUpdates = mutableListOf<TLRPC.TLUpdateFolderPeers>()
+		val tasks = mutableListOf<TLRPC.TLUpdateEncryptedMessagesRead>()
 		val contactsIds = mutableListOf<Long>()
 		val messageThumbs = mutableListOf<MessageThumb>()
 
@@ -15389,35 +15064,31 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val clientUserId = userConfig.getClientUserId()
 
 		for (baseUpdate in updates) {
-			// val baseUpdate = updates[c]
-
-			if (BuildConfig.DEBUG) {
-				FileLog.d("process update $baseUpdate")
-			}
+			FileLog.d("process update $baseUpdate")
 
 			when (baseUpdate) {
-				is TL_updateNewMessage, is TL_updateNewChannelMessage, is TL_updateNewScheduledMessage -> {
-					var message: Message
+				is TLRPC.TLUpdateNewMessage, is TLRPC.TLUpdateNewChannelMessage, is TLRPC.TLUpdateNewScheduledMessage -> {
+					var message: Message?
 
-					if (baseUpdate is TL_updateNewMessage) {
+					if (baseUpdate is TLRPC.TLUpdateNewMessage) {
 						message = baseUpdate.message
 					}
-					else if (baseUpdate is TL_updateNewScheduledMessage) {
+					else if (baseUpdate is TLRPC.TLUpdateNewScheduledMessage) {
 						message = baseUpdate.message
 					}
 					else {
-						message = (baseUpdate as TL_updateNewChannelMessage).message
+						message = (baseUpdate as? TLRPC.TLUpdateNewChannelMessage)?.message
 
-						if (BuildConfig.DEBUG) {
-							FileLog.d(baseUpdate.toString() + " channelId = " + message.peer_id?.channel_id)
-						}
+						if (message != null) {
+							FileLog.d(baseUpdate.toString() + " channelId = " + message.peerId?.channelId)
 
-						if (!message.out && message.from_id is TL_peerUser && message.from_id?.user_id == userConfig.getClientUserId()) {
-							message.out = true
+							if (!message.out && message.fromId is TLRPC.TLPeerUser && message.fromId?.userId == userConfig.getClientUserId()) {
+								message.out = true
+							}
 						}
 					}
 
-					if (message is TL_messageEmpty) {
+					if (message == null || message is TLRPC.TLMessageEmpty) {
 						continue
 					}
 
@@ -15429,14 +15100,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					var chatId: Long = 0
 					var userId: Long = 0
 
-					if (message.peer_id!!.channel_id != 0L) {
-						chatId = message.peer_id!!.channel_id
+					if (message.peerId!!.channelId != 0L) {
+						chatId = message.peerId!!.channelId
 					}
-					else if (message.peer_id!!.chat_id != 0L) {
-						chatId = message.peer_id!!.chat_id
+					else if (message.peerId!!.chatId != 0L) {
+						chatId = message.peerId!!.chatId
 					}
-					else if (message.peer_id!!.user_id != 0L) {
-						userId = message.peer_id!!.user_id
+					else if (message.peerId!!.userId != 0L) {
+						userId = message.peerId!!.userId
 					}
 
 					if (chatId != 0L) {
@@ -15455,45 +15126,42 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					if (!fromGetDifference) {
 						if (chatId != 0L) {
 							if (chat == null) {
-								if (BuildConfig.DEBUG) {
-									FileLog.d("not found chat $chatId")
-								}
-
+								FileLog.d("not found chat $chatId")
 								return false
 							}
 						}
 
-						val count = 3 + message.entities.size
+						val count = 3 + (message.entities?.size ?: 0)
 
 						for (a in 0 until count) {
 							var allowMin = false
 
 							if (a != 0) {
 								if (a == 1) {
-									userId = if (message.from_id is TL_peerUser) message.from_id!!.user_id else 0
+									userId = message.fromId?.userId ?: 0
 
 									if (message.post) {
 										allowMin = true
 									}
 								}
 								else if (a == 2) {
-									userId = if (message.fwd_from != null && message.fwd_from!!.from_id is TL_peerUser) message.fwd_from!!.from_id.user_id else 0
+									userId = (message.fwdFrom?.fromId as? TLRPC.TLPeerUser)?.userId ?: 0
 								}
 								else {
-									val entity = message.entities[a - 3]
-									userId = if (entity is TL_messageEntityMentionName) entity.userId else 0
+									val entity = message.entities?.getOrNull(a - 3)
+									userId = (entity as? TLRPC.TLMessageEntityMentionName)?.userId ?: 0
 								}
 							}
 
 							if (userId > 0) {
-								var user = usersDict[userId]
+								var user = usersDict[userId] as? TLUser
 
 								if (user == null || !allowMin && user.min) {
-									user = getUser(userId)
+									user = getUser(userId) as? TLUser
 								}
 
 								if (user == null || !allowMin && user.min) {
-									user = messagesStorage.getUserSync(userId)
+									user = messagesStorage.getUserSync(userId) as? TLUser
 
 									if (user != null && !allowMin && user.min) {
 										user = null
@@ -15503,10 +15171,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 
 								if (user == null) {
-									if (BuildConfig.DEBUG) {
-										FileLog.d("not found user $userId")
-									}
-
+									FileLog.d("not found user $userId")
 									return false
 								}
 
@@ -15520,14 +15185,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					val messageAction = message.action
 
-					if (messageAction is TL_messageActionChatDeleteUser) {
-						val user = usersDict[messageAction.user_id]
+					if (messageAction is TLRPC.TLMessageActionChatDeleteUser) {
+						val user = usersDict[messageAction.userId] as? TLUser
 
 						if (user != null && user.bot) {
-							message.reply_markup = TL_replyKeyboardHide()
+							message.replyMarkup = TLRPC.TLReplyKeyboardHide()
 							message.flags = message.flags or 64
 						}
-						else if (message.from_id is TL_peerUser && message.from_id?.user_id == clientUserId && messageAction.user_id == clientUserId) {
+						else if (message.fromId is TLRPC.TLPeerUser && message.fromId?.userId == clientUserId && messageAction.userId == clientUserId) {
 							continue
 						}
 					}
@@ -15536,30 +15201,30 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					MessageObject.getDialogId(message)
 
-					if (baseUpdate is TL_updateNewChannelMessage && message.reply_to != null && message.action !is TL_messageActionPinMessage) {
-						var replies = channelReplies[message.dialog_id]
+					if (baseUpdate is TLRPC.TLUpdateNewChannelMessage && message.replyTo != null && message.action !is TLRPC.TLMessageActionPinMessage) {
+						var replies = channelReplies[message.dialogId]
 
 						if (replies == null) {
 							replies = SparseArray()
-							channelReplies.put(message.dialog_id, replies)
+							channelReplies.put(message.dialogId, replies)
 						}
 
-						val id = if (message.reply_to!!.reply_to_top_id != 0) message.reply_to!!.reply_to_top_id else message.reply_to!!.reply_to_msg_id
+						val id = if (message.replyTo!!.replyToTopId != 0) message.replyTo!!.replyToTopId else message.replyTo!!.replyToMsgId
 						var messageReplies = replies[id]
 
 						if (messageReplies == null) {
-							messageReplies = TL_messageReplies()
+							messageReplies = TLMessageReplies()
 							replies.put(id, messageReplies)
 						}
 
-						if (message.from_id != null) {
-							messageReplies.recent_repliers.add(0, message.from_id)
+						message.fromId?.let {
+							messageReplies.recentRepliers.add(0, it)
 						}
 
 						messageReplies.replies++
 					}
 
-					if (createdDialogIds.contains(message.dialog_id) && message.realGroupId == 0L) {
+					if (createdDialogIds.contains(message.dialogId) && message.groupedId == 0L) {
 						val messageThumb = ImageLoader.generateMessageThumb(message)
 
 						if (messageThumb != null) {
@@ -15567,23 +15232,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 
-					if (baseUpdate is TL_updateNewScheduledMessage) {
+					if (baseUpdate is TLRPC.TLUpdateNewScheduledMessage) {
 						if (scheduledMessagesArr == null) {
 							scheduledMessagesArr = ArrayList()
 						}
 
 						scheduledMessagesArr.add(message)
 
-						val isDialogCreated = createdScheduledDialogIds.contains(message.dialog_id)
+						val isDialogCreated = createdScheduledDialogIds.contains(message.dialogId)
 
 						val obj = MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated)
 						obj.scheduled = true
 
-						var arr = scheduledMessages[message.dialog_id]
+						var arr = scheduledMessages[message.dialogId]
 
 						if (arr == null) {
 							arr = ArrayList()
-							scheduledMessages.put(message.dialog_id, arr)
+							scheduledMessages.put(message.dialogId, arr)
 						}
 
 						arr.add(obj)
@@ -15596,25 +15261,25 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						messagesArr.add(message)
 
 						val readMax = if (message.out) dialogs_read_outbox_max else dialogs_read_inbox_max
-						var value = readMax[message.dialog_id]
+						var value = readMax[message.dialogId]
 
 						if (value == null) {
-							value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-							readMax[message.dialog_id] = value
+							value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+							readMax[message.dialogId] = value
 						}
 
-						message.unread = !(value >= message.id || (chat != null && ChatObject.isNotInChat(chat)) || message.action is TL_messageActionChatMigrateTo || message.action is TL_messageActionChannelCreate)
+						message.unread = !(value >= message.id || (chat != null && ChatObject.isNotInChat(chat)) || message.action is TLRPC.TLMessageActionChatMigrateTo || message.action is TLRPC.TLMessageActionChannelCreate)
 
-						if (message.dialog_id == clientUserId) {
-							if (!message.from_scheduled) {
+						if (message.dialogId == clientUserId) {
+							if (!message.fromScheduled) {
 								message.unread = false
 							}
 
-							message.media_unread = false
+							message.mediaUnread = false
 							message.out = true
 						}
 
-						val isDialogCreated = createdDialogIds.contains(message.dialog_id)
+						val isDialogCreated = createdDialogIds.contains(message.dialogId)
 						val obj = MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated)
 
 						if (obj.type == 11) {
@@ -15624,16 +15289,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_CHAT_NAME
 						}
 
-						var arr = messages[message.dialog_id]
+						var arr = messages[message.dialogId]
 
 						if (arr == null) {
 							arr = ArrayList()
-							messages.put(message.dialog_id, arr)
+							messages.put(message.dialogId, arr)
 						}
 
 						arr.add(obj)
 
-						if ((!obj.isOut || obj.messageOwner?.from_scheduled == true) && obj.isUnread && (chat == null || !ChatObject.isNotInChat(chat) && !chat.min)) {
+						if ((!obj.isOut || obj.messageOwner?.fromScheduled == true) && obj.isUnread && (chat == null || !ChatObject.isNotInChat(chat) && !chat.min)) {
 							if (pushMessages == null) {
 								pushMessages = ArrayList()
 							}
@@ -15643,7 +15308,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				is TL_updateReadMessagesContents -> {
+				is TLRPC.TLUpdateReadMessagesContents -> {
 					var ids = markContentAsReadMessages[0]
 
 					if (ids == null) {
@@ -15654,8 +15319,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					ids.addAll(baseUpdate.messages)
 				}
 
-				is TL_updateChannelReadMessagesContents -> {
-					val dialogId = -baseUpdate.channel_id
+				is TLRPC.TLUpdateChannelReadMessagesContents -> {
+					val dialogId = -baseUpdate.channelId
 					var ids = markContentAsReadMessages[dialogId]
 
 					if (ids == null) {
@@ -15666,14 +15331,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					ids.addAll(baseUpdate.messages)
 				}
 
-				is TL_updateReadHistoryInbox -> {
-					val dialogId = if (baseUpdate.peer.chat_id != 0L) {
-						markAsReadMessagesInbox.put(-baseUpdate.peer.chat_id, baseUpdate.max_id)
-						-baseUpdate.peer.chat_id
+				is TLRPC.TLUpdateReadHistoryInbox -> {
+					val dialogId = if (baseUpdate.peer.chatId != 0L) {
+						markAsReadMessagesInbox.put(-baseUpdate.peer.chatId, baseUpdate.maxId)
+						-baseUpdate.peer.chatId
 					}
 					else {
-						markAsReadMessagesInbox.put(baseUpdate.peer.user_id, baseUpdate.max_id)
-						baseUpdate.peer.user_id
+						markAsReadMessagesInbox.put(baseUpdate.peer.userId, baseUpdate.maxId)
+						baseUpdate.peer.userId
 					}
 
 					var value = dialogs_read_inbox_max[dialogId]
@@ -15682,24 +15347,24 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = messagesStorage.getDialogReadMax(false, dialogId)
 					}
 
-					dialogs_read_inbox_max[dialogId] = max(value, baseUpdate.max_id)
+					dialogs_read_inbox_max[dialogId] = max(value, baseUpdate.maxId)
 				}
 
-				is TL_updateReadHistoryOutbox -> {
+				is TLRPC.TLUpdateReadHistoryOutbox -> {
 					val dialogId: Long
 
-					if (baseUpdate.peer.chat_id != 0L) {
-						markAsReadMessagesOutbox.put(-baseUpdate.peer.chat_id, baseUpdate.max_id)
-						dialogId = -baseUpdate.peer.chat_id
+					if (baseUpdate.peer.chatId != 0L) {
+						markAsReadMessagesOutbox.put(-baseUpdate.peer.chatId, baseUpdate.maxId)
+						dialogId = -baseUpdate.peer.chatId
 					}
 					else {
-						markAsReadMessagesOutbox.put(baseUpdate.peer.user_id, baseUpdate.max_id)
-						dialogId = baseUpdate.peer.user_id
+						markAsReadMessagesOutbox.put(baseUpdate.peer.userId, baseUpdate.maxId)
+						dialogId = baseUpdate.peer.userId
 
-						val user = getUser(baseUpdate.peer.user_id)
+						val status = (getUser(baseUpdate.peer.userId) as? TLUser)?.status
 
-						if (user?.status != null && user.status!!.expires <= 0 && abs(connectionsManager.currentTime - date) < 30) {
-							onlinePrivacy[baseUpdate.peer.user_id] = date
+						if (status != null && status.expires <= 0 && abs(connectionsManager.currentTime - date) < 30) {
+							onlinePrivacy[baseUpdate.peer.userId] = date
 							interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_STATUS
 						}
 					}
@@ -15710,10 +15375,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = messagesStorage.getDialogReadMax(true, dialogId)
 					}
 
-					dialogs_read_outbox_max[dialogId] = max(value, baseUpdate.max_id)
+					dialogs_read_outbox_max[dialogId] = max(value, baseUpdate.maxId)
 				}
 
-				is TL_updateDeleteMessages -> {
+				is TLRPC.TLUpdateDeleteMessages -> {
 					var arrayList = deletedMessages[0]
 
 					if (arrayList == null) {
@@ -15724,7 +15389,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					arrayList.addAll(baseUpdate.messages)
 				}
 
-				is TL_updateDeleteScheduledMessages -> {
+				is TLRPC.TLUpdateDeleteScheduledMessages -> {
 					val id = MessageObject.getPeerId(baseUpdate.peer)
 					var arrayList = scheduledDeletedMessages[MessageObject.getPeerId(baseUpdate.peer)]
 
@@ -15736,60 +15401,60 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					arrayList.addAll(baseUpdate.messages)
 				}
 
-				is TL_updateUserTyping, is TL_updateChatUserTyping, is TL_updateChannelUserTyping -> {
+				is TLRPC.TLUpdateUserTyping, is TLRPC.TLUpdateChatUserTyping, is TLRPC.TLUpdateChannelUserTyping -> {
 					val userId: Long
 					val chatId: Long
 					val threadId: Int
-					val action: SendMessageAction
+					val action: TLRPC.SendMessageAction?
 
-					if (baseUpdate is TL_updateChannelUserTyping) {
-						userId = if (baseUpdate.from_id.user_id != 0L) {
-							baseUpdate.from_id.user_id
+					if (baseUpdate is TLRPC.TLUpdateChannelUserTyping) {
+						userId = if (baseUpdate.fromId.userId != 0L) {
+							baseUpdate.fromId.userId
 						}
-						else if (baseUpdate.from_id.channel_id != 0L) {
-							-baseUpdate.from_id.channel_id
+						else if (baseUpdate.fromId.channelId != 0L) {
+							-baseUpdate.fromId.channelId
 						}
 						else {
-							-baseUpdate.from_id.chat_id
+							-baseUpdate.fromId.chatId
 						}
 
-						chatId = baseUpdate.channel_id
+						chatId = baseUpdate.channelId
 						action = baseUpdate.action
-						threadId = baseUpdate.top_msg_id
+						threadId = baseUpdate.topMsgId
 					}
-					else if (baseUpdate is TL_updateUserTyping) {
-						userId = baseUpdate.user_id
+					else if (baseUpdate is TLRPC.TLUpdateUserTyping) {
+						userId = baseUpdate.userId
 						action = baseUpdate.action
 						chatId = 0
 						threadId = 0
 
-						if (baseUpdate.action is TL_sendMessageEmojiInteraction) {
+						if (baseUpdate.action is TLRPC.TLSendMessageEmojiInteraction) {
 							AndroidUtilities.runOnUIThread {
-								notificationCenter.postNotificationName(NotificationCenter.onEmojiInteractionsReceived, baseUpdate.user_id, baseUpdate.action)
+								notificationCenter.postNotificationName(NotificationCenter.onEmojiInteractionsReceived, baseUpdate.userId, baseUpdate.action)
 							}
 
 							continue
 						}
 					}
-					else if (baseUpdate is TL_updateChatUserTyping) {
-						chatId = baseUpdate.chat_id
+					else if (baseUpdate is TLRPC.TLUpdateChatUserTyping) {
+						chatId = baseUpdate.chatId
 
-						userId = if (baseUpdate.from_id.user_id != 0L) {
-							baseUpdate.from_id.user_id
+						userId = if (baseUpdate.fromId.userId != 0L) {
+							baseUpdate.fromId.userId
 						}
-						else if (baseUpdate.from_id.channel_id != 0L) {
-							-baseUpdate.from_id.channel_id
+						else if (baseUpdate.fromId.channelId != 0L) {
+							-baseUpdate.fromId.channelId
 						}
 						else {
-							-baseUpdate.from_id.chat_id
+							-baseUpdate.fromId.chatId
 						}
 
 						action = baseUpdate.action
 						threadId = 0
 
-						if (baseUpdate.action is TL_sendMessageEmojiInteraction) {
+						if (baseUpdate.action is TLRPC.TLSendMessageEmojiInteraction) {
 							AndroidUtilities.runOnUIThread {
-								notificationCenter.postNotificationName(NotificationCenter.onEmojiInteractionsReceived, -baseUpdate.chat_id, baseUpdate.action)
+								notificationCenter.postNotificationName(NotificationCenter.onEmojiInteractionsReceived, -baseUpdate.chatId, baseUpdate.action)
 							}
 
 							continue
@@ -15805,11 +15470,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						uid = userId
 					}
 
-					if (action is TL_sendMessageHistoryImportAction) {
+					if (action is TLRPC.TLSendMessageHistoryImportAction) {
 						importingActions.put(uid, action.progress)
 					}
 					else if (userId != userConfig.getClientUserId()) {
-						if (action is TL_speakingInGroupCallAction) {
+						if (action is TLRPC.TLSpeakingInGroupCallAction) {
 							if (chatId != 0L) {
 								var uids = groupSpeakingActions[chatId]
 
@@ -15825,7 +15490,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							var threads = printingUsers[uid]
 							var arr = threads?.get(threadId)
 
-							if (action is TL_sendMessageCancelAction) {
+							if (action is TLRPC.TLSendMessageCancelAction) {
 								if (arr != null) {
 									var a = 0
 									val size = arr.size
@@ -15870,7 +15535,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 										u.lastTime = currentTime
 
-										if (u.action?.javaClass != action.javaClass) {
+										if (u.action?.javaClass != action?.javaClass) {
 											printChanged = true
 										}
 
@@ -15899,62 +15564,65 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				is TL_updateChatParticipants -> {
+				is TLRPC.TLUpdateChatParticipants -> {
 					interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_CHAT_MEMBERS
-					chatInfoToUpdate.add(baseUpdate.participants)
+
+					baseUpdate.participants?.let {
+						chatInfoToUpdate.add(it)
+					}
 				}
 
-				is TL_updateUserStatus -> {
+				is TLRPC.TLUpdateUserStatus -> {
 					interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_STATUS
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateUserEmojiStatus -> {
+				is TLRPC.TLUpdateUserEmojiStatus -> {
 					interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_EMOJI_STATUS
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateUserName -> {
+				is TLRPC.TLUpdateUserName -> {
 					interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_NAME
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateUserPhoto -> {
+				is TLRPC.TLUpdateUserPhoto -> {
 					interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_AVATAR
-					messagesStorage.clearUserPhotos(baseUpdate.user_id)
+					messagesStorage.clearUserPhotos(baseUpdate.userId)
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateUserPhone -> {
+				is TLRPC.TLUpdateUserPhone -> {
 					interfaceUpdateMask = interfaceUpdateMask or UPDATE_MASK_PHONE
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updatePeerSettings -> {
-					if (baseUpdate.peer is TL_peerUser) {
-						val user = usersDict[baseUpdate.peer.user_id]
+				is TLRPC.TLUpdatePeerSettings -> {
+					if (baseUpdate.peer is TLRPC.TLPeerUser) {
+						val user = usersDict[baseUpdate.peer.userId]
 
 						if (user != null) {
-							if (user.contact) {
-								val idx = contactsIds.indexOf(-baseUpdate.peer.user_id)
+							if ((user as? TLUser)?.contact == true) {
+								val idx = contactsIds.indexOf(-baseUpdate.peer.userId)
 
 								if (idx != -1) {
 									contactsIds.removeAt(idx)
 								}
 
-								if (!contactsIds.contains(baseUpdate.peer.user_id)) {
-									contactsIds.add(baseUpdate.peer.user_id)
+								if (!contactsIds.contains(baseUpdate.peer.userId)) {
+									contactsIds.add(baseUpdate.peer.userId)
 								}
 							}
 							else {
-								val idx = contactsIds.indexOf(baseUpdate.peer.user_id)
+								val idx = contactsIds.indexOf(baseUpdate.peer.userId)
 
 								if (idx != -1) {
 									contactsIds.removeAt(idx)
 								}
 
-								if (!contactsIds.contains(baseUpdate.peer.user_id)) {
-									contactsIds.add(-baseUpdate.peer.user_id)
+								if (!contactsIds.contains(baseUpdate.peer.userId)) {
+									contactsIds.add(-baseUpdate.peer.userId)
 								}
 							}
 						}
@@ -15963,47 +15631,48 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateNewEncryptedMessage -> {
-					val decryptedMessages = secretChatHelper.decryptMessage(baseUpdate.message)
-
-					if (decryptedMessages != null && decryptedMessages.isNotEmpty()) {
-						val cid = baseUpdate.message.chat_id
-						val uid = DialogObject.makeEncryptedDialogId(cid.toLong())
-						var arr = messages[uid]
-
-						if (arr == null) {
-							arr = ArrayList()
-							messages.put(uid, arr)
-						}
-
-						for (message in decryptedMessages) {
-							ImageLoader.saveMessageThumbs(message)
-
-							if (messagesArr == null) {
-								messagesArr = ArrayList()
-							}
-
-							messagesArr.add(message)
-
-							val isDialogCreated = createdDialogIds.contains(uid)
-							val obj = MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated)
-
-							arr.add(obj)
-
-							if (pushMessages == null) {
-								pushMessages = ArrayList()
-							}
-
-							pushMessages.add(obj)
-						}
-					}
+				is TLRPC.TLUpdateNewEncryptedMessage -> {
+					// MARK: uncomment to enable secret chats
+//					val decryptedMessages = secretChatHelper.decryptMessage(baseUpdate.message)
+//
+//					if (decryptedMessages != null && decryptedMessages.isNotEmpty()) {
+//						val cid = baseUpdate.message.chatId
+//						val uid = DialogObject.makeEncryptedDialogId(cid.toLong())
+//						var arr = messages[uid]
+//
+//						if (arr == null) {
+//							arr = ArrayList()
+//							messages.put(uid, arr)
+//						}
+//
+//						for (message in decryptedMessages) {
+//							ImageLoader.saveMessageThumbs(message)
+//
+//							if (messagesArr == null) {
+//								messagesArr = ArrayList()
+//							}
+//
+//							messagesArr.add(message)
+//
+//							val isDialogCreated = createdDialogIds.contains(uid)
+//							val obj = MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated)
+//
+//							arr.add(obj)
+//
+//							if (pushMessages == null) {
+//								pushMessages = ArrayList()
+//							}
+//
+//							pushMessages.add(obj)
+//						}
+//					}
 				}
 
-				is TL_updateEncryptedChatTyping -> {
-					val encryptedChat = getEncryptedChatDB(baseUpdate.chat_id, true)
+				is TLRPC.TLUpdateEncryptedChatTyping -> {
+					val encryptedChat = getEncryptedChatDB(baseUpdate.chatId, true)
 
 					if (encryptedChat != null) {
-						val uid = DialogObject.makeEncryptedDialogId(baseUpdate.chat_id.toLong())
+						val uid = DialogObject.makeEncryptedDialogId(baseUpdate.chatId.toLong())
 						var threads = printingUsers[uid]
 
 						if (threads == null) {
@@ -16021,19 +15690,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						var exist = false
 
 						for (u in arr) {
-							if (u.userId == encryptedChat.user_id) {
+							if (u.userId == encryptedChat.userId) {
 								exist = true
 								u.lastTime = currentTime
-								u.action = TL_sendMessageTypingAction()
+								u.action = TLRPC.TLSendMessageTypingAction()
 								break
 							}
 						}
 
 						if (!exist) {
 							val newUser = PrintingUser()
-							newUser.userId = encryptedChat.user_id
+							newUser.userId = encryptedChat.userId
 							newUser.lastTime = currentTime
-							newUser.action = TL_sendMessageTypingAction()
+							newUser.action = TLRPC.TLSendMessageTypingAction()
 
 							arr.add(newUser)
 
@@ -16041,36 +15710,37 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 
 						if (abs(connectionsManager.currentTime - date) < 30) {
-							onlinePrivacy[encryptedChat.user_id] = date
+							onlinePrivacy[encryptedChat.userId] = date
 						}
 					}
 				}
 
-				is TL_updateEncryptedMessagesRead -> {
-					markAsReadEncrypted.put(baseUpdate.chat_id, baseUpdate.max_date)
+				is TLRPC.TLUpdateEncryptedMessagesRead -> {
+					markAsReadEncrypted.put(baseUpdate.chatId, baseUpdate.maxDate)
 					tasks.add(baseUpdate)
 				}
 
-				is TL_updateChatParticipantAdd -> {
-					messagesStorage.updateChatInfo(baseUpdate.chat_id, baseUpdate.user_id, 0, baseUpdate.inviter_id, baseUpdate.version)
+				is TLRPC.TLUpdateChatParticipantAdd -> {
+					messagesStorage.updateChatInfo(baseUpdate.chatId, baseUpdate.userId, 0, baseUpdate.inviterId, baseUpdate.version)
 				}
 
-				is TL_updateChatParticipantDelete -> {
-					messagesStorage.updateChatInfo(baseUpdate.chat_id, baseUpdate.user_id, 1, 0, baseUpdate.version)
+				is TLRPC.TLUpdateChatParticipantDelete -> {
+					messagesStorage.updateChatInfo(baseUpdate.chatId, baseUpdate.userId, 1, 0, baseUpdate.version)
 				}
 
-				is TL_updateDcOptions, is TL_updateConfig -> {
+				is TLRPC.TLUpdateDcOptions, is TLRPC.TLUpdateConfig -> {
 					connectionsManager.updateDcSettings()
 				}
 
-				is TL_updateEncryption -> {
-					secretChatHelper.processUpdateEncryption(baseUpdate, usersDict)
+				is TLRPC.TLUpdateEncryption -> {
+					// MARK: uncomment to enable secret chats
+					// secretChatHelper.processUpdateEncryption(baseUpdate, usersDict)
 				}
 
-				is TL_updatePeerBlocked -> {
+				is TLRPC.TLUpdatePeerBlocked -> {
 					messagesStorage.storageQueue.postRunnable {
 						AndroidUtilities.runOnUIThread {
-							val id = MessageObject.getPeerId(baseUpdate.peer_id)
+							val id = MessageObject.getPeerId(baseUpdate.peerId)
 
 							if (baseUpdate.blocked) {
 								if (blockedPeers.indexOfKey(id) < 0) {
@@ -16086,11 +15756,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				is TL_updateNotifySettings -> {
+				is TLRPC.TLUpdateNotifySettings -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateServiceNotification -> {
+				is TLRPC.TLUpdateServiceNotification -> {
 					if (baseUpdate.popup && !baseUpdate.message.isNullOrEmpty()) {
 						AndroidUtilities.runOnUIThread {
 							notificationCenter.postNotificationName(NotificationCenter.needShowAlert, AlertDialog.AlertReason.SERVICE_NOTIFICATION, baseUpdate.message, baseUpdate.type)
@@ -16098,37 +15768,41 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 
 					if (baseUpdate.flags and 2 != 0) {
-						val newMessage = TL_message()
+						val newMessage = TLRPC.TLMessage()
 						newMessage.id = userConfig.newMessageId
-						newMessage.local_id = newMessage.id
+						newMessage.localId = newMessage.id
 
 						userConfig.saveConfig(false)
 
 						newMessage.unread = true
-						newMessage.flags = MESSAGE_FLAG_HAS_FROM_ID
+						newMessage.flags = TLRPC.MESSAGE_FLAG_HAS_FROM_ID
 
-						if (baseUpdate.inbox_date != 0) {
-							newMessage.date = baseUpdate.inbox_date
+						if (baseUpdate.inboxDate != 0) {
+							newMessage.date = baseUpdate.inboxDate
 						}
 						else {
 							newMessage.date = (System.currentTimeMillis() / 1000).toInt()
 						}
 
-						newMessage.from_id = TL_peerUser()
-						newMessage.from_id?.user_id = 777000
-						newMessage.peer_id = TL_peerUser()
-						newMessage.peer_id?.user_id = userConfig.getClientUserId()
-						newMessage.dialog_id = 777000
+						newMessage.fromId = TLRPC.TLPeerUser().also {
+							it.userId = BuildConfig.NOTIFICATIONS_BOT_ID
+						}
+
+						newMessage.peerId = TLRPC.TLPeerUser().also {
+							it.userId = userConfig.getClientUserId()
+						}
+
+						newMessage.dialogId = BuildConfig.NOTIFICATIONS_BOT_ID
 
 						if (baseUpdate.media != null) {
 							newMessage.media = baseUpdate.media
-							newMessage.flags = newMessage.flags or MESSAGE_FLAG_HAS_MEDIA
+							newMessage.flags = newMessage.flags or TLRPC.MESSAGE_FLAG_HAS_MEDIA
 						}
 
 						newMessage.message = baseUpdate.message
 
-						if (baseUpdate.entities != null) {
-							newMessage.entities = baseUpdate.entities
+						if (baseUpdate.entities.isNotEmpty()) {
+							newMessage.entities.addAll(baseUpdate.entities)
 							newMessage.flags = newMessage.flags or 128
 						}
 
@@ -16138,13 +15812,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 						messagesArr.add(newMessage)
 
-						val isDialogCreated = createdDialogIds.contains(newMessage.dialog_id)
+						val isDialogCreated = createdDialogIds.contains(newMessage.dialogId)
 						val obj = MessageObject(currentAccount, newMessage, usersDict, chatsDict, isDialogCreated, isDialogCreated)
-						var arr = messages[newMessage.dialog_id]
+						var arr = messages[newMessage.dialogId]
 
 						if (arr == null) {
 							arr = ArrayList()
-							messages.put(newMessage.dialog_id, arr)
+							messages.put(newMessage.dialogId, arr)
 						}
 
 						arr.add(obj)
@@ -16157,49 +15831,51 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				is TL_updateDialogPinned -> {
+				is TLRPC.TLUpdateDialogPinned -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updatePinnedDialogs -> {
+				is TLRPC.TLUpdatePinnedDialogs -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateFolderPeers -> {
+				is TLRPC.TLUpdateFolderPeers -> {
 					folderUpdates.add(baseUpdate)
 				}
 
-				is TL_updatePrivacy -> {
+				is TLRPC.TLUpdatePrivacy -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateWebPage -> {
-					webPages.put(baseUpdate.webpage.id, baseUpdate.webpage)
-				}
-
-				is TL_updateChannelWebPage -> {
-					webPages.put(baseUpdate.webpage.id, baseUpdate.webpage)
-				}
-
-				is TL_updateChannelTooLong -> {
-					if (BuildConfig.DEBUG) {
-						FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channel_id)
+				is TLRPC.TLUpdateWebPage -> {
+					baseUpdate.webpage?.let {
+						webPages.put(it.id, it)
 					}
+				}
 
-					var channelPts = channelsPts[baseUpdate.channel_id, 0]
+				is TLRPC.TLUpdateChannelWebPage -> {
+					baseUpdate.webpage?.let {
+						webPages.put(it.id, it)
+					}
+				}
+
+				is TLRPC.TLUpdateChannelTooLong -> {
+					FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channelId)
+
+					var channelPts = channelsPts[baseUpdate.channelId, 0]
 
 					if (channelPts == 0) {
-						channelPts = messagesStorage.getChannelPtsSync(baseUpdate.channel_id)
+						channelPts = messagesStorage.getChannelPtsSync(baseUpdate.channelId)
 
 						if (channelPts == 0) {
-							var chat = chatsDict[baseUpdate.channel_id]
+							var chat = chatsDict[baseUpdate.channelId]
 
 							if (chat == null || chat.min) {
-								chat = getChat(baseUpdate.channel_id)
+								chat = getChat(baseUpdate.channelId)
 							}
 
 							if (chat == null || chat.min) {
-								chat = messagesStorage.getChatSync(baseUpdate.channel_id)
+								chat = messagesStorage.getChatSync(baseUpdate.channelId)
 								putChat(chat, true)
 							}
 
@@ -16208,46 +15884,44 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 						else {
-							channelsPts.put(baseUpdate.channel_id, channelPts)
+							channelsPts.put(baseUpdate.channelId, channelPts)
 						}
 					}
 
 					if (channelPts != 0) {
 						if (baseUpdate.flags and 1 != 0) {
 							if (baseUpdate.pts > channelPts) {
-								getChannelDifference(baseUpdate.channel_id)
+								getChannelDifference(baseUpdate.channelId)
 							}
 						}
 						else {
-							getChannelDifference(baseUpdate.channel_id)
+							getChannelDifference(baseUpdate.channelId)
 						}
 					}
 				}
 
-				is TL_updateReadChannelInbox -> {
-					val dialogId = -baseUpdate.channel_id
+				is TLRPC.TLUpdateReadChannelInbox -> {
+					val dialogId = -baseUpdate.channelId
 					var value = dialogs_read_inbox_max[dialogId]
 
 					if (value == null) {
 						value = messagesStorage.getDialogReadMax(false, dialogId)
 					}
 
-					markAsReadMessagesInbox.put(dialogId, baseUpdate.max_id)
-					stillUnreadMessagesCount.put(dialogId, baseUpdate.still_unread_count)
+					markAsReadMessagesInbox.put(dialogId, baseUpdate.maxId)
+					stillUnreadMessagesCount.put(dialogId, baseUpdate.stillUnreadCount)
 
-					dialogs_read_inbox_max[dialogId] = max(value, baseUpdate.max_id)
+					dialogs_read_inbox_max[dialogId] = max(value, baseUpdate.maxId)
 
-					FileLog.d("TL_updateReadChannelInbox " + dialogId + "  new unread " + baseUpdate.still_unread_count + " from get diff" + fromGetDifference)
+					FileLog.d("TLRPC.TLUpdateReadChannelInbox " + dialogId + "  new unread " + baseUpdate.stillUnreadCount + " from get diff" + fromGetDifference)
 				}
 
-				is TL_updateReadChannelOutbox -> {
-					if (BuildConfig.DEBUG) {
-						FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channel_id)
-					}
+				is TLRPC.TLUpdateReadChannelOutbox -> {
+					FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channelId)
 
-					val dialogId = -baseUpdate.channel_id
+					val dialogId = -baseUpdate.channelId
 
-					markAsReadMessagesOutbox.put(dialogId, baseUpdate.max_id)
+					markAsReadMessagesOutbox.put(dialogId, baseUpdate.maxId)
 
 					var value = dialogs_read_outbox_max[dialogId]
 
@@ -16255,15 +15929,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						value = messagesStorage.getDialogReadMax(true, dialogId)
 					}
 
-					dialogs_read_outbox_max[dialogId] = max(value, baseUpdate.max_id)
+					dialogs_read_outbox_max[dialogId] = max(value, baseUpdate.maxId)
 				}
 
-				is TL_updateDeleteChannelMessages -> {
-					if (BuildConfig.DEBUG) {
-						FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channel_id)
-					}
+				is TLRPC.TLUpdateDeleteChannelMessages -> {
+					FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channelId)
 
-					val dialogId = -baseUpdate.channel_id
+					val dialogId = -baseUpdate.channelId
 					var arrayList = deletedMessages[dialogId]
 
 					if (arrayList == null) {
@@ -16274,24 +15946,20 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					arrayList.addAll(baseUpdate.messages)
 				}
 
-				is TL_updateChannel -> {
-					if (BuildConfig.DEBUG) {
-						FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channel_id)
-					}
+				is TLRPC.TLUpdateChannel -> {
+					FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channelId)
 
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateChat -> {
+				is TLRPC.TLUpdateChat -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateChannelMessageViews -> {
-					if (BuildConfig.DEBUG) {
-						FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channel_id)
-					}
+				is TLRPC.TLUpdateChannelMessageViews -> {
+					FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channelId)
 
-					val dialogId = -baseUpdate.channel_id
+					val dialogId = -baseUpdate.channelId
 					var array = channelViews[dialogId]
 
 					if (array == null) {
@@ -16302,12 +15970,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					array.put(baseUpdate.id, baseUpdate.views)
 				}
 
-				is TL_updateChannelMessageForwards -> {
-					if (BuildConfig.DEBUG) {
-						FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channel_id)
-					}
+				is TLRPC.TLUpdateChannelMessageForwards -> {
+					FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channelId)
 
-					val dialogId = -baseUpdate.channel_id
+					val dialogId = -baseUpdate.channelId
 					var array = channelForwards[dialogId]
 
 					if (array == null) {
@@ -16318,100 +15984,109 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					array.put(baseUpdate.id, baseUpdate.forwards)
 				}
 
-				is TL_updateChatParticipantAdmin -> {
-					messagesStorage.updateChatInfo(baseUpdate.chat_id, baseUpdate.user_id, 2, (if (baseUpdate.is_admin) 1 else 0).toLong(), baseUpdate.version)
+				is TLRPC.TLUpdateChatParticipantAdmin -> {
+					messagesStorage.updateChatInfo(baseUpdate.chatId, baseUpdate.userId, 2, (if (baseUpdate.isAdmin) 1 else 0).toLong(), baseUpdate.version)
 				}
 
-				is TL_updateChatDefaultBannedRights -> {
-					val chatId = if (baseUpdate.peer.channel_id != 0L) {
-						baseUpdate.peer.channel_id
+				is TLRPC.TLUpdateChatDefaultBannedRights -> {
+					val chatId = if (baseUpdate.peer.channelId != 0L) {
+						baseUpdate.peer.channelId
 					}
 					else {
-						baseUpdate.peer.chat_id
+						baseUpdate.peer.chatId
 					}
 
-					messagesStorage.updateChatDefaultBannedRights(chatId, baseUpdate.default_banned_rights, baseUpdate.version)
+					messagesStorage.updateChatDefaultBannedRights(chatId, baseUpdate.defaultBannedRights, baseUpdate.version)
 
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateStickerSets -> {
+				is TLRPC.TLUpdateStickerSets -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateStickerSetsOrder -> {
+				is TLRPC.TLUpdateStickerSetsOrder -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateNewStickerSet -> {
+				is TLRPC.TLUpdateNewStickerSet -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateDraftMessage -> {
+				is TLRPC.TLUpdateDraftMessage -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateMoveStickerSetToTop -> {
+				is TLRPC.TLUpdateMoveStickerSetToTop -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateSavedGifs -> {
+				is TLRPC.TLUpdateSavedGifs -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateEditChannelMessage, is TL_updateEditMessage -> {
-					val message: Message
+				is TLRPC.TLUpdateEditChannelMessage, is TLRPC.TLUpdateEditMessage -> {
+					val message: Message?
 
-					if (baseUpdate is TL_updateEditChannelMessage) {
+					if (baseUpdate is TLRPC.TLUpdateEditChannelMessage) {
 						message = baseUpdate.message
 
-						var chat = chatsDict[message.peer_id!!.channel_id]
+						var chat = chatsDict[message?.peerId?.channelId]
 
 						if (chat == null) {
-							chat = getChat(message.peer_id!!.channel_id)
+							chat = getChat(message?.peerId?.channelId)
 						}
 
 						if (chat == null) {
-							chat = messagesStorage.getChatSync(message.peer_id!!.channel_id)
+							chat = messagesStorage.getChatSync(message?.peerId?.channelId)
 							putChat(chat, true)
 						}
 					}
 					else {
-						message = (baseUpdate as TL_updateEditMessage).message
+						message = (baseUpdate as? TLRPC.TLUpdateEditMessage)?.message
 
-						if (message.dialog_id == clientUserId) {
+						if (message?.dialogId == clientUserId) {
 							message.unread = false
-							message.media_unread = false
+							message.mediaUnread = false
 							message.out = true
 						}
 					}
 
-					if (!message.out && message.from_id is TL_peerUser && message.from_id?.user_id == clientUserId) {
+					if (message == null) {
+						continue
+					}
+
+					if (!message.out && message.fromId is TLRPC.TLPeerUser && message.fromId?.userId == clientUserId) {
 						message.out = true
 					}
 
 					if (!fromGetDifference) {
-						for (entity in message.entities) {
-							if (entity is TL_messageEntityMentionName) {
-								val userId = entity.userId
-								var user = usersDict[userId]
+						val entities = message.entities
 
-								if (user == null || user.min) {
-									user = getUser(userId)
-								}
+						if (entities != null) {
+							for (entity in entities) {
+								if (entity is TLRPC.TLMessageEntityMentionName) {
+									val userId = entity.userId
+									var user = usersDict[userId]
 
-								if (user == null || user.min) {
-									user = messagesStorage.getUserSync(userId)
-
-									if (user != null && user.min) {
-										user = null
+									if (user == null || (user as? TLUser)?.min == true) {
+										user = getUser(userId)
 									}
 
-									putUser(user, true)
-								}
+									if (user == null || (user as? TLUser)?.min == true) {
+										user = messagesStorage.getUserSync(userId)
 
-								if (user == null) {
-									return false
+										if (user != null && (user as? TLUser)?.min == true) {
+											user = null
+										}
+
+										putUser(user, true)
+									}
+
+									if (user == null) {
+										// return false
+										continue
+									}
 								}
 							}
 						}
@@ -16420,19 +16095,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					MessageObject.getDialogId(message)
 
 					val readMax = if (message.out) dialogs_read_outbox_max else dialogs_read_inbox_max
-					var value = readMax[message.dialog_id]
+					var value = readMax[message.dialogId]
 
 					if (value == null) {
-						value = messagesStorage.getDialogReadMax(message.out, message.dialog_id)
-						readMax[message.dialog_id] = value
+						value = messagesStorage.getDialogReadMax(message.out, message.dialogId)
+						readMax[message.dialogId] = value
 					}
 
 					message.unread = value < message.id
 
-					if (message.dialog_id == clientUserId) {
+					if (message.dialogId == clientUserId) {
 						message.out = true
 						message.unread = false
-						message.media_unread = false
+						message.mediaUnread = false
 					}
 
 					if (message.out && message.message == null) {
@@ -16442,110 +16117,108 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					ImageLoader.saveMessageThumbs(message)
 
-					val isDialogCreated = createdDialogIds.contains(message.dialog_id)
+					val isDialogCreated = createdDialogIds.contains(message.dialogId)
 					val obj = MessageObject(currentAccount, message, usersDict, chatsDict, isDialogCreated, isDialogCreated)
-					var arr = editingMessages[message.dialog_id]
+					var arr = editingMessages[message.dialogId]
 
 					if (arr == null) {
 						arr = ArrayList()
-						editingMessages.put(message.dialog_id, arr)
+						editingMessages.put(message.dialogId, arr)
 					}
 
 					arr.add(obj)
 				}
 
-				is TL_updatePinnedChannelMessages -> {
-					if (BuildConfig.DEBUG) {
-						FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channel_id)
-					}
+				is TLRPC.TLUpdatePinnedChannelMessages -> {
+					FileLog.d(baseUpdate.toString() + " channelId = " + baseUpdate.channelId)
 
-					messagesStorage.updatePinnedMessages(-baseUpdate.channel_id, baseUpdate.messages, baseUpdate.pinned, -1, 0, false, null)
+					messagesStorage.updatePinnedMessages(-baseUpdate.channelId, baseUpdate.messages, baseUpdate.pinned, -1, 0, false, null)
 				}
 
-				is TL_updatePinnedMessages -> {
+				is TLRPC.TLUpdatePinnedMessages -> {
 					messagesStorage.updatePinnedMessages(MessageObject.getPeerId(baseUpdate.peer), baseUpdate.messages, baseUpdate.pinned, -1, 0, false, null)
 				}
 
-				is TL_updateReadFeaturedStickers -> {
+				is TLRPC.TLUpdateReadFeaturedStickers -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateReadFeaturedEmojiStickers -> {
+				is TLRPC.TLUpdateReadFeaturedEmojiStickers -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updatePhoneCall -> {
+				is TLRPC.TLUpdatePhoneCall -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateGroupCallParticipants -> {
+				is TLRPC.TLUpdateGroupCallParticipants -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateGroupCall -> {
+				is TLRPC.TLUpdateGroupCall -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateGroupCallConnection -> {
+				is TLRPC.TLUpdateGroupCallConnection -> {
 					// unused
 				}
 
-				is TL_updateBotCommands -> {
+				is TLRPC.TLUpdateBotCommands -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updatePhoneCallSignalingData -> {
+				is TLRPC.TLUpdatePhoneCallSignalingData -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateLangPack -> {
+				is TLRPC.TLUpdateLangPack -> {
 					AndroidUtilities.runOnUIThread {
 						LocaleController.getInstance().saveRemoteLocaleStringsForCurrentLocale(baseUpdate.difference, currentAccount)
 					}
 				}
 
-				is TL_updateLangPackTooLong -> {
-					LocaleController.getInstance().reloadCurrentRemoteLocale(currentAccount, baseUpdate.lang_code, false)
+				is TLRPC.TLUpdateLangPackTooLong -> {
+					LocaleController.getInstance().reloadCurrentRemoteLocale(currentAccount, baseUpdate.langCode, false)
 				}
 
-				is TL_updateRecentReactions -> {
+				is TLRPC.TLUpdateRecentReactions -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateFavedStickers -> {
+				is TLRPC.TLUpdateFavedStickers -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateContactsReset -> {
+				is TLRPC.TLUpdateContactsReset -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateChannelAvailableMessages -> {
-					val dialogId = -baseUpdate.channel_id
+				is TLRPC.TLUpdateChannelAvailableMessages -> {
+					val dialogId = -baseUpdate.channelId
 					val currentValue = clearHistoryMessages[dialogId, 0]
 
-					if (currentValue == 0 || currentValue < baseUpdate.available_min_id) {
-						clearHistoryMessages.put(dialogId, baseUpdate.available_min_id)
+					if (currentValue == 0 || currentValue < baseUpdate.availableMinId) {
+						clearHistoryMessages.put(dialogId, baseUpdate.availableMinId)
 					}
 				}
 
-				is TL_updateDialogUnreadMark -> {
+				is TLRPC.TLUpdateDialogUnreadMark -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateMessagePoll -> {
-					val time = sendMessagesHelper.getVoteSendTime(baseUpdate.poll_id)
+				is TLRPC.TLUpdateMessagePoll -> {
+					val time = sendMessagesHelper.getVoteSendTime(baseUpdate.pollId)
 
 					if (abs(SystemClock.elapsedRealtime() - time) < 600) {
 						continue
 					}
 
-					messagesStorage.updateMessagePollResults(baseUpdate.poll_id, baseUpdate.poll, baseUpdate.results)
+					messagesStorage.updateMessagePollResults(baseUpdate.pollId, baseUpdate.poll, baseUpdate.results)
 
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateMessageReactions -> {
+				is TLRPC.TLUpdateMessageReactions -> {
 					val dialogId = MessageObject.getPeerId(baseUpdate.peer)
 
 					messagesStorage.updateMessageReactions(dialogId, baseUpdate.msgId, baseUpdate.reactions)
@@ -16559,12 +16232,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateMessageExtendedMedia -> {
-					if (baseUpdate.extended_media is TL_messageExtendedMedia) {
-						val msg = messagesStorage.getMessage(DialogObject.getPeerDialogId(baseUpdate.peer), baseUpdate.msg_id.toLong())
+				is TLRPC.TLUpdateMessageExtendedMedia -> {
+					if (baseUpdate.extendedMedia is TLRPC.TLMessageExtendedMedia) {
+						val msg = messagesStorage.getMessage(DialogObject.getPeerDialogId(baseUpdate.peer), baseUpdate.msgId.toLong())
 
 						if (msg != null) {
-							msg.media?.extended_media = baseUpdate.extended_media
+							msg.media?.extendedMedia = baseUpdate.extendedMedia
 
 							if (messagesArr == null) {
 								messagesArr = ArrayList()
@@ -16577,77 +16250,77 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				is TL_updatePeerLocated -> {
+				is TLRPC.TLUpdatePeerLocated -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateTheme -> {
+				is TLRPC.TLUpdateTheme -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateGeoLiveViewed -> {
+				is TLRPC.TLUpdateGeoLiveViewed -> {
 					locationController.setNewLocationEndWatchTime()
 				}
 
-				is TL_updateDialogFilter -> {
+				is TLRPC.TLUpdateDialogFilter -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateDialogFilterOrder -> {
+				is TLRPC.TLUpdateDialogFilterOrder -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateDialogFilters -> {
+				is TLRPC.TLUpdateDialogFilters -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateRecentEmojiStatuses -> {
+				is TLRPC.TLUpdateRecentEmojiStatuses -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateWebViewResultSent -> {
+				is TLRPC.TLUpdateWebViewResultSent -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateAttachMenuBots -> {
+				is TLRPC.TLUpdateAttachMenuBots -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateBotMenuButton -> {
+				is TLRPC.TLUpdateBotMenuButton -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateReadChannelDiscussionInbox -> {
+				is TLRPC.TLUpdateReadChannelDiscussionInbox -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateReadChannelDiscussionOutbox -> {
+				is TLRPC.TLUpdateReadChannelDiscussionOutbox -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updatePeerHistoryTTL -> {
+				is TLRPC.TLUpdatePeerHistoryTTL -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updatePendingJoinRequests -> {
+				is TLRPC.TLUpdatePendingJoinRequests -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateSavedRingtones -> {
+				is TLRPC.TLUpdateSavedRingtones -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 
-				is TL_updateTranscribeAudio -> {
-					updatesOnMainThread.add(baseUpdate)
-				}
+//				is TLRPC.TLUpdateTranscribeAudio -> {
+//					updatesOnMainThread.add(baseUpdate)
+//				}
 
-				is TL_updateTranscribedAudio -> {
+				is TLRPC.TLUpdateTranscribedAudio -> {
 					updatesOnMainThread.add(baseUpdate)
 				}
 			}
 		}
 
-		if (!messages.isEmpty) {
+		if (!messages.isEmpty()) {
 			var a = 0
 			val size = messages.size()
 
@@ -16691,12 +16364,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			messagesStorage.putMessages(messagesArr, true, true, false, downloadController.autodownloadMask, false)
 		}
 
-		if (!editingMessages.isEmpty) {
+		if (!editingMessages.isEmpty()) {
 			var b = 0
 			val size = editingMessages.size()
 
 			while (b < size) {
-				val messagesRes = TL_messages_messages()
+				val messagesRes = TLRPC.TLMessagesMessages()
 				val messageObjects = editingMessages.valueAt(b)
 				var a = 0
 				val size2 = messageObjects.size
@@ -16718,13 +16391,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		if (!channelViews.isEmpty || !channelForwards.isEmpty || !channelReplies.isEmpty) {
+		if (!channelViews.isEmpty() || !channelForwards.isEmpty() || !channelReplies.isEmpty()) {
 			messagesStorage.putChannelViews(channelViews, channelForwards, channelReplies, true)
 		}
 
 		if (folderUpdates.isNotEmpty()) {
 			for (fu in folderUpdates) {
-				messagesStorage.setDialogsFolderId(fu.folder_peers, null, 0, 0)
+				messagesStorage.setDialogsFolderId(fu.folderPeers, null, 0, 0)
 			}
 		}
 
@@ -16736,101 +16409,95 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			if (updatesOnMainThread.isNotEmpty()) {
 				val dbUsers = mutableListOf<User>()
 				val dbUsersStatus = mutableListOf<User>()
-				var editor: SharedPreferences.Editor? = null
 
 				for (baseUpdate in updatesOnMainThread) {
 					when (baseUpdate) {
-						is TL_updatePrivacy -> {
+						is TLRPC.TLUpdatePrivacy -> {
 							when (baseUpdate.key) {
-								is TL_privacyKeyStatusTimestamp -> {
+								is TLRPC.TLPrivacyKeyStatusTimestamp -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_LAST_SEEN)
 								}
 
-								is TL_privacyKeyChatInvite -> {
+								is TLRPC.TLPrivacyKeyChatInvite -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_INVITE)
 								}
 
-								is TL_privacyKeyPhoneCall -> {
+								is TLRPC.TLPrivacyKeyPhoneCall -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_CALLS)
 								}
 
-								is TL_privacyKeyPhoneP2P -> {
+								is TLRPC.TLPrivacyKeyPhoneP2P -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_P2P)
 								}
 
-								is TL_privacyKeyProfilePhoto -> {
+								is TLRPC.TLPrivacyKeyProfilePhoto -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_PHOTO)
 								}
 
-								is TL_privacyKeyForwards -> {
+								is TLRPC.TLPrivacyKeyForwards -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_FORWARDS)
 								}
 
-								is TL_privacyKeyPhoneNumber -> {
+								is TLRPC.TLPrivacyKeyPhoneNumber -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_PHONE)
 								}
 
-								is TL_privacyKeyAddedByPhone -> {
+								is TLRPC.TLPrivacyKeyAddedByPhone -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_ADDED_BY_PHONE)
 								}
 
-								is TL_privacyKeyVoiceMessages -> {
+								is TLRPC.TLPrivacyKeyVoiceMessages -> {
 									contactsController.setPrivacyRules(baseUpdate.rules, ContactsController.PRIVACY_RULES_TYPE_VOICE_MESSAGES)
 								}
 							}
 						}
 
-						is TL_updateUserStatus -> {
-							val currentUser = getUser(baseUpdate.user_id)
-
-							when (baseUpdate.status) {
-								is TL_userStatusRecently -> baseUpdate.status.expires = -100
-								is TL_userStatusLastWeek -> baseUpdate.status.expires = -101
-								is TL_userStatusLastMonth -> baseUpdate.status.expires = -102
-							}
+						is TLRPC.TLUpdateUserStatus -> {
+							val currentUser = getUser(baseUpdate.userId) as? TLUser
+							val expires = baseUpdate.status?.expires ?: 0
 
 							if (currentUser != null) {
-								currentUser.id = baseUpdate.user_id
+								currentUser.id = baseUpdate.userId
 								currentUser.status = baseUpdate.status
 							}
 
-							val toDbUser: User = TL_user()
-							toDbUser.id = baseUpdate.user_id
+							val toDbUser = TLUser()
+							toDbUser.id = baseUpdate.userId
 							toDbUser.status = baseUpdate.status
 
 							dbUsersStatus.add(toDbUser)
 
-							if (baseUpdate.user_id == userConfig.getClientUserId()) {
-								notificationsController.setLastOnlineFromOtherDevice(baseUpdate.status.expires)
+							if (baseUpdate.userId == userConfig.getClientUserId()) {
+								notificationsController.setLastOnlineFromOtherDevice(expires)
 							}
 						}
 
-						is TL_updateUserEmojiStatus -> {
-							val currentUser = getUser(baseUpdate.user_id)
+						is TLRPC.TLUpdateUserEmojiStatus -> {
+							val currentUser = getUser(baseUpdate.userId) as? TLUser
 
 							if (currentUser != null) {
-								currentUser.id = baseUpdate.user_id
-								currentUser.emoji_status = baseUpdate.emoji_status
+								currentUser.id = baseUpdate.userId
+								currentUser.emojiStatus = baseUpdate.emojiStatus
 
 								if (UserObject.isUserSelf(currentUser)) {
 									notificationCenter.postNotificationName(NotificationCenter.userEmojiStatusUpdated, currentUser)
 								}
 							}
 
-							val toDbUser: User = TL_user()
-							toDbUser.id = baseUpdate.user_id
-							toDbUser.emoji_status = baseUpdate.emoji_status
+							val toDbUser = TLUser()
+							toDbUser.id = baseUpdate.userId
+							toDbUser.emojiStatus = baseUpdate.emojiStatus
 
 							dbUsers.add(toDbUser)
 						}
 
-						is TL_updateUserName -> {
-							val currentUser = getUser(baseUpdate.user_id)
+						is TLRPC.TLUpdateUserName -> {
+							val currentUser = getUser(baseUpdate.userId)
 
 							if (currentUser != null) {
 								if (!UserObject.isContact(currentUser)) {
-									currentUser.first_name = baseUpdate.first_name
-									currentUser.last_name = baseUpdate.last_name
+									currentUser.firstName = baseUpdate.firstName
+									currentUser.lastName = baseUpdate.lastName
 								}
 
 								if (!currentUser.username.isNullOrEmpty()) {
@@ -16838,39 +16505,39 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 
 								if (!baseUpdate.username.isNullOrEmpty()) {
-									objectsByUsernames[baseUpdate.username] = currentUser
+									objectsByUsernames[baseUpdate.username!!] = currentUser
 								}
 
 								currentUser.username = baseUpdate.username
 							}
 
-							val toDbUser: User = TL_user()
-							toDbUser.id = baseUpdate.user_id
-							toDbUser.first_name = baseUpdate.first_name
-							toDbUser.last_name = baseUpdate.last_name
+							val toDbUser = TLUser()
+							toDbUser.id = baseUpdate.userId
+							toDbUser.firstName = baseUpdate.firstName
+							toDbUser.lastName = baseUpdate.lastName
 							toDbUser.username = baseUpdate.username
 
 							dbUsers.add(toDbUser)
 						}
 
-						is TL_updateDialogPinned -> {
-							val did = if (baseUpdate.peer is TL_dialogPeer) {
-								val dialogPeer = baseUpdate.peer as TL_dialogPeer
+						is TLRPC.TLUpdateDialogPinned -> {
+							val did = if (baseUpdate.peer is TLRPC.TLDialogPeer) {
+								val dialogPeer = baseUpdate.peer as TLRPC.TLDialogPeer
 								DialogObject.getPeerDialogId(dialogPeer.peer)
 							}
 							else {
 								0L
 							}
 
-							if (!pinDialog(did, baseUpdate.pinned, null, -1)) {
-								userConfig.setPinnedDialogsLoaded(baseUpdate.folder_id, false)
+							if (!pinDialog(did, baseUpdate.pinned, null)) {
+								userConfig.setPinnedDialogsLoaded(baseUpdate.folderId, false)
 								userConfig.saveConfig(false)
-								loadPinnedDialogs(baseUpdate.folder_id)
+								loadPinnedDialogs(baseUpdate.folderId)
 							}
 						}
 
-						is TL_updatePinnedDialogs -> {
-							userConfig.setPinnedDialogsLoaded(baseUpdate.folder_id, false)
+						is TLRPC.TLUpdatePinnedDialogs -> {
+							userConfig.setPinnedDialogsLoaded(baseUpdate.folderId, false)
 							userConfig.saveConfig(false)
 
 							val order: ArrayList<Long>?
@@ -16879,17 +16546,17 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								order = ArrayList()
 
 								for (dialogPeer in baseUpdate.order) {
-									val did = if (dialogPeer is TL_dialogPeer) {
+									val did = if (dialogPeer is TLRPC.TLDialogPeer) {
 										val peer = dialogPeer.peer
 
-										if (peer.user_id != 0L) {
-											peer.user_id
+										if (peer.userId != 0L) {
+											peer.userId
 										}
-										else if (peer.chat_id != 0L) {
-											-peer.chat_id
+										else if (peer.chatId != 0L) {
+											-peer.chatId
 										}
 										else {
-											-peer.channel_id
+											-peer.channelId
 										}
 									}
 									else {
@@ -16903,18 +16570,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								order = null
 							}
 
-							loadPinnedDialogs(baseUpdate.folder_id)
+							loadPinnedDialogs(baseUpdate.folderId)
 						}
 
-						is TL_updateUserPhoto -> {
-							val currentUser = getUser(baseUpdate.user_id)
+						is TLRPC.TLUpdateUserPhoto -> {
+							val currentUser = getUser(baseUpdate.userId) as? TLUser
 
 							if (currentUser != null) {
 								currentUser.photo = baseUpdate.photo
 							}
 
-							val toDbUser: User = TL_user()
-							toDbUser.id = baseUpdate.user_id
+							val toDbUser = TLUser()
+							toDbUser.id = baseUpdate.userId
 							toDbUser.photo = baseUpdate.photo
 
 							dbUsers.add(toDbUser)
@@ -16924,8 +16591,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 
-						is TL_updateUserPhone -> {
-							val currentUser = getUser(baseUpdate.user_id)
+						is TLRPC.TLUpdateUserPhone -> {
+							val currentUser = getUser(baseUpdate.userId)
 
 							if (currentUser != null) {
 								// currentUser.phone = update.phone;
@@ -16936,202 +16603,202 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								}
 							}
 
-							val toDbUser: User = TL_user()
-							toDbUser.id = baseUpdate.user_id
+							val toDbUser = TLUser()
+							toDbUser.id = baseUpdate.userId
 							// toDbUser.phone = update.phone;
 							dbUsers.add(toDbUser)
 						}
 
-						is TL_updateNotifySettings -> {
-							if (baseUpdate.notify_settings is TL_peerNotifySettings) {
-								updateDialogFiltersFlags = updateDialogFiltersFlags or DIALOG_FILTER_FLAG_EXCLUDE_MUTED
+						is TLRPC.TLUpdateNotifySettings -> {
+							val notifySettings = baseUpdate.notifySettings
 
-								if (editor == null) {
-									editor = notificationsPreferences.edit()
-								}
+							if (notifySettings is TLRPC.TLPeerNotifySettings) {
+								notificationsPreferences.edit {
+									updateDialogFiltersFlags = updateDialogFiltersFlags or DIALOG_FILTER_FLAG_EXCLUDE_MUTED
 
-								val currentTime1 = connectionsManager.currentTime
+									val currentTime1 = connectionsManager.currentTime
 
-								if (baseUpdate.peer is TL_notifyPeer) {
-									val notifyPeer = baseUpdate.peer as TL_notifyPeer
+									if (baseUpdate.peer is TLRPC.TLNotifyPeer) {
+										val notifyPeer = baseUpdate.peer as TLRPC.TLNotifyPeer
 
-									val dialogId = if (notifyPeer.peer.user_id != 0L) {
-										notifyPeer.peer.user_id
-									}
-									else if (notifyPeer.peer.chat_id != 0L) {
-										-notifyPeer.peer.chat_id
-									}
-									else {
-										-notifyPeer.peer.channel_id
-									}
+										val dialogId = if (notifyPeer.peer.userId != 0L) {
+											notifyPeer.peer.userId
+										}
+										else if (notifyPeer.peer.chatId != 0L) {
+											-notifyPeer.peer.chatId
+										}
+										else {
+											-notifyPeer.peer.channelId
+										}
 
-									val dialog = dialogs_dict[dialogId]
+										val dialog = dialogs_dict[dialogId]
 
-									if (dialog != null) {
-										dialog.notify_settings = baseUpdate.notify_settings
-									}
+										if (dialog != null) {
+											dialog.notifySettings = notifySettings
+										}
 
-									if (baseUpdate.notify_settings.flags and 2 != 0) {
-										editor?.putBoolean("silent_$dialogId", baseUpdate.notify_settings.silent)
-									}
-									else {
-										editor?.remove("silent_$dialogId")
-									}
+										if (notifySettings.flags and 2 != 0) {
+											putBoolean("silent_$dialogId", notifySettings.silent)
+										}
+										else {
+											remove("silent_$dialogId")
+										}
 
-									if (baseUpdate.notify_settings.flags and 4 != 0) {
-										if (baseUpdate.notify_settings.mute_until > currentTime1) {
-											var until = 0
+										if (notifySettings.flags and 4 != 0) {
+											if (notifySettings.muteUntil > currentTime1) {
+												var until = 0
 
-											if (baseUpdate.notify_settings.mute_until > currentTime1 + 60 * 60 * 24 * 365) {
-												editor?.putInt("notify2_$dialogId", 2)
+												if (notifySettings.muteUntil > currentTime1 + 60 * 60 * 24 * 365) {
+													putInt("notify2_$dialogId", 2)
 
-												if (dialog != null) {
-													baseUpdate.notify_settings.mute_until = Int.MAX_VALUE
+													if (dialog != null) {
+														notifySettings.muteUntil = Int.MAX_VALUE
+													}
 												}
+												else {
+													until = notifySettings.muteUntil
+
+													putInt("notify2_$dialogId", 3)
+													putInt("notifyuntil_$dialogId", notifySettings.muteUntil)
+
+													if (dialog != null) {
+														notifySettings.muteUntil = until
+													}
+												}
+
+												messagesStorage.setDialogFlags(dialogId, until.toLong() shl 32 or 1L)
+
+												notificationsController.removeNotificationsForDialog(dialogId)
 											}
 											else {
-												until = baseUpdate.notify_settings.mute_until
-
-												editor?.putInt("notify2_$dialogId", 3)
-												editor?.putInt("notifyuntil_$dialogId", baseUpdate.notify_settings.mute_until)
-
 												if (dialog != null) {
-													baseUpdate.notify_settings.mute_until = until
+													notifySettings.muteUntil = 0
 												}
+
+												putInt("notify2_$dialogId", 0)
+
+												messagesStorage.setDialogFlags(dialogId, 0)
 											}
-
-											messagesStorage.setDialogFlags(dialogId, until.toLong() shl 32 or 1L)
-
-											notificationsController.removeNotificationsForDialog(dialogId)
 										}
 										else {
 											if (dialog != null) {
-												baseUpdate.notify_settings.mute_until = 0
+												notifySettings.muteUntil = 0
 											}
 
-											editor?.putInt("notify2_$dialogId", 0)
+											remove("notify2_$dialogId")
 
 											messagesStorage.setDialogFlags(dialogId, 0)
 										}
+
+										applySoundSettings(notifySettings.androidSound, this, dialogId, 0, true)
 									}
-									else {
-										if (dialog != null) {
-											baseUpdate.notify_settings.mute_until = 0
+									else if (baseUpdate.peer is TLRPC.TLNotifyChats) {
+										if (notifySettings.flags and 1 != 0) {
+											putBoolean("EnablePreviewGroup", notifySettings.showPreviews)
 										}
 
-										editor?.remove("notify2_$dialogId")
+										// if ((update.notifySettings.flags & 2) != 0) {
+										/*if (update.notifySettings.silent) {
+										editor.putString("GroupSoundPath", "NoSound");
+									} else {
+										editor.remove("GroupSoundPath");
+									}*/
+										// }
 
-										messagesStorage.setDialogFlags(dialogId, 0)
+										if (notifySettings.flags and 4 != 0) {
+											if (notificationsPreferences.getInt("EnableGroup2", 0) != notifySettings.muteUntil) {
+												putInt("EnableGroup2", notifySettings.muteUntil)
+												putBoolean("overwrite_group", true)
+
+												AndroidUtilities.runOnUIThread {
+													notificationsController.deleteNotificationChannelGlobal(NotificationsController.TYPE_GROUP)
+												}
+											}
+										}
+
+										applySoundSettings(notifySettings.androidSound, this, 0, NotificationsController.TYPE_GROUP, false)
 									}
+									else if (baseUpdate.peer is TLRPC.TLNotifyUsers) {
+										if (notifySettings.flags and 1 != 0) {
+											putBoolean("EnablePreviewAll", notifySettings.showPreviews)
+										}
 
-									applySoundSettings(baseUpdate.notify_settings.android_sound, editor!!, dialogId, 0, true)
-								}
-								else if (baseUpdate.peer is TL_notifyChats) {
-									if (baseUpdate.notify_settings.flags and 1 != 0) {
-										editor?.putBoolean("EnablePreviewGroup", baseUpdate.notify_settings.show_previews)
-									}
+										// if ((update.notifySettings.flags & 2) != 0) {
+										/*if (update.notifySettings.silent) {
+										editor.putString("GlobalSoundPath", "NoSound");
+									} else {
+										editor.remove("GlobalSoundPath");
+									}*/
+										// }
 
-									// if ((update.notify_settings.flags & 2) != 0) {
-									/*if (update.notify_settings.silent) {
-											editor.putString("GroupSoundPath", "NoSound");
-										} else {
-											editor.remove("GroupSoundPath");
-										}*/
-									// }
+										applySoundSettings(notifySettings.androidSound, this, 0, NotificationsController.TYPE_PRIVATE, false)
 
-									if (baseUpdate.notify_settings.flags and 4 != 0) {
-										if (notificationsPreferences.getInt("EnableGroup2", 0) != baseUpdate.notify_settings.mute_until) {
-											editor?.putInt("EnableGroup2", baseUpdate.notify_settings.mute_until)
-											editor?.putBoolean("overwrite_group", true)
+										if (notifySettings.flags and 4 != 0) {
+											if (notificationsPreferences.getInt("EnableAll2", 0) != notifySettings.muteUntil) {
+												putInt("EnableAll2", notifySettings.muteUntil)
+												putBoolean("overwrite_private", true)
 
-											AndroidUtilities.runOnUIThread {
-												notificationsController.deleteNotificationChannelGlobal(NotificationsController.TYPE_GROUP)
+												AndroidUtilities.runOnUIThread {
+													notificationsController.deleteNotificationChannelGlobal(NotificationsController.TYPE_PRIVATE)
+												}
 											}
 										}
 									}
+									else if (baseUpdate.peer is TLRPC.TLNotifyBroadcasts) {
+										if (notifySettings.flags and 1 != 0) {
+											putBoolean("EnablePreviewChannel", notifySettings.showPreviews)
+										}
 
-									applySoundSettings(baseUpdate.notify_settings.android_sound, editor!!, 0, NotificationsController.TYPE_GROUP, false)
-								}
-								else if (baseUpdate.peer is TL_notifyUsers) {
-									if (baseUpdate.notify_settings.flags and 1 != 0) {
-										editor?.putBoolean("EnablePreviewAll", baseUpdate.notify_settings.show_previews)
-									}
+										// if ((update.notifySettings.flags & 2) != 0) {
+										/*if (update.notifySettings.silent) {
+										editor.putString("ChannelSoundPath", "NoSound");
+									} else {
+										editor.remove("ChannelSoundPath");
+									}*/
+										// }
 
-									// if ((update.notify_settings.flags & 2) != 0) {
-									/*if (update.notify_settings.silent) {
-											editor.putString("GlobalSoundPath", "NoSound");
-										} else {
-											editor.remove("GlobalSoundPath");
-										}*/
-									// }
+										if (notifySettings.flags and 4 != 0) {
+											if (notificationsPreferences.getInt("EnableChannel2", 0) != notifySettings.muteUntil) {
+												putInt("EnableChannel2", notifySettings.muteUntil)
+												putBoolean("overwrite_channel", true)
 
-									applySoundSettings(baseUpdate.notify_settings.android_sound, editor!!, 0, NotificationsController.TYPE_PRIVATE, false)
-
-									if (baseUpdate.notify_settings.flags and 4 != 0) {
-										if (notificationsPreferences.getInt("EnableAll2", 0) != baseUpdate.notify_settings.mute_until) {
-											editor.putInt("EnableAll2", baseUpdate.notify_settings.mute_until)
-											editor.putBoolean("overwrite_private", true)
-
-											AndroidUtilities.runOnUIThread {
-												notificationsController.deleteNotificationChannelGlobal(NotificationsController.TYPE_PRIVATE)
+												AndroidUtilities.runOnUIThread {
+													notificationsController.deleteNotificationChannelGlobal(NotificationsController.TYPE_CHANNEL)
+												}
 											}
 										}
+
+										applySoundSettings(notifySettings.androidSound, this, 0, NotificationsController.TYPE_CHANNEL, false)
 									}
-								}
-								else if (baseUpdate.peer is TL_notifyBroadcasts) {
-									if (baseUpdate.notify_settings.flags and 1 != 0) {
-										editor?.putBoolean("EnablePreviewChannel", baseUpdate.notify_settings.show_previews)
-									}
-
-									// if ((update.notify_settings.flags & 2) != 0) {
-									/*if (update.notify_settings.silent) {
-											editor.putString("ChannelSoundPath", "NoSound");
-										} else {
-											editor.remove("ChannelSoundPath");
-										}*/
-									// }
-
-									if (baseUpdate.notify_settings.flags and 4 != 0) {
-										if (notificationsPreferences.getInt("EnableChannel2", 0) != baseUpdate.notify_settings.mute_until) {
-											editor?.putInt("EnableChannel2", baseUpdate.notify_settings.mute_until)
-											editor?.putBoolean("overwrite_channel", true)
-
-											AndroidUtilities.runOnUIThread {
-												notificationsController.deleteNotificationChannelGlobal(NotificationsController.TYPE_CHANNEL)
-											}
-										}
-									}
-
-									applySoundSettings(baseUpdate.notify_settings.android_sound, editor!!, 0, NotificationsController.TYPE_CHANNEL, false)
 								}
 
 								messagesStorage.updateMutedDialogsFiltersCounters()
 							}
 						}
 
-						is TL_updateChannel -> {
-							val dialog = dialogs_dict[-baseUpdate.channel_id]
-							val chat = getChat(baseUpdate.channel_id)
+						is TLRPC.TLUpdateChannel -> {
+							val dialog = dialogs_dict[-baseUpdate.channelId]
+							val chat = getChat(baseUpdate.channelId)
 
 							if (chat != null) {
-								if (dialog == null && chat is TL_channel && !chat.left) {
+								if (dialog == null && chat is TLRPC.TLChannel && !chat.left) {
 									Utilities.stageQueue.postRunnable {
-										getChannelDifference(baseUpdate.channel_id, 1, 0, null)
+										getChannelDifference(baseUpdate.channelId, 1, 0, null)
 									}
 								}
 								else if (ChatObject.isNotInChat(chat) && dialog != null && (promoDialog == null || promoDialog!!.id != dialog.id)) {
 									deleteDialog(dialog.id, 0)
 								}
 
-								if (chat is TL_channelForbidden || chat.kicked) {
+								if (chat is TLRPC.TLChannelForbidden) { // || chat.kicked) {
 									val call = getGroupCall(chat.id, false)
 
 									if (call != null) {
-										val updateGroupCall = TL_updateGroupCall()
-										updateGroupCall.chat_id = chat.id
-										updateGroupCall.call = TL_groupCallDiscarded()
-										updateGroupCall.call.id = call.call?.id ?: 0
-										updateGroupCall.call.access_hash = call.call?.access_hash ?: 0L
+										val updateGroupCall = TLRPC.TLUpdateGroupCall()
+										updateGroupCall.chatId = chat.id
+										updateGroupCall.call = TLRPC.TLGroupCallDiscarded()
+										updateGroupCall.call?.id = call.call?.id ?: 0
+										updateGroupCall.call?.accessHash = call.call?.accessHash ?: 0L
 
 										call.processGroupCallUpdate(updateGroupCall)
 
@@ -17142,21 +16809,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							updateMask = updateMask or UPDATE_MASK_CHAT
 
-							loadFullChat(baseUpdate.channel_id, 0, true)
+							loadFullChat(baseUpdate.channelId, 0, true)
 						}
 
-						is TL_updateChat -> {
-							val chat = getChat(baseUpdate.chat_id)
+						is TLRPC.TLUpdateChat -> {
+							val chat = getChat(baseUpdate.chatId)
 
-							if (chat != null && (chat is TL_chatForbidden || chat.kicked)) {
+							if (chat != null && (chat is TLRPC.TLChatForbidden /*|| chat.kicked*/)) {
 								val call = getGroupCall(chat.id, false)
 
 								if (call != null) {
-									val updateGroupCall = TL_updateGroupCall()
-									updateGroupCall.chat_id = chat.id
-									updateGroupCall.call = TL_groupCallDiscarded()
-									updateGroupCall.call.id = call.call?.id ?: 0
-									updateGroupCall.call.access_hash = call.call?.access_hash ?: 0
+									val updateGroupCall = TLRPC.TLUpdateGroupCall()
+									updateGroupCall.chatId = chat.id
+
+									updateGroupCall.call = TLRPC.TLGroupCallDiscarded().also {
+										it.id = call.call?.id ?: 0
+										it.accessHash = call.call?.accessHash ?: 0
+									}
 
 									call.processGroupCallUpdate(updateGroupCall)
 
@@ -17172,21 +16841,21 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							updateMask = updateMask or UPDATE_MASK_CHAT
 
-							loadFullChat(baseUpdate.chat_id, 0, true)
+							loadFullChat(baseUpdate.chatId, 0, true)
 						}
 
-						is TL_updateChatDefaultBannedRights -> {
-							val chatId = if (baseUpdate.peer.channel_id != 0L) {
-								baseUpdate.peer.channel_id
+						is TLRPC.TLUpdateChatDefaultBannedRights -> {
+							val chatId = if (baseUpdate.peer.channelId != 0L) {
+								baseUpdate.peer.channelId
 							}
 							else {
-								baseUpdate.peer.chat_id
+								baseUpdate.peer.chatId
 							}
 
 							val chat = getChat(chatId)
 
 							if (chat != null) {
-								chat.default_banned_rights = baseUpdate.default_banned_rights
+								chat.defaultBannedRights = baseUpdate.defaultBannedRights
 
 								AndroidUtilities.runOnUIThread {
 									notificationCenter.postNotificationName(NotificationCenter.channelRightsUpdated, chat)
@@ -17194,15 +16863,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 
-						is TL_updateBotCommands -> {
+						is TLRPC.TLUpdateBotCommands -> {
 							mediaDataController.updateBotInfo(MessageObject.getPeerId(baseUpdate.peer), baseUpdate)
 						}
 
-						is TL_updateStickerSets -> {
+						is TLRPC.TLUpdateStickerSets -> {
 							mediaDataController.loadStickers(MediaDataController.TYPE_IMAGE, cache = false, useHash = true, retry = true)
 						}
 
-						is TL_updateStickerSetsOrder -> {
+						is TLRPC.TLUpdateStickerSetsOrder -> {
 							val type = if (baseUpdate.masks) {
 								MediaDataController.TYPE_MASK
 							}
@@ -17216,104 +16885,110 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							mediaDataController.reorderStickers(type, baseUpdate.order, false)
 						}
 
-						is TL_updateRecentReactions -> {
+						is TLRPC.TLUpdateRecentReactions -> {
 							mediaDataController.loadRecentAndTopReactions(true)
 						}
 
-						is TL_updateFavedStickers -> {
+						is TLRPC.TLUpdateFavedStickers -> {
 							mediaDataController.loadRecents(MediaDataController.TYPE_FAVE, gif = false, cache = false, force = true)
 						}
 
-						is TL_updateContactsReset -> {
+						is TLRPC.TLUpdateContactsReset -> {
 							// getContactsController().forceImportContacts();
 						}
 
-						is TL_updateNewStickerSet -> {
-							mediaDataController.addNewStickerSet(baseUpdate.stickerset)
+						is TLRPC.TLUpdateNewStickerSet -> {
+							(baseUpdate.stickerset as? TLRPC.TLMessagesStickerSet)?.let {
+								mediaDataController.addNewStickerSet(it)
+							}
 						}
 
-						is TL_updateSavedGifs -> {
+						is TLRPC.TLUpdateSavedGifs -> {
 							val editor2 = getGlobalEmojiSettings().edit()
-							editor2.putLong("lastGifLoadTime", 0).commit()
+							editor2.putLong("lastGifLoadTime", 0).apply()
 						}
 
-						is TL_updateRecentStickers -> {
+						is TLRPC.TLUpdateRecentStickers -> {
 							val editor2 = getGlobalEmojiSettings().edit()
-							editor2.putLong("lastStickersLoadTime", 0).commit()
+							editor2.putLong("lastStickersLoadTime", 0).apply()
 						}
 
-						is TL_updateDraftMessage -> {
+						is TLRPC.TLUpdateDraftMessage -> {
 							forceDialogsUpdate = true
 
 							val peer = baseUpdate.peer
 
-							val did = if (peer.user_id != 0L) {
-								peer.user_id
+							val did = if (peer.userId != 0L) {
+								peer.userId
 							}
-							else if (peer.channel_id != 0L) {
-								-peer.channel_id
+							else if (peer.channelId != 0L) {
+								-peer.channelId
 							}
 							else {
-								-peer.chat_id
+								-peer.chatId
 							}
 
 							mediaDataController.saveDraft(did, 0, baseUpdate.draft, null, true)
 						}
 
-						is TL_updateReadFeaturedStickers -> {
+						is TLRPC.TLUpdateReadFeaturedStickers -> {
 							mediaDataController.markFeaturedStickersAsRead(emoji = false, query = false)
 						}
 
-						is TL_updateReadFeaturedEmojiStickers -> {
+						is TLRPC.TLUpdateReadFeaturedEmojiStickers -> {
 							mediaDataController.markFeaturedStickersAsRead(emoji = true, query = false)
 						}
 
-						is TL_updateMoveStickerSetToTop -> {
+						is TLRPC.TLUpdateMoveStickerSetToTop -> {
 							mediaDataController.moveStickerSetToTop(baseUpdate.stickerset, baseUpdate.emojis, baseUpdate.masks)
 						}
 
-						is TL_updatePhoneCallSignalingData -> {
+						is TLRPC.TLUpdatePhoneCallSignalingData -> {
 							VoIPService.sharedInstance?.onSignalingData(baseUpdate)
 						}
 
-						is TL_updateGroupCallParticipants -> {
-							val call = groupCalls[baseUpdate.call.id]
-							call?.processParticipantsUpdate(baseUpdate, false)
-							VoIPService.sharedInstance?.onGroupCallParticipantsUpdate(baseUpdate)
+						is TLRPC.TLUpdateGroupCallParticipants -> {
+							baseUpdate.call?.let {
+								val call = groupCalls[it.id]
+								call?.processParticipantsUpdate(baseUpdate, false)
+								VoIPService.sharedInstance?.onGroupCallParticipantsUpdate(baseUpdate)
+							}
 						}
 
-						is TL_updateGroupCall -> {
-							val call = groupCalls[baseUpdate.call.id]
+						is TLRPC.TLUpdateGroupCall -> {
+							baseUpdate.call?.let { baseUpdateCall ->
+								val call = groupCalls[baseUpdateCall.id]
 
-							if (call != null) {
-								call.processGroupCallUpdate(baseUpdate)
+								if (call != null) {
+									call.processGroupCallUpdate(baseUpdate)
 
-								val chat = getChat(call.chatId)
+									val chat = getChat(call.chatId)
 
-								if (chat != null) {
-									chat.call_active = baseUpdate.call is TL_groupCall
+									if (chat != null) {
+										chat.callActive = baseUpdate.call is TLRPC.TLGroupCall
+									}
 								}
-							}
-							else {
-								val chatFull = getChatFull(baseUpdate.chat_id)
+								else {
+									val chatFull = getChatFull(baseUpdate.chatId)
 
-								if (chatFull != null && (chatFull.call == null || chatFull.call != null && chatFull.call.id != baseUpdate.call.id)) {
-									loadFullChat(baseUpdate.chat_id, 0, true)
+									if (chatFull != null && (chatFull.call == null || chatFull.call != null && chatFull.call?.id != baseUpdateCall.id)) {
+										loadFullChat(baseUpdate.chatId, 0, true)
+									}
 								}
-							}
 
-							VoIPService.sharedInstance?.onGroupCallUpdated(baseUpdate.call)
+								VoIPService.sharedInstance?.onGroupCallUpdated(baseUpdateCall)
+							}
 						}
 
-						is TL_updatePhoneCall -> {
-							if (ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-								val call = baseUpdate.phone_call
+						is TLRPC.TLUpdatePhoneCall -> {
+							if (ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+								val call = baseUpdate.phoneCall
 								val svc = VoIPService.sharedInstance
 
 								FileLog.d("Received call in update: $call")
-								FileLog.d("call id " + call.id)
+								FileLog.d("call id " + call?.id)
 
-								if (call is TL_phoneCallRequested) {
+								if (call is TLRPC.TLPhoneCallRequested) {
 									if ((call.date + callRingTimeout / 1000) < connectionsManager.currentTime) {
 										FileLog.d("ignoring too old call")
 										continue
@@ -17333,11 +17008,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 									val discardCallInvocation = {
 										FileLog.d("Auto-declining call " + call.id + " because there's already active one")
 
-										val req = TL_phone_discardCall()
-										req.peer = TL_inputPhoneCall()
-										req.peer.access_hash = call.access_hash
-										req.peer.id = call.id
-										req.reason = TL_phoneCallDiscardReasonBusy()
+										val req = TLRPC.TLPhoneDiscardCall()
+
+										req.peer = TLRPC.TLInputPhoneCall().also {
+											it.accessHash = call.accessHash
+											it.id = call.id
+										}
+
+										req.reason = TLRPC.TLPhoneCallDiscardReasonBusy()
 
 										connectionsManager.sendRequest(req) { response, _ ->
 											if (response is Updates) {
@@ -17364,7 +17042,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										FileLog.e(e)
 									}
 
-									if (svc != null || (VoIPService.callIShouldHavePutIntoIntent != null && VoIPService.callIShouldHavePutIntoIntent !is TL_phoneCallDiscarded) || !callStateIsIdle) {
+									if (svc != null || (VoIPService.callIShouldHavePutIntoIntent != null && VoIPService.callIShouldHavePutIntoIntent !is TLRPC.TLPhoneCallDiscarded) || !callStateIsIdle) {
 										if (VoIPService.callIShouldHavePutIntoIntent?.id == call.id) {
 											continue
 										}
@@ -17379,7 +17057,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										continue
 									}
 
-									val callerId = if (call.participant_id == userConfig.getClientUserId()) call.admin_id else call.participant_id
+									val callerId = if (call.participantId == userConfig.getClientUserId()) call.adminId else call.participantId
 									val isMuted = isDialogMuted(callerId)
 
 									FileLog.d("Starting service for call " + call.id)
@@ -17441,15 +17119,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										svc.onCallUpdated(call)
 									}
 									else {
-										if (call is TL_phoneCallDiscarded) {
+										if (call is TLRPC.TLPhoneCallDiscarded) {
 											VoIPPreNotificationService.dismiss(ApplicationLoader.applicationContext)
 										}
 
 										if (VoIPService.callIShouldHavePutIntoIntent != null) {
 											FileLog.d("Updated the call while the service is starting")
 
-											if (call.id == VoIPService.callIShouldHavePutIntoIntent?.id) {
-												VoIPService.callIShouldHavePutIntoIntent = if (call is TL_phoneCallDiscarded) null else call
+											if (call?.id == VoIPService.callIShouldHavePutIntoIntent?.id) {
+												VoIPService.callIShouldHavePutIntoIntent = if (call is TLRPC.TLPhoneCallDiscarded) null else call
 											}
 										}
 									}
@@ -17457,18 +17135,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 
-						is TL_updateDialogUnreadMark -> {
-							val did = if (baseUpdate.peer is TL_dialogPeer) {
-								val dialogPeer = baseUpdate.peer as TL_dialogPeer
+						is TLRPC.TLUpdateDialogUnreadMark -> {
+							val did = if (baseUpdate.peer is TLRPC.TLDialogPeer) {
+								val dialogPeer = baseUpdate.peer as TLRPC.TLDialogPeer
 
-								if (dialogPeer.peer.user_id != 0L) {
-									dialogPeer.peer.user_id
+								if (dialogPeer.peer.userId != 0L) {
+									dialogPeer.peer.userId
 								}
-								else if (dialogPeer.peer.chat_id != 0L) {
-									-dialogPeer.peer.chat_id
+								else if (dialogPeer.peer.chatId != 0L) {
+									-dialogPeer.peer.chatId
 								}
 								else {
-									-dialogPeer.peer.channel_id
+									-dialogPeer.peer.channelId
 								}
 							}
 							else {
@@ -17479,11 +17157,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							val dialog = dialogs_dict[did]
 
-							if (dialog != null && dialog.unread_mark != baseUpdate.unread) {
-								dialog.unread_mark = baseUpdate.unread
+							if (dialog != null && dialog.unreadMark != baseUpdate.unread) {
+								dialog.unreadMark = baseUpdate.unread
 
-								if (dialog.unread_count == 0 && !isDialogMuted(did)) {
-									if (dialog.unread_mark) {
+								if (dialog.unreadCount == 0 && !isDialogMuted(did)) {
+									if (dialog.unreadMark) {
 										unreadUnmutedDialogs++
 									}
 									else {
@@ -17496,91 +17174,91 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 
-						is TL_updateMessagePoll -> {
-							notificationCenter.postNotificationName(NotificationCenter.didUpdatePollResults, baseUpdate.poll_id, baseUpdate.poll, baseUpdate.results)
+						is TLRPC.TLUpdateMessagePoll -> {
+							notificationCenter.postNotificationName(NotificationCenter.didUpdatePollResults, baseUpdate.pollId, baseUpdate.poll, baseUpdate.results)
 						}
 
-						is TL_updatePeerSettings -> {
+						is TLRPC.TLUpdatePeerSettings -> {
 							val dialogId = when (baseUpdate.peer) {
-								is TL_peerUser -> baseUpdate.peer.user_id
-								is TL_peerChat -> -baseUpdate.peer.chat_id
-								else -> -baseUpdate.peer.channel_id
+								is TLRPC.TLPeerUser -> baseUpdate.peer.userId
+								is TLRPC.TLPeerChat -> -baseUpdate.peer.chatId
+								else -> -baseUpdate.peer.channelId
 							}
 
 							savePeerSettings(dialogId, baseUpdate.settings)
 						}
 
-						is TL_updatePeerLocated -> {
+						is TLRPC.TLUpdatePeerLocated -> {
 							notificationCenter.postNotificationName(NotificationCenter.newPeopleNearbyAvailable, baseUpdate)
 						}
 
-						is TL_updateMessageReactions -> {
+						is TLRPC.TLUpdateMessageReactions -> {
 							val dialogId = MessageObject.getPeerId(baseUpdate.peer)
 							notificationCenter.postNotificationName(NotificationCenter.didUpdateReactions, dialogId, baseUpdate.msgId, baseUpdate.reactions)
 						}
 
-						is TL_updateMessageExtendedMedia -> {
-							notificationCenter.postNotificationName(NotificationCenter.didUpdateExtendedMedia, DialogObject.getPeerDialogId(baseUpdate.peer), baseUpdate.msg_id, baseUpdate.extended_media)
+						is TLRPC.TLUpdateMessageExtendedMedia -> {
+							notificationCenter.postNotificationName(NotificationCenter.didUpdateExtendedMedia, DialogObject.getPeerDialogId(baseUpdate.peer), baseUpdate.msgId, baseUpdate.extendedMedia)
 						}
 
-						is TL_updateTheme -> {
-							val theme = baseUpdate.theme as TL_theme
+						is TLRPC.TLUpdateTheme -> {
+							val theme = baseUpdate.theme as TLRPC.TLTheme
 							Theme.setThemeUploadInfo(null, null, theme, currentAccount, true)
 						}
 
-						is TL_updateDialogFilter -> {
+						is TLRPC.TLUpdateDialogFilter -> {
 							loadRemoteFilters(true)
 						}
 
-						is TL_updateDialogFilterOrder -> {
+						is TLRPC.TLUpdateDialogFilterOrder -> {
 							loadRemoteFilters(true)
 						}
 
-						is TL_updateDialogFilters -> {
+						is TLRPC.TLUpdateDialogFilters -> {
 							loadRemoteFilters(true)
 						}
 
-						is TL_updateRecentEmojiStatuses -> {
+						is TLRPC.TLUpdateRecentEmojiStatuses -> {
 							notificationCenter.postNotificationName(NotificationCenter.recentEmojiStatusesUpdate)
 						}
 
-						is TL_updateWebViewResultSent -> {
-							notificationCenter.postNotificationName(NotificationCenter.webViewResultSent, baseUpdate.query_id)
+						is TLRPC.TLUpdateWebViewResultSent -> {
+							notificationCenter.postNotificationName(NotificationCenter.webViewResultSent, baseUpdate.queryId)
 						}
 
-						is TL_updateAttachMenuBots -> {
+						is TLRPC.TLUpdateAttachMenuBots -> {
 							mediaDataController.loadAttachMenuBots(cache = false, force = true)
 						}
 
-						is TL_updateBotMenuButton -> {
-							notificationCenter.postNotificationName(NotificationCenter.updateBotMenuButton, baseUpdate.bot_id, baseUpdate.button)
+						is TLRPC.TLUpdateBotMenuButton -> {
+							notificationCenter.postNotificationName(NotificationCenter.updateBotMenuButton, baseUpdate.botId, baseUpdate.button)
 						}
 
-						is TL_updateReadChannelDiscussionInbox -> {
-							notificationCenter.postNotificationName(NotificationCenter.threadMessagesRead, -baseUpdate.channel_id, baseUpdate.top_msg_id, baseUpdate.read_max_id, 0)
+						is TLRPC.TLUpdateReadChannelDiscussionInbox -> {
+							notificationCenter.postNotificationName(NotificationCenter.threadMessagesRead, -baseUpdate.channelId, baseUpdate.topMsgId, baseUpdate.readMaxId, 0)
 
 							if (baseUpdate.flags and 1 != 0) {
-								messagesStorage.updateRepliesMaxReadId(baseUpdate.broadcast_id, baseUpdate.broadcast_post, baseUpdate.read_max_id, true)
-								notificationCenter.postNotificationName(NotificationCenter.commentsRead, baseUpdate.broadcast_id, baseUpdate.broadcast_post, baseUpdate.read_max_id)
+								messagesStorage.updateRepliesMaxReadId(baseUpdate.broadcastId, baseUpdate.broadcastPost, baseUpdate.readMaxId, true)
+								notificationCenter.postNotificationName(NotificationCenter.commentsRead, baseUpdate.broadcastId, baseUpdate.broadcastPost, baseUpdate.readMaxId)
 							}
 						}
 
-						is TL_updateReadChannelDiscussionOutbox -> {
-							notificationCenter.postNotificationName(NotificationCenter.threadMessagesRead, -baseUpdate.channel_id, baseUpdate.top_msg_id, 0, baseUpdate.read_max_id)
+						is TLRPC.TLUpdateReadChannelDiscussionOutbox -> {
+							notificationCenter.postNotificationName(NotificationCenter.threadMessagesRead, -baseUpdate.channelId, baseUpdate.topMsgId, 0, baseUpdate.readMaxId)
 						}
 
-						is TL_updatePeerHistoryTTL -> {
+						is TLRPC.TLUpdatePeerHistoryTTL -> {
 							val peerId = MessageObject.getPeerId(baseUpdate.peer)
 							var chatFull: ChatFull? = null
-							var userFull: UserFull? = null
+							var userFull: TLUserFull? = null
 
 							if (peerId > 0) {
 								userFull = getUserFull(peerId)
 
 								if (userFull != null) {
-									userFull.ttl_period = baseUpdate.ttl_period
+									userFull.ttlPeriod = baseUpdate.ttlPeriod
 
-									if (userFull.ttl_period == 0) {
+									if (userFull.ttlPeriod == 0) {
 										userFull.flags = userFull.flags and 16384.inv()
 									}
 									else {
@@ -17592,10 +17270,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								chatFull = getChatFull(-peerId)
 
 								if (chatFull != null) {
-									chatFull.ttl_period = baseUpdate.ttl_period
+									chatFull.ttlPeriod = baseUpdate.ttlPeriod
 
-									if (chatFull is TL_channelFull) {
-										if (chatFull.ttl_period == 0) {
+									if (chatFull is TLRPC.TLChannelFull) {
+										if (chatFull.ttlPeriod == 0) {
 											chatFull.flags = chatFull.flags and 16777216.inv()
 										}
 										else {
@@ -17603,7 +17281,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 										}
 									}
 									else {
-										if (chatFull.ttl_period == 0) {
+										if (chatFull.ttlPeriod == 0) {
 											chatFull.flags = chatFull.flags and 16384.inv()
 										}
 										else {
@@ -17623,43 +17301,34 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							}
 						}
 
-						is TL_updatePendingJoinRequests -> {
+						is TLRPC.TLUpdatePendingJoinRequests -> {
 							memberRequestsController.onPendingRequestsUpdated(baseUpdate)
 						}
 
-						is TL_updateSavedRingtones -> {
+						is TLRPC.TLUpdateSavedRingtones -> {
 							mediaDataController.ringtoneDataStore.loadUserRingtones()
 						}
 
-						is TL_updateTranscribeAudio -> {
-							FileLog.e("Received legacy TL_updateTranscribeAudio update")
-						}
-
-						is TL_updateTranscribedAudio -> {
-							if (BuildConfig.DEBUG) {
-								FileLog.d("Transcription update received, pending=" + baseUpdate.pending + " id=" + baseUpdate.transcription_id + " text=" + baseUpdate.text)
-							}
+						is TLRPC.TLUpdateTranscribedAudio -> {
+							FileLog.d("Transcription update received, pending=" + baseUpdate.pending + " id=" + baseUpdate.transcriptionId + " text=" + baseUpdate.text)
 
 							if (!(baseUpdate.pending && baseUpdate.text.isNullOrEmpty())) {
-								if (baseUpdate.pending || !TranscribeButton.finishTranscription(null, baseUpdate.transcription_id, baseUpdate.text)) {
-									messagesStorage.updateMessageVoiceTranscription(DialogObject.getPeerDialogId(baseUpdate.peer), baseUpdate.msg_id, baseUpdate.text, baseUpdate.transcription_id, !baseUpdate.pending)
-									notificationCenter.postNotificationName(NotificationCenter.voiceTranscriptionUpdate, null, baseUpdate.transcription_id, baseUpdate.text, null, !baseUpdate.pending)
+								if (baseUpdate.pending || !TranscribeButton.finishTranscription(null, baseUpdate.transcriptionId, baseUpdate.text)) {
+									messagesStorage.updateMessageVoiceTranscription(DialogObject.getPeerDialogId(baseUpdate.peer), baseUpdate.msgId, baseUpdate.text, baseUpdate.transcriptionId, !baseUpdate.pending)
+									notificationCenter.postNotificationName(NotificationCenter.voiceTranscriptionUpdate, null, baseUpdate.transcriptionId, baseUpdate.text, null, !baseUpdate.pending)
 								}
 							}
 						}
 					}
 				}
 
-				if (editor != null) {
-					editor.commit()
-					notificationCenter.postNotificationName(NotificationCenter.notificationsSettingsUpdated)
-				}
+				notificationCenter.postNotificationName(NotificationCenter.notificationsSettingsUpdated)
 
 				messagesStorage.updateUsers(dbUsersStatus, true, true, true)
 				messagesStorage.updateUsers(dbUsers, false, true, true)
 			}
 
-			if (!groupSpeakingActions.isEmpty) {
+			if (!groupSpeakingActions.isEmpty()) {
 				var a = 0
 				val n = groupSpeakingActions.size()
 
@@ -17690,7 +17359,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			if (!webPages.isEmpty) {
+			if (!webPages.isEmpty()) {
 				notificationCenter.postNotificationName(NotificationCenter.didReceivedWebpagesInUpdates, webPages)
 
 				for (i in 0..1) {
@@ -17707,10 +17376,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 						if (arrayList != null) {
 							val webpage = webPages.valueAt(b)
-							val arr = ArrayList<Message>()
+							val arr = mutableListOf<Message>()
 							var dialogId: Long = 0
 
-							if (webpage is TL_webPage || webpage is TL_webPageEmpty) {
+							if (webpage is TLRPC.TLWebPage || webpage is TLRPC.TLWebPageEmpty) {
 								var a = 0
 								val size2 = arrayList.size
 
@@ -17753,7 +17422,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			var updateDialogs = false
 
-			if (!messages.isEmpty) {
+			if (!messages.isEmpty()) {
 				var sorted = false
 				var a = 0
 				val size = messages.size()
@@ -17786,7 +17455,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			if (!scheduledMessages.isEmpty) {
+			if (!scheduledMessages.isEmpty()) {
 				var a = 0
 				val size = scheduledMessages.size()
 
@@ -17800,7 +17469,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			if (!editingMessages.isEmpty) {
+			if (!editingMessages.isEmpty()) {
 				var b = 0
 				val size = editingMessages.size()
 
@@ -17830,7 +17499,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							if (oldObject.id == newMessage.id) {
 								dialogMessage.put(dialogId, newMessage)
 
-								if (newMessage.messageOwner?.peer_id != null && newMessage.messageOwner?.peer_id?.channel_id == 0L) {
+								if (newMessage.messageOwner?.peerId != null && newMessage.messageOwner?.peerId?.channelId == 0L) {
 									dialogMessagesByIds.put(newMessage.id, newMessage)
 								}
 
@@ -17838,7 +17507,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 								break
 							}
-							else if (oldObject.dialogId == newMessage.dialogId && oldObject.messageOwner?.action is TL_messageActionPinMessage && oldObject.replyMessageObject != null && oldObject.replyMessageObject?.id == newMessage.id) {
+							else if (oldObject.dialogId == newMessage.dialogId && oldObject.messageOwner?.action is TLRPC.TLMessageActionPinMessage && oldObject.replyMessageObject != null && oldObject.replyMessageObject?.id == newMessage.id) {
 								oldObject.replyMessageObject = newMessage
 								oldObject.generatePinMessageText(null, null)
 								updateDialogs = true
@@ -17873,7 +17542,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 			}
 
-			if (!channelViews.isEmpty || !channelForwards.isEmpty || !channelReplies.isEmpty) {
+			if (!channelViews.isEmpty() || !channelForwards.isEmpty() || !channelReplies.isEmpty()) {
 				notificationCenter.postNotificationName(NotificationCenter.didUpdateMessagesViews, channelViews, channelForwards, channelReplies, true)
 			}
 
@@ -17896,33 +17565,32 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					if (markAsReadMessagesInbox.isNotEmpty) {
 						notificationsController.processReadMessages(markAsReadMessagesInbox, 0, 0, 0, false)
 
-						val editor = notificationsPreferences.edit()
-						var b = 0
-						val size = markAsReadMessagesInbox.size()
+						notificationsPreferences.edit {
+							var b = 0
+							val size = markAsReadMessagesInbox.size()
 
-						while (b < size) {
-							val key = markAsReadMessagesInbox.keyAt(b)
-							val messageId = markAsReadMessagesInbox.valueAt(b)
-							val dialog = dialogs_dict[key]
+							while (b < size) {
+								val key = markAsReadMessagesInbox.keyAt(b)
+								val messageId = markAsReadMessagesInbox.valueAt(b)
+								val dialog = dialogs_dict[key]
 
-							if (dialog != null && dialog.top_message > 0 && dialog.top_message <= messageId) {
-								val obj = dialogMessage[dialog.id]
+								if (dialog != null && dialog.topMessage > 0 && dialog.topMessage <= messageId) {
+									val obj = dialogMessage[dialog.id]
 
-								if (obj != null && !obj.isOut) {
-									obj.setIsRead()
-									updateMask = updateMask or UPDATE_MASK_READ_DIALOG_MESSAGE
+									if (obj != null && !obj.isOut) {
+										obj.setIsRead()
+										updateMask = updateMask or UPDATE_MASK_READ_DIALOG_MESSAGE
+									}
 								}
-							}
 
-							if (key != userConfig.getClientUserId()) {
-								editor.remove("diditem$key")
-								editor.remove("diditemo$key")
-							}
+								if (key != userConfig.getClientUserId()) {
+									remove("diditem$key")
+									remove("diditemo$key")
+								}
 
-							b++
+								b++
+							}
 						}
-
-						editor.commit()
 					}
 
 					if (markAsReadMessagesOutbox.isNotEmpty) {
@@ -17934,7 +17602,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							val messageId = markAsReadMessagesOutbox.valueAt(b)
 							val dialog = dialogs_dict[key]
 
-							if (dialog != null && dialog.top_message > 0 && dialog.top_message <= messageId) {
+							if (dialog != null && dialog.topMessage > 0 && dialog.topMessage <= messageId) {
 								val obj = dialogMessage[dialog.id]
 
 								if (obj != null && obj.isOut) {
@@ -17950,7 +17618,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 				if (markAsReadEncrypted.isNotEmpty()) {
 					var a = 0
-					val size = markAsReadEncrypted.size()
+					val size = markAsReadEncrypted.size
 
 					while (a < size) {
 						val key = markAsReadEncrypted.keyAt(a)
@@ -17974,7 +17642,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				if (!markContentAsReadMessages.isEmpty) {
+				if (!markContentAsReadMessages.isEmpty()) {
 					var a = 0
 					val size = markContentAsReadMessages.size()
 
@@ -17988,18 +17656,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				if (!deletedMessages.isEmpty) {
+				if (!deletedMessages.isEmpty()) {
 					var a = 0
 					val size = deletedMessages.size()
 
 					while (a < size) {
 						val dialogId = deletedMessages.keyAt(a)
 						val arrayList = deletedMessages.valueAt(a)
-
-						if (arrayList == null) {
-							a++
-							continue
-						}
 
 						notificationCenter.postNotificationName(NotificationCenter.messagesDeleted, arrayList, -dialogId, false)
 
@@ -18012,9 +17675,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								val obj = dialogMessagesByIds[id]
 
 								if (obj != null) {
-									if (BuildConfig.DEBUG) {
-										FileLog.d("mark messages " + obj.id + " deleted")
-									}
+									FileLog.d("mark messages " + obj.id + " deleted")
 
 									obj.deleted = true
 								}
@@ -18045,18 +17706,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					notificationsController.removeDeletedMessagesFromNotifications(deletedMessages, false)
 				}
 
-				if (!scheduledDeletedMessages.isEmpty) {
+				if (!scheduledDeletedMessages.isEmpty()) {
 					var a = 0
 					val size = scheduledDeletedMessages.size()
 
 					while (a < size) {
 						val key = scheduledDeletedMessages.keyAt(a)
 						val arrayList = scheduledDeletedMessages.valueAt(a)
-
-						if (arrayList == null) {
-							a++
-							continue
-						}
 
 						notificationCenter.postNotificationName(NotificationCenter.messagesDeleted, arrayList, if (DialogObject.isChatDialog(key) && ChatObject.isChannel(getChat(-key))) -key else 0, true)
 
@@ -18096,19 +17752,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		if (!webPages.isEmpty) {
+		if (!webPages.isEmpty()) {
 			messagesStorage.putWebPages(webPages)
 		}
 
-		if (markAsReadMessagesInbox.isNotEmpty || markAsReadMessagesOutbox.isNotEmpty || markAsReadEncrypted.isNotEmpty() || !markContentAsReadMessages.isEmpty || stillUnreadMessagesCount.isNotEmpty) {
-			if (markAsReadMessagesInbox.isNotEmpty || markAsReadMessagesOutbox.isNotEmpty || !markContentAsReadMessages.isEmpty || stillUnreadMessagesCount.isNotEmpty) {
+		if (markAsReadMessagesInbox.isNotEmpty || markAsReadMessagesOutbox.isNotEmpty || markAsReadEncrypted.isNotEmpty() || !markContentAsReadMessages.isEmpty() || stillUnreadMessagesCount.isNotEmpty) {
+			if (markAsReadMessagesInbox.isNotEmpty || markAsReadMessagesOutbox.isNotEmpty || !markContentAsReadMessages.isEmpty() || stillUnreadMessagesCount.isNotEmpty) {
 				messagesStorage.updateDialogsWithReadMessages(markAsReadMessagesInbox, markAsReadMessagesOutbox, markContentAsReadMessages, stillUnreadMessagesCount, true)
 			}
 
 			messagesStorage.markMessagesAsRead(markAsReadMessagesInbox, markAsReadMessagesOutbox, markAsReadEncrypted, true)
 		}
 
-		if (!markContentAsReadMessages.isEmpty) {
+		if (!markContentAsReadMessages.isEmpty()) {
 			val time = connectionsManager.currentTime
 			var a = 0
 			val size = markContentAsReadMessages.size()
@@ -18123,7 +17779,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		if (!deletedMessages.isEmpty) {
+		if (!deletedMessages.isEmpty()) {
 			var a = 0
 			val size = deletedMessages.size()
 
@@ -18140,7 +17796,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 
-		if (!scheduledDeletedMessages.isEmpty) {
+		if (!scheduledDeletedMessages.isEmpty()) {
 			var a = 0
 			val size = scheduledDeletedMessages.size()
 
@@ -18172,7 +17828,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		for (update in tasks) {
-			messagesStorage.createTaskForSecretChat(update.chat_id, update.max_date, update.date, 1, null)
+			messagesStorage.createTaskForSecretChat(update.chatId, update.maxDate, update.date, 1, null)
 		}
 
 		return true
@@ -18186,7 +17842,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 			val stringBuilder = buildString {
 				if (unreadReactions != null) {
-					for (i in 0 until unreadReactions.size()) {
+					for (i in 0 until unreadReactions.size) {
 						val messageId = unreadReactions.keyAt(i)
 
 						if (isNotEmpty()) {
@@ -18218,7 +17874,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			var newUnreadCount = 0
 
 			if (unreadReactions != null) {
-				for (i in 0 until unreadReactions.size()) {
+				for (i in 0 until unreadReactions.size) {
 					val messageId = unreadReactions.keyAt(i)
 					val hasUnreadReaction = unreadReactions.valueAt(i)
 
@@ -18252,16 +17908,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 
 			if (needReload) {
-				val req = TL_messages_getPeerDialogs()
+				val req = TLRPC.TLMessagesGetPeerDialogs()
 
-				val inputDialogPeer = TL_inputDialogPeer()
+				val inputDialogPeer = TLRPC.TLInputDialogPeer()
 				inputDialogPeer.peer = getInputPeer(dialogId)
 
 				req.peers.add(inputDialogPeer)
 
 				connectionsManager.sendRequest(req) { response, _ ->
-					if (response is TL_messages_peerDialogs) {
-						val count = if (response.dialogs.size == 0) 0 else response.dialogs[0].unread_reactions_count
+					if (response is TLRPC.TLMessagesPeerDialogs) {
+						val count = if (response.dialogs.size == 0) 0 else response.dialogs[0].unreadReactionsCount
 
 						AndroidUtilities.runOnUIThread {
 							val dialog = dialogs_dict[dialogId]
@@ -18271,7 +17927,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 								return@runOnUIThread
 							}
 
-							dialog.unread_reactions_count = count
+							dialog.unreadReactionsCount = count
 
 							messagesStorage.updateUnreadReactionsCount(dialogId, count)
 
@@ -18289,15 +17945,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						return@runOnUIThread
 					}
 
-					dialog.unread_reactions_count += newUnreadCount
+					dialog.unreadReactionsCount += newUnreadCount
 
-					if (dialog.unread_reactions_count < 0) {
-						dialog.unread_reactions_count = 0
+					if (dialog.unreadReactionsCount < 0) {
+						dialog.unreadReactionsCount = 0
 					}
 
-					messagesStorage.updateUnreadReactionsCount(dialogId, dialog.unread_reactions_count)
+					messagesStorage.updateUnreadReactionsCount(dialogId, dialog.unreadReactionsCount)
 
-					notificationCenter.postNotificationName(NotificationCenter.dialogsUnreadReactionsCounterChanged, dialogId, dialog.unread_reactions_count, newUnreadMessages)
+					notificationCenter.postNotificationName(NotificationCenter.dialogsUnreadReactionsCounterChanged, dialogId, dialog.unreadReactionsCount, newUnreadMessages)
 				}
 			}
 		}
@@ -18339,12 +17995,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		val dialog = dialogs_dict[dialogId]
 
 		if (dialog != null) {
-			dialog.unread_reactions_count = 0
+			dialog.unreadReactionsCount = 0
 		}
 
 		messagesStorage.updateUnreadReactionsCount(dialogId, 0)
 
-		val req = TL_messages_readReactions()
+		val req = TLRPC.TLMessagesReadReactions()
 		req.peer = getInputPeer(dialogId)
 
 		connectionsManager.sendRequest(req)
@@ -18370,13 +18026,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		val infoFinal: SponsoredMessagesInfo = info
 
-		val req = TL_channels_getSponsoredMessages()
+		val req = TLRPC.TLChannelsGetSponsoredMessages()
 		req.channel = getInputChannel(chat)
 
 		connectionsManager.sendRequest(req) { response, _ ->
 			val result: ArrayList<MessageObject>?
 
-			if (response is TL_messages_sponsoredMessages) {
+			if (response is TLRPC.TLMessagesSponsoredMessages) {
 				if (response.messages.isEmpty()) {
 					result = null
 				}
@@ -18402,26 +18058,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					var messageId = -10000000
 
 					for (sponsoredMessage in response.messages) {
-						val message = TL_message()
+						val message = TLRPC.TLMessage()
 						message.message = sponsoredMessage.message
 
 						if (sponsoredMessage.entities.isNotEmpty()) {
-							message.entities = sponsoredMessage.entities
+							message.entities.addAll(sponsoredMessage.entities)
 							message.flags = message.flags or 128
 						}
 
-						message.peer_id = getPeer(dialogId)
-						message.from_id = sponsoredMessage.from_id
+						message.peerId = getPeer(dialogId)
+						message.fromId = sponsoredMessage.fromId
 						message.flags = message.flags or 256
 						message.date = connectionsManager.currentTime
 						message.id = messageId--
 
 						val messageObject = MessageObject(currentAccount, message, usersDict, chatsDict, generateLayout = true, checkMediaExists = true)
-						messageObject.sponsoredId = sponsoredMessage.random_id
-						messageObject.botStartParam = sponsoredMessage.start_param
-						messageObject.sponsoredChannelPost = sponsoredMessage.channel_post
-						messageObject.sponsoredChatInvite = sponsoredMessage.chat_invite
-						messageObject.sponsoredChatInviteHash = sponsoredMessage.chat_invite_hash
+						messageObject.sponsoredId = sponsoredMessage.randomId
+						messageObject.botStartParam = sponsoredMessage.startParam
+						messageObject.sponsoredChannelPost = sponsoredMessage.channelPost
+						messageObject.sponsoredChatInvite = sponsoredMessage.chatInvite
+						messageObject.sponsoredChatInviteHash = sponsoredMessage.chatInviteHash
 
 						result.add(messageObject)
 					}
@@ -18447,7 +18103,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		return null
 	}
 
-	fun getSendAsPeers(dialogId: Long): TL_channels_sendAsPeers? {
+	fun getSendAsPeers(dialogId: Long): TLRPC.TLChannelsSendAsPeers? {
 		var info = sendAsPeers[dialogId]
 
 		if (info != null && (info.loading || abs(SystemClock.elapsedRealtime() - info.loadTime) <= 5 * 60 * 1000)) {
@@ -18467,13 +18123,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		val infoFinal: SendAsPeersInfo = info
 
-		val req = TL_channels_getSendAs()
+		val req = TLRPC.TLChannelsGetSendAs()
 		req.peer = getInputPeer(dialogId)
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			val result: TL_channels_sendAsPeers?
+			val result: TLRPC.TLChannelsSendAsPeers?
 
-			if (response is TL_channels_sendAsPeers) {
+			if (response is TLRPC.TLChannelsSendAsPeers) {
 				if (response.peers.isEmpty()) {
 					result = null
 				}
@@ -18519,9 +18175,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 	fun getPrintingString(dialogId: Long, threadId: Int, isDialog: Boolean): CharSequence? {
 		if (isDialog && DialogObject.isUserDialog(dialogId)) {
-			val user = getUser(dialogId)
+			val status = (getUser(dialogId) as? TLUser)?.status
 
-			if (user?.status != null && user.status!!.expires < 0) {
+			if (status != null && status.expires < 0) {
 				return null
 			}
 		}
@@ -18549,8 +18205,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val messagesUsers = mutableListOf<Long>()
 
 			for (message in messages) {
-				if (message.isFromUser && !messagesUsers.contains(message.messageOwner?.from_id?.user_id)) {
-					messagesUsers.add(message.messageOwner!!.from_id!!.user_id)
+				if (message.isFromUser && !messagesUsers.contains(message.messageOwner?.fromId?.userId)) {
+					messagesUsers.add(message.messageOwner!!.fromId!!.userId)
 				}
 			}
 
@@ -18620,16 +18276,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				if (lastMessage == null || !isEncryptedChat && message.id > lastMessage.id || (isEncryptedChat || message.id < 0 && lastMessage.id < 0) && message.id < lastMessage.id || message.messageOwner!!.date > lastMessage.messageOwner!!.date) {
 					lastMessage = message
 
-					if (message.messageOwner?.peer_id?.channel_id != 0L) {
-						channelId = message.messageOwner?.peer_id?.channel_id ?: 0L
+					if (message.messageOwner?.peerId?.channelId != 0L) {
+						channelId = message.messageOwner?.peerId?.channelId ?: 0L
 					}
 				}
 
-				if (message.messageOwner?.action is TL_messageActionGroupCall) {
-					val chatFull = getChatFull(message.messageOwner?.peer_id?.channel_id)
+				if (message.messageOwner?.action is TLRPC.TLMessageActionGroupCall) {
+					val chatFull = getChatFull(message.messageOwner?.peerId?.channelId)
 
-					if (chatFull != null && (chatFull.call == null || chatFull.call.id != message.messageOwner?.action?.call?.id)) {
-						loadFullChat(message.messageOwner?.peer_id?.channel_id ?: 0L, 0, true)
+					if (chatFull != null && (chatFull.call == null || chatFull.call?.id != message.messageOwner?.action?.call?.id)) {
+						loadFullChat(message.messageOwner?.peerId?.channelId ?: 0L, 0, true)
 					}
 				}
 
@@ -18671,9 +18327,9 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return false
 		}
 
-		var dialog = dialogs_dict[dialogId] as? TL_dialog
+		var dialog = dialogs_dict[dialogId] as? TLDialog
 
-		if (lastMessage.messageOwner?.action is TL_messageActionChatMigrateTo) {
+		if (lastMessage.messageOwner?.action is TLRPC.TLMessageActionChatMigrateTo) {
 			if (dialog != null) {
 				allDialogs.remove(dialog)
 				dialogsServerOnly.remove(dialog)
@@ -18694,28 +18350,28 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				dialogs_read_inbox_max.remove(dialog.id)
 				dialogs_read_outbox_max.remove(dialog.id)
 
-				val offset = nextDialogsCacheOffset[dialog.folder_id, 0]
+				val offset = nextDialogsCacheOffset[dialog.folderId, 0]
 
 				if (offset > 0) {
-					nextDialogsCacheOffset.put(dialog.folder_id, offset - 1)
+					nextDialogsCacheOffset.put(dialog.folderId, offset - 1)
 				}
 
 				dialogMessage.remove(dialog.id)
 
-				val dialogs = dialogsByFolder[dialog.folder_id]
+				val dialogs = dialogsByFolder[dialog.folderId]
 				dialogs?.remove(dialog)
 
-				val `object` = dialogMessagesByIds[dialog.top_message]
+				val `object` = dialogMessagesByIds[dialog.topMessage]
 
-				if (`object` != null && `object`.messageOwner?.peer_id?.channel_id == 0L) {
-					dialogMessagesByIds.remove(dialog.top_message)
+				if (`object` != null && `object`.messageOwner?.peerId?.channelId == 0L) {
+					dialogMessagesByIds.remove(dialog.topMessage)
 				}
 
-				if (`object` != null && `object`.messageOwner!!.random_id != 0L) {
-					dialogMessagesByRandomIds.remove(`object`.messageOwner!!.random_id)
+				if (`object` != null && `object`.messageOwner!!.randomId != 0L) {
+					dialogMessagesByRandomIds.remove(`object`.messageOwner!!.randomId)
 				}
 
-				dialog.top_message = 0
+				dialog.topMessage = 0
 
 				notificationsController.removeNotificationsForDialog(dialog.id)
 
@@ -18726,7 +18382,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				val call = getGroupCall(-dialogId, false)
 
 				if (call != null) {
-					val chat = getChat(lastMessage.messageOwner?.action?.channel_id)
+					val chat = getChat(lastMessage.messageOwner?.action?.channelId)
 
 					if (chat != null) {
 						call.migrateToChat(chat)
@@ -18746,28 +18402,26 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return false
 			}
 
-			if (BuildConfig.DEBUG) {
-				FileLog.d("not found dialog with id " + dialogId + " dictCount = " + dialogs_dict.size() + " allCount = " + allDialogs.size)
-			}
+			FileLog.d("not found dialog with id " + dialogId + " dictCount = " + dialogs_dict.size() + " allCount = " + allDialogs.size)
 
-			dialog = TL_dialog()
+			dialog = TLDialog()
 			dialog.id = dialogId
-			dialog.top_message = lastMessage.id
+			dialog.topMessage = lastMessage.id
 
-			val mid = dialog.top_message
+			val mid = dialog.topMessage
 
-			dialog.last_message_date = lastMessage.messageOwner!!.date
+			dialog.lastMessageDate = lastMessage.messageOwner!!.date
 			dialog.flags = if (ChatObject.isChannel(chat)) 1 else 0
 
 			dialogs_dict.put(dialogId, dialog)
 			allDialogs.add(dialog)
 			dialogMessage.put(dialogId, lastMessage)
 
-			if (lastMessage.messageOwner?.peer_id?.channel_id == 0L) {
+			if (lastMessage.messageOwner?.peerId?.channelId == 0L) {
 				dialogMessagesByIds.put(lastMessage.id, lastMessage)
 
-				if (lastMessage.messageOwner?.random_id != 0L) {
-					dialogMessagesByRandomIds.put(lastMessage.messageOwner!!.random_id, lastMessage)
+				if (lastMessage.messageOwner?.randomId != 0L) {
+					dialogMessagesByRandomIds.put(lastMessage.messageOwner!!.randomId, lastMessage)
 				}
 			}
 
@@ -18778,7 +18432,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			messagesStorage.getDialogFolderId(dialogId) {
 				if (it != -1) {
 					if (it != 0) {
-						dialogFinal.folder_id = it
+						dialogFinal.folderId = it
 						sortDialogs(null)
 						notificationCenter.postNotificationName(NotificationCenter.dialogsNeedReload, true)
 					}
@@ -18791,29 +18445,29 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			}
 		}
 		else {
-			if (dialog.top_message > 0 && lastMessage.id > 0 && lastMessage.id > dialog.top_message || dialog.top_message < 0 && lastMessage.id < 0 && lastMessage.id < dialog.top_message || dialogMessage.indexOfKey(dialogId) < 0 || dialog.top_message < 0 || dialog.last_message_date <= lastMessage.messageOwner!!.date) {
-				val `object` = dialogMessagesByIds[dialog.top_message]
+			if (dialog.topMessage > 0 && lastMessage.id > 0 && lastMessage.id > dialog.topMessage || dialog.topMessage < 0 && lastMessage.id < 0 && lastMessage.id < dialog.topMessage || dialogMessage.indexOfKey(dialogId) < 0 || dialog.topMessage < 0 || dialog.lastMessageDate <= lastMessage.messageOwner!!.date) {
+				val `object` = dialogMessagesByIds[dialog.topMessage]
 
-				if (`object` != null && `object`.messageOwner?.peer_id?.channel_id == 0L) {
-					dialogMessagesByIds.remove(dialog.top_message)
+				if (`object` != null && `object`.messageOwner?.peerId?.channelId == 0L) {
+					dialogMessagesByIds.remove(dialog.topMessage)
 				}
 
-				if (`object` != null && `object`.messageOwner?.random_id != 0L) {
-					dialogMessagesByRandomIds.remove(`object`.messageOwner!!.random_id)
+				if (`object` != null && `object`.messageOwner?.randomId != 0L) {
+					dialogMessagesByRandomIds.remove(`object`.messageOwner!!.randomId)
 				}
 
-				dialog.top_message = lastMessage.id
-				dialog.last_message_date = lastMessage.messageOwner!!.date
+				dialog.topMessage = lastMessage.id
+				dialog.lastMessageDate = lastMessage.messageOwner!!.date
 
 				changed = true
 
 				dialogMessage.put(dialogId, lastMessage)
 
-				if (lastMessage.messageOwner?.peer_id?.channel_id == 0L) {
+				if (lastMessage.messageOwner?.peerId?.channelId == 0L) {
 					dialogMessagesByIds.put(lastMessage.id, lastMessage)
 
-					if (lastMessage.messageOwner?.random_id != 0L) {
-						dialogMessagesByRandomIds.put(lastMessage.messageOwner!!.random_id, lastMessage)
+					if (lastMessage.messageOwner?.randomId != 0L) {
+						dialogMessagesByRandomIds.put(lastMessage.messageOwner!!.randomId, lastMessage)
 					}
 				}
 			}
@@ -18885,7 +18539,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		dialogsForBlock.clear()
 		dialogsForward.clear()
 
-		for (a in 0 until dialogsByFolder.size()) {
+		for (a in 0 until dialogsByFolder.size) {
 			val arrayList = dialogsByFolder.valueAt(a)
 			arrayList?.clear()
 		}
@@ -18908,14 +18562,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				val dialogsByFilter = sortingDialogFilter!!.dialogs
 
 				for (d in allDialogs) {
-					if (d is TL_dialog) {
+					if (d is TLDialog) {
 						var dialogId = d.id
 
 						if (DialogObject.isEncryptedDialog(dialogId)) {
 							val encryptedChat = getEncryptedChat(DialogObject.getEncryptedChatId(dialogId))
 
 							if (encryptedChat != null) {
-								dialogId = encryptedChat.user_id
+								dialogId = encryptedChat.userId
 							}
 						}
 
@@ -18948,7 +18602,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			while (a < n) {
 				val d = allDialogs[a]
 
-				if (d is TL_dialog) {
+				if (d is TLDialog) {
 					val messageObject = dialogMessage[d.id]
 
 					if (messageObject != null && messageObject.messageOwner!!.date < dialogsLoadedTillDate) {
@@ -18964,8 +18618,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						if (DialogObject.isChannel(d)) {
 							val chat = getChat(-d.id)
 
-							if (chat != null && (chat.creator || chat.megagroup && (chat.admin_rights != null && (chat.admin_rights.post_messages || chat.admin_rights.add_admins) || chat.default_banned_rights == null || !chat.default_banned_rights.invite_users) || !chat.megagroup && chat.admin_rights != null && chat.admin_rights.add_admins)) {
-								if (chat.creator || chat.megagroup && chat.admin_rights != null || !chat.megagroup && chat.admin_rights != null) {
+							if (chat != null && (chat.creator || chat.megagroup && (chat.adminRights != null && (chat.adminRights!!.postMessages || chat.adminRights!!.addAdmins) || chat.defaultBannedRights == null || !chat.defaultBannedRights!!.inviteUsers) || !chat.megagroup && chat.adminRights != null && chat.adminRights!!.addAdmins)) {
+								if (chat.creator || chat.megagroup && chat.adminRights != null || !chat.megagroup && chat.adminRights != null) {
 									if (chat.megagroup) {
 										dialogsMyGroups.add(d)
 									}
@@ -18991,7 +18645,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							if (chatsDict != null) {
 								val chat = chatsDict[-d.id]
 
-								if (chat?.migrated_to != null) {
+								if (chat?.migratedTo != null) {
 									allDialogs.removeAt(a)
 									n--
 									continue
@@ -19000,7 +18654,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 							val chat = getChat(-d.id)
 
-							if (chat != null && (chat.admin_rights != null && (chat.admin_rights.add_admins || chat.admin_rights.invite_users) || chat.creator)) {
+							if (chat != null && (chat.adminRights != null && (chat.adminRights!!.addAdmins || chat.adminRights!!.inviteUsers) || chat.creator)) {
 								if (chat.creator) {
 									dialogsMyGroups.add(d)
 								}
@@ -19028,7 +18682,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 					}
 
-					if (canAddToForward && d.folder_id == 0) {
+					if (canAddToForward && d.folderId == 0) {
 						if (d.id == selfId) {
 							dialogsForward.add(0, d)
 							selfAdded = true
@@ -19039,7 +18693,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					}
 				}
 
-				if ((d.unread_count != 0 || d.unread_mark) && !isDialogMuted(d.id)) {
+				if ((d.unreadCount != 0 || d.unreadMark) && !isDialogMuted(d.id)) {
 					unreadUnmutedDialogs++
 				}
 
@@ -19066,17 +18720,19 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val user = userConfig.getCurrentUser()
 
 			if (user != null) {
-				val dialog: Dialog = TL_dialog()
+				val dialog: Dialog = TLDialog()
 				dialog.id = user.id
-				dialog.notify_settings = TL_peerNotifySettings()
-				dialog.peer = TL_peerUser()
-				dialog.peer.user_id = user.id
+				dialog.notifySettings = TLRPC.TLPeerNotifySettings()
+
+				dialog.peer = TLRPC.TLPeerUser().also {
+					it.userId = user.id
+				}
 
 				dialogsForward.add(0, dialog)
 			}
 		}
 
-		for (a in 0 until dialogsByFolder.size()) {
+		for (a in 0 until dialogsByFolder.size) {
 			val folderId = dialogsByFolder.keyAt(a)
 			val dialogs = dialogsByFolder.valueAt(a)
 
@@ -19087,11 +18743,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	private fun addDialogToItsFolder(index: Int, dialog: Dialog) {
-		val folderId = if (dialog is TL_dialogFolder) {
+		val folderId = if (dialog is TLRPC.TLDialogFolder) {
 			0
 		}
 		else {
-			dialog.folder_id
+			dialog.folderId
 		}
 
 		var dialogs = dialogsByFolder[folderId]
@@ -19106,7 +18762,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			dialogs.add(dialog)
 		}
 		else if (index == -2) {
-			if (dialogs.isEmpty() || dialogs[0] !is TL_dialogFolder) {
+			if (dialogs.isEmpty() || dialogs[0] !is TLRPC.TLDialogFolder) {
 				dialogs.add(0, dialog)
 			}
 			else {
@@ -19142,10 +18798,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		val reason = if (chat != null) {
-			getRestrictionReason(chat.restriction_reason)
+			getRestrictionReason(chat.restrictionReason)
 		}
 		else {
-			getRestrictionReason(user!!.restriction_reason)
+			getRestrictionReason((user as? TLUser)?.restrictionReason)
 		}
 
 		if (reason != null) {
@@ -19153,7 +18809,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			return false
 		}
 
-		if (messageId != 0 && originalMessage != null && chat != null && chat.access_hash == 0L) {
+		if (messageId != 0 && originalMessage != null && chat != null && chat.accessHash == 0L) {
 			val did = originalMessage.dialogId
 
 			if (!DialogObject.isEncryptedDialog(did)) {
@@ -19165,23 +18821,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				}
 
 				if (did > 0 || !ChatObject.isChannel(chat)) {
-					val request = TL_messages_getMessages()
-					request.id.add(originalMessage.id)
+					val request = TLRPC.TLMessagesGetMessages()
+					request.id.add(TLRPC.TLInputMessageID().also { it.id = originalMessage.id })
 
 					req = request
 				}
 				else {
 					chat = getChat(-did)
 
-					val request = TL_channels_getMessages()
+					val request = TLRPC.TLChannelsGetMessages()
 					request.channel = getInputChannel(chat)
-					request.id.add(originalMessage.id)
+					request.id.add(TLRPC.TLInputMessageID().also { it.id = originalMessage.id })
 
 					req = request
 				}
 
 				val reqId = connectionsManager.sendRequest(req) { response, _ ->
-					if (response is messages_Messages) {
+					if (response is MessagesMessages) {
 						AndroidUtilities.runOnUIThread {
 							try {
 								progressDialog.dismiss()
@@ -19228,7 +18884,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		if (`object` is User) {
 			user = `object`
 
-			if (user.min) {
+			if ((user as? TLUser)?.min == true) {
 				user = null
 			}
 		}
@@ -19250,7 +18906,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val parentActivity = fragment.parentActivity ?: return
 			var progressDialog: AlertDialog? = AlertDialog(parentActivity, 3)
 
-			val req = TL_contacts_resolveUsername()
+			val req = TLRPC.TLContactsResolveUsername()
 			req.username = username
 
 			val reqId = connectionsManager.sendRequest(req) { response, _ ->
@@ -19263,7 +18919,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 					fragment.visibleDialog = null
 
-					if (response is TL_contacts_resolvedPeer) {
+					if (response is TLRPC.TLContactsResolvedPeer) {
 						putUsers(response.users, false)
 						putChats(response.chats, false)
 
@@ -19392,7 +19048,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun setChatPendingRequestsOnClose(chatId: Long, count: Int) {
-		mainPreferences.edit().putInt("chatPendingRequests$chatId", count).commit()
+		mainPreferences.edit { putInt("chatPendingRequests$chatId", count) }
 	}
 
 	fun markSponsoredAsRead(dialogId: Long, `object`: MessageObject?) {
@@ -19400,16 +19056,16 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun deleteMessagesRange(dialogId: Long, channelId: Long, minDate: Int, maxDate: Int, forAll: Boolean, callback: Runnable) {
-		val req = TL_messages_deleteHistory()
+		val req = TLRPC.TLMessagesDeleteHistory()
 		req.peer = getInputPeer(dialogId)
 		req.flags = 1 shl 2 or (1 shl 3)
-		req.min_date = minDate
-		req.max_date = maxDate
+		req.minDate = minDate
+		req.maxDate = maxDate
 		req.revoke = forAll
 
 		connectionsManager.sendRequest(req) { response, _ ->
-			if (response is TL_messages_affectedHistory) {
-				processNewDifferenceParams(-1, response.pts, -1, response.pts_count)
+			if (response is TLRPC.TLMessagesAffectedHistory) {
+				processNewDifferenceParams(-1, response.pts, -1, response.ptsCount)
 
 				messagesStorage.storageQueue.postRunnable {
 					val dbMessages = messagesStorage.getCachedMessagesInRange(dialogId, minDate, maxDate)
@@ -19430,24 +19086,24 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	fun setChatReactions(chatId: Long, type: Int, reactions: List<String>) {
-		val req = TL_messages_setChatAvailableReactions()
+		val req = TLRPC.TLMessagesSetChatAvailableReactions()
 		req.peer = getInputPeer(-chatId)
 
 		when (type) {
 			ChatReactionsEditActivity.SELECT_TYPE_NONE -> {
-				req.available_reactions = TL_chatReactionsNone()
+				req.availableReactions = TLRPC.TLChatReactionsNone()
 			}
 
 			ChatReactionsEditActivity.SELECT_TYPE_ALL -> {
-				req.available_reactions = TL_chatReactionsAll()
+				req.availableReactions = TLRPC.TLChatReactionsAll()
 			}
 
 			else -> {
-				val someReactions = TL_chatReactionsSome()
-				req.available_reactions = someReactions
+				val someReactions = TLRPC.TLChatReactionsSome()
+				req.availableReactions = someReactions
 
 				for (i in reactions.indices) {
-					val emojiReaction = TL_reactionEmoji()
+					val emojiReaction = TLRPC.TLReactionEmoji()
 					emojiReaction.emoticon = reactions[i]
 
 					someReactions.reactions.add(emojiReaction)
@@ -19462,15 +19118,15 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				val full = getChatFull(chatId)
 
 				if (full != null) {
-					if (full is TL_chatFull) {
+					if (full is TLChatFull) {
 						full.flags = full.flags or 262144
 					}
 
-					if (full is TL_channelFull) {
+					if (full is TLRPC.TLChannelFull) {
 						full.flags = full.flags or 1073741824
 					}
 
-					full.available_reactions = req.available_reactions
+					full.availableReactions = req.availableReactions
 
 					messagesStorage.updateChatInfo(full, false)
 				}
@@ -19489,14 +19145,18 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		if (chat.megagroup || ChatObject.isChannel(chat)) {
-			val req = TL_channels_getParticipant()
+			val req = TLRPC.TLChannelsGetParticipant()
 			req.channel = getInputChannel(chat.id)
 			req.participant = getInputPeer(user)
 
 			connectionsManager.sendRequest(req) { response, error ->
 				if (callback != null) {
-					val participant = (response as? TL_channels_channelParticipant)?.participant
-					callback.run(error == null && participant != null && !participant.left, participant?.admin_rights, participant?.rank)
+					val participant = (response as? TLRPC.TLChannelsChannelParticipants)?.participants?.find { it.userId == user.id }
+					// val participant = (response as? TLRPC.TLChannelsChannelParticipants)?.participant
+
+					val didNotLeft = participant !is TLRPC.TLChannelParticipantLeft && (participant as? TLRPC.TLChannelParticipantBanned)?.left != true
+
+					callback.run(error == null && participant != null && didNotLeft, participant?.adminRights, participant?.rank)
 				}
 			}
 		}
@@ -19504,22 +19164,24 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val chatFull = getChatFull(chat.id)
 
 			if (chatFull != null) {
-				var userParticipant: ChatParticipant? = null
+				var userParticipant: TLRPC.ChatParticipant? = null
+				val participants = chatFull.participants?.participants
 
-				if (chatFull.participants?.participants != null) {
-					val count = chatFull.participants.participants.size
+				if (participants != null) {
+					val count = participants.size
 
 					for (i in 0 until count) {
-						val participant = chatFull.participants.participants[i]
+						val participant = participants[i]
 
-						if (participant != null && participant.user_id == user.id) {
+						if (participant.userId == user.id) {
 							userParticipant = participant
 							break
 						}
 					}
 				}
 
-				callback?.run(userParticipant != null, if (chatFull.participants != null && chatFull.participants.admin_id == user.id) emptyAdminRights(true) else null, null)
+				// callback?.run(userParticipant != null, if (chatFull.participants != null && chatFull.participants.adminId == user.id) emptyAdminRights(true) else null, null)
+				callback?.run(userParticipant != null, null, null)
 			}
 			else {
 				callback?.run(false, null, null)
@@ -19527,7 +19189,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	private fun applySoundSettings(settings: NotificationSound?, editor: SharedPreferences.Editor, dialogId: Long, globalType: Int, serverUpdate: Boolean) {
+	private fun applySoundSettings(settings: TLRPC.NotificationSound?, editor: SharedPreferences.Editor, dialogId: Long, globalType: Int, serverUpdate: Boolean) {
 		if (settings == null) {
 			return
 		}
@@ -19564,25 +19226,25 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		when (settings) {
-			is TL_notificationSoundDefault -> {
+			is TLRPC.TLNotificationSoundDefault -> {
 				editor.putString(soundPref, "Default")
 				editor.putString(soundPathPref, "Default")
 				editor.remove(soundDocPref)
 			}
 
-			is TL_notificationSoundNone -> {
+			is TLRPC.TLNotificationSoundNone -> {
 				editor.putString(soundPref, "NoSound")
 				editor.putString(soundPathPref, "NoSound")
 				editor.remove(soundDocPref)
 			}
 
-			is TL_notificationSoundLocal -> {
+			is TLRPC.TLNotificationSoundLocal -> {
 				editor.putString(soundPref, settings.title)
 				editor.putString(soundPathPref, settings.data)
 				editor.remove(soundDocPref)
 			}
 
-			is TL_notificationSoundRingtone -> {
+			is TLRPC.TLNotificationSoundRingtone -> {
 				editor.putLong(soundDocPref, settings.id)
 
 				mediaDataController.checkRingtones()
@@ -19596,8 +19258,8 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 	}
 
-	fun updateEmojiStatusUntilUpdate(userId: Long, status: EmojiStatus?) {
-		if (status is TL_emojiStatusUntil) {
+	fun updateEmojiStatusUntilUpdate(userId: Long, status: TLRPC.EmojiStatus?) {
+		if (status is TLRPC.TLEmojiStatusUntil) {
 			emojiStatusUntilValues.put(userId, status.until)
 		}
 		else {
@@ -19657,11 +19319,11 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 	fun interface ErrorDelegate {
 		// if returns true, a delegate allows to show default alert
-		fun run(error: TL_error?): Boolean
+		fun run(error: TLRPC.TLError?): Boolean
 	}
 
 	fun interface IsInChatCheckedCallback {
-		fun run(isInChat: Boolean, currentAdminRights: TL_chatAdminRights?, rank: String?)
+		fun run(isInChat: Boolean, currentAdminRights: TLRPC.TLChatAdminRights?, rank: String?)
 	}
 
 	interface MessagesLoadedCallback {
@@ -19777,7 +19439,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	class PrintingUser {
 		var lastTime: Long = 0
 		var userId: Long = 0
-		var action: SendMessageAction? = null
+		var action: TLRPC.SendMessageAction? = null
 	}
 
 	class DialogFilter {
@@ -19831,23 +19493,23 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return true
 			}
 
-			if (d.folder_id != 0 && flags and DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED != 0) {
+			if (d.folderId != 0 && flags and DIALOG_FILTER_FLAG_EXCLUDE_ARCHIVED != 0) {
 				return false
 			}
 
 			val messagesController = accountInstance.messagesController
 			val contactsController = accountInstance.contactsController
 
-			if (flags and DIALOG_FILTER_FLAG_EXCLUDE_MUTED != 0 && messagesController.isDialogMuted(d.id) && d.unread_mentions_count == 0 || flags and DIALOG_FILTER_FLAG_EXCLUDE_READ != 0 && d.unread_count == 0 && !d.unread_mark && d.unread_mentions_count == 0) {
+			if (flags and DIALOG_FILTER_FLAG_EXCLUDE_MUTED != 0 && messagesController.isDialogMuted(d.id) && d.unreadMentionsCount == 0 || flags and DIALOG_FILTER_FLAG_EXCLUDE_READ != 0 && d.unreadCount == 0 && !d.unreadMark && d.unreadMentionsCount == 0) {
 				return false
 			}
 
 			if (dialogId > 0) {
-				val user = messagesController.getUser(dialogId)
+				val user = messagesController.getUser(dialogId) as? TLUser
 
 				if (user != null) {
 					return if (!user.bot) {
-						if (user.self || user.contact || contactsController.isContact(dialogId)) {
+						if (user.isSelf || user.contact || contactsController.isContact(dialogId)) {
 							flags and DIALOG_FILTER_FLAG_CONTACTS != 0
 						}
 						else {
@@ -19886,7 +19548,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				val encryptedChat = getInstance(currentAccount).getEncryptedChat(DialogObject.getEncryptedChatId(dialogId))
 
 				if (encryptedChat != null) {
-					dialogId = encryptedChat.user_id
+					dialogId = encryptedChat.userId
 				}
 			}
 
@@ -19908,7 +19570,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 	}
 
 	private class SendAsPeersInfo {
-		var sendAsPeers: TL_channels_sendAsPeers? = null
+		var sendAsPeers: TLRPC.TLChannelsSendAsPeers? = null
 		var loadTime: Long = 0
 		var loading = false
 	}
@@ -19924,10 +19586,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 							notificationCenter.removeObserver(it, NotificationCenter.chatInfoDidLoad)
 						}
 
-						val chatFull = args[0] as ChatFull
+						val chatFull = args[0] as? ChatFull
 						var chat: Chat? = null
 
-						if (chatFull.id == chatId) {
+						if (chatFull?.id == chatId) {
 							chat = getChat(chatId)
 						}
 
@@ -19954,10 +19616,14 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 						}
 
 						val uid = args[0] as Long
-						var resultingUser: User? = null
+						var resultingUser: TLUser? = null
 
 						if (uid == userId) {
-							resultingUser = (args[1] as? UserFull)?.user
+							val userFull = (args[1] as? TLUserFull)
+
+							if (userFull != null) {
+								resultingUser = getUser(userFull.id) as? TLUser
+							}
 						}
 
 						continuation.resume(resultingUser)
@@ -19967,7 +19633,7 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				notificationCenter.addObserver(observer, NotificationCenter.userInfoDidLoad)
 			}
 
-			loadFullUser(TL_user().apply { id = userId }, classGuid, force)
+			loadFullUser(TLUser().apply { id = userId }, classGuid, force)
 		}
 	}
 
@@ -20121,22 +19787,22 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 		}
 
 		@JvmStatic
-		fun getInputChannel(chat: Chat?): InputChannel {
-			return if (chat is TL_channel || chat is TL_channelForbidden) {
-				val inputChat: InputChannel = TL_inputChannel()
-				inputChat.channel_id = chat.id
-				inputChat.access_hash = chat.access_hash
+		fun getInputChannel(chat: Chat?): TLRPC.InputChannel {
+			return if (chat is TLRPC.TLChannel || chat is TLRPC.TLChannelForbidden) {
+				val inputChat = TLRPC.TLInputChannel()
+				inputChat.channelId = chat.id
+				inputChat.accessHash = chat.accessHash
 				inputChat
 			}
 			else {
-				TL_inputChannelEmpty()
+				TLRPC.TLInputChannelEmpty()
 			}
 		}
 
-		fun getInputChannel(peer: InputPeer): InputChannel {
-			val inputChat = TL_inputChannel()
-			inputChat.channel_id = peer.channel_id
-			inputChat.access_hash = peer.access_hash
+		fun getInputChannel(peer: InputPeer): TLRPC.InputChannel {
+			val inputChat = TLRPC.TLInputChannel()
+			inputChat.channelId = peer.channelId
+			inputChat.accessHash = peer.accessHash
 			return inputChat
 		}
 
@@ -20145,13 +19811,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val inputPeer: InputPeer
 
 			if (ChatObject.isChannel(chat)) {
-				inputPeer = TL_inputPeerChannel()
-				inputPeer.channel_id = chat.id
-				inputPeer.access_hash = chat.access_hash
+				inputPeer = TLRPC.TLInputPeerChannel()
+				inputPeer.channelId = chat.id
+				inputPeer.accessHash = chat.accessHash
 			}
 			else {
-				inputPeer = TL_inputPeerChat()
-				inputPeer.chat_id = chat!!.id
+				inputPeer = TLRPC.TLInputPeerChat()
+				inputPeer.chatId = chat?.id ?: 0
 			}
 
 			return inputPeer
@@ -20159,13 +19825,13 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		@JvmStatic
 		fun getInputPeer(user: User): InputPeer {
-			val inputPeer: InputPeer = TL_inputPeerUser()
-			inputPeer.user_id = user.id
-			inputPeer.access_hash = user.access_hash
+			val inputPeer = TLRPC.TLInputPeerUser()
+			inputPeer.userId = user.id
+			inputPeer.accessHash = (user as? TLUser)?.accessHash ?: 0L
 			return inputPeer
 		}
 
-		val savedLogOutTokens: ArrayList<TL_auth_loggedOut>?
+		val savedLogOutTokens: ArrayList<TLRPC.TLAuthLoggedOut>?
 			get() {
 				val preferences = ApplicationLoader.applicationContext.getSharedPreferences("saved_tokens", Context.MODE_PRIVATE)
 				val count = preferences.getInt("count", 0)
@@ -20174,12 +19840,12 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 					return null
 				}
 
-				val tokens = ArrayList<TL_auth_loggedOut>()
+				val tokens = ArrayList<TLRPC.TLAuthLoggedOut>()
 
 				for (i in 0 until count) {
 					val value = preferences.getString("log_out_token_$i", "")
 					val serializedData = SerializedData(Utilities.hexToBytes(value))
-					val token = TL_auth_loggedOut.TLdeserialize(serializedData, serializedData.readInt32(true), true)
+					val token = TLRPC.TLAuthLoggedOut.deserialize(serializedData, serializedData.readInt32(true), true)
 
 					if (token != null) {
 						tokens.add(token)
@@ -20189,78 +19855,78 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 				return tokens
 			}
 
-		fun saveLogOutTokens(tokens: ArrayList<TL_auth_loggedOut>) {
+		fun saveLogOutTokens(tokens: ArrayList<TLRPC.TLAuthLoggedOut>) {
 			val preferences = ApplicationLoader.applicationContext.getSharedPreferences("saved_tokens", Context.MODE_PRIVATE)
-			preferences.edit().clear().commit()
+			preferences.edit { clear() }
 
-			val activeTokens = ArrayList<TL_auth_loggedOut>()
+			val activeTokens = mutableListOf<TLRPC.TLAuthLoggedOut>()
 
 			for (i in 0 until min(20, tokens.size)) {
 				activeTokens.add(tokens[i])
 			}
 
 			if (activeTokens.size > 0) {
-				val editor = preferences.edit()
-				editor.putInt("count", activeTokens.size)
+				preferences.edit {
+					putInt("count", activeTokens.size)
 
-				for (i in activeTokens.indices) {
-					val data = SerializedData(activeTokens[i].objectSize)
-					activeTokens[i].serializeToStream(data)
-					editor.putString("log_out_token_$i", Utilities.bytesToHex(data.toByteArray()))
+					for (i in activeTokens.indices) {
+						val data = SerializedData(activeTokens[i].objectSize)
+						activeTokens[i].serializeToStream(data)
+						putString("log_out_token_$i", Utilities.bytesToHex(data.toByteArray()))
+					}
+
 				}
-
-				editor.commit()
 			}
 		}
 
 		@JvmStatic
 		fun isSupportUser(user: User?): Boolean {
-			return user != null && (user.support || user.id == BuildConfig.NOTIFICATIONS_BOT_ID || user.id == 333000L || user.id == 4240000L || user.id == 4244000L || user.id == 4245000L || user.id == 4246000L || user.id == 410000L || user.id == 420000L || user.id == 431000L || user.id == 431415000L || user.id == 434000L || user.id == 4243000L || user.id == 439000L || user.id == 449000L || user.id == 450000L || user.id == 452000L || user.id == 454000L || user.id == 4254000L || user.id == 455000L || user.id == 460000L || user.id == 470000L || user.id == 479000L || user.id == 796000L || user.id == 482000L || user.id == 490000L || user.id == 496000L || user.id == 497000L || user.id == 498000L || user.id == 4298000L)
+			return user is TLUser && (user.support || user.id == BuildConfig.NOTIFICATIONS_BOT_ID || user.id == 333000L || user.id == 4240000L || user.id == 4244000L || user.id == 4245000L || user.id == 4246000L || user.id == 410000L || user.id == 420000L || user.id == 431000L || user.id == 431415000L || user.id == 434000L || user.id == 4243000L || user.id == 439000L || user.id == 449000L || user.id == 450000L || user.id == 452000L || user.id == 454000L || user.id == 4254000L || user.id == 455000L || user.id == 460000L || user.id == 470000L || user.id == 479000L || user.id == 796000L || user.id == 482000L || user.id == 490000L || user.id == 496000L || user.id == 497000L || user.id == 498000L || user.id == 4298000L)
 		}
 
 		private fun getUpdatePts(update: Update): Int {
 			return when (update) {
-				is TL_updateDeleteMessages -> update.pts
-				is TL_updateNewChannelMessage -> update.pts
-				is TL_updateReadHistoryOutbox -> update.pts
-				is TL_updateNewMessage -> update.pts
-				is TL_updateEditMessage -> update.pts
-				is TL_updateWebPage -> update.pts
-				is TL_updateReadHistoryInbox -> update.pts
-				is TL_updateChannelWebPage -> update.pts
-				is TL_updateDeleteChannelMessages -> update.pts
-				is TL_updateEditChannelMessage -> update.pts
-				is TL_updateReadMessagesContents -> update.pts
-				is TL_updateChannelTooLong -> update.pts
-				is TL_updateFolderPeers -> update.pts
-				is TL_updatePinnedChannelMessages -> update.pts
-				is TL_updatePinnedMessages -> update.pts
+				is TLRPC.TLUpdateDeleteMessages -> update.pts
+				is TLRPC.TLUpdateNewChannelMessage -> update.pts
+				is TLRPC.TLUpdateReadHistoryOutbox -> update.pts
+				is TLRPC.TLUpdateNewMessage -> update.pts
+				is TLRPC.TLUpdateEditMessage -> update.pts
+				is TLRPC.TLUpdateWebPage -> update.pts
+				is TLRPC.TLUpdateReadHistoryInbox -> update.pts
+				is TLRPC.TLUpdateChannelWebPage -> update.pts
+				is TLRPC.TLUpdateDeleteChannelMessages -> update.pts
+				is TLRPC.TLUpdateEditChannelMessage -> update.pts
+				is TLRPC.TLUpdateReadMessagesContents -> update.pts
+				is TLRPC.TLUpdateChannelTooLong -> update.pts
+				is TLRPC.TLUpdateFolderPeers -> update.pts
+				is TLRPC.TLUpdatePinnedChannelMessages -> update.pts
+				is TLRPC.TLUpdatePinnedMessages -> update.pts
 				else -> 0
 			}
 		}
 
 		private fun getUpdatePtsCount(update: Update): Int {
 			return when (update) {
-				is TL_updateDeleteMessages -> update.pts_count
-				is TL_updateNewChannelMessage -> update.pts_count
-				is TL_updateReadHistoryOutbox -> update.pts_count
-				is TL_updateNewMessage -> update.pts_count
-				is TL_updateEditMessage -> update.pts_count
-				is TL_updateWebPage -> update.pts_count
-				is TL_updateReadHistoryInbox -> update.pts_count
-				is TL_updateChannelWebPage -> update.pts_count
-				is TL_updateDeleteChannelMessages -> update.pts_count
-				is TL_updateEditChannelMessage -> update.pts_count
-				is TL_updateReadMessagesContents -> update.pts_count
-				is TL_updateFolderPeers -> update.pts_count
-				is TL_updatePinnedChannelMessages -> update.pts_count
-				is TL_updatePinnedMessages -> update.pts_count
+				is TLRPC.TLUpdateDeleteMessages -> update.ptsCount
+				is TLRPC.TLUpdateNewChannelMessage -> update.ptsCount
+				is TLRPC.TLUpdateReadHistoryOutbox -> update.ptsCount
+				is TLRPC.TLUpdateNewMessage -> update.ptsCount
+				is TLRPC.TLUpdateEditMessage -> update.ptsCount
+				is TLRPC.TLUpdateWebPage -> update.ptsCount
+				is TLRPC.TLUpdateReadHistoryInbox -> update.ptsCount
+				is TLRPC.TLUpdateChannelWebPage -> update.ptsCount
+				is TLRPC.TLUpdateDeleteChannelMessages -> update.ptsCount
+				is TLRPC.TLUpdateEditChannelMessage -> update.ptsCount
+				is TLRPC.TLUpdateReadMessagesContents -> update.ptsCount
+				is TLRPC.TLUpdateFolderPeers -> update.ptsCount
+				is TLRPC.TLUpdatePinnedChannelMessages -> update.ptsCount
+				is TLRPC.TLUpdatePinnedMessages -> update.ptsCount
 				else -> 0
 			}
 		}
 
 		private fun getUpdateQts(update: Update): Int {
-			return if (update is TL_updateNewEncryptedMessage) {
+			return if (update is TLRPC.TLUpdateNewEncryptedMessage) {
 				update.qts
 			}
 			else {
@@ -20270,28 +19936,28 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 
 		fun getUpdateChannelId(update: Update): Long {
 			return when (update) {
-				is TL_updateNewChannelMessage -> update.message.peer_id!!.channel_id
-				is TL_updateEditChannelMessage -> update.message.peer_id!!.channel_id
-				is TL_updateReadChannelOutbox -> update.channel_id
-				is TL_updateChannelMessageViews -> update.channel_id
-				is TL_updateChannelMessageForwards -> update.channel_id
-				is TL_updateChannelTooLong -> update.channel_id
-				is TL_updateChannelReadMessagesContents -> update.channel_id
-				is TL_updateChannelAvailableMessages -> update.channel_id
-				is TL_updateChannel -> update.channel_id
-				is TL_updateChannelWebPage -> update.channel_id
-				is TL_updateDeleteChannelMessages -> update.channel_id
-				is TL_updateReadChannelInbox -> update.channel_id
-				is TL_updateReadChannelDiscussionInbox -> update.channel_id
-				is TL_updateReadChannelDiscussionOutbox -> update.channel_id
-				is TL_updateChannelUserTyping -> update.channel_id
-				is TL_updatePinnedChannelMessages -> update.channel_id
+				is TLRPC.TLUpdateNewChannelMessage -> update.message?.peerId?.channelId
+				is TLRPC.TLUpdateEditChannelMessage -> update.message?.peerId?.channelId
+				is TLRPC.TLUpdateReadChannelOutbox -> update.channelId
+				is TLRPC.TLUpdateChannelMessageViews -> update.channelId
+				is TLRPC.TLUpdateChannelMessageForwards -> update.channelId
+				is TLRPC.TLUpdateChannelTooLong -> update.channelId
+				is TLRPC.TLUpdateChannelReadMessagesContents -> update.channelId
+				is TLRPC.TLUpdateChannelAvailableMessages -> update.channelId
+				is TLRPC.TLUpdateChannel -> update.channelId
+				is TLRPC.TLUpdateChannelWebPage -> update.channelId
+				is TLRPC.TLUpdateDeleteChannelMessages -> update.channelId
+				is TLRPC.TLUpdateReadChannelInbox -> update.channelId
+				is TLRPC.TLUpdateReadChannelDiscussionInbox -> update.channelId
+				is TLRPC.TLUpdateReadChannelDiscussionOutbox -> update.channelId
+				is TLRPC.TLUpdateChannelUserTyping -> update.channelId
+				is TLRPC.TLUpdatePinnedChannelMessages -> update.channelId
 				else -> 0
-			}
+			} ?: 0L
 		}
 
 		@JvmStatic
-		fun getRestrictionReason(reasons: ArrayList<TL_restrictionReason>?): String? {
+		fun getRestrictionReason(reasons: List<TLRPC.TLRestrictionReason>?): String? {
 			if (reasons.isNullOrEmpty()) {
 				return null
 			}
@@ -20332,10 +19998,10 @@ class MessagesController(num: Int) : BaseController(num), NotificationCenterDele
 			val reason: String?
 
 			if (chat != null) {
-				reason = getRestrictionReason(chat.restriction_reason)
+				reason = getRestrictionReason(chat.restrictionReason)
 			}
-			else if (user != null) {
-				reason = getRestrictionReason(user.restriction_reason)
+			else if (user is TLUser) {
+				reason = getRestrictionReason(user.restrictionReason)
 
 				if (type != 3 && user.bot) {
 					type = 1

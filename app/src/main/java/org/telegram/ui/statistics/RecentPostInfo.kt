@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.statistics
 
@@ -12,6 +12,6 @@ import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.TLRPC
 
 class RecentPostInfo {
-	var counters: TLRPC.TL_messageInteractionCounters? = null
+	var counters: TLRPC.TLMessageInteractionCounters? = null
 	var message: MessageObject? = null
 }

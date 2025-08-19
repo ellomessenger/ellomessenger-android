@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components
 
@@ -18,9 +18,9 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.Drawable
 import android.os.SystemClock
 import android.view.View
-import android.view.animation.Interpolator
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.withScale
 import org.telegram.messenger.AccountInstance
 import org.telegram.messenger.AndroidUtilities
 import org.telegram.messenger.ApplicationLoader
@@ -32,10 +32,10 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.messenger.voip.VoIPService
 import org.telegram.tgnet.ConnectionsManager
+import org.telegram.tgnet.TLObject
 import org.telegram.tgnet.TLRPC.Chat
-import org.telegram.tgnet.TLRPC.TL_groupCallParticipant
-import org.telegram.tgnet.tlrpc.TLObject
-import org.telegram.tgnet.tlrpc.User
+import org.telegram.tgnet.TLRPC.TLGroupCallParticipant
+import org.telegram.tgnet.TLRPC.User
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Cells.GroupCallUserCell.AvatarWavesDrawable
 import java.util.Random
@@ -250,7 +250,7 @@ class AvatarsDrawable(var parent: View?, private val isInCall: Boolean) {
 		var lastUpdateTime = 0L
 		var lastSpeakTime = 0L
 		var imageReceiver: ImageReceiver? = null
-		var participant: TL_groupCallParticipant? = null
+		var participant: TLGroupCallParticipant? = null
 		var id = 0L
 		var `object`: TLObject? = null
 		var animationType = 0
@@ -312,7 +312,7 @@ class AvatarsDrawable(var parent: View?, private val isInCall: Boolean) {
 		animatingStates[index].`object` = `object`
 
 		when (`object`) {
-			is TL_groupCallParticipant -> {
+			is TLGroupCallParticipant -> {
 				animatingStates[index].participant = `object`
 
 				val id = MessageObject.getPeerId(`object`.peer)
@@ -335,12 +335,12 @@ class AvatarsDrawable(var parent: View?, private val isInCall: Boolean) {
 							animatingStates[index].lastSpeakTime = `object`.lastActiveDate
 						}
 						else {
-							animatingStates[index].lastSpeakTime = `object`.active_date.toLong()
+							animatingStates[index].lastSpeakTime = `object`.activeDate.toLong()
 						}
 					}
 				}
 				else {
-					animatingStates[index].lastSpeakTime = `object`.active_date.toLong()
+					animatingStates[index].lastSpeakTime = `object`.activeDate.toLong()
 				}
 
 				animatingStates[index].id = id
@@ -603,12 +603,9 @@ class AvatarsDrawable(var parent: View?, private val isInCall: Boolean) {
 				imageReceiver.alpha = alpha
 
 				if (avatarScale != 1f) {
-					canvas.save()
-					canvas.scale(avatarScale, avatarScale, imageReceiver.centerX, imageReceiver.centerY)
-
-					imageReceiver.draw(canvas)
-
-					canvas.restore()
+					canvas.withScale(avatarScale, avatarScale, imageReceiver.centerX, imageReceiver.centerY) {
+						imageReceiver.draw(this)
+					}
 				}
 				else {
 					imageReceiver.draw(canvas)

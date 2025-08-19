@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components
 
@@ -40,7 +40,7 @@ import org.telegram.messenger.UserConfig
 import org.telegram.messenger.UserConfig.Companion.getInstance
 import org.telegram.messenger.messageobject.MessageObject
 import org.telegram.tgnet.TLRPC
-import org.telegram.tgnet.TLRPC.StickerSet
+import org.telegram.tgnet.TLRPC.TLStickerSet
 import org.telegram.ui.ActionBar.Theme
 import org.telegram.ui.Components.EmojiView.EmojiPack
 import org.telegram.ui.Components.Premium.PremiumLockIconView
@@ -50,6 +50,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import androidx.core.graphics.withTranslation
 
 open class EmojiTabsStrip(context: Context, includeStandard: Boolean, private val includeAnimated: Boolean, private val onSettingsOpenRunnable: Runnable?) : ScrollableHorizontalScrollView(context) {
 	private val recentDrawableId = R.drawable.msg_emoji_recent
@@ -74,10 +75,7 @@ open class EmojiTabsStrip(context: Context, includeStandard: Boolean, private va
 	private var appearAnimation: ValueAnimator? = null
 	private var appearCount = 0
 	private var paddingLeftDp = (5 + 6).toFloat()
-
-	private val emojipackTabs: ArrayList<EmojiTabButton> by lazy {
-		ArrayList()
-	}
+	private val emojipackTabs = mutableListOf<EmojiTabButton>()
 
 	fun showRecent(show: Boolean) {
 		if (recentIsShown == show) {
@@ -102,7 +100,7 @@ open class EmojiTabsStrip(context: Context, includeStandard: Boolean, private va
 		recentFirstChange = false
 	}
 
-	private fun isFreeEmojiPack(set: StickerSet?, documents: ArrayList<TLRPC.Document>?): Boolean {
+	private fun isFreeEmojiPack(set: TLStickerSet?, documents: List<TLRPC.Document>?): Boolean {
 		if (set == null || documents == null) {
 			return false
 		}
@@ -115,7 +113,7 @@ open class EmojiTabsStrip(context: Context, includeStandard: Boolean, private va
 		return true
 	}
 
-	private fun getThumbDocument(set: StickerSet?, documents: ArrayList<TLRPC.Document>?): TLRPC.Document? {
+	private fun getThumbDocument(set: TLStickerSet?, documents: List<TLRPC.Document>?): TLRPC.Document? {
 		if (set == null) {
 			return null
 		}
@@ -124,7 +122,7 @@ open class EmojiTabsStrip(context: Context, includeStandard: Boolean, private va
 			for (i in documents.indices) {
 				val d = documents[i]
 
-				if (d.id == set.thumb_document_id) {
+				if (d.id == set.thumbDocumentId) {
 					return d
 				}
 			}
@@ -486,11 +484,10 @@ open class EmojiTabsStrip(context: Context, includeStandard: Boolean, private va
 
 			override fun dispatchDraw(canvas: Canvas) {
 				for ((view, bounds) in removingViews) {
-					canvas.save()
-					canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
-					canvas.scale(view!!.scaleX, view.scaleY, bounds.width() / 2f, bounds.height() / 2f)
-					view.draw(canvas)
-					canvas.restore()
+					canvas.withTranslation(bounds.left.toFloat(), bounds.top.toFloat()) {
+						scale(view!!.scaleX, view.scaleY, bounds.width() / 2f, bounds.height() / 2f)
+						view.draw(this)
+					}
 				}
 
 				val selectFrom = floor(selectT.toDouble()).toInt()

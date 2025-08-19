@@ -1,3 +1,11 @@
+/*
+ * This is the source code of Telegram for Android v. 5.x.x.
+ * It is licensed under GNU GPL v. 2 or later.
+ * You should have received a copy of the license in this archive (see LICENSE).
+ *
+ * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
+ */
 package org.telegram.ui.Components;
 
 import android.graphics.Bitmap;
@@ -6,7 +14,6 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
-import android.graphics.RectF;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -36,7 +43,6 @@ public class ThemePreviewDrawable extends BitmapDrawable {
 	}
 
 	private static Bitmap createPreview(File pattern, DocumentObject.ThemeDocument themeDocument) {
-		RectF rect = new RectF();
 		Paint paint = new Paint();
 
 		Bitmap bitmap = Bitmaps.createBitmap(560, 678, Bitmap.Config.ARGB_8888);
@@ -121,7 +127,7 @@ public class ThemePreviewDrawable extends BitmapDrawable {
 			Bitmap patternBitmap = null;
 			if (pattern != null) {
 				int W = 560, H = 678;
-				if ("application/x-tgwallpattern".equals(themeDocument.mime_type)) {
+				if ("application/x-tgwallpattern".equals(themeDocument.mimeType)) {
 					patternBitmap = SvgHelper.getBitmap(pattern, W, H, false);
 				}
 				else {
@@ -132,19 +138,17 @@ public class ThemePreviewDrawable extends BitmapDrawable {
 					float photoW = opts.outWidth;
 					float photoH = opts.outHeight;
 					float scaleFactor;
-					int w_filter = W;
-					int h_filter = H;
-					if (w_filter >= h_filter && photoW > photoH) {
-						scaleFactor = Math.max(photoW / w_filter, photoH / h_filter);
+					if (W >= H && photoW > photoH) {
+						scaleFactor = Math.max(photoW / W, photoH / H);
 					}
 					else {
-						scaleFactor = Math.min(photoW / w_filter, photoH / h_filter);
+						scaleFactor = Math.min(photoW / W, photoH / H);
 					}
 					if (scaleFactor < 1.2f) {
 						scaleFactor = 1;
 					}
 					opts.inJustDecodeBounds = false;
-					if (scaleFactor > 1.0f && (photoW > w_filter || photoH > h_filter)) {
+					if (scaleFactor > 1.0f && (photoW > W || photoH > H)) {
 						int sample = 1;
 						do {
 							sample *= 2;

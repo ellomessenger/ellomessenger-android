@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2022-2024.
+ * Copyright Nikita Denin, Ello 2022-2025.
  */
 package org.telegram.ui.ActionBar;
 
@@ -47,7 +47,6 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.SecretChatHelper;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
@@ -676,9 +675,10 @@ public abstract class BaseFragment {
 		return getAccountInstance().getFileLoader();
 	}
 
-	protected SecretChatHelper getSecretChatHelper() {
-		return getAccountInstance().getSecretChatHelper();
-	}
+	// MARK: uncomment to enable secret chats
+//	protected SecretChatHelper getSecretChatHelper() {
+//		return getAccountInstance().getSecretChatHelper();
+//	}
 
 	public DownloadController getDownloadController() {
 		return getAccountInstance().getDownloadController();

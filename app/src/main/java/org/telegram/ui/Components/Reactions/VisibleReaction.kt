@@ -4,14 +4,11 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.ui.Components.Reactions
 
-import org.telegram.tgnet.tlrpc.Reaction
-import org.telegram.tgnet.tlrpc.TL_availableReaction
-import org.telegram.tgnet.tlrpc.TL_reactionCustomEmoji
-import org.telegram.tgnet.tlrpc.TL_reactionEmoji
+import org.telegram.tgnet.TLRPC
 import java.util.Objects
 
 class VisibleReaction {
@@ -41,13 +38,13 @@ class VisibleReaction {
 
 	companion object {
 		@JvmStatic
-		fun fromTLReaction(reaction: Reaction?): VisibleReaction {
+		fun fromTLReaction(reaction: TLRPC.Reaction?): VisibleReaction {
 			val visibleReaction = VisibleReaction()
 
-			if (reaction is TL_reactionEmoji) {
+			if (reaction is TLRPC.TLReactionEmoji) {
 				visibleReaction.emojicon = reaction.emoticon
 			}
-			else if (reaction is TL_reactionCustomEmoji) {
+			else if (reaction is TLRPC.TLReactionCustomEmoji) {
 				visibleReaction.documentId = reaction.documentId
 			}
 
@@ -55,7 +52,7 @@ class VisibleReaction {
 		}
 
 		@JvmStatic
-		fun fromEmojicon(reaction: TL_availableReaction): VisibleReaction {
+		fun fromEmojicon(reaction: TLRPC.TLAvailableReaction): VisibleReaction {
 			val visibleReaction = VisibleReaction()
 			visibleReaction.emojicon = reaction.reaction
 			return visibleReaction

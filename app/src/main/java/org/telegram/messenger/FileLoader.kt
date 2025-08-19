@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2023-2024.
+ * Copyright Nikita Denin, Ello 2023-2025.
  */
 package org.telegram.messenger
 
@@ -15,30 +15,13 @@ import org.telegram.messenger.FileLoadOperation.FileLoadOperationDelegate
 import org.telegram.messenger.FilePathDatabase.PathData
 import org.telegram.messenger.FileUploadOperation.FileUploadOperationDelegate
 import org.telegram.messenger.messageobject.MessageObject
-import org.telegram.tgnet.TLRPC
+import org.telegram.tgnet.*
 import org.telegram.tgnet.TLRPC.ChatPhoto
 import org.telegram.tgnet.TLRPC.FileLocation
 import org.telegram.tgnet.TLRPC.InputEncryptedFile
 import org.telegram.tgnet.TLRPC.InputFile
 import org.telegram.tgnet.TLRPC.PhotoSize
-import org.telegram.tgnet.TLRPC.TL_documentAttributeFilename
-import org.telegram.tgnet.TLRPC.TL_fileLocationToBeDeprecated
-import org.telegram.tgnet.TLRPC.TL_fileLocationUnavailable
-import org.telegram.tgnet.TLRPC.TL_messageMediaDocument
-import org.telegram.tgnet.TLRPC.TL_messageMediaInvoice
-import org.telegram.tgnet.TLRPC.TL_messageMediaPhoto
-import org.telegram.tgnet.TLRPC.TL_messageMediaWebPage
-import org.telegram.tgnet.TLRPC.TL_messageService
-import org.telegram.tgnet.tlrpc.TL_photo
-import org.telegram.tgnet.TLRPC.TL_photoCachedSize
-import org.telegram.tgnet.TLRPC.TL_photoPathSize
-import org.telegram.tgnet.TLRPC.TL_photoSizeEmpty
-import org.telegram.tgnet.TLRPC.TL_photoStrippedSize
-import org.telegram.tgnet.TLRPC.TL_secureFile
-import org.telegram.tgnet.TLRPC.TL_videoSize
-import org.telegram.tgnet.TLRPC.UserProfilePhoto
-import org.telegram.tgnet.tlrpc.Message
-import org.telegram.tgnet.tlrpc.TLObject
+import org.telegram.tgnet.TLRPC.TLChatPhoto
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -244,19 +227,19 @@ class FileLoader(instance: Int) : BaseController(instance) {
 				}
 			}
 
-			var esimated = estimatedSize
+			var estimated = estimatedSize
 
-			if (esimated != 0L) {
+			if (estimated != 0L) {
 				val finalSize = uploadSizes[location]
 
 				if (finalSize != null) {
-					esimated = 0
+					estimated = 0
 
 					uploadSizes.remove(location)
 				}
 			}
 
-			val operation = FileUploadOperation(currentAccount, location, encrypted, esimated, type)
+			val operation = FileUploadOperation(currentAccount, location, encrypted, estimated, type)
 
 			if (estimatedSize != 0L) {
 				delegate?.fileUploadProgressChanged(operation, location, 0, estimatedSize, encrypted)
@@ -308,7 +291,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 							}
 						}
 
-						delegate?.fileDidUploaded(location, inputFile, inputEncryptedFile, key, iv, operation.totalFileSize)
+						delegate?.fileDidUpload(location, inputFile, inputEncryptedFile, key, iv, operation.totalFileSize)
 					}
 				}
 
@@ -321,7 +304,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 							uploadOperationPaths.remove(location)
 						}
 
-						delegate?.fileDidFailedUpload(location, encrypted)
+						delegate?.fileDidFailToUpload(location, encrypted)
 
 						if (small) {
 							currentUploadSmallOperationsCount--
@@ -412,8 +395,8 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		cancelLoadFile(null, null, document, null, null, null)
 	}
 
-	fun cancelLoadFile(photo: PhotoSize) {
-		cancelLoadFile(null, null, null, photo.location, null, null)
+	fun cancelLoadFile(photo: PhotoSize?) {
+		cancelLoadFile(null, null, null, photo?.location, null, null)
 	}
 
 	fun cancelLoadFile(location: FileLocation?, ext: String?) {
@@ -512,14 +495,8 @@ class FileLoader(instance: Int) : BaseController(instance) {
 	}
 
 	fun loadFile(document: TLRPC.Document?, parentObject: Any?, priority: Int, cacheType: Int) {
-		@Suppress("NAME_SHADOWING") var cacheType = cacheType
-
 		if (document == null) {
 			return
-		}
-
-		if (cacheType == 0 && document.key != null) {
-			cacheType = 1
 		}
 
 		loadFile(document, null, null, null, null, parentObject, null, 0, priority, cacheType)
@@ -529,7 +506,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		loadFile(null, null, document, null, null, null, null, 0, priority, cacheType)
 	}
 
-	private fun loadFileInternal(document: TLRPC.Document?, secureDocument: SecureDocument?, webDocument: WebFile?, location: TL_fileLocationToBeDeprecated?, imageLocation: ImageLocation?, parentObject: Any?, locationExt: String?, locationSize: Long, priority: Int, stream: FileLoadOperationStream?, streamOffset: Long, streamPriority: Boolean, cacheType: Int): FileLoadOperation? {
+	private fun loadFileInternal(document: TLRPC.Document?, secureDocument: SecureDocument?, webDocument: WebFile?, location: FileLocation?, imageLocation: ImageLocation?, parentObject: Any?, locationExt: String?, locationSize: Long, priority: Int, stream: FileLoadOperationStream?, streamOffset: Long, streamPriority: Boolean, cacheType: Int): FileLoadOperation? {
 		@Suppress("NAME_SHADOWING") var priority = priority
 
 		val fileName = if (location != null) {
@@ -557,7 +534,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		}
 
 		if (document != null && parentObject is MessageObject && parentObject.putInDownloadsStore && !parentObject.isAnyKindOfSticker) {
-			downloadController.startDownloadFile(document, parentObject as MessageObject?)
+			downloadController.startDownloadFile(parentObject as MessageObject?)
 		}
 
 		var operation = loadOperationPaths[fileName]
@@ -598,12 +575,12 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			type = MEDIA_DIR_DOCUMENT
 		}
 		else if (location != null) {
-			documentId = location.volume_id
-			dcId = location.dc_id
+			documentId = location.volumeId
+			dcId = (location as? TLRPC.TLFileLocation)?.dcId ?: 0
 			operation = FileLoadOperation(imageLocation!!, parentObject, locationExt, locationSize)
 			type = MEDIA_DIR_IMAGE
 		}
-		else if (document != null) {
+		else if (document != null && document is TLRPC.TLDocument) {
 			operation = FileLoadOperation(document, parentObject)
 
 			if (MessageObject.isVoiceDocument(document)) {
@@ -612,12 +589,12 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			else if (MessageObject.isVideoDocument(document)) {
 				type = MEDIA_DIR_VIDEO
 				documentId = document.id
-				dcId = document.dc_id
+				dcId = document.dcId
 			}
 			else {
 				type = MEDIA_DIR_DOCUMENT
 				documentId = document.id
-				dcId = document.dc_id
+				dcId = document.dcId
 			}
 
 			if (MessageObject.isRoundVideoDocument(document)) {
@@ -730,7 +707,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			operation.setIsPreloadVideoOperation(true)
 		}
 
-		val fileLoadOperationDelegate: FileLoadOperationDelegate = object : FileLoadOperationDelegate {
+		val fileLoadOperationDelegate = object : FileLoadOperationDelegate {
 			override fun didFinishLoadingFile(operation: FileLoadOperation, finalFile: File?) {
 				if (!operation.isPreloadVideoOperation() && operation.isPreloadFinished) {
 					return
@@ -742,7 +719,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 
 				if (!operation.isPreloadVideoOperation()) {
 					loadOperationPathsUI.remove(fileName)
-					delegate?.fileDidLoaded(fileName, finalFile, parentObject, type)
+					delegate?.fileDidLoad(fileName, finalFile, parentObject, type)
 				}
 
 				operation.queue?.let {
@@ -757,7 +734,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 					checkDownloadQueue(it, fileName)
 				}
 
-				delegate?.fileDidFailedLoad(fileName, state)
+				delegate?.fileDidFailToLoad(fileName, state)
 
 				if (document != null && parentObject is MessageObject && state == 0) {
 					downloadController.onDownloadFail(parentObject, state)
@@ -811,7 +788,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			val flag: Int
 			val dialogId = parentObject.dialogId
 
-			if (parentObject.isRoundVideo || parentObject.isVoice || parentObject.isAnyKindOfSticker || messagesController.isChatNoForwards(messagesController.getChat(-dialogId)) || parentObject.messageOwner?.noforwards == true || DialogObject.isEncryptedDialog(dialogId)) {
+			if (parentObject.isRoundVideo || parentObject.isVoice || parentObject.isAnyKindOfSticker || messagesController.isChatNoForwards(messagesController.getChat(-dialogId)) || (parentObject.messageOwner as? TLRPC.TLMessage)?.noforwards == true || DialogObject.isEncryptedDialog(dialogId)) {
 				return false
 			}
 
@@ -859,7 +836,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 //		}
 //	}
 
-	private fun loadFile(document: TLRPC.Document?, secureDocument: SecureDocument?, webDocument: WebFile?, location: TL_fileLocationToBeDeprecated?, imageLocation: ImageLocation?, parentObject: Any?, locationExt: String?, locationSize: Long, priority: Int, cacheType: Int) {
+	private fun loadFile(document: TLRPC.Document?, secureDocument: SecureDocument?, webDocument: WebFile?, location: FileLocation?, imageLocation: ImageLocation?, parentObject: Any?, locationExt: String?, locationSize: Long, priority: Int, cacheType: Int) {
 		val fileName = if (location != null) {
 			getAttachFileName(location, locationExt)
 		}
@@ -918,17 +895,17 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		delegate = fileLoaderDelegate
 	}
 
-	fun getPathToMessage(message: Message?): File {
+	fun getPathToMessage(message: TLRPC.Message?): File {
 		return getPathToMessage(message, true)
 	}
 
-	fun getPathToMessage(message: Message?, useFileDatabaseQueue: Boolean): File {
+	fun getPathToMessage(message: TLRPC.Message?, useFileDatabaseQueue: Boolean): File {
 		if (message == null) {
 			return File("")
 		}
 
-		if (message is TL_messageService) {
-			val photo = message.action?.photo
+		if (message is TLRPC.TLMessageService) {
+			val photo = (message.action as? TLRPC.TLMessageActionChatEditPhoto)?.photo as? TLRPC.TLPhoto
 
 			if (photo != null) {
 				val sizes = photo.sizes
@@ -944,30 +921,32 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		}
 		else {
 			when (val media = MessageObject.getMedia(message)) {
-				is TL_messageMediaDocument -> {
-					return getPathToAttach(media.document, null, media.ttl_seconds != 0, useFileDatabaseQueue)
+				is TLRPC.TLMessageMediaDocument -> {
+					return getPathToAttach(media.document, null, media.ttlSeconds != 0, useFileDatabaseQueue)
 				}
 
-				is TL_messageMediaPhoto -> {
-					val sizes = media.photo.sizes
+				is TLRPC.TLMessageMediaPhoto -> {
+					val sizes = (media.photo as? TLRPC.TLPhoto)?.sizes
 
-					if (sizes.size > 0) {
+					if (sizes != null && sizes.size > 0) {
 						val sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize(), false, null, true)
 
 						if (sizeFull != null) {
-							return getPathToAttach(sizeFull, null, media.ttl_seconds != 0, useFileDatabaseQueue)
+							return getPathToAttach(sizeFull, null, media.ttlSeconds != 0, useFileDatabaseQueue)
 						}
 					}
 				}
 
-				is TL_messageMediaWebPage -> {
-					if (media.webpage.document != null) {
-						return getPathToAttach(media.webpage.document, null, false, useFileDatabaseQueue)
-					}
-					else if (media.webpage.photo != null) {
-						val sizes = media.webpage.photo.sizes
+				is TLRPC.TLMessageMediaWebPage -> {
+					val webpage = media.webpage as? TLRPC.TLWebPage
 
-						if (sizes.size > 0) {
+					if (webpage?.document != null) {
+						return getPathToAttach(webpage.document, null, false, useFileDatabaseQueue)
+					}
+					else if (webpage?.photo != null) {
+						val sizes = (webpage.photo as? TLRPC.TLPhoto)?.sizes
+
+						if (sizes != null && sizes.size > 0) {
 							val sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize())
 
 							if (sizeFull != null) {
@@ -977,7 +956,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 					}
 				}
 
-				is TL_messageMediaInvoice -> {
+				is TLRPC.TLMessageMediaInvoice -> {
 					return getPathToAttach(media.photo, null, true, useFileDatabaseQueue)
 				}
 			}
@@ -1008,7 +987,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 	fun getPathToAttach(attach: TLObject?, size: String?, ext: String?, forceCache: Boolean, useFileDatabaseQueue: Boolean): File {
 		@Suppress("NAME_SHADOWING") var size = size
 		var dir: File? = null
-		var documentId: Long = 0
+		var documentId = 0L
 		var dcId = 0
 		var type = 0
 
@@ -1016,70 +995,62 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			dir = getDirectory(MEDIA_DIR_CACHE)
 		}
 		else {
-			if (attach is TLRPC.Document) {
-				if (!attach.localPath.isNullOrEmpty()) {
-					return File(attach.localPath)
+			if (attach is TLRPC.TLDocument) {
+				type = if (MessageObject.isVoiceDocument(attach)) {
+					MEDIA_DIR_AUDIO
 				}
-
-				type = if (attach.key != null) {
-					MEDIA_DIR_CACHE
+				else if (MessageObject.isVideoDocument(attach)) {
+					MEDIA_DIR_VIDEO
 				}
 				else {
-					if (MessageObject.isVoiceDocument(attach)) {
-						MEDIA_DIR_AUDIO
-					}
-					else if (MessageObject.isVideoDocument(attach)) {
-						MEDIA_DIR_VIDEO
-					}
-					else {
-						MEDIA_DIR_DOCUMENT
-					}
+					MEDIA_DIR_DOCUMENT
 				}
 
 				documentId = attach.id
-				dcId = attach.dc_id
+				dcId = attach.dcId
 				dir = getDirectory(type)
 			}
-			else if (attach is TLRPC.Photo) {
+			else if (attach is TLRPC.TLPhoto) {
 				val photoSize = getClosestPhotoSizeWithSize(attach.sizes, AndroidUtilities.getPhotoSize())
 				return getPathToAttach(photoSize, ext, false, useFileDatabaseQueue)
 			}
 			else if (attach is PhotoSize) {
-				if (attach is TL_photoStrippedSize || attach is TL_photoPathSize) {
+				if (attach is TLRPC.TLPhotoStrippedSize || attach is TLRPC.TLPhotoPathSize) {
 					dir = null
 				}
-				else if (attach.location == null || attach.location.key != null || attach.location.volume_id == Int.MIN_VALUE.toLong() && attach.location.local_id < 0 || attach.size < 0) {
+				else if (attach.location == null || /*attach.location.key != null || */ attach.location!!.volumeId == Int.MIN_VALUE.toLong() && attach.location!!.localId < 0 || attach.size < 0) {
 					dir = getDirectory(MEDIA_DIR_CACHE.also { type = it })
 				}
 				else {
 					dir = getDirectory(MEDIA_DIR_IMAGE.also { type = it })
 				}
 
-				documentId = attach.location.volume_id
-				dcId = attach.location.dc_id
+				documentId = attach.location?.volumeId ?: 0
+				dcId = attach.location?.dcId ?: 0
+
 			}
-			else if (attach is TL_videoSize) {
-				if (attach.location == null || attach.location.key != null || attach.location.volume_id == Int.MIN_VALUE.toLong() && attach.location.local_id < 0 || attach.size < 0) {
+			else if (attach is TLRPC.VideoSize) {
+				if (attach.size < 0) {
 					dir = getDirectory(MEDIA_DIR_CACHE.also { type = it })
 				}
 				else {
 					dir = getDirectory(MEDIA_DIR_IMAGE.also { type = it })
 				}
 
-				documentId = attach.location.volume_id
-				dcId = attach.location.dc_id
+				documentId = attach.location?.volumeId ?: 0L
+				dcId = attach.location?.dcId ?: 0
 			}
-			else if (attach is FileLocation) {
-				if (attach.key != null || attach.volume_id == Int.MIN_VALUE.toLong() && attach.local_id < 0) {
+			else if (attach is TLRPC.TLFileLocation) {
+				if (attach.volumeId == Int.MIN_VALUE.toLong() && attach.localId < 0) {
 					dir = getDirectory(MEDIA_DIR_CACHE)
 				}
 				else {
-					documentId = attach.volume_id
-					dcId = attach.dc_id
+					documentId = attach.volumeId
+					dcId = attach.dcId
 					dir = getDirectory(MEDIA_DIR_IMAGE.also { type = it })
 				}
 			}
-			else if (attach is UserProfilePhoto || attach is ChatPhoto) {
+			else if (attach is TLRPC.UserProfilePhoto || attach is ChatPhoto) {
 				if (size == null) {
 					size = "s"
 				}
@@ -1105,7 +1076,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 					getDirectory(MEDIA_DIR_DOCUMENT)
 				}
 			}
-			else if (attach is TL_secureFile || attach is SecureDocument) {
+			else if (attach is TLRPC.TLSecureFile || attach is SecureDocument) {
 				dir = getDirectory(MEDIA_DIR_CACHE)
 			}
 		}
@@ -1248,10 +1219,10 @@ class FileLoader(instance: Int) : BaseController(instance) {
 
 	interface FileLoaderDelegate {
 		fun fileUploadProgressChanged(operation: FileUploadOperation?, location: String?, uploadedSize: Long, totalSize: Long, isEncrypted: Boolean)
-		fun fileDidUploaded(location: String?, inputFile: InputFile?, inputEncryptedFile: InputEncryptedFile?, key: ByteArray?, iv: ByteArray?, totalFileSize: Long)
-		fun fileDidFailedUpload(location: String?, isEncrypted: Boolean)
-		fun fileDidLoaded(location: String?, finalFile: File?, parentObject: Any?, type: Int)
-		fun fileDidFailedLoad(location: String?, state: Int)
+		fun fileDidUpload(location: String?, inputFile: InputFile?, inputEncryptedFile: InputEncryptedFile?, key: ByteArray?, iv: ByteArray?, totalFileSize: Long)
+		fun fileDidFailToUpload(location: String?, isEncrypted: Boolean)
+		fun fileDidLoad(location: String?, finalFile: File?, parentObject: Any?, type: Int)
+		fun fileDidFailToLoad(location: String?, state: Int)
 		fun fileLoadProgressChanged(operation: FileLoadOperation?, location: String?, uploadedSize: Long, totalSize: Long)
 	}
 
@@ -1331,18 +1302,18 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		}
 
 		@JvmStatic
-		fun getMessageFileName(message: Message?): String {
+		fun getMessageFileName(message: TLRPC.Message?): String {
 			if (message == null) {
 				return ""
 			}
 
-			if (message is TL_messageService) {
-				val photo = message.action?.photo
+			if (message is TLRPC.TLMessageService) {
+				val photo = (message.action as? TLRPC.TLMessageActionChatEditPhoto)?.photo
 
 				if (photo != null) {
-					val sizes = photo.sizes
+					val sizes = (photo as? TLRPC.TLPhoto)?.sizes
 
-					if (sizes.size > 0) {
+					if (sizes != null && sizes.size > 0) {
 						val sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize())
 
 						if (sizeFull != null) {
@@ -1353,14 +1324,14 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			}
 			else {
 				when (val media = MessageObject.getMedia(message)) {
-					is TL_messageMediaDocument -> {
+					is TLRPC.TLMessageMediaDocument -> {
 						return getAttachFileName(media.document)
 					}
 
-					is TL_messageMediaPhoto -> {
-						val sizes = media.photo.sizes
+					is TLRPC.TLMessageMediaPhoto -> {
+						val sizes = (media.photo as? TLRPC.TLPhoto)?.sizes
 
-						if (sizes.size > 0) {
+						if (sizes != null && sizes.size > 0) {
 							val sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize(), false, null, true)
 
 							if (sizeFull != null) {
@@ -1369,14 +1340,16 @@ class FileLoader(instance: Int) : BaseController(instance) {
 						}
 					}
 
-					is TL_messageMediaWebPage -> {
-						if (media.webpage.document != null) {
-							return getAttachFileName(media.webpage.document)
-						}
-						else if (media.webpage.photo != null) {
-							val sizes = media.webpage.photo.sizes
+					is TLRPC.TLMessageMediaWebPage -> {
+						val webpage = media.webpage as? TLRPC.TLWebPage
 
-							if (sizes.size > 0) {
+						if (webpage?.document != null) {
+							return getAttachFileName(webpage.document)
+						}
+						else if (webpage?.photo != null) {
+							val sizes = (webpage.photo as? TLRPC.TLPhoto)?.sizes
+
+							if (sizes != null && sizes.size > 0) {
 								val sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize())
 
 								if (sizeFull != null) {
@@ -1386,11 +1359,11 @@ class FileLoader(instance: Int) : BaseController(instance) {
 						}
 					}
 
-					is TL_messageMediaInvoice -> {
+					is TLRPC.TLMessageMediaInvoice -> {
 						val document = media.photo
 
 						if (document != null) {
-							return Utilities.MD5(document.url) + "." + ImageLoader.getHttpUrlExtension(document.url, getMimeTypePart(document.mime_type))
+							return Utilities.MD5(document.url) + "." + ImageLoader.getHttpUrlExtension(document.url, getMimeTypePart(document.mimeType))
 						}
 					}
 				}
@@ -1400,17 +1373,17 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		}
 
 		@JvmStatic
-		fun getClosestPhotoSizeWithSize(sizes: ArrayList<PhotoSize?>?, side: Int): PhotoSize? {
+		fun getClosestPhotoSizeWithSize(sizes: List<PhotoSize?>?, side: Int): PhotoSize? {
 			return getClosestPhotoSizeWithSize(sizes, side, false)
 		}
 
 		@JvmStatic
-		fun getClosestPhotoSizeWithSize(sizes: ArrayList<PhotoSize?>?, side: Int, byMinSide: Boolean): PhotoSize? {
+		fun getClosestPhotoSizeWithSize(sizes: List<PhotoSize?>?, side: Int, byMinSide: Boolean): PhotoSize? {
 			return getClosestPhotoSizeWithSize(sizes, side, byMinSide, null, false)
 		}
 
 		@JvmStatic
-		fun getClosestPhotoSizeWithSize(sizes: ArrayList<PhotoSize?>?, side: Int, byMinSide: Boolean, toIgnore: PhotoSize?, ignoreStripped: Boolean): PhotoSize? {
+		fun getClosestPhotoSizeWithSize(sizes: List<PhotoSize?>?, side: Int, byMinSide: Boolean, toIgnore: PhotoSize?, ignoreStripped: Boolean): PhotoSize? {
 			if (sizes.isNullOrEmpty()) {
 				return null
 			}
@@ -1421,14 +1394,14 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			for (a in sizes.indices) {
 				val obj = sizes[a]
 
-				if (obj == null || obj === toIgnore || obj is TL_photoSizeEmpty || obj is TL_photoPathSize || ignoreStripped && obj is TL_photoStrippedSize) {
+				if (obj == null || obj === toIgnore || obj is TLRPC.TLPhotoSizeEmpty || obj is TLRPC.TLPhotoPathSize || ignoreStripped && obj is TLRPC.TLPhotoStrippedSize) {
 					continue
 				}
 
 				if (byMinSide) {
 					val currentSide = min(obj.h.toDouble(), obj.w.toDouble()).toInt()
 
-					if (closestObject == null || side > 100 && closestObject.location != null && closestObject.location.dc_id == Int.MIN_VALUE || obj is TL_photoCachedSize || side > lastSide && lastSide < currentSide) {
+					if (closestObject == null || side > 100 && closestObject.location != null && (closestObject.location as? TLRPC.TLFileLocation)?.dcId == Int.MIN_VALUE || obj is TLRPC.TLPhotoCachedSize || side > lastSide && lastSide < currentSide) {
 						closestObject = obj
 						lastSide = currentSide
 					}
@@ -1436,7 +1409,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 				else {
 					val currentSide = max(obj.w.toDouble(), obj.h.toDouble()).toInt()
 
-					if (closestObject == null || side > 100 && closestObject.location != null && closestObject.location.dc_id == Int.MIN_VALUE || obj is TL_photoCachedSize || currentSide in (lastSide + 1)..side) {
+					if (closestObject == null || side > 100 && closestObject.location != null && (closestObject.location as? TLRPC.TLFileLocation)?.dcId == Int.MIN_VALUE || obj is TLRPC.TLPhotoCachedSize || currentSide in (lastSide + 1)..side) {
 						closestObject = obj
 						lastSide = currentSide
 					}
@@ -1445,7 +1418,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 
 			return closestObject
 		}
-//
+
 //		fun getPathPhotoSize(sizes: ArrayList<PhotoSize?>?): TL_photoPathSize? {
 //			if (sizes.isNullOrEmpty()) {
 //				return null
@@ -1489,26 +1462,20 @@ class FileLoader(instance: Int) : BaseController(instance) {
 
 		@JvmStatic
 		fun getDocumentFileName(document: TLRPC.Document?): String? {
-			if (document == null) {
+			if (document == null || document !is TLRPC.TLDocument) {
 				return null
 			}
 
-			if (document.file_name_fixed != null) {
-				return document.file_name_fixed
+			if (document.fileNameFixed != null) {
+				return document.fileNameFixed
 			}
 
 			var fileName: String? = null
 
-			if (document.file_name != null) {
-				fileName = document.file_name
-			}
-			else {
-				for (a in document.attributes.indices) {
-					val documentAttribute = document.attributes[a]
-
-					if (documentAttribute is TL_documentAttributeFilename) {
-						fileName = documentAttribute.file_name
-					}
+			for (documentAttribute in document.attributes) {
+				if (documentAttribute is TLRPC.TLDocumentAttributeFilename) {
+					fileName = documentAttribute.fileName
+					break
 				}
 			}
 
@@ -1518,7 +1485,11 @@ class FileLoader(instance: Int) : BaseController(instance) {
 		}
 
 		@JvmStatic
-		fun getMimeTypePart(mime: String): String {
+		fun getMimeTypePart(mime: String?): String {
+			if (mime.isNullOrEmpty()) {
+				return ""
+			}
+
 			var index: Int
 
 			return if (mime.lastIndexOf('/').also { index = it } != -1) {
@@ -1553,7 +1524,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			}
 
 			if (ext.isNullOrEmpty()) {
-				ext = document.mime_type
+				ext = document.mimeType
 			}
 
 			if (ext == null) {
@@ -1581,7 +1552,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			@Suppress("NAME_SHADOWING") var size = size
 
 			when (attach) {
-				is TLRPC.Document -> {
+				is TLRPC.TLDocument -> {
 					var docExt: String?
 					docExt = getDocumentFileName(attach)
 
@@ -1595,23 +1566,23 @@ class FileLoader(instance: Int) : BaseController(instance) {
 					}
 
 					if ((docExt?.length ?: 0) <= 1) {
-						docExt = getExtensionByMimeType(attach.mime_type)
+						docExt = getExtensionByMimeType(attach.mimeType)
 					}
 
 					return if ((docExt?.length ?: 0) > 1) {
-						attach.dc_id.toString() + "_" + attach.id + docExt
+						attach.dcId.toString() + "_" + attach.id + docExt
 					}
 					else {
-						attach.dc_id.toString() + "_" + attach.id
+						attach.dcId.toString() + "_" + attach.id
 					}
 				}
 
 				is SecureDocument -> {
-					return attach.secureFile.dc_id.toString() + "_" + attach.secureFile.id + ".jpg"
+					return attach.secureFile.dcId.toString() + "_" + attach.secureFile.id + ".jpg"
 				}
 
-				is TL_secureFile -> {
-					return attach.dc_id.toString() + "_" + attach.id + ".jpg"
+				is TLRPC.TLSecureFile -> {
+					return attach.dcId.toString() + "_" + attach.id + ".jpg"
 				}
 
 				is WebFile -> {
@@ -1619,61 +1590,36 @@ class FileLoader(instance: Int) : BaseController(instance) {
 				}
 
 				is PhotoSize -> {
-					return if (attach.location == null || attach.location is TL_fileLocationUnavailable) {
+					return if (attach.location == null || attach.location is TLRPC.TLFileLocationUnavailable) {
 						""
 					}
 					else {
-						attach.location.volume_id.toString() + "_" + attach.location.local_id + "." + (ext ?: "jpg")
+						attach.location?.volumeId?.toString() + "_" + attach.location?.localId + "." + (ext ?: "jpg")
 					}
 				}
 
-				is TL_videoSize -> {
-					return if (attach.location == null || attach.location is TL_fileLocationUnavailable) {
-						""
-					}
-					else {
-						attach.location.volume_id.toString() + "_" + attach.location.local_id + "." + (ext ?: "mp4")
-					}
+				is TLRPC.VideoSize -> {
+					return ""
 				}
 
 				is FileLocation -> {
-					if (attach is TL_fileLocationUnavailable) {
+					if (attach is TLRPC.TLFileLocationUnavailable) {
 						return ""
 					}
 
-					return attach.volume_id.toString() + "_" + attach.local_id + "." + (ext ?: "jpg")
+					return attach.volumeId.toString() + "_" + attach.localId + "." + (ext ?: "jpg")
 				}
 
-				is UserProfilePhoto -> {
+				is TLRPC.UserProfilePhoto -> {
 					if (size == null) {
 						size = "s"
 					}
 
-					return if (attach.photo_small != null) {
-						if ("s" == size) {
-							getAttachFileName(attach.photo_small, ext)
-						}
-						else {
-							getAttachFileName(attach.photo_big, ext)
-						}
-					}
-					else {
-						attach.photo_id.toString() + "_" + size + "." + (ext ?: "jpg")
-					}
+					return attach.photoId.toString() + "_" + size + "." + (ext ?: "jpg")
 				}
 
-				is ChatPhoto -> {
-					return if (attach.photo_small != null) {
-						if ("s" == size) {
-							getAttachFileName(attach.photo_small, ext)
-						}
-						else {
-							getAttachFileName(attach.photo_big, ext)
-						}
-					}
-					else {
-						attach.photo_id.toString() + "_" + size + "." + (ext ?: "jpg")
-					}
+				is TLChatPhoto -> {
+					return attach.photoId.toString() + "_" + size + "." + (ext ?: "jpg")
 				}
 
 				else -> {
@@ -1682,7 +1628,7 @@ class FileLoader(instance: Int) : BaseController(instance) {
 			}
 		}
 
-		fun isVideoMimeType(mime: String): Boolean {
+		fun isVideoMimeType(mime: String?): Boolean {
 			return "video/mp4" == mime || SharedConfig.streamMkv && "video/x-matroska" == mime
 		}
 
@@ -1738,17 +1684,17 @@ class FileLoader(instance: Int) : BaseController(instance) {
 //		}
 
 		fun isSamePhoto(location: FileLocation?, photo: TLRPC.Photo?): Boolean {
-			if (location == null || photo !is TL_photo) {
+			if (location == null || photo !is TLRPC.TLPhoto) {
 				return false
 			}
 
 			for (size in photo.sizes) {
-				if (size.location != null && size.location.local_id == location.local_id && size.location.volume_id == location.volume_id) {
+				if (size.location != null && size.location?.localId == location.localId && size.location?.volumeId == location.volumeId) {
 					return true
 				}
 			}
 
-			return -location.volume_id == photo.id
+			return -location.volumeId == photo.id
 		}
 
 //		fun getPhotoId(`object`: TLObject?): Long {

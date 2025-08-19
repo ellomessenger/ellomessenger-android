@@ -4,8 +4,8 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
+ * Copyright Nikita Denin, Ello 2025.
  */
-
 package org.telegram.ui;
 
 import android.app.Activity;
@@ -315,12 +315,12 @@ public class ExternalActionActivity extends Activity implements ActionBarLayout.
 			final long bot_id = intent.getLongExtra("bot_id", intent.getIntExtra("bot_id", 0));
 			final String nonce = intent.getStringExtra("nonce");
 			final String payload = intent.getStringExtra("payload");
-			final TLRPC.TL_account_getAuthorizationForm req = new TLRPC.TL_account_getAuthorizationForm();
-			req.bot_id = bot_id;
+			var req = new TLRPC.TLAccountGetAuthorizationForm();
+			req.botId = bot_id;
 			req.scope = intent.getStringExtra("scope");
-			req.public_key = intent.getStringExtra("public_key");
+			req.publicKey = intent.getStringExtra("public_key");
 
-			if (bot_id == 0 || TextUtils.isEmpty(payload) && TextUtils.isEmpty(nonce) || TextUtils.isEmpty(req.scope) || TextUtils.isEmpty(req.public_key)) {
+			if (bot_id == 0 || TextUtils.isEmpty(payload) && TextUtils.isEmpty(nonce) || TextUtils.isEmpty(req.scope) || TextUtils.isEmpty(req.publicKey)) {
 				finish();
 				return false;
 			}
@@ -332,9 +332,9 @@ public class ExternalActionActivity extends Activity implements ActionBarLayout.
 
 			progressDialog.show();
 			requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req, (response, error) -> {
-				final TLRPC.TL_account_authorizationForm authorizationForm = (TLRPC.TL_account_authorizationForm)response;
+				final TLRPC.TLAccountAuthorizationForm authorizationForm = (TLRPC.TLAccountAuthorizationForm)response;
 				if (authorizationForm != null) {
-					TLRPC.TL_account_getPassword req2 = new TLRPC.TL_account_getPassword();
+					var req2 = new TLRPC.TLAccountGetPassword();
 					requestId[0] = ConnectionsManager.getInstance(intentAccount).sendRequest(req2, (response1, error1) -> AndroidUtilities.runOnUIThread(() -> {
 						try {
 							progressDialog.dismiss();
@@ -343,9 +343,9 @@ public class ExternalActionActivity extends Activity implements ActionBarLayout.
 							FileLog.e(e);
 						}
 						if (response1 != null) {
-							TLRPC.account_Password accountPassword = (TLRPC.account_Password)response1;
+							TLRPC.TLAccountPassword accountPassword = (TLRPC.TLAccountPassword)response1;
 							MessagesController.getInstance(intentAccount).putUsers(authorizationForm.users, false);
-							PassportActivity fragment = new PassportActivity(PassportActivity.TYPE_PASSWORD, req.bot_id, req.scope, req.public_key, payload, nonce, null, authorizationForm, accountPassword);
+							PassportActivity fragment = new PassportActivity(PassportActivity.TYPE_PASSWORD, req.botId, req.scope, req.publicKey, payload, nonce, null, authorizationForm, accountPassword);
 							fragment.setNeedActivityResult(true);
 							if (AndroidUtilities.isTablet()) {
 								layersActionBarLayout.addFragmentToStack(fragment);

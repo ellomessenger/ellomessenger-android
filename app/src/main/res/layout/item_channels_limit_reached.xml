@@ -1,59 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:app="http://schemas.android.com/apk/res-auto"
 	android:layout_width="match_parent"
 	android:layout_height="wrap_content"
+	app:strokeWidth="0dp"
 	android:background="@color/background"
 	xmlns:tools="http://schemas.android.com/tools">
 
-	<FrameLayout
-		android:id="@+id/avatar_container"
-		android:layout_width="54dp"
-		android:layout_height="54dp"
-		android:layout_marginTop="6dp"
-		android:layout_marginBottom="6dp"
-		android:layout_marginStart="@dimen/common_size_12dp"
-		app:layout_constraintBottom_toBottomOf="parent"
-		app:layout_constraintStart_toStartOf="parent"
-		app:layout_constraintTop_toTopOf="parent"
-		tools:background="@drawable/panda_logo" />
-
-	<TextView
-		android:id="@+id/channels_group_name"
-		android:layout_width="0dp"
+	<androidx.constraintlayout.widget.ConstraintLayout
+		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
-		android:layout_marginStart="12dp"
-		android:layout_marginTop="6dp"
-		android:layout_marginBottom="6dp"
-		android:textSize="16sp"
-		android:textColor="@color/dark"
-		android:textStyle="bold"
-		app:layout_constraintEnd_toEndOf="parent"
-		app:layout_constraintStart_toEndOf="@+id/avatar_container"
-		app:layout_constraintTop_toTopOf="parent"
-		tools:text="Channel-Group name" />
+		android:background="@color/background">
 
-	<TextView
-		android:id="@+id/username"
-		android:layout_width="0dp"
-		android:layout_height="wrap_content"
-		android:layout_marginStart="12dp"
-		android:layout_marginTop="2dp"
-		android:layout_marginBottom="6dp"
-		android:textColor="@color/dark_gray"
-		app:layout_constraintStart_toEndOf="@+id/avatar_container"
-		app:layout_constraintTop_toBottomOf="@+id/channels_group_name"
-		tools:text="ello.team/username" />
+		<FrameLayout
+			android:id="@+id/avatar_container"
+			android:layout_width="54dp"
+			android:layout_height="54dp"
+			android:layout_marginTop="6dp"
+			android:layout_marginBottom="6dp"
+			android:layout_marginStart="@dimen/common_size_12dp"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintStart_toStartOf="parent"
+			app:layout_constraintTop_toTopOf="parent"
+			tools:background="@drawable/panda_logo" />
 
-	<View
-		android:id="@+id/divider"
-		android:layout_width="0dp"
-		android:layout_height="0.5dp"
-		android:background="@color/divider"
-		android:layout_marginStart="14dp"
-		app:layout_constraintBottom_toBottomOf="parent"
-		app:layout_constraintEnd_toEndOf="parent"
-		app:layout_constraintStart_toEndOf="@+id/avatar_container" />
+		<TextView
+			android:id="@+id/channels_group_name"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_marginStart="12dp"
+			android:layout_marginTop="6dp"
+			android:layout_marginBottom="6dp"
+			android:textSize="16sp"
+			android:textColor="@color/dark"
+			android:textStyle="bold"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@+id/avatar_container"
+			app:layout_constraintTop_toTopOf="parent"
+			tools:text="Channel-Group name" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+		<TextView
+			android:id="@+id/username"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_marginStart="12dp"
+			android:layout_marginTop="2dp"
+			android:layout_marginBottom="6dp"
+			android:textColor="@color/dark_gray"
+			app:layout_constraintStart_toEndOf="@+id/avatar_container"
+			app:layout_constraintTop_toBottomOf="@+id/channels_group_name"
+			tools:text="ello.team/username" />
+
+		<View
+			android:id="@+id/divider"
+			android:layout_width="0dp"
+			android:layout_height="0.5dp"
+			android:background="@color/divider"
+			android:layout_marginStart="14dp"
+			app:layout_constraintBottom_toBottomOf="parent"
+			app:layout_constraintEnd_toEndOf="parent"
+			app:layout_constraintStart_toEndOf="@+id/avatar_container" />
+
+	</androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>
 

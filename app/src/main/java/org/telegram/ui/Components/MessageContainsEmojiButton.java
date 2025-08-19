@@ -4,7 +4,7 @@
  * You should have received a copy of the license in this archive (see LICENSE).
  *
  * Copyright Nikolai Kudashov, 2013-2018.
- * Copyright Nikita Denin, Ello 2024.
+ * Copyright Nikita Denin, Ello 2024-2025.
  */
 package org.telegram.ui.Components;
 
@@ -113,11 +113,11 @@ public class MessageContainsEmojiButton extends FrameLayout implements Notificat
 				TLRPC.Document document = null;
 				inputStickerSet = inputStickerSets.get(0);
 				if (inputStickerSet != null) {
-					TLRPC.TL_messages_stickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(inputStickerSet, false);
+					var stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(inputStickerSet, false);
 					if (stickerSet != null && stickerSet.set != null) {
 						stickerPackName = stickerSet.set.title;
 						for (int i = 0; stickerSet.documents != null && i < stickerSet.documents.size(); ++i) {
-							if (stickerSet.documents.get(i).id == stickerSet.set.thumb_document_id) {
+							if (stickerSet.documents.get(i).id == stickerSet.set.thumbDocumentId) {
 								document = stickerSet.documents.get(i);
 								break;
 							}
@@ -268,7 +268,7 @@ public class MessageContainsEmojiButton extends FrameLayout implements Notificat
 	public void didReceivedNotification(int id, int account, Object... args) {
 		if (id == NotificationCenter.groupStickersDidLoad) {
 			if (inputStickerSet != null) {
-				TLRPC.TL_messages_stickerSet stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(inputStickerSet, false);
+				var stickerSet = MediaDataController.getInstance(currentAccount).getStickerSet(inputStickerSet, false);
 				if (stickerSet == null) {
 					return;
 				}
@@ -277,7 +277,7 @@ public class MessageContainsEmojiButton extends FrameLayout implements Notificat
 				if (stickerSet.set != null) {
 					stickerPackName = stickerSet.set.title;
 					for (int i = 0; stickerSet.documents != null && i < stickerSet.documents.size(); ++i) {
-						if (stickerSet.documents.get(i).id == stickerSet.set.thumb_document_id) {
+						if (stickerSet.documents.get(i).id == stickerSet.set.thumbDocumentId) {
 							document = stickerSet.documents.get(i);
 							break;
 						}

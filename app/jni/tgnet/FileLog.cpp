@@ -73,9 +73,9 @@ void FileLog::fatal(const char *message, ...) {
 
     va_end(argptr);
 
-#ifdef DEBUG_VERSION
-    abort();
-#endif
+//#ifdef DEBUG_VERSION
+//    abort();
+//#endif
 }
 
 void FileLog::e(const char *message, ...) {
